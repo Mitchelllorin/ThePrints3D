@@ -149,7 +149,7 @@ export default function ScaleCalibrator({
         <div className={styles.imageWrap}>
           {/* SVG overlay for measurement line */}
           {(ptA || ptB) && (
-            <svg className={styles.svg} viewBox={`0 0 ${imageWidth} ${imageHeight}`} preserveAspectRatio="none">
+            <svg className={styles.svg} viewBox={`0 0 ${imageWidth} ${imageHeight}`} preserveAspectRatio="xMidYMid meet">
               {ptA && ptB && (
                 <line
                   x1={ptA.x} y1={ptA.y}

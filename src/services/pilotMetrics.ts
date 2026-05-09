@@ -62,7 +62,10 @@ export function buildPilotSnapshot(drawings: Drawing[]): PilotMetricRow {
   )
 
   const now = new Date()
-  const projectId = `AUTO-${now.toISOString().replaceAll(':', '').replaceAll('.', '')}`
+  const iso = now.toISOString()
+  const compactDate = iso.slice(0, 10).replaceAll('-', '')
+  const compactTime = iso.slice(11, 19).replaceAll(':', '')
+  const projectId = `AUTO-${compactDate}-${compactTime}`
   const inputType =
     pdfs.length > 0 && images.length > 0 ? 'mixed' : pdfs.length > 0 ? 'pdf' : 'image'
 
