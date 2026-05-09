@@ -1,0 +1,41 @@
+BluePrint3D Data Governance Controls Baseline
+
+Purpose
+- Define minimum governance controls for pilot/test/training data handling.
+
+1) Data permission controls
+- Every project must have a completed permission record before upload.
+- Use ops/data_permission_template.txt for provider confirmation.
+- Map each project to allowed_use:
+  - testing_only
+  - training_allowed
+  - restricted
+
+2) Access controls
+- Least-privilege access only.
+- No public links to raw or anonymized assets.
+- MFA required for all admins and maintainers.
+- Monthly access review for active users.
+- Immediate removal for inactive users.
+
+3) Storage and separation
+- Keep raw data and labels in separate folders/stores.
+- Keep anonymized exports separate from raw source sets.
+- Use immutable audit logs when available.
+
+4) Retention and deletion
+- Retain raw customer data only per contract/permission.
+- Document retention period per project.
+- Enforce deletion requests within agreed SLA.
+- Record deletion contact and completion date.
+
+5) Operational controls
+- Maintain a project-level data access register.
+- Track anonymization requirement and export restrictions.
+- Block data export for records marked do_not_export=yes.
+
+6) Evidence to maintain
+- Permission template per project
+- Data access register (see ops/data_access_register_template.csv)
+- Monthly access review checklist
+- Deletion request log and completion evidence

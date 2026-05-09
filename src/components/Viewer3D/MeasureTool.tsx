@@ -125,10 +125,7 @@ export default function MeasureTool() {
 
   // Attach/detach click listener on the canvas
   useEffect(() => {
-    if (!measureMode) {
-      setPendingA(null)
-      return
-    }
+    if (!measureMode) return
     gl.domElement.addEventListener('click', handleCanvasClick)
     return () => {
       gl.domElement.removeEventListener('click', handleCanvasClick)
@@ -140,7 +137,7 @@ export default function MeasureTool() {
       {measurements.map((m) => (
         <MeasurementLine key={m.id} m={m} />
       ))}
-      {pendingA && <PendingMarker point={pendingA} />}
+      {measureMode && pendingA && <PendingMarker point={pendingA} />}
     </>
   )
 }

@@ -1,6 +1,7 @@
 import { rasterizeFile } from './pdfRasterizer'
 import { detectWalls } from './wallDetector'
 import { inferFloorNumber } from './sheetParser'
+import { deriveScaleFromNotation } from './scaleParser'
 import type { Drawing } from '../types'
 
 export type DrawingPatch = Partial<Drawing>
@@ -14,13 +15,20 @@ export async function processDrawing(
   onProgress: (pct: number) => void
 ): Promise<DrawingPatch> {
   try {
+    let lastProgress = 0
+    const setProgress = (pct: number) => {
+      const next = Math.max(lastProgress, Math.min(100, Math.round(pct)))
+      lastProgress = next
+      onProgress(next)
+    }
+
     // 1. Rasterize
-    const raster = await rasterizeFile(drawing.file, (p) => onProgress(p * 0.8))
+    const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8))
 
     // 2. Detect walls (runs in main thread — acceptable for most drawing sizes)
-    onProgress(82)
+    setProgress(82)
     const isRasterPhoto = drawing.file.type.startsWith('image/')
-    const walls = detectWalls(raster.imageData, {
+    let walls = detectWalls(raster.imageData, {
       // Stricter defaults reduce annotation noise (text/dimension lines)
       edgeThreshold: isRasterPhoto ? 30 : 34,
       minWallLengthPx: isRasterPhoto ? 55 : 70,
@@ -29,18 +37,29 @@ export async function processDrawing(
       requirePairedEdges: true,
       mergeGapPx: 4,
     })
-    onProgress(95)
+    // Fallback pass for noisy scans/photos where strict pairing can miss walls.
+    if (walls.length === 0) {
+      walls = detectWalls(raster.imageData, {
+        edgeThreshold: isRasterPhoto ? 26 : 30,
+        minWallLengthPx: isRasterPhoto ? 40 : 55,
+        minWallThicknessPx: 2,
+        maxWallThicknessPx: 72,
+        requirePairedEdges: false,
+        mergeGapPx: 6,
+      })
+    }
+    setProgress(95)
 
     // 3. Derive scale from notation if available
     let scaleMmPerPx: number | null = null
     if (raster.scaleNotation) {
-      scaleMmPerPx = deriveScaleFromNotation(raster.scaleNotation, raster.width)
+      scaleMmPerPx = deriveScaleFromNotation(raster.scaleNotation)
     }
 
     // 4. Parse floor number from filename
     const floorNumber = inferFloorNumber(drawing.name)
 
-    onProgress(100)
+    setProgress(100)
 
     return {
       status: 'ready',
@@ -61,22 +80,4 @@ export async function processDrawing(
       parseProgress: 0,
     }
   }
-}
-
-/**
- * Estimate mm-per-pixel from a scale notation like "1:100" or "1:50".
- *
- * At 144 DPI (RASTER_SCALE=1.5 on 96 DPI), 1 PDF point = 25.4/72 mm on paper.
- * With scale 1:S, 1mm on paper = S mm real, so 1 px ≈ (25.4/72) * 1.5 * S / 1.5 ≈ 25.4/72 * S mm.
- * Simplified: scaleMmPerPx = S * 0.353
- */
-function deriveScaleFromNotation(notation: string, _width: number): number | null {
-  const match = notation.match(/1\s*[:/]\s*(\d+)/)
-  if (match) {
-    const ratio = parseInt(match[1], 10)
-    const ptPerPx = 1 / 1.5  // inverse of RASTER_SCALE
-    const mmPerPt = 25.4 / 72
-    return ratio * mmPerPt * ptPerPx
-  }
-  return null
 }
