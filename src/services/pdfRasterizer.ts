@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import { RASTER_SCALE } from './constants'
 
 // Configure worker once
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -18,7 +19,6 @@ export interface RasterResult {
   scaleNotation: string | null
 }
 
-const RASTER_SCALE = 1.5   // ~144 DPI (PDF points * scale) — good balance of detail vs speed
 const SCALE_REGEX = /\b1\s*[:/]\s*(\d+)\b|\b(\d+)\s*[:/]\s*1\b/g
 const MIN_BUILDING_SCALE = 10
 const MAX_BUILDING_SCALE = 500

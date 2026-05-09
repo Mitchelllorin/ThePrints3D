@@ -1,3 +1,5 @@
+import { RASTER_SCALE } from './constants'
+
 /**
  * Estimate mm-per-pixel from a scale notation like "1:100" or "1/50".
  */
@@ -11,7 +13,7 @@ export function deriveScaleFromNotation(notation: string): number | null {
 
   // For notation a:b, real-world scale factor is b/a.
   const ratio = right / left
-  const ptPerPx = 1 / 1.5  // inverse of RASTER_SCALE
+  const ptPerPx = 1 / RASTER_SCALE
   const mmPerPt = 25.4 / 72
   const mmPerPx = ratio * mmPerPt * ptPerPx
 
