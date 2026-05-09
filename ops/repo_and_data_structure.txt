@@ -1,0 +1,66 @@
+Blueprint3D Recommended Repo and Data Structure
+
+1) Code Repository (blueprint3d-app)
+- src/
+- public/
+- pilot/
+  - pilot_metrics_template.csv
+  - pilot_runbook.txt
+- ops/
+  - day1_setup_checklist.txt
+  - repo_and_data_structure.txt
+  - data_permission_template.txt
+
+Branching
+- main: protected, production-ready
+- develop: integration
+- feature/*: task branches
+- hotfix/*: urgent fixes
+
+Release Tags
+- v0.1.0-mvp
+- v0.2.0-beta
+- v1.0.0-production
+
+2) Data Repository or Secure Bucket (blueprint3d-testdata)
+- raw/
+  - customer_name_or_id/
+    - project_001/
+      - source_files/
+      - metadata.json
+- anonymized/
+  - project_001/
+- pilot_batches/
+  - batch_2026_05_week1/
+    - project_manifest.csv
+- labels/
+  - walls/
+  - symbols/
+  - dimensions/
+  - floor_levels/
+- corrections/
+  - project_001_corrections.json
+- exports/
+  - training_ready/
+  - reports/
+
+3) Required Metadata Per Project
+- project_id
+- data_source
+- permission_status
+- allowed_use (testing_only, training_allowed, restricted)
+- anonymized (yes/no)
+- upload_date
+- owner
+
+4) Access Policy Minimum
+- Least privilege access only
+- No public links
+- MFA enabled for all admins
+- Access review monthly
+- Immediate removal for inactive users
+
+5) Retention Policy Baseline
+- Raw customer data: retain only as contract allows
+- Anonymized training data: retain for model improvement lifecycle
+- Deletion request SLA: define and enforce

@@ -1,0 +1,61 @@
+BluePrint3D Day 1 Setup Checklist
+
+Goal
+Stand up the minimum business + engineering operating system so pilot testing can run safely and consistently.
+
+Owner Roles
+- Product Owner
+- Engineering Lead
+- Data Steward
+- QA Lead
+
+Day 1 Actions
+1. Create code repository
+- Repo name: blueprint3d-app
+- Enable branch protection on main
+- Require pull request reviews for main
+- Enable issue tracking
+
+2. Create secure data repository/storage
+- Name: blueprint3d-testdata (private)
+- Restrict access to approved team only
+- Turn on audit logs if available
+- Store raw drawings separate from labels
+
+3. Create folder structure in data storage
+- raw/
+- anonymized/
+- pilot_batches/
+- labels/
+- exports/
+
+4. Set pilot batch target
+- 20 projects total
+- 8 clean PDFs
+- 6 scanned/noisy sets
+- 6 phone-photo sets
+
+5. Confirm legal rights for drawings
+- Verify ownership or written permission
+- Record source and usage rights for each project
+- Mark any restricted-use project clearly
+
+6. Configure local runtime
+- Install dependencies: npm install
+- Start app: npm run dev
+- Validate app URL opens and upload view renders
+
+7. Run first 3 pilot projects
+- Follow pilot/pilot_runbook.txt exactly
+- Log every result in pilot/pilot_metrics_template.csv
+- Note top issue category for each failed step
+
+8. End-of-day review
+- Count blockers
+- Rank top 3 recurring issues
+- Decide next day focus (only top 1-2 issues)
+
+Go/No-Go Daily Signal
+- Green: 0 crashes in day batch and measurable progress
+- Yellow: 1 blocker repeated more than once
+- Red: 2+ crash/blockers in same flow step

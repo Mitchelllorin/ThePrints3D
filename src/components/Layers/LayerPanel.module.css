@@ -1,0 +1,60 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background 0.1s;
+}
+
+.row:hover {
+  background: #0f2847;
+}
+
+.row.hidden {
+  opacity: 0.4;
+}
+
+.eyeBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.icon {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.label {
+  font-size: 13px;
+  color: #cbd5e1;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.opacity {
+  width: 56px;
+  flex-shrink: 0;
+  accent-color: #38bdf8;
+  cursor: pointer;
+}

@@ -1,0 +1,110 @@
+.viewer {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #060d1a;
+}
+
+/* ── Measure toolbar ──────────────────────────────────────────────────────────── */
+
+.toolbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.88);
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  padding: 6px 10px;
+  backdrop-filter: blur(6px);
+  pointer-events: all;
+}
+
+.toolBtn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.toolBtn:hover {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+.toolBtnActive {
+  background: #1e3a5f !important;
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
+}
+
+.toolHint {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* ── Overlays ─────────────────────────────────────────────────────────────────── */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.buildingMsg {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid #1e3a5f;
+  border-radius: 12px;
+  padding: 16px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #38bdf8;
+  backdrop-filter: blur(6px);
+}
+
+.spinner {
+  font-size: 22px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.idleMsg {
+  text-align: center;
+  color: #475569;
+}
+
+.idleMsg p {
+  margin: 4px 0;
+  font-size: 15px;
+}
+
+.hint {
+  font-size: 13px !important;
+  color: #334155 !important;
+}
+
+.stats {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}

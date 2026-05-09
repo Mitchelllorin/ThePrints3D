@@ -1,0 +1,69 @@
+BluePrint3D 2-Week Pilot Runbook
+
+Objective
+Validate real-world readiness and collect correction data for parser improvement.
+
+Scope
+- 20 projects total
+- Input mix target:
+  - 8 clean PDF sets
+  - 6 scanned/noisy PDF sets
+  - 6 phone-photo image sets
+
+Per-Project Test Flow (run in this exact order)
+1. Upload full project set
+2. Analyze all drawings
+3. Calibrate scale on at least one known dimension
+4. Build 3D model
+5. Toggle layers (walls/floors/structure + one MEP layer)
+6. Run at least 3 measurements against known values
+7. Record failures and corrections in pilot_metrics_template.csv
+
+Required Metrics (must be filled for every project)
+- wall_correctness_pct
+- measurement_error_pct
+- symbol_text_false_positive_count
+- time_to_usable_3d_min
+- crash_or_blocker
+
+Definitions
+- wall_correctness_pct: estimated percent of walls correctly represented in 3D
+- measurement_error_pct: mean absolute percent error vs known dimensions
+- symbol_text_false_positive_count: count of non-wall items (text/dim/symbols) that became walls
+- time_to_usable_3d_min: elapsed time from upload start to user being able to inspect model
+- crash_or_blocker: any app crash, lockup, or flow-blocking defect
+
+Go / No-Go Rules (end of pilot)
+GO if all are true:
+1) crash_or_blocker = no for at least 18/20 projects
+2) average wall_correctness_pct >= 85
+3) median measurement_error_pct <= 5
+4) average symbol_text_false_positive_count <= 10 per project
+5) average time_to_usable_3d_min <= 10
+
+NO-GO if any are true:
+1) more than 2 projects have crash_or_blocker = yes
+2) average wall_correctness_pct < 80
+3) median measurement_error_pct > 8
+4) repeated blocker in same step across 5+ projects
+
+Daily Cadence
+- End of each day: sort by top_issue and count repeats
+- Fix only top 1-2 recurring blockers at a time
+- Re-test at least 3 previously failed projects after each fix
+
+Top Issue Tags (recommended)
+- false_walls_from_text
+- poor_scale_inference
+- floor_stacking_wrong
+- model_build_stuck
+- layer_visibility_bug
+- measurement_inaccurate
+- upload_parse_failure
+- performance_timeout
+
+Pilot Exit Deliverables
+1) Completed CSV with all 20 projects
+2) Ranked list of top 3 recurring issues
+3) Go/No-Go decision based on rules above
+4) If No-Go: 1-week fix plan with owner per issue

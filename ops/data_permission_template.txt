@@ -1,0 +1,45 @@
+Blueprint3D Data Permission and Use Record Template
+
+Purpose
+Record permission and data rights for each drawing set used in pilot/testing/training.
+
+Project Information
+- Project ID:
+- Project Name:
+- Data Provider (company/person):
+- Date Received:
+
+Permission Details
+- Data owner confirms rights to share drawings: Yes / No
+- Permission granted for internal testing: Yes / No
+- Permission granted for model training: Yes / No
+- Permission granted for product demos: Yes / No
+- Restrictions or exclusions:
+
+Confidentiality
+- Contains sensitive information: Yes / No
+- Requires anonymization before use: Yes / No
+- Distribution limitation (internal only / named users / other):
+
+Retention and Deletion
+- Retention period allowed:
+- Deletion required on request: Yes / No
+- Deletion contact:
+
+Legal Confirmation
+- Provider representative name:
+- Title:
+- Email:
+- Signature:
+- Date:
+
+Blueprint3D Internal Review
+- Reviewed by:
+- Approved for pilot: Yes / No
+- Approved for training: Yes / No
+- Notes:
+
+Operational Flags
+- allowed_use = testing_only / training_allowed / restricted
+- anonymized_required = yes / no
+- do_not_export = yes / no
