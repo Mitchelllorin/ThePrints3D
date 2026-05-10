@@ -121,7 +121,10 @@ jobs:
 
             let existing = null;
             let before = null;
+            let pagesSearched = 0;
+            const maxPagesToSearch = 20;
             while (true) {
+              pagesSearched += 1;
               const commentSearch = await github.graphql(query, {
                 owner,
                 repo,
@@ -137,7 +140,11 @@ jobs:
                   comment.body?.includes(marker),
               );
 
-              if (existing || !commentConnection.pageInfo.hasPreviousPage) {
+              if (
+                existing ||
+                !commentConnection.pageInfo.hasPreviousPage ||
+                pagesSearched >= maxPagesToSearch
+              ) {
                 break;
               }
 
