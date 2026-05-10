@@ -71,6 +71,7 @@ jobs:
           PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
         with:
           script: |
+            // Unique marker used to find and update the same PR preview comment.
             const marker = '<!-- blueprint3d-pr-preview-comment:v1 -->';
             const previewUrl = process.env.PREVIEW_URL;
 
@@ -118,9 +119,9 @@ jobs:
               }
             `;
 
-            let existing;
+            let existing = null;
             let before = null;
-            while (!existing) {
+            while (true) {
               const commentSearch = await github.graphql(query, {
                 owner,
                 repo,
