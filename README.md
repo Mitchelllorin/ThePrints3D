@@ -71,6 +71,14 @@ CI workflow (`.github/workflows/ci.yml`) runs:
 - tests
 - build
 
+## Build and preview pipeline
+
+- `npm run build` creates production assets in `dist/`
+- `npm run preview` serves the built `dist/` locally for verification
+- GitHub Actions preview workflow (`.github/workflows/preview.yml`):
+  - On pull requests: builds and uploads a `preview-dist` artifact
+  - On `main`: builds and deploys to GitHub Pages (base path `/BluePrint3D/`)
+
 ## Near-term roadmap
 
 1. Improve noisy-input robustness (false positives/false negatives)
