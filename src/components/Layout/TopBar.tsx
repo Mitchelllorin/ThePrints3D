@@ -23,7 +23,10 @@ export default function TopBar() {
         </button>
         <div className={styles.brand}>
           <span className={styles.brandIcon}>📐</span>
-          <span className={styles.brandName}>BluePrint3D</span>
+          <span className={styles.brandName}>
+            <span className={styles.brandBlue}>Blue</span>
+            <span className={styles.brandRest}>Print3D</span>
+          </span>
         </div>
       </div>
 

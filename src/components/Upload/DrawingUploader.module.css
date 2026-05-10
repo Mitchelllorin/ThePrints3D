@@ -17,10 +17,15 @@
   font-weight: 800;
   letter-spacing: -2px;
   margin: 0 0 12px;
-  background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #e2e8f0;
+}
+
+.titleBlue {
+  color: #3b82f6;
+}
+
+.titleRest {
+  color: inherit;
 }
 
 .subtitle {

@@ -30,7 +30,10 @@ export default function DrawingUploader() {
   return (
     <div className={styles.page}>
       <div className={styles.hero}>
-        <h1 className={styles.title}>BluePrint3D</h1>
+        <h1 className={styles.title}>
+          <span className={styles.titleBlue}>Blue</span>
+          <span className={styles.titleRest}>Print3D</span>
+        </h1>
         <p className={styles.subtitle}>
           Scan your construction drawings and turn them into an interactive 3D model.
           <br />
