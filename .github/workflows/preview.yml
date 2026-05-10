@@ -94,7 +94,7 @@ jobs:
             const query = `
               query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String) {
                 repository(owner: $owner, name: $repo) {
-                  issue(number: $issueNumber) {
+                  pullRequest(number: $issueNumber) {
                     comments(last: 50, before: $before) {
                       pageInfo {
                         hasPreviousPage
@@ -106,9 +106,6 @@ jobs:
                         author {
                           __typename
                           ... on Bot {
-                            login
-                          }
-                          ... on User {
                             login
                           }
                         }
@@ -133,7 +130,7 @@ jobs:
                 before,
               });
 
-              const commentConnection = commentSearch.repository.issue.comments;
+              const commentConnection = commentSearch.repository.pullRequest.comments;
               existing = commentConnection.nodes.find(
                 (comment) =>
                   comment.author?.__typename === 'Bot' &&
