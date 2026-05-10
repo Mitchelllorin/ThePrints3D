@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build PR preview
+      - name: Build PR preview (relative base path)
         env:
           VITE_BASE_PATH: ./
         run: npm run build
@@ -54,6 +54,9 @@ jobs:
       contents: read
       pages: write
       id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy PR preview
         id: deployment
@@ -78,7 +81,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build for Pages
+      - name: Build for Pages production (repo base path)
         env:
           VITE_BASE_PATH: /BluePrint3D/
         run: npm run build
