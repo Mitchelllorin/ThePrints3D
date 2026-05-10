@@ -6,7 +6,6 @@ import {
   Environment,
   GizmoHelper,
   GizmoViewport,
-  Stats,
 } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
@@ -130,9 +129,14 @@ export default function ModelViewer() {
             labelColor="#f1f5f9"
           />
         </GizmoHelper>
-
-        <Stats className={styles.stats} />
       </Canvas>
+
+      {/* Camera hint */}
+      {(model.status === 'building' || model.status === 'ready') && (
+        <div className={styles.cameraHint} aria-label="Camera controls: Scroll to zoom, Drag to orbit, Right-drag to pan">
+          <span aria-hidden="true">Scroll to zoom · Drag to orbit · Right-drag to pan</span>
+        </div>
+      )}
 
       {model.status === 'building' && (
         <div className={styles.overlay}>

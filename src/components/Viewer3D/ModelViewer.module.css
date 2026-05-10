@@ -103,8 +103,18 @@
   color: #334155 !important;
 }
 
-.stats {
+.cameraHint {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 4px 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  backdrop-filter: blur(4px);
 }
