@@ -71,7 +71,7 @@ jobs:
           PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
         with:
           script: |
-            const marker = '<!-- pr-preview-link -->';
+            const marker = '<!-- blueprint3d-pr-preview-comment:v1 -->';
             const previewUrl = process.env.PREVIEW_URL;
 
             if (!previewUrl) {
@@ -90,34 +90,58 @@ jobs:
             const { owner, repo } = context.repo;
             const issue_number = context.issue.number;
 
-            const commentSearch = await github.graphql(
-              `
-                query($owner: String!, $repo: String!, $issueNumber: Int!) {
-                  repository(owner: $owner, name: $repo) {
-                    issue(number: $issueNumber) {
-                      comments(last: 100) {
-                        nodes {
-                          databaseId
-                          body
-                          author {
-                            __typename
+            const query = `
+              query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String) {
+                repository(owner: $owner, name: $repo) {
+                  issue(number: $issueNumber) {
+                    comments(last: 100, before: $before) {
+                      pageInfo {
+                        hasPreviousPage
+                        startCursor
+                      }
+                      nodes {
+                        databaseId
+                        body
+                        author {
+                          __typename
+                          ... on Bot {
+                            login
+                          }
+                          ... on User {
+                            login
                           }
                         }
                       }
                     }
                   }
                 }
-              `,
-              {
+              }
+            `;
+
+            let existing;
+            let before = null;
+            while (!existing) {
+              const commentSearch = await github.graphql(query, {
                 owner,
                 repo,
                 issueNumber: issue_number,
-              },
-            );
+                before,
+              });
 
-            const existing = commentSearch.repository.issue.comments.nodes.find(
-              (comment) => comment.author?.__typename === 'Bot' && comment.body?.includes(marker),
-            );
+              const commentConnection = commentSearch.repository.issue.comments;
+              existing = commentConnection.nodes.find(
+                (comment) =>
+                  comment.author?.__typename === 'Bot' &&
+                  comment.author?.login === 'github-actions[bot]' &&
+                  comment.body?.includes(marker),
+              );
+
+              if (existing || !commentConnection.pageInfo.hasPreviousPage) {
+                break;
+              }
+
+              before = commentConnection.pageInfo.startCursor;
+            }
 
             if (existing) {
               await github.rest.issues.updateComment({
