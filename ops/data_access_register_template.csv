@@ -1,0 +1,2 @@
+project_id,project_name,data_provider,permission_status,allowed_use,anonymized_required,do_not_export,contains_sensitive_info,retention_period,deletion_contact,approved_by,last_reviewed,notes
+P-001,Sample Project,Sample Provider,approved,testing_only,yes,no,yes,12_months,dataowner@example.com,,YYYY-MM-DD,template row

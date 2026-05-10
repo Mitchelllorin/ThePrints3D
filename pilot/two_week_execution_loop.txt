@@ -1,0 +1,42 @@
+BluePrint3D Two-Week Pilot Execution Loop
+
+Objective
+- Run pilot batches quickly, identify recurring blockers, and close the highest-impact issues first.
+
+Cadence
+- Duration: 10 working days
+- Daily cycle:
+  1) Run project batch
+  2) Log outcomes in pilot_metrics_template.csv
+  3) Rank recurring issues by frequency and impact
+  4) Fix top 1-2 issues only
+  5) Re-test at least 3 previously failed projects
+
+Day-by-Day Outline
+- Day 1:
+  - Confirm setup and permissions
+  - Run first 3 projects
+  - Establish baseline blocker list
+- Days 2-4:
+  - Run 2-3 projects/day
+  - Prioritize top recurring issue tags
+  - Implement focused fixes and re-test failed samples
+- Day 5:
+  - Midpoint checkpoint against GO/NO-GO trend
+  - Adjust focus if repeated blocker persists
+- Days 6-9:
+  - Finish remaining projects
+  - Continue focused fix + re-test loop
+- Day 10:
+  - Final metrics aggregation
+  - Top-3 recurring issue ranking
+  - GO/NO-GO recommendation
+
+Prioritization rule
+- Always fix the smallest number of issues that removes the largest number of repeated failures.
+
+Definition of done (pilot close)
+- CSV complete for all 20 projects
+- Top-3 issues documented with counts
+- GO/NO-GO decision documented
+- If NO-GO: 1-week remediation plan with owners

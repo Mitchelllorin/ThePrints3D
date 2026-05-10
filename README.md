@@ -1,75 +1,88 @@
-# React + TypeScript + Vite
+# BluePrint3D
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+BluePrint3D is a React + TypeScript web app that converts drawing sets (PDF/image sheets) into an interactive 3D model with layer toggles and distance measurement.
 
-Currently, two official plugins are available:
+## Current product stage
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Prototype with end-to-end flow:
+  1) Upload drawing set
+  2) Analyze/rasterize sheets
+  3) Detect walls + infer floor level + infer/calibrate scale
+  4) Build and inspect 3D model
+- Optimized for pilot validation, not yet production hardened.
 
-## React Compiler
+## Local setup
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open the app URL printed by Vite.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Commands
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- `npm run dev` – local development
+- `npm run lint` – ESLint checks
+- `npm run test` – unit tests (Vitest)
+- `npm run build` – TypeScript build + Vite production bundle
+- `npm run preview` – preview built app
+
+## Input support
+
+- PDFs (`.pdf`)
+- Images (`.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.webp`)
+
+## High-level architecture
+
+- `src/components/Upload` – file intake
+- `src/components/Drawings` – sheet management, preview, scale calibration
+- `src/components/Viewer3D` – Three.js model visualization and measuring
+- `src/store/useAppStore.ts` – centralized app state/actions (Zustand + Immer)
+- `src/services/pdfRasterizer.ts` – PDF/image rasterization + scale text extraction
+- `src/services/wallDetector.ts` – heuristic wall detection in raster space
+- `src/services/sheetParser.ts` – floor inference/grouping helpers
+- `src/services/drawingProcessor.ts` – drawing processing pipeline orchestration
+- `src/services/logger.ts` – structured app event logging
+- `src/services/pilotMetrics.ts` – pilot CSV snapshot/export utilities
+
+## Pilot and operations artifacts
+
+- `pilot/pilot_runbook.txt` – 2-week pilot operational runbook
+- `pilot/pilot_metrics_template.csv` – required pilot metrics schema
+- `pilot/two_week_execution_loop.txt` – daily execution/fix cadence
+- `ops/day1_setup_checklist.txt` – setup checklist
+- `ops/data_permission_template.txt` – permissions capture template
+- `ops/mvp_acceptance_criteria.md` – MVP readiness/exit criteria
+- `ops/data_governance_controls.txt` – governance controls baseline
+- `ops/data_access_register_template.csv` – permission/access register template
+
+## Known limitations
+
+- Wall detection is heuristic and may over/under-detect on noisy scans and text-heavy plans.
+- Model geometry is partially procedural fallback when parsed wall fidelity is low.
+- Scale inference is best-effort and may require manual calibration.
+- No backend persistence yet (client-side processing/state only).
+
+## Quality gates
+
+CI workflow (`.github/workflows/ci.yml`) runs:
+- lint
+- tests
+- build
+
+## Build and preview pipeline
+
+- `npm run build` creates production assets in `dist/`
+- `npm run preview` serves the built `dist/` locally for verification
+- GitHub Actions preview workflow (`.github/workflows/preview.yml`):
+  - On pull requests: builds and uploads a `preview-dist` artifact
+  - On `main`: builds and deploys to GitHub Pages (base path `/BluePrint3D/`)
+
+## Near-term roadmap
+
+1. Improve noisy-input robustness (false positives/false negatives)
+2. Strengthen scale inference and floor stacking confidence
+3. Expand parser/service unit coverage
+4. Add richer pilot telemetry and result dashboards
+5. Introduce secure backend data handling and retention enforcement

@@ -78,19 +78,6 @@ export default function ScaleCalibrator({
     onCalibrate(mmPerPx, notation)
   }
 
-  // Map image pixel coord to display coord (CSS space)
-  function toCssCoord(p: Point) {
-    if (!imgRef.current) return { left: 0, top: 0 }
-    const rect = imgRef.current.getBoundingClientRect()
-    return {
-      left: (p.x / imageWidth) * rect.width,
-      top: (p.y / imageHeight) * rect.height,
-    }
-  }
-
-  const cssPtA = ptA ? toCssCoord(ptA) : null
-  const cssPtB = ptB ? toCssCoord(ptB) : null
-
   const instructions: Record<Phase, string> = {
     idle: 'Click "Start Calibration" to set a known distance on the drawing',
     'point-a': 'Click the FIRST point of your known measurement',
@@ -161,20 +148,20 @@ export default function ScaleCalibrator({
 
         <div className={styles.imageWrap}>
           {/* SVG overlay for measurement line */}
-          {(cssPtA || cssPtB) && (
-            <svg className={styles.svg}>
-              {cssPtA && cssPtB && (
+          {(ptA || ptB) && (
+            <svg className={styles.svg} viewBox={`0 0 ${imageWidth} ${imageHeight}`} preserveAspectRatio="xMidYMid meet">
+              {ptA && ptB && (
                 <line
-                  x1={cssPtA.left} y1={cssPtA.top}
-                  x2={cssPtB.left} y2={cssPtB.top}
+                  x1={ptA.x} y1={ptA.y}
+                  x2={ptB.x} y2={ptB.y}
                   stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 3"
                 />
               )}
-              {cssPtA && (
-                <circle cx={cssPtA.left} cy={cssPtA.top} r={6} fill="#38bdf8" stroke="#fff" strokeWidth={1.5} />
+              {ptA && (
+                <circle cx={ptA.x} cy={ptA.y} r={6} fill="#38bdf8" stroke="#fff" strokeWidth={1.5} />
               )}
-              {cssPtB && (
-                <circle cx={cssPtB.left} cy={cssPtB.top} r={6} fill="#f59e0b" stroke="#fff" strokeWidth={1.5} />
+              {ptB && (
+                <circle cx={ptB.x} cy={ptB.y} r={6} fill="#f59e0b" stroke="#fff" strokeWidth={1.5} />
               )}
             </svg>
           )}

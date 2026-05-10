@@ -11,7 +11,8 @@ import type {
   Model3D,
 } from '../types'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
-import { groupByFloor, floorToElevation, FLOOR_HEIGHT_M } from '../services/sheetParser'
+import { groupByFloor, floorToElevation, FLOOR_HEIGHT_M, inferFloorNumber } from '../services/sheetParser'
+import { logError, logEvent } from '../services/logger'
 
 // ─── Default Layers ────────────────────────────────────────────────────────────
 
@@ -208,6 +209,13 @@ export const useAppStore = create<AppState>()(
             uploadedAt: Date.now(),
           }
           s.drawings.push(drawing)
+          logEvent('drawing.uploaded', {
+            drawingId: drawing.id,
+            name: drawing.name,
+            type: drawing.type,
+            fileType: drawing.file.type,
+            size: drawing.file.size,
+          })
         }
         if (s.view === 'upload') s.view = 'drawings'
       }),
@@ -216,8 +224,10 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         const idx = s.drawings.findIndex((d) => d.id === id)
         if (idx !== -1) {
-          const url = s.drawings[idx].previewUrl
-          if (url) URL.revokeObjectURL(url)
+          const previewUrl = s.drawings[idx].previewUrl
+          const rasterUrl = s.drawings[idx].rasterUrl
+          if (previewUrl) URL.revokeObjectURL(previewUrl)
+          if (rasterUrl && rasterUrl !== previewUrl) URL.revokeObjectURL(rasterUrl)
           s.drawings.splice(idx, 1)
         }
         if (s.selectedDrawingId === id) s.selectedDrawingId = null
@@ -253,6 +263,7 @@ export const useAppStore = create<AppState>()(
       const drawing = get().drawings.find((d) => d.id === id)
       if (!drawing || drawing.status === 'processing') return
 
+      logEvent('drawing.processing.started', { drawingId: id, name: drawing?.name })
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)
         if (d) { d.status = 'processing'; d.parseProgress = 0 }
@@ -267,8 +278,26 @@ export const useAppStore = create<AppState>()(
 
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)
-        if (d) Object.assign(d, patch)
+        if (d) {
+          if (patch.rasterUrl && d.rasterUrl && patch.rasterUrl !== d.rasterUrl) {
+            URL.revokeObjectURL(d.rasterUrl)
+          }
+          Object.assign(d, patch)
+        }
       })
+
+      if (patch.status === 'ready') {
+        logEvent('drawing.processing.completed', {
+          drawingId: id,
+          wallCount: patch.parsedWalls?.length ?? 0,
+          floorNumber: patch.floorNumber,
+          scaleNotation: patch.scaleNotation,
+        })
+      } else if (patch.status === 'error') {
+        logError('drawing.processing.failed', patch.errorMessage ?? 'Unknown processing error', {
+          drawingId: id,
+        })
+      }
     },
 
     toggleLayer: (id) =>
@@ -301,7 +330,11 @@ export const useAppStore = create<AppState>()(
 
         // Build floor levels from sheet numbers
         const floorGroups = groupByFloor(
-          s.drawings.map((d) => ({ id: d.id, name: d.name, floorNumber: d.floorNumber }))
+          s.drawings.map((d) => ({
+            id: d.id,
+            name: d.name,
+            floorNumber: d.floorNumber ?? inferFloorNumber(d.name),
+          }))
         )
         const levels: FloorLevel[] = []
         for (const [floorNum, ids] of Array.from(floorGroups.entries()).sort(([a], [b]) => a - b)) {
@@ -314,6 +347,11 @@ export const useAppStore = create<AppState>()(
           })
         }
         s.model.floorLevels = levels
+        logEvent('model.build.started', {
+          drawingCount: s.drawings.length,
+          floorCount: levels.length,
+          uncalibratedCount: s.drawings.filter((d) => !d.scaleMmPerPx).length,
+        })
       }),
 
     setMeasureMode: (active) =>

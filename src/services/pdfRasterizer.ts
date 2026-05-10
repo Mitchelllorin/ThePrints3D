@@ -1,4 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import { RASTER_SCALE } from './constants'
 
 // Configure worker once
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -18,8 +19,28 @@ export interface RasterResult {
   scaleNotation: string | null
 }
 
-const RASTER_SCALE = 1.5   // ~144 DPI (PDF points * scale) — good balance of detail vs speed
 const SCALE_REGEX = /\b1\s*[:/]\s*(\d+)\b|\b(\d+)\s*[:/]\s*1\b/g
+const MIN_BUILDING_SCALE = 10
+const MAX_BUILDING_SCALE = 500
+
+function pickBestScaleNotation(fullText: string): string | null {
+  const candidates: Array<{ notation: string; ratio: number }> = []
+  for (const m of fullText.matchAll(SCALE_REGEX)) {
+    const left = m[1] ? 1 : parseInt(m[2], 10)
+    const right = m[1] ? parseInt(m[1], 10) : 1
+    if (!Number.isFinite(left) || !Number.isFinite(right) || left <= 0 || right <= 0) continue
+    const ratio = right / left
+    const notation = `${left}:${right}`
+    candidates.push({ notation, ratio })
+  }
+  if (candidates.length === 0) return null
+
+  // Prefer common building scales, fallback to first detected value.
+  const preferred = candidates.find(
+    (c) => c.ratio >= MIN_BUILDING_SCALE && c.ratio <= MAX_BUILDING_SCALE
+  )
+  return preferred?.notation ?? candidates[0].notation
+}
 
 /** Rasterize the first page of a PDF file. */
 export async function rasterizePDF(
@@ -46,20 +67,15 @@ export async function rasterizePDF(
 
   // Try to extract scale notation from text layer
   let scaleNotation: string | null = null
-  try {
-    const textContent = await page.getTextContent()
-    const fullText = textContent.items
-      .map((item) => ('str' in item ? item.str : ''))
-      .join(' ')
-    const matches = [...fullText.matchAll(SCALE_REGEX)]
-    if (matches.length > 0) {
-      const m = matches[0]
-      const ratio = m[1] ?? m[2]
-      scaleNotation = m[1] ? `1:${ratio}` : `${ratio}:1`
+    try {
+      const textContent = await page.getTextContent()
+      const fullText = textContent.items
+        .map((item) => ('str' in item ? item.str : ''))
+        .join(' ')
+      scaleNotation = pickBestScaleNotation(fullText)
+    } catch {
+      // Text extraction is best-effort
     }
-  } catch {
-    // Text extraction is best-effort
-  }
   onProgress?.(85)
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)

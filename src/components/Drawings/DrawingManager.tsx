@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
+import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
+import { logEvent } from '../../services/logger'
 import styles from './DrawingManager.module.css'
 
 const DRAWING_TYPES: { value: DrawingType; label: string }[] = [
@@ -55,6 +57,15 @@ export default function DrawingManager() {
     }
   }
 
+  const exportPilotMetrics = () => {
+    const snapshot = buildPilotSnapshot(drawings)
+    downloadPilotMetricsCsv([snapshot])
+    logEvent('pilot.metrics.exported', {
+      drawingCount: drawings.length,
+      readyCount: drawings.filter((d) => d.status === 'ready').length,
+    })
+  }
+
   const anyPending = drawings.some((d) => d.status === 'pending')
   const anyProcessing = drawings.some((d) => d.status === 'processing')
   const readyCount = drawings.filter((d) => d.status === 'ready').length
@@ -75,6 +86,9 @@ export default function DrawingManager() {
             )}
             <button className={styles.buildBtn} onClick={buildModel}>
               ⬡ Build 3D
+            </button>
+            <button className={styles.processBtn} onClick={exportPilotMetrics} title="Export pilot metrics CSV">
+              ⬇ Export Pilot CSV
             </button>
           </div>
         </div>

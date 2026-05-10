@@ -112,7 +112,7 @@ export default function ModelViewer() {
         {(model.status === 'building' || model.status === 'ready') && (
           <>
             <BuildingModel layers={layers} />
-            {model.status === 'ready' && <MeasureTool />}
+            {model.status === 'ready' && <MeasureTool key={measureMode ? 'measure-on' : 'measure-off'} />}
           </>
         )}
 

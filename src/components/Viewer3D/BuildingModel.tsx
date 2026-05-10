@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, FloorLevel, Layer, ParsedWall } from '../../types'
+import { logEvent } from '../../services/logger'
 
 interface Props {
   layers: Layer[]
@@ -224,7 +225,7 @@ function buildMEP(
 
   // Electrical conduits & panels
   const elecLayer = layers.find((l) => l.id === 'electrical')
-  if (elecLayer && hasElec) {
+  if (elecLayer && elecLayer.visible && hasElec) {
     const eMat = mat(elecLayer.color, elecLayer.opacity, {
       emissive: new THREE.Color(elecLayer.color),
       emissiveIntensity: 0.25,
@@ -253,7 +254,7 @@ function buildMEP(
 
   // Plumbing risers + horizontal run
   const plumbLayer = layers.find((l) => l.id === 'plumbing')
-  if (plumbLayer && hasPlumb) {
+  if (plumbLayer && plumbLayer.visible && hasPlumb) {
     const pMat = mat(plumbLayer.color, plumbLayer.opacity, { metalness: 0.5, roughness: 0.4 })
     const riserPts = [
       [cx - W * 0.25, cz - D * 0.25],
@@ -277,7 +278,7 @@ function buildMEP(
 
   // Mechanical ducts + AHU
   const mechLayer = layers.find((l) => l.id === 'mechanical')
-  if (mechLayer && hasMech) {
+  if (mechLayer && mechLayer.visible && hasMech) {
     const mMat = mat(mechLayer.color, mechLayer.opacity, { metalness: 0.3 })
     const dGeo = new THREE.BoxGeometry(W * 0.75, 0.28, 0.45)
     const duct = new THREE.Mesh(dGeo, mMat)
@@ -325,6 +326,13 @@ export default function BuildingModel({ layers }: Props) {
       globalCx = rcx
       globalCy = rcy
       globalMmPerPx = ref.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
+    }
+    const fallbackScaleUsages = drawings.filter((d) => d.parsedWalls.length > 0 && !d.scaleMmPerPx).length
+    if (fallbackScaleUsages > 0) {
+      logEvent('model.scale.fallback_used', {
+        fallbackScaleMmPerPx: DEFAULT_SCALE_MM_PER_PX,
+        drawingCount: fallbackScaleUsages,
+      }, 'warn')
     }
 
     // Compute global footprint
@@ -402,33 +410,15 @@ export default function BuildingModel({ layers }: Props) {
       )
     }
 
-    const timer = setTimeout(() => setModelStatus('ready'), 1500)
+    const timer = setTimeout(() => {
+      setModelStatus('ready')
+      logEvent('model.build.completed', {
+        floorCount: floorLevels.length,
+        renderedObjects: group.children.length,
+      })
+    }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, model.floorLevels, setModelStatus])
-
-  // Live layer visibility + opacity updates (no geometry rebuild)
-  useEffect(() => {
-    if (!groupRef.current) return
-    for (const obj of groupRef.current.children) {
-      const layerId = obj.userData.layer as string
-      if (!layerId) continue
-      const layer = layers.find((l) => l.id === layerId)
-      if (layer) {
-        obj.visible = layer.visible
-        const mesh = obj as THREE.Mesh
-        if (Array.isArray(mesh.material)) {
-          for (const m of mesh.material as THREE.MeshStandardMaterial[]) {
-            m.opacity = layer.opacity
-            m.transparent = layer.opacity < 1
-          }
-        } else if (mesh.material) {
-          const m = mesh.material as THREE.MeshStandardMaterial
-          m.opacity = layer.opacity
-          m.transparent = layer.opacity < 1
-        }
-      }
-    }
-  }, [layers])
+  }, [drawings, model.floorLevels, layers, setModelStatus])
 
   return <group ref={groupRef} />
 }
