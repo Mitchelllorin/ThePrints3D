@@ -25,7 +25,7 @@ export default function TopBar() {
           <span className={styles.brandIcon}>📐</span>
           <span className={styles.brandName}>
             <span className={styles.brandBlue}>Blue</span>
-            <span className={styles.brandRest}>Print3D</span>
+            <span>Print3D</span>
           </span>
         </div>
       </div>
