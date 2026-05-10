@@ -76,8 +76,8 @@ CI workflow (`.github/workflows/ci.yml`) runs:
 - `npm run build` creates production assets in `dist/`
 - `npm run preview` serves the built `dist/` locally for verification
 - GitHub Actions preview workflow (`.github/workflows/preview.yml`):
-  - On pull requests: builds and uploads a `preview-dist` artifact
-  - On `main`: builds and deploys to GitHub Pages (base path `/BluePrint3D/`)
+  - On pull requests: builds and deploys a GitHub Pages preview environment (relative base path `./`)
+  - On `main`: builds and deploys production GitHub Pages (base path `/BluePrint3D/`)
 
 ## Near-term roadmap
 
