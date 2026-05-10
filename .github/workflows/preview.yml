@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build-pr-preview:
     name: Build PR preview
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -47,7 +47,7 @@ jobs:
 
   deploy-pr-preview:
     name: Deploy PR preview
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     needs: build-pr-preview
     permissions:
