@@ -69,6 +69,8 @@ export default function DrawingManager() {
   const anyPending = drawings.some((d) => d.status === 'pending')
   const anyProcessing = drawings.some((d) => d.status === 'processing')
   const readyCount = drawings.filter((d) => d.status === 'ready').length
+  const uncalibrated = drawings.filter((d) => d.scaleMmPerPx == null)
+  const firstUncalibrated = uncalibrated[0] ?? null
 
   return (
     <div className={styles.page}>
@@ -92,6 +94,48 @@ export default function DrawingManager() {
             </button>
           </div>
         </div>
+
+        {firstUncalibrated && (
+          <div
+            style={{
+              margin: '12px 0',
+              padding: '12px 14px',
+              borderRadius: 10,
+              background: 'linear-gradient(90deg, rgba(251,191,36,0.12), rgba(251,191,36,0.04))',
+              border: '1px solid rgba(251,191,36,0.35)',
+              color: '#fde68a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              fontSize: 14,
+            }}
+          >
+            <span>
+              <strong>⚠️ {uncalibrated.length} drawing{uncalibrated.length !== 1 ? 's' : ''} need scale calibration</strong>
+              <span style={{ opacity: 0.8 }}> — measurements & 3D dimensions will be wrong without it.</span>
+            </span>
+            <button
+              onClick={() => {
+                if (firstUncalibrated.id !== selectedDrawingId) selectDrawing(firstUncalibrated.id)
+                setCalibratingId(firstUncalibrated.id)
+              }}
+              style={{
+                background: '#fbbf24',
+                color: '#0b0f1a',
+                border: 'none',
+                padding: '8px 14px',
+                borderRadius: 8,
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                fontSize: 13,
+              }}
+            >
+              📏 Calibrate now →
+            </button>
+          </div>
+        )}
 
         {readyCount > 0 && (
           <div className={styles.readySummary}>
