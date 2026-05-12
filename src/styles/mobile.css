@@ -1,0 +1,65 @@
+/*
+ * Global mobile / accessibility tweaks for BluePrint3D.
+ * Imported once from main.tsx so every component picks them up.
+ */
+
+/* Use safe-area insets so we don't draw under the status bar / nav bar on phones. */
+html, body, #root {
+  height: 100%;
+  height: 100dvh; /* dynamic viewport height — handles mobile browser chrome resize */
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #0f172a;
+  color: #f1f5f9;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  touch-action: manipulation; /* eliminates the 300ms tap delay + double-tap zoom on buttons */
+}
+
+/* Make every interactive element a comfortable touch target. */
+button,
+[role="button"],
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+@media (max-width: 768px) {
+  button,
+  [role="button"] {
+    min-height: 44px;
+  }
+  input[type="text"],
+  input[type="number"],
+  input[type="search"],
+  textarea {
+    min-height: 44px;
+    font-size: 16px; /* prevent iOS Safari auto-zoom on focus */
+  }
+}
+
+/* Allow components to use safe-area insets via env() vars. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+/* Hide scrollbars in mobile portrait — they're flaky on Android WebView. */
+@media (max-width: 768px) {
+  * {
+    scrollbar-width: thin;
+  }
+  *::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+}

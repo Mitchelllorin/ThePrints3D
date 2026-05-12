@@ -7,6 +7,13 @@
   min-height: 100%;
 }
 
+@media (max-width: 768px) {
+  .page {
+    padding: 20px 16px 80px;
+    gap: 24px;
+  }
+}
+
 .hero {
   text-align: center;
   max-width: 640px;
@@ -23,11 +30,27 @@
   background-clip: text;
 }
 
+@media (max-width: 768px) {
+  .title {
+    font-size: 32px;
+    letter-spacing: -1px;
+  }
+}
+
 .subtitle {
   font-size: 16px;
   color: #94a3b8;
   line-height: 1.6;
   margin: 0;
+}
+
+@media (max-width: 768px) {
+  .subtitle {
+    font-size: 14px;
+  }
+  .subtitle br {
+    display: none;
+  }
 }
 
 .dropzone {
@@ -43,6 +66,14 @@
   gap: 12px;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
+  min-height: 200px;
+}
+
+@media (max-width: 768px) {
+  .dropzone {
+    padding: 32px 20px;
+    min-height: 180px;
+  }
 }
 
 .dropzone:hover,
