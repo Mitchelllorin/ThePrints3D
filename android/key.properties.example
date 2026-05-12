@@ -1,0 +1,17 @@
+# Android signing configuration — DO NOT commit the real file to git (it is in .gitignore).
+# Copy this file to android/key.properties and fill in your actual values.
+
+# Password that protects the .jks keystore file
+storePassword=your-store-password
+
+# Password that protects the specific key inside the keystore
+# (usually the same as storePassword for upload keys)
+keyPassword=your-key-password
+
+# The alias name of the key inside the keystore
+# The committed new-upload-key.jks uses: blueprint3d-upload-reset
+keyAlias=blueprint3d-upload-reset
+
+# Path to the keystore file, relative to android/app/
+# Copy new-upload-key.jks (repo root) to android/app/keystore/upload-key.jks
+storeFile=keystore/upload-key.jks
