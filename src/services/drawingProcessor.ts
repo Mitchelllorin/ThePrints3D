@@ -28,7 +28,7 @@ export async function processDrawing(
     // 2. Detect walls (runs in main thread — acceptable for most drawing sizes)
     setProgress(82)
     const isRasterPhoto = drawing.file.type.startsWith('image/')
-    let walls = detectWalls(raster.imageData, {
+    let result = detectWalls(raster.imageData, {
       // Stricter defaults reduce annotation noise (text/dimension lines)
       edgeThreshold: isRasterPhoto ? 30 : 34,
       minWallLengthPx: isRasterPhoto ? 55 : 70,
@@ -38,8 +38,8 @@ export async function processDrawing(
       mergeGapPx: 4,
     })
     // Fallback pass for noisy scans/photos where strict pairing can miss walls.
-    if (walls.length === 0) {
-      walls = detectWalls(raster.imageData, {
+    if (result.walls.length === 0) {
+      result = detectWalls(raster.imageData, {
         edgeThreshold: isRasterPhoto ? 26 : 30,
         minWallLengthPx: isRasterPhoto ? 40 : 55,
         minWallThicknessPx: 2,
@@ -48,6 +48,8 @@ export async function processDrawing(
         mergeGapPx: 6,
       })
     }
+    const walls = result.walls
+    const classificationStats = result.stats
     setProgress(95)
 
     // 3. Derive scale from notation if available
@@ -68,6 +70,7 @@ export async function processDrawing(
       rasterHeight: raster.height,
       pageCount: raster.pageCount,
       parsedWalls: walls,
+      lineClassificationStats: classificationStats,
       parseProgress: 100,
       scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
       scaleMmPerPx: scaleMmPerPx ?? drawing.scaleMmPerPx,

@@ -140,6 +140,33 @@ export default function DrawingManager() {
         {readyCount > 0 && (
           <div className={styles.readySummary}>
             {readyCount} drawing{readyCount !== 1 ? 's' : ''} analysed — {drawings.reduce((n, d) => n + d.parsedWalls.length, 0)} wall segments detected
+            {(() => {
+              const totals = drawings.reduce(
+                (acc, d) => {
+                  const s = d.lineClassificationStats
+                  if (!s) return acc
+                  acc.dimension += s.dimension
+                  acc.dashed += s.dashed
+                  acc.dotted += s.dotted
+                  acc.leader += s.leader
+                  acc.unknown += s.unknown
+                  return acc
+                },
+                { dimension: 0, dashed: 0, dotted: 0, leader: 0, unknown: 0 },
+              )
+              const filteredTotal = totals.dimension + totals.dashed + totals.dotted + totals.leader + totals.unknown
+              if (filteredTotal === 0) return null
+              return (
+                <span style={{ display: 'block', marginTop: 6, fontSize: 12, opacity: 0.85 }}>
+                  Filtered out:{' '}
+                  {totals.dimension > 0 && <span style={{ marginRight: 8 }}>{totals.dimension} dimension</span>}
+                  {totals.dashed > 0 && <span style={{ marginRight: 8 }}>{totals.dashed} dashed</span>}
+                  {totals.dotted > 0 && <span style={{ marginRight: 8 }}>{totals.dotted} dotted/overhead</span>}
+                  {totals.leader > 0 && <span style={{ marginRight: 8 }}>{totals.leader} leader/short</span>}
+                  {totals.unknown > 0 && <span style={{ marginRight: 8 }}>{totals.unknown} unclassified</span>}
+                </span>
+              )
+            })()}
           </div>
         )}
 
