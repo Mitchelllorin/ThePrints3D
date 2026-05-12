@@ -55,6 +55,7 @@ jobs:
       pages: write
       id-token: write
       issues: write
+      statuses: write
     environment:
       name: github-pages-preview
       url: ${{ steps.deployment.outputs.page_url }}
@@ -164,6 +165,37 @@ jobs:
                 body,
               });
             }
+
+      - name: Publish PR preview status check
+        uses: actions/github-script@v8
+        env:
+          PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        with:
+          script: |
+            const previewUrl = process.env.PREVIEW_URL;
+            const sha = process.env.PR_HEAD_SHA;
+
+            if (!previewUrl) {
+              core.setFailed('Missing preview URL from deployment output.');
+              return;
+            }
+
+            if (!sha) {
+              core.setFailed('Missing pull request head SHA.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha,
+              state: 'success',
+              context: 'PR Preview',
+              description: 'Open deployed PR preview',
+              target_url: previewUrl,
+            });
 
   build-pages:
     name: Build Pages production
