@@ -12,6 +12,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
+import CameraHud from './CameraHud'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -24,6 +25,30 @@ function CameraRig() {
       initialized.current = true
     }
   }, [camera])
+  return null
+}
+
+/**
+ * Listens for camera-preset requests from the store (set by the CameraHud).
+ * Applies the requested camera pose to the active camera + OrbitControls.
+ */
+function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<{ target: THREE.Vector3; update: () => void } | null> }) {
+  const { camera } = useThree()
+  const preset = useAppStore((s) => s.cameraPreset)
+  const consume = useAppStore((s) => s.consumeCameraPreset)
+
+  useEffect(() => {
+    if (!preset) return
+    camera.position.set(preset.position[0], preset.position[1], preset.position[2])
+    if (controlsRef.current) {
+      controlsRef.current.target.set(preset.target[0], preset.target[1], preset.target[2])
+      controlsRef.current.update()
+    } else {
+      camera.lookAt(preset.target[0], preset.target[1], preset.target[2])
+    }
+    consume()
+  }, [preset, camera, controlsRef, consume])
+
   return null
 }
 
@@ -47,6 +72,7 @@ export default function ModelViewer() {
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const measurements = useAppStore((s) => s.measurements)
+  const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null)
 
   return (
     <div className={styles.viewer}>
@@ -77,10 +103,14 @@ export default function ModelViewer() {
         </div>
       )}
 
+      {/* Camera preset HUD — visible whenever the model exists */}
+      {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
+
       <Canvas
         shadows
         gl={{ antialias: true, preserveDrawingBuffer: false }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
+        style={{ touchAction: 'none' }}
       >
         <CameraRig />
         <ambientLight intensity={0.4} />
@@ -117,12 +147,29 @@ export default function ModelViewer() {
         )}
 
         <OrbitControls
+          ref={controlsRef as unknown as React.RefObject<undefined>}
           makeDefault
           enableDamping
-          dampingFactor={0.05}
+          dampingFactor={0.12}
+          rotateSpeed={0.6}
+          panSpeed={0.7}
+          zoomSpeed={0.7}
           minDistance={1}
           maxDistance={200}
+          enablePan
+          screenSpacePanning
+          mouseButtons={{
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN,
+          }}
+          touches={{
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN,
+          }}
         />
+
+        <CameraPresetApplier controlsRef={controlsRef} />
 
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport

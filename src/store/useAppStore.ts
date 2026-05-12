@@ -14,6 +14,12 @@ import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import { groupByFloor, floorToElevation, FLOOR_HEIGHT_M, inferFloorNumber } from '../services/sheetParser'
 import { logError, logEvent } from '../services/logger'
 
+// ─── Camera Presets ────────────────────────────────────────────────────────────
+export interface CameraPreset {
+  position: [number, number, number]
+  target: [number, number, number]
+}
+
 // ─── Default Layers ────────────────────────────────────────────────────────────
 
 const DEFAULT_LAYERS: Layer[] = [
@@ -128,6 +134,7 @@ interface AppState {
   sidebarOpen: boolean
   measurements: Measurement[]
   measureMode: boolean
+  cameraPreset: CameraPreset | null
 
   // Actions
   setView: (view: AppView) => void
@@ -148,6 +155,9 @@ interface AppState {
   addMeasurement: (m: Omit<Measurement, 'id'>) => void
   removeMeasurement: (id: string) => void
   clearMeasurements: () => void
+  // Camera
+  setCameraPreset: (p: CameraPreset) => void
+  consumeCameraPreset: () => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -373,6 +383,16 @@ export const useAppStore = create<AppState>()(
     clearMeasurements: () =>
       set((s) => {
         s.measurements = []
+      }),
+
+    setCameraPreset: (p) =>
+      set((s) => {
+        s.cameraPreset = p
+      }),
+
+    consumeCameraPreset: () =>
+      set((s) => {
+        s.cameraPreset = null
       }),
   }))
 )
