@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useAppStore } from '../../store/useAppStore'
 import styles from './DrawingUploader.module.css'
@@ -13,6 +13,7 @@ const ACCEPTED_TYPES = {
 
 export default function DrawingUploader() {
   const addDrawings = useAppStore((s) => s.addDrawings)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const onDrop = useCallback(
     (accepted: File[]) => {
@@ -20,6 +21,21 @@ export default function DrawingUploader() {
     },
     [addDrawings]
   )
+
+  const onCameraCapture = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files
+      if (!files || files.length === 0) return
+      addDrawings(Array.from(files))
+      // Reset so the same file can be re-captured if user retries
+      if (cameraInputRef.current) cameraInputRef.current.value = ''
+    },
+    [addDrawings]
+  )
+
+  const triggerCamera = useCallback(() => {
+    cameraInputRef.current?.click()
+  }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -37,6 +53,31 @@ export default function DrawingUploader() {
           Supports floor plans, RCP, architectural, structural, MEP sets and more.
         </p>
       </div>
+
+      {/* Hidden input — opens the rear camera on mobile, falls back to file picker on desktop. */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={onCameraCapture}
+        style={{ display: 'none' }}
+        data-testid="camera-capture-input"
+      />
+
+      {/* Primary CTA — phones default to the camera flow. */}
+      <button
+        type="button"
+        onClick={triggerCamera}
+        className={styles.cameraBtn}
+        data-testid="scan-with-camera-btn"
+      >
+        <span className={styles.cameraIcon}>📷</span>
+        <span className={styles.cameraLabel}>Scan a print with your camera</span>
+        <span className={styles.cameraSub}>Best for on-site work — uses the rear camera on phones</span>
+      </button>
+
+      <div className={styles.orDivider}><span>or upload existing files</span></div>
 
       <div
         {...getRootProps()}
