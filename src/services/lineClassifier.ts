@@ -88,7 +88,7 @@ export function classifyLine(
 
   // ── Decide ──
   let classification: LineClass
-  let confidence = 0.5
+  let confidence: number
 
   if (length < leaderMaxLengthPx) {
     classification = 'leader'
