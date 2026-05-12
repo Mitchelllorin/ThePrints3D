@@ -4,7 +4,15 @@
   background: #0f172a;
   border-right: 1px solid #1e293b;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 12px 0;
+  transition: width 0.25s ease, padding 0.25s ease, border-color 0.25s ease;
+}
+
+.sidebarCollapsed {
+  width: 0;
+  padding: 0;
+  border-color: transparent;
 }
 
 .section {

@@ -6,10 +6,8 @@ export default function Sidebar() {
   const view = useAppStore((s) => s.view)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
 
-  if (!sidebarOpen) return null
-
   return (
-    <aside className={styles.sidebar}>
+    <aside className={`${styles.sidebar} ${!sidebarOpen ? styles.sidebarCollapsed : ''}`}>
       {view === 'model' && (
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Layers</h2>
