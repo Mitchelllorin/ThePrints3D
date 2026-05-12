@@ -83,10 +83,7 @@ jobs:
 
             const body = [
               marker,
-              '## PR Preview',
-              `[🔍 Open PR Preview](${previewUrl})`,
-              '',
-              '_Auto-updated on each preview deploy._',
+              `[![Open PR Preview](https://img.shields.io/badge/Open%20PR%20Preview-%F0%9F%94%8D%20Click%20Here-blue?style=for-the-badge)](${previewUrl})`,
             ].join('\n');
 
             const { owner, repo } = context.repo;
