@@ -88,6 +88,32 @@
   color: #fff;
 }
 
+.uploadBtns {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.scanBtn {
+  background: #14332a;
+  border: 1px solid #059669;
+  color: #6ee7b7;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.scanBtn:hover {
+  background: #065f46;
+  border-color: #10b981;
+  color: #fff;
+}
+
 .features {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
