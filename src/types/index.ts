@@ -23,6 +23,14 @@ export interface ParsedWall {
   y2: number
   /** Estimated wall thickness in pixels */
   thickness: number
+  /** Structural classification (filled by wallTypeClassifier, may be 'unknown' before scale calibration) */
+  wallType?: import('../services/wallTypeClassifier').WallType
+  /** Estimated structural framing thickness in mm */
+  framingMm?: number
+  /** Measured finished thickness in mm */
+  finishedMm?: number
+  /** 0..1 — how cleanly this wall fits its assigned bucket */
+  typeConfidence?: number
 }
 
 // Re-export so the Drawing type can reference it without circular imports.
