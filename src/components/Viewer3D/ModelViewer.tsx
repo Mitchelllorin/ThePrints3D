@@ -1,4 +1,4 @@
-import { useRef, useEffect, Suspense } from 'react'
+import { useRef, useEffect, Suspense, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import {
   OrbitControls,
@@ -72,8 +72,10 @@ export default function ModelViewer() {
   const measureMode = useAppStore((s) => s.measureMode)
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
+  const removeMeasurement = useAppStore((s) => s.removeMeasurement)
   const measurements = useAppStore((s) => s.measurements)
   const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null)
+  const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
 
   return (
     <div className={styles.viewer}>
@@ -128,6 +130,60 @@ export default function ModelViewer() {
 
       {/* Camera preset HUD — visible whenever the model exists */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
+
+      {model.status === 'ready' && (
+        <aside
+          className={`${styles.measurementsPanel} ${
+            measurementsPanelCollapsed ? styles.measurementsPanelCollapsed : ''
+          }`}
+        >
+          <div className={styles.measurementsPanelHeader}>
+            <h3 className={styles.measurementsPanelTitle}>Measurements ({measurements.length})</h3>
+            <button
+              className={styles.measurementsPanelToggle}
+              onClick={() => setMeasurementsPanelCollapsed((v) => !v)}
+              title={measurementsPanelCollapsed ? 'Expand measurements panel' : 'Collapse measurements panel'}
+              aria-label={measurementsPanelCollapsed ? 'Expand measurements panel' : 'Collapse measurements panel'}
+            >
+              {measurementsPanelCollapsed ? '◀' : '▶'}
+            </button>
+          </div>
+          {!measurementsPanelCollapsed && (
+            <div className={styles.measurementsPanelBody}>
+              {measurements.length === 0 ? (
+                <div className={styles.measurementEmpty}>No measurements yet.</div>
+              ) : (
+                measurements.map((m) => {
+                  const isMeters = m.distanceM >= 1
+                  const value = isMeters ? m.distanceM.toFixed(2) : (m.distanceM * 1000).toFixed(0)
+                  const unit = isMeters ? 'm' : 'mm'
+                  return (
+                    <div key={m.id} className={styles.measurementEntry}>
+                      <div className={styles.measurementValueRow}>
+                        <span className={styles.measurementValue}>{value}</span>
+                        <span className={styles.measurementUnit}>{unit}</span>
+                      </div>
+                      <div className={styles.measurementMeta}>
+                        {typeof m.createdAt === 'number'
+                          ? new Date(m.createdAt).toLocaleString()
+                          : 'Unknown'}
+                      </div>
+                      <button
+                        className={styles.measurementDelete}
+                        onClick={() => removeMeasurement(m.id)}
+                        aria-label="Delete measurement"
+                        title="Delete measurement"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          )}
+        </aside>
+      )}
 
       <Canvas
         shadows

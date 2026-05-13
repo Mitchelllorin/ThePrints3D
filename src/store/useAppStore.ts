@@ -156,7 +156,7 @@ interface AppState {
   buildModel: () => void
   // Measurements
   setMeasureMode: (active: boolean) => void
-  addMeasurement: (m: Omit<Measurement, 'id'>) => void
+  addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
   removeMeasurement: (id: string) => void
   clearMeasurements: () => void
   // Camera
@@ -402,7 +402,11 @@ export const useAppStore = create<AppState>()(
 
     addMeasurement: (m) =>
       set((s) => {
-        s.measurements.push({ ...m, id: `meas-${Date.now()}` })
+        s.measurements.push({
+          ...m,
+          id: `meas-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: Date.now(),
+        })
       }),
 
     removeMeasurement: (id) =>
