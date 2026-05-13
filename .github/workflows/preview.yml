@@ -32,9 +32,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build PR preview (relative base path)
-        env:
-          VITE_BASE_PATH: ./
+      - name: Build PR preview
         run: npm run build
 
       - name: Setup Pages
@@ -211,9 +209,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build for Pages production (repo base path)
-        env:
-          VITE_BASE_PATH: /BluePrint3D/
+      - name: Build for Pages production
         run: npm run build
 
       - name: Setup Pages
@@ -240,3 +236,123 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  build-cloudflare:
+    name: Build for Cloudflare Pages
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-dist
+          path: dist
+          retention-days: 1
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Pages
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    needs: build-cloudflare
+    permissions:
+      contents: read
+      deployments: write
+      pull-requests: write
+    environment:
+      name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'cloudflare-production' || 'cloudflare-preview' }}
+    steps:
+      - name: Download dist artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cloudflare-dist
+          path: dist
+
+      - name: Deploy to Cloudflare Pages
+        id: cf-deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy dist
+            --project-name=blueprint3d
+            ${{ github.event_name == 'pull_request' && format('--branch=pr-{0}', github.event.pull_request.number) || '--branch=main' }}
+
+      - name: Add Cloudflare preview comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        env:
+          CF_DEPLOYMENT_URL: ${{ steps.cf-deploy.outputs.deployment-url }}
+        with:
+          script: |
+            const marker = '<!-- blueprint3d-cf-preview-comment:v1 -->';
+            const deployUrl = process.env.CF_DEPLOYMENT_URL;
+
+            if (!deployUrl) {
+              core.warning('No Cloudflare deployment URL available; skipping comment.');
+              return;
+            }
+
+            const body = [
+              marker,
+              `[![Open Cloudflare Preview](https://img.shields.io/badge/Cloudflare%20Preview-%F0%9F%8C%A5%20Click%20Here-orange?style=for-the-badge&logo=cloudflare)](${deployUrl})`,
+            ].join('\n');
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const query = `
+              query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $issueNumber) {
+                    comments(last: 50, before: $before) {
+                      pageInfo { hasPreviousPage startCursor }
+                      nodes {
+                        databaseId
+                        body
+                        author {
+                          __typename
+                          ... on Bot { login }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            let existing = null;
+            let before = null;
+            let pagesSearched = 0;
+            const maxPagesToSearch = 20;
+            while (true) {
+              pagesSearched += 1;
+              const result = await github.graphql(query, { owner, repo, issueNumber: issue_number, before });
+              const conn = result.repository.pullRequest.comments;
+              existing = conn.nodes.find(
+                (c) => c.author?.__typename === 'Bot' && c.author?.login === 'github-actions[bot]' && c.body?.includes(marker),
+              );
+              if (existing || !conn.pageInfo.hasPreviousPage || pagesSearched >= maxPagesToSearch) break;
+              before = conn.pageInfo.startCursor;
+            }
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.databaseId, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }

@@ -1,0 +1,24 @@
+# Security and caching headers for Cloudflare Pages
+
+# HTML entry point — always revalidate so users pick up new deployments immediately
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+# Vite-hashed JS / CSS bundles — immutable, cache for 1 year
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+  X-Content-Type-Options: nosniff
+
+# Service worker — must revalidate so browsers always fetch the latest worker
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+# PWA manifest and icons
+/manifest.json
+  Cache-Control: public, max-age=86400
+/icons/*
+  Cache-Control: public, max-age=31536000, immutable

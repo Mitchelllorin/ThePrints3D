@@ -76,8 +76,37 @@ CI workflow (`.github/workflows/ci.yml`) runs:
 - `npm run build` creates production assets in `dist/`
 - `npm run preview` serves the built `dist/` locally for verification
 - GitHub Actions preview workflow (`.github/workflows/preview.yml`):
-  - On pull requests: builds and deploys a GitHub Pages preview environment (relative base path `./`)
-  - On `main`: builds and deploys production GitHub Pages (base path `/BluePrint3D/`)
+  - On pull requests: builds and deploys a GitHub Pages preview environment **and** a Cloudflare Pages preview URL
+  - On `main`: builds and deploys both GitHub Pages production and Cloudflare Pages production
+
+## Cloudflare Pages deployment
+
+The app is deployed to [Cloudflare Pages](https://pages.cloudflare.com/) in addition to GitHub Pages.
+
+### Required repository secrets
+
+| Secret | Description |
+|--------|-------------|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare API token with **Cloudflare Pages: Edit** permission |
+| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID (found in the Cloudflare dashboard sidebar) |
+
+### Project name
+
+The Cloudflare Pages project is named **`blueprint3d`** (configured in `wrangler.toml`).
+Production URL: `https://blueprint3d.pages.dev`
+
+### Local deploy
+
+```bash
+npx wrangler pages deploy dist --project-name=blueprint3d
+```
+
+### PR previews
+
+Each pull request is deployed to a unique Cloudflare preview URL:
+`https://<hash>.blueprint3d.pages.dev`
+
+A bot comment with a one-click badge link is posted to the PR automatically.
 
 ## Near-term roadmap
 
