@@ -83,4 +83,3 @@ export function mergeAutoAndUserWalls(
   const filteredAuto = autoWalls.filter((a) => !userWalls.some((u) => areConflicting(a, u)))
   return [...filteredAuto, ...userWalls]
 }
-

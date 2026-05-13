@@ -107,4 +107,3 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
     </div>
   )
 }
-

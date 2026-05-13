@@ -38,4 +38,3 @@ describe('mergeAutoAndUserWalls', () => {
     expect(merged.some((w) => w.y1 === 20)).toBe(false)
   })
 })
-
