@@ -14,6 +14,8 @@ import type {
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import { groupByFloor, floorToElevation, FLOOR_HEIGHT_M, inferFloorNumber } from '../services/sheetParser'
 import { logError, logEvent } from '../services/logger'
+import type { ParsedWall } from '../types'
+import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
 
 // ─── Camera Presets ────────────────────────────────────────────────────────────
 export interface CameraPreset {
@@ -166,6 +168,8 @@ interface AppState {
   updateDrawing: (id: string, patch: Partial<Drawing>) => void
   setDrawingType: (id: string, type: DrawingType) => void
   setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
+  addUserTracedWall: (id: string, wall: ParsedWall) => void
+  clearUserTracedWalls: (id: string) => void
   selectDrawing: (id: string | null) => void
   processDrawing: (id: string) => Promise<void>
   toggleLayer: (id: LayerId) => void
@@ -221,9 +225,6 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
-    annotations: loadPersistedAnnotations(),
-    annotateMode: false,
-    selectedAnnotationId: null,
     cameraPreset: null,
 
     setView: (view) =>
@@ -299,6 +300,25 @@ export const useAppStore = create<AppState>()(
         }
       }),
 
+    addUserTracedWall: (id, wall) =>
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        const userWalls = [
+          ...d.parsedWalls.filter((w) => w.source === 'user'),
+          { ...wall, source: 'user' as const, detectionConfidence: 1 },
+        ]
+        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+      }),
+
+    clearUserTracedWalls: (id) =>
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        d.parsedWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+      }),
+
     selectDrawing: (id) =>
       set((s) => {
         s.selectedDrawingId = id
@@ -326,6 +346,13 @@ export const useAppStore = create<AppState>()(
         if (d) {
           if (patch.rasterUrl && d.rasterUrl && patch.rasterUrl !== d.rasterUrl) {
             URL.revokeObjectURL(d.rasterUrl)
+          }
+          if (patch.parsedWalls) {
+            const preservedUser = d.parsedWalls.filter((w) => w.source === 'user')
+            patch.parsedWalls = mergeAutoAndUserWalls(
+              patch.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user'),
+              preservedUser,
+            )
           }
           Object.assign(d, patch)
         }

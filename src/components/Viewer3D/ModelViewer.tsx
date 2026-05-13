@@ -318,7 +318,7 @@ export default function ModelViewer() {
         )}
 
         <OrbitControls
-          ref={controlsRef}
+          ref={controlsRef as unknown as React.RefObject<OrbitControlsImpl>}
           makeDefault
           enableDamping
           dampingFactor={0.12}

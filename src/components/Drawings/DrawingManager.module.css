@@ -356,6 +356,12 @@
   color: #f1f5f9;
 }
 
+.actionBtnActive {
+  background: #1e3a5f;
+  border-color: #38bdf8;
+  color: #bae6fd;
+}
+
 .zoomControls {
   display: flex;
   align-items: center;
@@ -426,6 +432,12 @@
   box-shadow: 0 4px 24px rgba(0,0,0,0.5);
 }
 
+.previewImgWrap {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
 .noPreview {
   color: #475569;
   text-align: center;
@@ -463,6 +475,15 @@
   font-weight: 700;
   color: #4ade80;
   background: #052e16;
+  padding: 2px 8px;
+  border-radius: 8px;
+}
+
+.confidenceBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fbbf24;
+  background: #422006;
   padding: 2px 8px;
   border-radius: 8px;
 }
