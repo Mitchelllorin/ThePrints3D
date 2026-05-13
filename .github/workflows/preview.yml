@@ -69,6 +69,8 @@ jobs:
       - name: Resolve PR metadata
         id: pr_metadata
         uses: actions/github-script@v8
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
         with:
           script: |
             const { owner, repo } = context.repo;
@@ -76,7 +78,7 @@ jobs:
             let prHeadSha = context.payload.pull_request?.head?.sha ?? null;
 
             if (!prNumber) {
-              const branch = context.ref.replace('refs/heads/', '');
+              const branch = process.env.BRANCH_NAME;
               const { data: pullRequests } = await github.rest.pulls.list({
                 owner,
                 repo,
@@ -91,11 +93,12 @@ jobs:
               }
             }
 
+            core.setOutput('pr_found', prNumber ? 'true' : 'false');
             core.setOutput('pr_number', prNumber ? String(prNumber) : '');
             core.setOutput('pr_head_sha', prHeadSha ?? '');
 
       - name: Add PR preview button comment
-        if: steps.pr_metadata.outputs.pr_number != ''
+        if: steps.pr_metadata.outputs.pr_found == 'true'
         uses: actions/github-script@v8
         env:
           PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
@@ -105,15 +108,21 @@ jobs:
             // Unique marker used to find and update the same PR preview comment.
             const marker = '<!-- blueprint3d-pr-preview-comment:v1 -->';
             const previewUrl = process.env.PREVIEW_URL;
-            const issue_number = Number.parseInt(process.env.PR_NUMBER, 10);
+            const prNumberRaw = process.env.PR_NUMBER;
 
             if (!previewUrl) {
               core.setFailed('Missing preview URL from deployment output.');
               return;
             }
 
-            if (!issue_number) {
+            if (!prNumberRaw?.trim()) {
               core.setFailed('Missing pull request number.');
+              return;
+            }
+
+            const issueNumber = parseInt(prNumberRaw, 10);
+            if (Number.isNaN(issueNumber)) {
+              core.setFailed('Invalid pull request number.');
               return;
             }
 
@@ -159,7 +168,7 @@ jobs:
               const commentSearch = await github.graphql(query, {
                 owner,
                 repo,
-                issueNumber: issue_number,
+                issueNumber,
                 before,
               });
 
@@ -193,13 +202,13 @@ jobs:
               await github.rest.issues.createComment({
                 owner,
                 repo,
-                issue_number,
+                issue_number: issueNumber,
                 body,
               });
             }
 
       - name: Publish PR preview status check
-        if: steps.pr_metadata.outputs.pr_head_sha != ''
+        if: steps.pr_metadata.outputs.pr_found == 'true' && steps.pr_metadata.outputs.pr_head_sha != ''
         uses: actions/github-script@v8
         env:
           PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
