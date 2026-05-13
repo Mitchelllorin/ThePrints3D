@@ -157,10 +157,17 @@
 .imageWrap {
   flex: 1;
   overflow: auto;
-  position: relative;
   background: #080f1a;
   border-radius: 8px;
   min-height: 0;
+}
+
+/* Wrapper sized to the image so the SVG overlay aligns exactly. */
+.imageContainer {
+  position: relative;
+  line-height: 0; /* prevent inline gap below the image */
+  display: inline-block;
+  max-width: 100%;
 }
 
 .svg {
