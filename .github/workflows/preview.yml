@@ -17,7 +17,7 @@ concurrency:
 jobs:
   build-pr-preview:
     name: Build PR preview
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -47,7 +47,7 @@ jobs:
 
   deploy-pr-preview:
     name: Deploy PR preview
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     needs: build-pr-preview
     permissions:
@@ -66,18 +66,54 @@ jobs:
         with:
           preview: true
 
+      - name: Resolve PR metadata
+        id: pr_metadata
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            let prNumber = context.payload.pull_request?.number ?? null;
+            let prHeadSha = context.payload.pull_request?.head?.sha ?? null;
+
+            if (!prNumber) {
+              const branch = context.ref.replace('refs/heads/', '');
+              const { data: pullRequests } = await github.rest.pulls.list({
+                owner,
+                repo,
+                state: 'open',
+                head: `${owner}:${branch}`,
+                per_page: 1,
+              });
+
+              if (pullRequests.length > 0) {
+                prNumber = pullRequests[0].number;
+                prHeadSha = pullRequests[0].head.sha;
+              }
+            }
+
+            core.setOutput('pr_number', prNumber ? String(prNumber) : '');
+            core.setOutput('pr_head_sha', prHeadSha ?? '');
+
       - name: Add PR preview button comment
+        if: steps.pr_metadata.outputs.pr_number != ''
         uses: actions/github-script@v8
         env:
           PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
+          PR_NUMBER: ${{ steps.pr_metadata.outputs.pr_number }}
         with:
           script: |
             // Unique marker used to find and update the same PR preview comment.
             const marker = '<!-- blueprint3d-pr-preview-comment:v1 -->';
             const previewUrl = process.env.PREVIEW_URL;
+            const issue_number = Number.parseInt(process.env.PR_NUMBER, 10);
 
             if (!previewUrl) {
               core.setFailed('Missing preview URL from deployment output.');
+              return;
+            }
+
+            if (!issue_number) {
+              core.setFailed('Missing pull request number.');
               return;
             }
 
@@ -87,7 +123,6 @@ jobs:
             ].join('\n');
 
             const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
 
             const query = `
               query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String) {
@@ -164,10 +199,11 @@ jobs:
             }
 
       - name: Publish PR preview status check
+        if: steps.pr_metadata.outputs.pr_head_sha != ''
         uses: actions/github-script@v8
         env:
           PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_SHA: ${{ steps.pr_metadata.outputs.pr_head_sha }}
         with:
           script: |
             const previewUrl = process.env.PREVIEW_URL;
@@ -196,7 +232,7 @@ jobs:
 
   build-pages:
     name: Build Pages production
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -226,7 +262,7 @@ jobs:
 
   deploy-pages:
     name: Deploy GitHub Pages production
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: build-pages
     permissions:
