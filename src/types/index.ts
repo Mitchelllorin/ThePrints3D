@@ -116,7 +116,7 @@ export interface Model3D {
 
 // ─── App State ─────────────────────────────────────────────────────────────────
 
-export type AppView = 'upload' | 'drawings' | 'model'
+export type AppView = 'upload' | 'drawings' | 'model' | 'tools'
 
 export interface ScaleCalibration {
   /** px distance measured on canvas */

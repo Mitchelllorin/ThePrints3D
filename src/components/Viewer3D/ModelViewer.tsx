@@ -9,10 +9,13 @@ import {
   Stats,
 } from '@react-three/drei'
 import * as THREE from 'three'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useAppStore } from '../../store/useAppStore'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
 import CameraHud from './CameraHud'
+import ProductPlacementPanel from './ProductPlacementPanel'
+import ProductPlacements from './ProductPlacements'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -32,7 +35,7 @@ function CameraRig() {
  * Listens for camera-preset requests from the store (set by the CameraHud).
  * Applies the requested camera pose to the active camera + OrbitControls.
  */
-function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<{ target: THREE.Vector3; update: () => void } | null> }) {
+function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
   const preset = useAppStore((s) => s.cameraPreset)
   const consume = useAppStore((s) => s.consumeCameraPreset)
@@ -72,7 +75,7 @@ export default function ModelViewer() {
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const measurements = useAppStore((s) => s.measurements)
-  const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null)
+  const controlsRef = useRef<OrbitControlsImpl | null>(null)
 
   return (
     <div className={styles.viewer}>
@@ -127,6 +130,7 @@ export default function ModelViewer() {
 
       {/* Camera preset HUD — visible whenever the model exists */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
+      {model.status === 'ready' && <ProductPlacementPanel />}
 
       <Canvas
         shadows
@@ -164,12 +168,13 @@ export default function ModelViewer() {
         {(model.status === 'building' || model.status === 'ready') && (
           <>
             <BuildingModel layers={layers} />
+            <ProductPlacements />
             {model.status === 'ready' && <MeasureTool key={measureMode ? 'measure-on' : 'measure-off'} />}
           </>
         )}
 
         <OrbitControls
-          ref={controlsRef as unknown as React.RefObject<undefined>}
+          ref={controlsRef}
           makeDefault
           enableDamping
           dampingFactor={0.12}

@@ -13,6 +13,7 @@ import type {
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import { groupByFloor, floorToElevation, FLOOR_HEIGHT_M, inferFloorNumber } from '../services/sheetParser'
 import { logError, logEvent } from '../services/logger'
+import type { ProductCatalogItem, ProductPlacement } from '../types/products'
 
 // ─── Camera Presets ────────────────────────────────────────────────────────────
 export interface CameraPreset {
@@ -135,6 +136,8 @@ interface AppState {
   measurements: Measurement[]
   measureMode: boolean
   cameraPreset: CameraPreset | null
+  productCatalog: ProductCatalogItem[]
+  productPlacements: ProductPlacement[]
 
   // Actions
   setView: (view: AppView) => void
@@ -158,6 +161,10 @@ interface AppState {
   // Camera
   setCameraPreset: (p: CameraPreset) => void
   consumeCameraPreset: () => void
+  setProductCatalog: (items: ProductCatalogItem[]) => void
+  addProductPlacement: (placement: Omit<ProductPlacement, 'id' | 'placedAt'>) => void
+  removeProductPlacement: (id: string) => void
+  clearProductPlacements: () => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -190,6 +197,9 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
+    cameraPreset: null,
+    productCatalog: [],
+    productPlacements: [],
 
     setView: (view) =>
       set((s) => {
@@ -393,6 +403,31 @@ export const useAppStore = create<AppState>()(
     consumeCameraPreset: () =>
       set((s) => {
         s.cameraPreset = null
+      }),
+
+    setProductCatalog: (items) =>
+      set((s) => {
+        s.productCatalog = items
+      }),
+
+    addProductPlacement: (placement) =>
+      set((s) => {
+        s.productPlacements.push({
+          ...placement,
+          id: `placement-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+          placedAt: Date.now(),
+        })
+      }),
+
+    removeProductPlacement: (id) =>
+      set((s) => {
+        const idx = s.productPlacements.findIndex((p) => p.id === id)
+        if (idx !== -1) s.productPlacements.splice(idx, 1)
+      }),
+
+    clearProductPlacements: () =>
+      set((s) => {
+        s.productPlacements = []
       }),
   }))
 )

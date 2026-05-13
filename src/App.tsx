@@ -3,6 +3,7 @@ import DrawingUploader from './components/Upload/DrawingUploader'
 import DrawingManager from './components/Drawings/DrawingManager'
 import ModelViewer from './components/Viewer3D/ModelViewer'
 import ProjectLibrary from './components/Projects/ProjectLibrary'
+import Toolbox from './components/Tools/Toolbox'
 import { useAppStore } from './store/useAppStore'
 import { useState } from 'react'
 
@@ -16,6 +17,7 @@ function App() {
         {view === 'upload' && <DrawingUploader />}
         {view === 'drawings' && <DrawingManager />}
         {view === 'model' && <ModelViewer />}
+        {view === 'tools' && <Toolbox />}
       </AppShell>
       <button
         onClick={() => setLibraryOpen(true)}
