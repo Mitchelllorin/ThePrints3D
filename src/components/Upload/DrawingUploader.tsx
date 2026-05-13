@@ -24,6 +24,11 @@ export default function DrawingUploader() {
 
   const onCameraCapture = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files
+      if (!files || files.length === 0) return
+      addDrawings(Array.from(files))
+      // Reset so the same file can be re-captured if user retries
+      if (cameraInputRef.current) cameraInputRef.current.value = ''
       const files = Array.from(e.target.files ?? [])
       if (files.length > 0) addDrawings(files)
       // Reset so the same file can be re-captured if needed
@@ -31,6 +36,10 @@ export default function DrawingUploader() {
     },
     [addDrawings]
   )
+
+  const triggerCamera = useCallback(() => {
+    cameraInputRef.current?.click()
+  }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -51,6 +60,31 @@ export default function DrawingUploader() {
           Supports floor plans, RCP, architectural, structural, MEP sets and more.
         </p>
       </div>
+
+      {/* Hidden input — opens the rear camera on mobile, falls back to file picker on desktop. */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={onCameraCapture}
+        style={{ display: 'none' }}
+        data-testid="camera-capture-input"
+      />
+
+      {/* Primary CTA — phones default to the camera flow. */}
+      <button
+        type="button"
+        onClick={triggerCamera}
+        className={styles.cameraBtn}
+        data-testid="scan-with-camera-btn"
+      >
+        <span className={styles.cameraIcon}>📷</span>
+        <span className={styles.cameraLabel}>Scan a print with your camera</span>
+        <span className={styles.cameraSub}>Best for on-site work — uses the rear camera on phones</span>
+      </button>
+
+      <div className={styles.orDivider}><span>or upload existing files</span></div>
 
       <div
         {...getRootProps()}

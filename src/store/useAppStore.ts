@@ -194,6 +194,7 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
+    cameraPreset: null,
 
     setView: (view) =>
       set((s) => {
