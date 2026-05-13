@@ -317,7 +317,7 @@ function makeOutletLOD(baseMat: THREE.MeshStandardMaterial): THREE.LOD {
   gnd.rotation.x = Math.PI / 2
   gnd.position.set(0, -0.02, 0)
   nearGroup.add(slot1, slot2, gnd)
-  lod.addLevel(nearGroup as unknown as THREE.Mesh, 0)
+  lod.addLevel(nearGroup, 0)
 
   // Mid level — simple rectangle (0.2 m – 2 m)
   lod.addLevel(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.14, 0.015), baseMat), 0.2)
@@ -339,7 +339,7 @@ function makeSwitchLOD(baseMat: THREE.MeshStandardMaterial): THREE.LOD {
   const paddle = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.075, 0.02), baseMat)
   paddle.position.set(0, 0.005, 0.005)
   nearGroup.add(paddle)
-  lod.addLevel(nearGroup as unknown as THREE.Mesh, 0)
+  lod.addLevel(nearGroup, 0)
 
   // Mid — flat rectangle
   lod.addLevel(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.015), baseMat), 0.2)
@@ -367,7 +367,7 @@ function makePotLightLOD(baseMat: THREE.MeshStandardMaterial): THREE.LOD {
   const bulb = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.04, 16), bulbMat)
   bulb.position.y = 0.02
   nearGroup.add(bulb)
-  lod.addLevel(nearGroup as unknown as THREE.Mesh, 0)
+  lod.addLevel(nearGroup, 0)
 
   // Mid — flat disc
   lod.addLevel(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.01, 16), baseMat), 0.2)
@@ -397,7 +397,7 @@ function makePipeCollarLOD(baseMat: THREE.MeshStandardMaterial): THREE.LOD {
     bolt.position.set(Math.cos(angle) * 0.055, 0, Math.sin(angle) * 0.055)
     nearGroup.add(bolt)
   }
-  lod.addLevel(nearGroup as unknown as THREE.Mesh, 0)
+  lod.addLevel(nearGroup, 0)
 
   // Mid — simple torus
   lod.addLevel(new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.018, 6, 16), baseMat), 0.2)
