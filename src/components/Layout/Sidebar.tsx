@@ -1,5 +1,6 @@
 import { useAppStore } from '../../store/useAppStore'
 import LayerPanel from '../Layers/LayerPanel'
+import AnnotationPanel from '../Annotations/AnnotationPanel'
 import styles from './Sidebar.module.css'
 
 export default function Sidebar() {
@@ -11,10 +12,16 @@ export default function Sidebar() {
   return (
     <aside className={styles.sidebar}>
       {view === 'model' && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Layers</h2>
-          <LayerPanel />
-        </section>
+        <>
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Layers</h2>
+            <LayerPanel />
+          </section>
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Annotations</h2>
+            <AnnotationPanel />
+          </section>
+        </>
       )}
 
       {view === 'drawings' && (

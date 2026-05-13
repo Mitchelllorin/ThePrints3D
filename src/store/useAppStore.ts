@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type {
   AppView,
+  Annotation,
   Drawing,
   DrawingType,
   FloorLevel,
@@ -18,6 +19,24 @@ import { logError, logEvent } from '../services/logger'
 export interface CameraPreset {
   position: [number, number, number]
   target: [number, number, number]
+}
+
+// ─── Annotation persistence ────────────────────────────────────────────────────
+
+const ANNOTATIONS_KEY = 'blueprint3d-annotations'
+
+function loadPersistedAnnotations(): Annotation[] {
+  try {
+    const raw = localStorage.getItem(ANNOTATIONS_KEY)
+    if (raw) return JSON.parse(raw) as Annotation[]
+  } catch { /* ignore */ }
+  return []
+}
+
+function saveAnnotations(annotations: Annotation[]) {
+  try {
+    localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(annotations))
+  } catch { /* ignore */ }
 }
 
 // ─── Default Layers ────────────────────────────────────────────────────────────
@@ -135,6 +154,10 @@ interface AppState {
   measurements: Measurement[]
   measureMode: boolean
   cameraPreset: CameraPreset | null
+  // Annotations
+  annotations: Annotation[]
+  annotateMode: boolean
+  selectedAnnotationId: string | null
 
   // Actions
   setView: (view: AppView) => void
@@ -158,6 +181,14 @@ interface AppState {
   // Camera
   setCameraPreset: (p: CameraPreset) => void
   consumeCameraPreset: () => void
+  // Annotation actions
+  setAnnotateMode: (active: boolean) => void
+  setSelectedAnnotationId: (id: string | null) => void
+  addAnnotation: (a: Omit<Annotation, 'id' | 'createdAt'>) => void
+  updateAnnotation: (id: string, patch: Partial<Omit<Annotation, 'id' | 'createdAt'>>) => void
+  removeAnnotation: (id: string) => void
+  clearAnnotations: () => void
+  importAnnotations: (json: string) => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -190,6 +221,10 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
+    annotations: loadPersistedAnnotations(),
+    annotateMode: false,
+    selectedAnnotationId: null,
+    cameraPreset: null,
 
     setView: (view) =>
       set((s) => {
@@ -367,6 +402,7 @@ export const useAppStore = create<AppState>()(
     setMeasureMode: (active) =>
       set((s) => {
         s.measureMode = active
+        if (active) s.annotateMode = false  // mutually exclusive with annotate
       }),
 
     addMeasurement: (m) =>
@@ -394,5 +430,60 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         s.cameraPreset = null
       }),
+
+    setAnnotateMode: (active) =>
+      set((s) => {
+        s.annotateMode = active
+        if (active) s.measureMode = false  // mutually exclusive with measure
+      }),
+
+    setSelectedAnnotationId: (id) =>
+      set((s) => {
+        s.selectedAnnotationId = id
+      }),
+
+    addAnnotation: (a) => {
+      set((s) => {
+        s.annotations.push({ ...a, id: `ann-${Date.now()}`, createdAt: Date.now() })
+      })
+      saveAnnotations(get().annotations)
+    },
+
+    updateAnnotation: (id, patch) => {
+      set((s) => {
+        const ann = s.annotations.find((a) => a.id === id)
+        if (ann) Object.assign(ann, patch)
+      })
+      saveAnnotations(get().annotations)
+    },
+
+    removeAnnotation: (id) => {
+      set((s) => {
+        const idx = s.annotations.findIndex((a) => a.id === id)
+        if (idx !== -1) s.annotations.splice(idx, 1)
+        if (s.selectedAnnotationId === id) s.selectedAnnotationId = null
+      })
+      saveAnnotations(get().annotations)
+    },
+
+    clearAnnotations: () => {
+      set((s) => {
+        s.annotations = []
+        s.selectedAnnotationId = null
+      })
+      saveAnnotations([])
+    },
+
+    importAnnotations: (json) => {
+      try {
+        const parsed = JSON.parse(json) as Annotation[]
+        if (!Array.isArray(parsed)) return
+        set((s) => {
+          s.annotations = parsed
+          s.selectedAnnotationId = null
+        })
+        saveAnnotations(get().annotations)
+      } catch { /* ignore invalid JSON */ }
+    },
   }))
 )
