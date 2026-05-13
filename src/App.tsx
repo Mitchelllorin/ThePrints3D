@@ -3,13 +3,14 @@ import DrawingUploader from './components/Upload/DrawingUploader'
 import DrawingManager from './components/Drawings/DrawingManager'
 import ModelViewer from './components/Viewer3D/ModelViewer'
 import ProjectLibrary from './components/Projects/ProjectLibrary'
-import Toolbox from './components/Tools/Toolbox'
+import PrivacyPolicy from './components/Legal/PrivacyPolicy'
 import { useAppStore } from './store/useAppStore'
 import { useState } from 'react'
 
 function App() {
   const view = useAppStore((s) => s.view)
   const [libraryOpen, setLibraryOpen] = useState(false)
+  const [privacyOpen, setPrivacyOpen] = useState(false)
 
   return (
     <>
@@ -42,7 +43,30 @@ function App() {
       >
         📁
       </button>
+      <button
+        onClick={() => setPrivacyOpen(true)}
+        title="Privacy Policy"
+        aria-label="Open privacy policy"
+        style={{
+          position: 'fixed',
+          bottom: 'calc(var(--safe-bottom, 0px) + 86px)',
+          left: 20,
+          padding: '0 12px',
+          height: 32,
+          borderRadius: 16,
+          background: 'transparent',
+          color: '#475569',
+          border: '1px solid #1e293b',
+          cursor: 'pointer',
+          zIndex: 99,
+          fontSize: 11,
+          letterSpacing: '0.02em',
+        }}
+      >
+        Privacy
+      </button>
       {libraryOpen && <ProjectLibrary onClose={() => setLibraryOpen(false)} />}
+      {privacyOpen && <PrivacyPolicy onClose={() => setPrivacyOpen(false)} />}
     </>
   )
 }

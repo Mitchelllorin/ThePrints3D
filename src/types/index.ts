@@ -23,6 +23,10 @@ export interface ParsedWall {
   y2: number
   /** Estimated wall thickness in pixels */
   thickness: number
+  /** Detection source: auto pipeline vs user-traced override */
+  source?: 'auto' | 'user'
+  /** 0..1 confidence from detection/classification stage */
+  detectionConfidence?: number
   /** Structural classification (filled by wallTypeClassifier, may be 'unknown' before scale calibration) */
   wallType?: import('../services/wallTypeClassifier').WallType
   /** Estimated structural framing thickness in mm */
@@ -135,4 +139,6 @@ export interface Measurement {
   pointB: [number, number, number]
   /** Distance in metres */
   distanceM: number
+  /** Unix timestamp (ms) when this measurement was created */
+  createdAt: number
 }

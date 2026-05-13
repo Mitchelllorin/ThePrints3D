@@ -9,23 +9,33 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:android": "npm run build && npx cap sync android",
+    "open:android": "npx cap open android",
+    "cap:sync": "npx cap sync android",
+    "cap:assets": "npx @capacitor/assets generate --iconBackgroundColor '#0f172a' --iconBackgroundColorDark '#0f172a' --splashBackgroundColor '#0f172a' --splashBackgroundColorDark '#0f172a'"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/splash-screen": "^8.0.1",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@types/three": "^0.184.1",
+    "idb": "^8.0.0",
     "immer": "^11.1.8",
+    "onnxruntime-web": "^1.26.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-dropzone": "^15.0.0",
     "three": "^0.184.0",
-    "zustand": "^5.0.13",
-    "idb": "^8.0.0"
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.3.4",
     "@eslint/js": "^10.0.1",
     "@rolldown/plugin-babel": "^0.2.3",
     "@types/babel__core": "^7.20.5",
@@ -41,6 +51,7 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^3.2.4"
   }
 }

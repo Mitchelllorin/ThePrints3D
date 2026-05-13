@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
+import WallTracer from './WallTracer'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
 import MaterialReportPanel from '../Tools/MaterialReportPanel'
@@ -47,6 +48,8 @@ export default function DrawingManager() {
   const buildModel = useAppStore((s) => s.buildModel)
   const processDrawing = useAppStore((s) => s.processDrawing)
   const setDrawingScale = useAppStore((s) => s.setDrawingScale)
+  const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
+  const clearUserTracedWalls = useAppStore((s) => s.clearUserTracedWalls)
 
   const [calibratingId, setCalibratingId] = useState<string | null>(null)
   const selected = drawings.find((d) => d.id === selectedDrawingId) ?? null
@@ -188,16 +191,13 @@ export default function DrawingManager() {
 
       <div className={styles.preview}>
         {selected ? (
-          <div className={styles.previewColumn}>
-            <DrawingPreview
-              drawing={selected}
-              onProcess={() => processDrawing(selected.id)}
-              onCalibrate={() => setCalibratingId(selected.id)}
-            />
-            <div className={styles.materialPanelWrap}>
-              <MaterialReportPanel drawing={selected} />
-            </div>
-          </div>
+          <DrawingPreview
+            drawing={selected}
+            onProcess={() => processDrawing(selected.id)}
+            onCalibrate={() => setCalibratingId(selected.id)}
+            onAddUserWall={(wall) => addUserTracedWall(selected.id, wall)}
+            onClearUserWalls={() => clearUserTracedWalls(selected.id)}
+          />
         ) : (
           <div className={styles.noSelection}>
             <span>👆</span>
@@ -312,11 +312,16 @@ interface PreviewProps {
   drawing: Drawing
   onProcess: () => void
   onCalibrate: () => void
+  onAddUserWall: (wall: Drawing['parsedWalls'][number]) => void
+  onClearUserWalls: () => void
 }
 
-function DrawingPreview({ drawing, onProcess, onCalibrate }: PreviewProps) {
+function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClearUserWalls }: PreviewProps) {
   const [scale, setScale] = useState(1)
+  const [traceMode, setTraceMode] = useState(false)
   const previewSrc = drawing.rasterUrl ?? drawing.previewUrl
+  const lowConfidenceCount = drawing.parsedWalls.filter((w) => (w.detectionConfidence ?? 1) < 0.75).length
+  const userTraceCount = drawing.parsedWalls.filter((w) => w.source === 'user').length
 
   return (
     <div className={styles.previewInner}>
@@ -343,9 +348,22 @@ function DrawingPreview({ drawing, onProcess, onCalibrate }: PreviewProps) {
             </button>
           )}
           {drawing.status === 'ready' && (
-            <button className={styles.actionBtn} onClick={onCalibrate}>
-              📏 Calibrate Scale
-            </button>
+            <>
+              <button className={styles.actionBtn} onClick={onCalibrate}>
+                📏 Calibrate Scale
+              </button>
+              <button
+                className={`${styles.actionBtn} ${traceMode ? styles.actionBtnActive : ''}`}
+                onClick={() => setTraceMode((v) => !v)}
+              >
+                ✍️ Trace Walls
+              </button>
+              {userTraceCount > 0 && (
+                <button className={styles.actionBtn} onClick={onClearUserWalls}>
+                  🧹 Clear Traces ({userTraceCount})
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -367,12 +385,23 @@ function DrawingPreview({ drawing, onProcess, onCalibrate }: PreviewProps) {
       <div className={styles.previewCanvas}>
         <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', transition: 'transform 0.15s', position: 'relative' }}>
           {previewSrc ? (
-            <img
-              src={previewSrc}
-              alt={drawing.name}
-              className={styles.previewImg}
-              draggable={false}
-            />
+            <div className={styles.previewImgWrap}>
+              <img
+                src={previewSrc}
+                alt={drawing.name}
+                className={styles.previewImg}
+                draggable={false}
+              />
+              {drawing.status === 'ready' && (
+                <WallTracer
+                  active={traceMode}
+                  imageWidth={drawing.rasterWidth ?? 800}
+                  imageHeight={drawing.rasterHeight ?? 600}
+                  walls={drawing.parsedWalls}
+                  onAddWall={onAddUserWall}
+                />
+              )}
+            </div>
           ) : (
             <div className={styles.noPreview}>
               <p>Preview loading…</p>
@@ -399,6 +428,11 @@ function DrawingPreview({ drawing, onProcess, onCalibrate }: PreviewProps) {
         )}
         {drawing.parsedWalls.length > 0 && (
           <span className={styles.wallBadge}>{drawing.parsedWalls.length} walls detected</span>
+        )}
+        {lowConfidenceCount > 0 && (
+          <span className={styles.confidenceBadge}>
+            ⚠ {lowConfidenceCount} low-confidence wall{lowConfidenceCount !== 1 ? 's' : ''}
+          </span>
         )}
       </div>
     </div>
