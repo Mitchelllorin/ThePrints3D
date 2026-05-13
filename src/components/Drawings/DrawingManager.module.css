@@ -487,3 +487,34 @@
   padding: 2px 8px;
   border-radius: 8px;
 }
+
+/* Scale confidence badges */
+.scaleConfBadge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.scaleConfParsed {
+  color: #4ade80;
+  background: #052e16;
+}
+
+.scaleConfInferred {
+  color: #fbbf24;
+  background: #422006;
+}
+
+.scaleConfFallback {
+  color: #f87171;
+  background: #3b0a0a;
+}
+
+/* Warning banner on card when scale confidence is fallback */
+.cardFallbackWarn {
+  font-size: 10px;
+  color: #f87171;
+  margin: 2px 0 0;
+}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
-import type { Drawing, DrawingType } from '../../types'
+import type { Drawing, DrawingType, ScaleConfidence } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
 import WallTracer from './WallTracer'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
@@ -36,6 +36,26 @@ const STATUS_ICON: Record<string, string> = {
   processing: '⚙',
   ready: '✓',
   error: '✗',
+}
+
+const CONFIDENCE_LABEL: Record<ScaleConfidence, string> = {
+  parsed: '✓ auto-detected',
+  inferred: '~ inferred',
+  fallback: '⚠ needs calibration',
+}
+
+const CONFIDENCE_CSS: Record<ScaleConfidence, string> = {
+  parsed: styles.scaleConfParsed,
+  inferred: styles.scaleConfInferred,
+  fallback: styles.scaleConfFallback,
+}
+
+function ScaleConfBadge({ confidence }: { confidence: ScaleConfidence }) {
+  return (
+    <span className={`${styles.scaleConfBadge} ${CONFIDENCE_CSS[confidence]}`}>
+      {CONFIDENCE_LABEL[confidence]}
+    </span>
+  )
 }
 
 export default function DrawingManager() {
@@ -283,6 +303,9 @@ function DrawingCard({ drawing, isSelected, onSelect, onRemove, onTypeChange, on
         {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
           <p className={styles.wallCount}>{drawing.parsedWalls.length} walls · {drawing.scaleNotation ?? 'uncalibrated'}</p>
         )}
+        {drawing.status === 'ready' && drawing.scaleConfidence === 'fallback' && (
+          <p className={styles.cardFallbackWarn}>⚠ Scale unknown</p>
+        )}
       </div>
 
       <div className={styles.cardActions}>
@@ -349,7 +372,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
           {drawing.status === 'ready' && (
             <>
               <button className={styles.actionBtn} onClick={onCalibrate}>
-                📏 Calibrate Scale
+                📏 {drawing.scaleConfidence === 'fallback' ? '⚠ ' : ''}Calibrate Scale
               </button>
               <button
                 className={`${styles.actionBtn} ${traceMode ? styles.actionBtnActive : ''}`}
@@ -416,6 +439,9 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
             <span>Scale: <strong>{drawing.scaleNotation}</strong></span>
             {drawing.scaleMmPerPx && (
               <span className={styles.hint}> · {drawing.scaleMmPerPx.toFixed(3)} mm/px</span>
+            )}
+            {drawing.scaleConfidence && (
+              <ScaleConfBadge confidence={drawing.scaleConfidence} />
             )}
           </>
         ) : (
