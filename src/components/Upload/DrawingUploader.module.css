@@ -7,6 +7,13 @@
   min-height: 100%;
 }
 
+@media (max-width: 768px) {
+  .page {
+    padding: 20px 16px 80px;
+    gap: 24px;
+  }
+}
+
 .hero {
   text-align: center;
   max-width: 640px;
@@ -17,10 +24,21 @@
   font-weight: 800;
   letter-spacing: -2px;
   margin: 0 0 12px;
-  background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #f1f5f9;
+}
+
+.titleBlue {
+  color: #60a5fa;
+  text-shadow:
+    0 0 18px rgba(96, 165, 250, 0.55),
+    0 0 4px rgba(96, 165, 250, 0.9);
+}
+
+@media (max-width: 768px) {
+  .title {
+    font-size: 32px;
+    letter-spacing: -1px;
+  }
 }
 
 .subtitle {
@@ -28,6 +46,15 @@
   color: #94a3b8;
   line-height: 1.6;
   margin: 0;
+}
+
+@media (max-width: 768px) {
+  .subtitle {
+    font-size: 14px;
+  }
+  .subtitle br {
+    display: none;
+  }
 }
 
 .dropzone {
@@ -43,6 +70,14 @@
   gap: 12px;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
+  min-height: 200px;
+}
+
+@media (max-width: 768px) {
+  .dropzone {
+    padding: 32px 20px;
+    min-height: 180px;
+  }
 }
 
 .dropzone:hover,
@@ -84,6 +119,32 @@
 .browseBtn:hover {
   background: #1d4ed8;
   border-color: #60a5fa;
+  color: #fff;
+}
+
+.uploadBtns {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.scanBtn {
+  background: #14332a;
+  border: 1px solid #059669;
+  color: #6ee7b7;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.scanBtn:hover {
+  background: #065f46;
+  border-color: #10b981;
   color: #fff;
 }
 

@@ -1,4 +1,6 @@
 import type { ParsedWall } from '../types'
+import { classifyLines } from './lineClassifier'
+import type { ClassifiedLine, LineClassificationStats } from '../symbols/types'
 
 // ─── Image processing utilities ───────────────────────────────────────────────
 
@@ -238,6 +240,14 @@ function detectWallPairs(segs: ParsedWall[], axis: 'h' | 'v', maxSep: number): v
  * Returns wall candidates as pixel-space line segments. The caller should
  * supply `scaleMmPerPx` to convert to real-world coordinates.
  */
+export interface DetectWallsResult {
+  walls: ParsedWall[]
+  /** Distribution of all candidate line classifications (wall, dimension, etc). */
+  stats: LineClassificationStats
+  /** Each candidate with its class — useful for debug overlay. */
+  classified: ClassifiedLine[]
+}
+
 export function detectWalls(
   imageData: ImageData,
   options: {
@@ -248,7 +258,7 @@ export function detectWalls(
     requirePairedEdges?: boolean
     mergeGapPx?: number
   } = {}
-): ParsedWall[] {
+): DetectWallsResult {
   const { width, height, data } = imageData
   const {
     edgeThreshold = 32,
@@ -266,17 +276,32 @@ export function detectWalls(
   const segments = findLineSegments(edges, width, height, edgeThreshold, minWallLengthPx)
   const merged = mergeSegments(segments, mergeGapPx)
 
-  // Keep long segments; optionally require a parallel edge pair with plausible wall thickness.
-  return merged.filter((w) => {
+  // First-pass length / thickness gate (keeps the classifier cheap)
+  const candidates = merged.filter((w) => {
     const len = Math.sqrt((w.x2 - w.x1) ** 2 + (w.y2 - w.y1) ** 2)
     if (len < minWallLengthPx) return false
-
-    // If strict mode is enabled, reject unpaired single-line artifacts (text/dims).
     if (requirePairedEdges) {
-      if (w.thickness < minWallThicknessPx) return false
       if (w.thickness > maxWallThicknessPx) return false
     }
-
     return true
   })
+
+  // Sample the original image along each candidate to decide its line class.
+  const { classified, stats } = classifyLines(imageData, candidates, {
+    minWallLengthPx,
+    minWallThicknessPx,
+  })
+
+  // Only `wall`-classified lines survive into ParsedWall[].
+  const walls: ParsedWall[] = classified
+    .filter((c) => c.classification === 'wall')
+    .map((c) => ({
+      x1: c.x1,
+      y1: c.y1,
+      x2: c.x2,
+      y2: c.y2,
+      thickness: c.thickness,
+    }))
+
+  return { walls, stats, classified }
 }

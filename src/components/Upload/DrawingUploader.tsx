@@ -29,6 +29,10 @@ export default function DrawingUploader() {
       addDrawings(Array.from(files))
       // Reset so the same file can be re-captured if user retries
       if (cameraInputRef.current) cameraInputRef.current.value = ''
+      const files = Array.from(e.target.files ?? [])
+      if (files.length > 0) addDrawings(files)
+      // Reset so the same file can be re-captured if needed
+      e.target.value = ''
     },
     [addDrawings]
   )
@@ -46,7 +50,10 @@ export default function DrawingUploader() {
   return (
     <div className={styles.page}>
       <div className={styles.hero}>
-        <h1 className={styles.title}>BluePrint3D</h1>
+        <h1 className={styles.title}>
+          <span className={styles.titleBlue}>Blue</span>
+          <span>Print3D</span>
+        </h1>
         <p className={styles.subtitle}>
           Scan your construction drawings and turn them into an interactive 3D model.
           <br />
@@ -91,9 +98,32 @@ export default function DrawingUploader() {
         <p className={styles.dropSub}>
           PDF, PNG, JPG, TIFF — drag in a whole drawing set at once
         </p>
-        <button className={styles.browseBtn} type="button">
-          Browse Files
-        </button>
+        <div className={styles.uploadBtns}>
+          <button className={styles.browseBtn} type="button">
+            Browse Files
+          </button>
+          <button
+            className={styles.scanBtn}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              cameraInputRef.current?.click()
+            }}
+            title="Use your phone camera to photograph a printed blueprint"
+          >
+            📷 Scan Print
+          </button>
+        </div>
+        {/* Hidden input that opens the rear camera on mobile devices */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: 'none' }}
+          onChange={onCameraCapture}
+          onClick={(e) => e.stopPropagation()}
+        />
       </div>
 
       <div className={styles.features}>
@@ -119,6 +149,11 @@ const FEATURES = [
     icon: '⬡',
     title: 'Interactive 3D Model',
     desc: 'Fly through your building in a real-time 3D environment generated from the drawings.',
+  },
+  {
+    icon: '📷',
+    title: 'Scan from Phone',
+    desc: 'Point your phone camera at a printed blueprint and scan it directly into the app.',
   },
   {
     icon: '🔀',

@@ -95,6 +95,28 @@ export default function ModelViewer() {
               🗑 Clear ({measurements.length})
             </button>
           )}
+          <button
+            className={styles.toolBtn}
+            onClick={() => {
+              const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
+              if (!canvas) return
+              // preserveDrawingBuffer is false for perf; force a render before snapshot
+              try {
+                const dataUrl = canvas.toDataURL('image/png')
+                const a = document.createElement('a')
+                a.href = dataUrl
+                a.download = `blueprint3d-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`
+                a.click()
+              } catch (err) {
+                console.error('Snapshot failed:', err)
+                alert('Snapshot failed — try again after orbiting the view once.')
+              }
+            }}
+            title="Save the current 3D view as a PNG image you can share"
+            data-testid="share-png-btn"
+          >
+            📤 Share PNG
+          </button>
           {measureMode && (
             <span className={styles.toolHint}>
               Click a surface to place point A, then point B
@@ -108,7 +130,7 @@ export default function ModelViewer() {
 
       <Canvas
         shadows
-        gl={{ antialias: true, preserveDrawingBuffer: false }}
+        gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
         style={{ touchAction: 'none' }}
       >

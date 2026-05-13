@@ -1,0 +1,248 @@
+{
+  "$schema": "./types.ts",
+  "version": "0.1.0",
+  "description": "Canonical glossary of architectural / construction symbols used during detection. Seeded from AIA, NCS, IEC 60617, ISO 7000. Grows with community variants.",
+  "entries": [
+    {
+      "id": "wall_interior_partition",
+      "category": "wall",
+      "common_names": ["interior partition", "non-load-bearing wall", "stud wall"],
+      "represents": "Standard interior partition wall, typically wood or metal stud, 4-6in thick",
+      "appearance": { "shape": "polyline", "stroke_style": "double_solid" },
+      "default_height_in": 96,
+      "standards": ["AIA"]
+    },
+    {
+      "id": "wall_load_bearing",
+      "category": "wall",
+      "common_names": ["load-bearing wall", "bearing wall", "structural wall"],
+      "represents": "Wall carrying structural load. Hatched in plan, often thicker than partitions.",
+      "appearance": { "shape": "polyline", "stroke_style": "solid_thick" },
+      "default_height_in": 96
+    },
+    {
+      "id": "wall_fire_rated",
+      "category": "wall",
+      "common_names": ["fire-rated wall", "rated assembly", "1-hour wall"],
+      "represents": "Wall with fire-resistance rating (e.g. 1-hour, 2-hour). Tagged with rating.",
+      "appearance": { "shape": "polyline", "stroke_style": "solid_thick", "has_text": true }
+    },
+    {
+      "id": "door_swing_single",
+      "category": "opening",
+      "common_names": ["door", "swing door", "hinged door"],
+      "represents": "Single hinged door with swing arc shown in plan",
+      "appearance": { "shape": "custom", "stroke_style": "solid_thin" },
+      "default_height_in": 80
+    },
+    {
+      "id": "door_pocket",
+      "category": "opening",
+      "common_names": ["pocket door", "sliding pocket"],
+      "represents": "Door that slides into the wall cavity",
+      "appearance": { "shape": "custom", "stroke_style": "dashed" }
+    },
+    {
+      "id": "door_bifold",
+      "category": "opening",
+      "common_names": ["bifold door", "folding door"],
+      "represents": "Pair of doors hinged together that fold open",
+      "appearance": { "shape": "custom" }
+    },
+    {
+      "id": "window_fixed",
+      "category": "opening",
+      "common_names": ["window", "fixed window", "picture window"],
+      "represents": "Non-operable window, three parallel lines spanning wall thickness in plan",
+      "appearance": { "shape": "polyline", "stroke_style": "solid_thin" }
+    },
+    {
+      "id": "window_casement",
+      "category": "opening",
+      "common_names": ["casement window", "crank window"],
+      "represents": "Side-hinged window that swings outward, shown with arc",
+      "appearance": { "shape": "custom" }
+    },
+    {
+      "id": "elec_outlet_duplex",
+      "category": "electrical",
+      "common_names": ["duplex receptacle", "wall outlet", "120v outlet", "receptacle"],
+      "represents": "120V duplex receptacle at standard wall-mount height (18in AFF)",
+      "appearance": { "shape": "circle", "relative_size": "small" },
+      "default_height_in": 18,
+      "standards": ["IEC 60617", "NCS"]
+    },
+    {
+      "id": "elec_outlet_gfci",
+      "category": "electrical",
+      "common_names": ["GFCI receptacle", "ground-fault receptacle"],
+      "represents": "GFCI-protected outlet (required in bathrooms, kitchens, outdoors)",
+      "appearance": { "shape": "circle", "has_text": true },
+      "default_height_in": 42
+    },
+    {
+      "id": "elec_switch_1way",
+      "category": "electrical",
+      "common_names": ["switch", "single-pole switch", "S"],
+      "represents": "Single-pole light switch",
+      "appearance": { "shape": "custom", "has_text": true },
+      "default_height_in": 48
+    },
+    {
+      "id": "elec_switch_3way",
+      "category": "electrical",
+      "common_names": ["3-way switch", "S3"],
+      "represents": "Three-way switch (pair controls one fixture from two locations)",
+      "appearance": { "shape": "custom", "has_text": true },
+      "default_height_in": 48
+    },
+    {
+      "id": "elec_fixture_recessed",
+      "category": "electrical",
+      "common_names": ["recessed light", "can light", "downlight"],
+      "represents": "Ceiling-recessed light fixture (usually 4in or 6in dia)",
+      "appearance": { "shape": "circle", "relative_size": "medium" }
+    },
+    {
+      "id": "elec_fixture_surface",
+      "category": "electrical",
+      "common_names": ["surface-mounted fixture", "ceiling light"],
+      "represents": "Surface-mounted ceiling light",
+      "appearance": { "shape": "circle" }
+    },
+    {
+      "id": "elec_panel",
+      "category": "electrical",
+      "common_names": ["electrical panel", "breaker panel", "load center"],
+      "represents": "Electrical service panel / breaker box",
+      "appearance": { "shape": "square", "has_text": true }
+    },
+    {
+      "id": "elec_smoke_detector",
+      "category": "electrical",
+      "common_names": ["smoke detector", "smoke alarm", "SD"],
+      "represents": "Ceiling-mounted smoke detector",
+      "appearance": { "shape": "circle", "has_text": true }
+    },
+    {
+      "id": "plumb_sink",
+      "category": "plumbing",
+      "common_names": ["sink", "lavatory", "lav"],
+      "represents": "Plumbing sink fixture",
+      "appearance": { "shape": "custom" }
+    },
+    {
+      "id": "plumb_toilet",
+      "category": "plumbing",
+      "common_names": ["toilet", "water closet", "WC"],
+      "represents": "Toilet fixture",
+      "appearance": { "shape": "custom" }
+    },
+    {
+      "id": "plumb_tub",
+      "category": "plumbing",
+      "common_names": ["bathtub", "tub", "bath"],
+      "represents": "Bathtub fixture, typically 30in x 60in",
+      "appearance": { "shape": "custom" }
+    },
+    {
+      "id": "plumb_shower",
+      "category": "plumbing",
+      "common_names": ["shower", "shower stall"],
+      "represents": "Shower fixture / stall",
+      "appearance": { "shape": "custom" }
+    },
+    {
+      "id": "hvac_supply_register",
+      "category": "hvac",
+      "common_names": ["supply register", "supply diffuser", "supply air"],
+      "represents": "Ceiling or wall HVAC supply air register",
+      "appearance": { "shape": "square", "has_text": true }
+    },
+    {
+      "id": "hvac_return_register",
+      "category": "hvac",
+      "common_names": ["return register", "return air", "return grille"],
+      "represents": "HVAC return air register",
+      "appearance": { "shape": "square", "has_text": true }
+    },
+    {
+      "id": "hvac_thermostat",
+      "category": "hvac",
+      "common_names": ["thermostat", "TSTAT", "T"],
+      "represents": "Wall-mounted thermostat",
+      "appearance": { "shape": "circle", "has_text": true },
+      "default_height_in": 60
+    },
+    {
+      "id": "dim_linear",
+      "category": "dimension",
+      "common_names": ["dimension line", "dim line"],
+      "represents": "Linear dimension callout, thin line with tick or arrow endpoints and a length label",
+      "appearance": { "shape": "line", "stroke_style": "solid_thin", "has_text": true }
+    },
+    {
+      "id": "dim_leader",
+      "category": "dimension",
+      "common_names": ["leader", "callout leader", "annotation arrow"],
+      "represents": "Short line with arrow that points to an annotation",
+      "appearance": { "shape": "line", "stroke_style": "solid_thin" }
+    },
+    {
+      "id": "annotation_room_tag",
+      "category": "annotation",
+      "common_names": ["room tag", "room name", "room label"],
+      "represents": "Text label identifying a room (e.g. KITCHEN, BR-1, OFFICE)",
+      "appearance": { "shape": "custom", "has_text": true }
+    },
+    {
+      "id": "overhead_soffit",
+      "category": "overhead",
+      "common_names": ["soffit", "dropped ceiling", "bulkhead"],
+      "represents": "Dropped ceiling element above (shown as dotted line in plan)",
+      "appearance": { "shape": "polyline", "stroke_style": "dotted" }
+    },
+    {
+      "id": "overhead_beam",
+      "category": "overhead",
+      "common_names": ["beam above", "header above", "structural beam"],
+      "represents": "Structural beam at ceiling level (dashed in plan)",
+      "appearance": { "shape": "polyline", "stroke_style": "dashed" }
+    },
+    {
+      "id": "overhead_light_cove",
+      "category": "overhead",
+      "common_names": ["light cove", "cove lighting"],
+      "represents": "Recessed cove lighting feature above (dotted line in plan)",
+      "appearance": { "shape": "polyline", "stroke_style": "dotted" }
+    },
+    {
+      "id": "section_cut_line",
+      "category": "section_marker",
+      "common_names": ["section line", "cut line"],
+      "represents": "Indicates where a section view is taken (dash-dot line with arrows)",
+      "appearance": { "shape": "line", "stroke_style": "dash_dot" }
+    },
+    {
+      "id": "hatch_concrete",
+      "category": "material_hatch",
+      "common_names": ["concrete hatch", "CONC"],
+      "represents": "Concrete material indicator — irregular gravel-like pattern",
+      "appearance": { "shape": "custom" }
+    },
+    {
+      "id": "hatch_wood_stud",
+      "category": "material_hatch",
+      "common_names": ["wood stud", "WD STUD"],
+      "represents": "Wood stud framing material",
+      "appearance": { "shape": "custom" }
+    },
+    {
+      "id": "hatch_insulation",
+      "category": "material_hatch",
+      "common_names": ["insulation", "batt insulation", "INSUL"],
+      "represents": "Insulation in wall/ceiling cavity (squiggle / zigzag pattern)",
+      "appearance": { "shape": "custom" }
+    }
+  ]
+}

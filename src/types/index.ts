@@ -1,5 +1,7 @@
 // ─── Drawing Set ───────────────────────────────────────────────────────────────
 
+import type { LineClassificationStats as _LineClassificationStats } from '../symbols/types'
+
 export type DrawingType =
   | 'floor-plan'
   | 'rcp'          // Reflected Ceiling Plan
@@ -21,7 +23,18 @@ export interface ParsedWall {
   y2: number
   /** Estimated wall thickness in pixels */
   thickness: number
+  /** Structural classification (filled by wallTypeClassifier, may be 'unknown' before scale calibration) */
+  wallType?: import('../services/wallTypeClassifier').WallType
+  /** Estimated structural framing thickness in mm */
+  framingMm?: number
+  /** Measured finished thickness in mm */
+  finishedMm?: number
+  /** 0..1 — how cleanly this wall fits its assigned bucket */
+  typeConfidence?: number
 }
+
+// Re-export so the Drawing type can reference it without circular imports.
+export type { LineClassificationStats, ClassifiedLine, LineClass } from '../symbols/types'
 
 export interface Drawing {
   id: string
@@ -39,6 +52,8 @@ export interface Drawing {
   rasterHeight: number | null
   /** Wall segments detected from the rasterized image */
   parsedWalls: ParsedWall[]
+  /** Breakdown of every candidate line by class — surfaces what was filtered out. */
+  lineClassificationStats?: _LineClassificationStats
   /** 0–100 processing progress */
   parseProgress: number
   /** Floor level inferred from sheet numbering (0 = ground) */
