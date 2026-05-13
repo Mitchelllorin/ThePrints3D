@@ -120,7 +120,7 @@ export interface Model3D {
 
 // ─── App State ─────────────────────────────────────────────────────────────────
 
-export type AppView = 'upload' | 'drawings' | 'model'
+export type AppView = 'upload' | 'drawings' | 'model' | 'tools'
 
 export interface ScaleCalibration {
   /** px distance measured on canvas */
@@ -139,6 +139,8 @@ export interface Measurement {
   pointB: [number, number, number]
   /** Distance in metres */
   distanceM: number
+  /** Unix timestamp (ms) when this measurement was created */
+  createdAt: number
 }
 
 // ─── Annotations ──────────────────────────────────────────────────────────────

@@ -120,6 +120,12 @@ export default function ScaleCalibrator({
   const livePx = livePixelDistance()
   const liveRealMm = existingMmPerPx && livePx > 0 ? livePx * existingMmPerPx : null
 
+  // Show the SVG overlay whenever the user is actively placing points or has
+  // placed at least one, so the cursor-preview dot appears even in point-a.
+  const showOverlay = phase === 'point-a' || phase === 'point-b' || phase === 'enter-distance'
+  const dotR = Math.max(5, Math.min(imageWidth, imageHeight) / 200)
+  const strokeW = Math.max(2, Math.min(imageWidth, imageHeight) / 400)
+
   return (
     <div className={styles.overlay}>
       <div className={styles.panel}>
@@ -182,115 +188,135 @@ export default function ScaleCalibrator({
         )}
 
         <div className={styles.imageWrap}>
-          {/* SVG overlay for measurement line — now rubber-bands to cursor */}
-          {(ptA || ptB) && (
-            <svg
-              data-testid="calibration-overlay"
-              className={styles.svg}
-              viewBox={`0 0 ${imageWidth} ${imageHeight}`}
-              preserveAspectRatio="xMidYMid meet"
-            >
-              <defs>
-                {/* Reusable arrowhead — sized in px-equivalent for the SVG's user units */}
-                <marker
-                  id="cal-arrow-end"
-                  viewBox="0 0 10 10"
-                  refX="9"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
-                </marker>
-                <marker
-                  id="cal-arrow-start"
-                  viewBox="0 0 10 10"
-                  refX="1"
-                  refY="5"
-                  markerWidth="6"
-                  markerHeight="6"
-                  orient="auto-start-reverse"
-                >
-                  <path d="M 10 0 L 0 5 L 10 10 z" fill="#f59e0b" />
-                </marker>
-              </defs>
-
-              {/* The "stretchy" double-headed arrow.
-                  Live (cursor) state: solid line so it reads as active.
-                  Locked (both points set): dashed for "frozen measurement".  */}
-              {ptA && arrowEnd && (
-                <g data-testid="calibration-arrow">
-                  <line
-                    x1={ptA.x} y1={ptA.y}
-                    x2={arrowEnd.x} y2={arrowEnd.y}
-                    stroke="#f59e0b"
-                    strokeWidth={Math.max(2, Math.min(imageWidth, imageHeight) / 400)}
-                    strokeDasharray={ptB ? '6 3' : undefined}
-                    strokeLinecap="round"
-                    markerStart="url(#cal-arrow-start)"
-                    markerEnd="url(#cal-arrow-end)"
-                  />
-                </g>
-              )}
-
-              {ptA && (
-                <circle
-                  cx={ptA.x} cy={ptA.y}
-                  r={Math.max(5, Math.min(imageWidth, imageHeight) / 200)}
-                  fill="#38bdf8" stroke="#fff" strokeWidth={1.5}
-                />
-              )}
-              {ptB && (
-                <circle
-                  cx={ptB.x} cy={ptB.y}
-                  r={Math.max(5, Math.min(imageWidth, imageHeight) / 200)}
-                  fill="#f59e0b" stroke="#fff" strokeWidth={1.5}
-                />
-              )}
-
-              {/* Live measurement readout following the cursor */}
-              {ptA && arrowEnd && phase === 'point-b' && livePx > 0 && (
-                <g pointerEvents="none">
-                  <rect
-                    x={(ptA.x + arrowEnd.x) / 2 - 60}
-                    y={(ptA.y + arrowEnd.y) / 2 - 24}
-                    width={120}
-                    height={22}
-                    rx={4}
-                    fill="rgba(15, 23, 42, 0.85)"
-                    stroke="#f59e0b"
-                    strokeWidth={1}
-                  />
-                  <text
-                    x={(ptA.x + arrowEnd.x) / 2}
-                    y={(ptA.y + arrowEnd.y) / 2 - 9}
-                    fill="#fbbf24"
-                    fontSize={Math.max(11, Math.min(imageWidth, imageHeight) / 80)}
-                    fontFamily="ui-monospace, monospace"
-                    textAnchor="middle"
-                    dominantBaseline="middle"
+          {/*
+           * imageContainer sizes itself to the displayed image so the SVG
+           * overlay covers it exactly — avoiding any coordinate misalignment
+           * that would occur if the SVG were sized to a larger parent container.
+           */}
+          <div className={styles.imageContainer}>
+            {showOverlay && (
+              <svg
+                data-testid="calibration-overlay"
+                className={styles.svg}
+                viewBox={`0 0 ${imageWidth} ${imageHeight}`}
+                preserveAspectRatio="none"
+              >
+                <defs>
+                  {/* Reusable arrowheads */}
+                  <marker
+                    id="cal-arrow-end"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
                   >
-                    {liveRealMm !== null
-                      ? `${livePx.toFixed(0)} px ≈ ${(liveRealMm / 1000).toFixed(2)} m`
-                      : `${livePx.toFixed(0)} px`}
-                  </text>
-                </g>
-              )}
-            </svg>
-          )}
-          <img
-            ref={imgRef}
-            src={imageUrl}
-            alt="Drawing preview"
-            className={`${styles.image} ${
-              phase === 'point-a' || phase === 'point-b' ? styles.imageCrosshair : ''
-            }`}
-            onClick={handleImageClick}
-            onMouseMove={handleImageMove}
-            onMouseLeave={handleImageLeave}
-            draggable={false}
-          />
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
+                  </marker>
+                  <marker
+                    id="cal-arrow-start"
+                    viewBox="0 0 10 10"
+                    refX="1"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 10 0 L 0 5 L 10 10 z" fill="#f59e0b" />
+                  </marker>
+                </defs>
+
+                {/* Cursor-preview dot in point-a phase so the user can see
+                    exactly where their first click will land. */}
+                {phase === 'point-a' && cursor && (
+                  <circle
+                    data-testid="cursor-preview"
+                    cx={cursor.x} cy={cursor.y}
+                    r={dotR}
+                    fill="#38bdf8"
+                    fillOpacity={0.6}
+                    stroke="#fff"
+                    strokeWidth={1.5}
+                  />
+                )}
+
+                {/* Rubber-band arrow: stretches from ptA to the cursor while the
+                    user moves toward point B, then locks to a dashed line once
+                    both points are confirmed. */}
+                {ptA && arrowEnd && (
+                  <g data-testid="calibration-arrow">
+                    <line
+                      x1={ptA.x} y1={ptA.y}
+                      x2={arrowEnd.x} y2={arrowEnd.y}
+                      stroke="#f59e0b"
+                      strokeWidth={strokeW}
+                      strokeDasharray={ptB ? '6 3' : undefined}
+                      strokeLinecap="round"
+                      markerStart="url(#cal-arrow-start)"
+                      markerEnd="url(#cal-arrow-end)"
+                    />
+                  </g>
+                )}
+
+                {ptA && (
+                  <circle
+                    cx={ptA.x} cy={ptA.y}
+                    r={dotR}
+                    fill="#38bdf8" stroke="#fff" strokeWidth={1.5}
+                  />
+                )}
+                {ptB && (
+                  <circle
+                    cx={ptB.x} cy={ptB.y}
+                    r={dotR}
+                    fill="#f59e0b" stroke="#fff" strokeWidth={1.5}
+                  />
+                )}
+
+                {/* Live pixel/distance readout floating at the arrow midpoint */}
+                {ptA && arrowEnd && phase === 'point-b' && livePx > 0 && (
+                  <g pointerEvents="none">
+                    <rect
+                      x={(ptA.x + arrowEnd.x) / 2 - 60}
+                      y={(ptA.y + arrowEnd.y) / 2 - 24}
+                      width={120}
+                      height={22}
+                      rx={4}
+                      fill="rgba(15, 23, 42, 0.85)"
+                      stroke="#f59e0b"
+                      strokeWidth={1}
+                    />
+                    <text
+                      x={(ptA.x + arrowEnd.x) / 2}
+                      y={(ptA.y + arrowEnd.y) / 2 - 9}
+                      fill="#fbbf24"
+                      fontSize={Math.max(11, Math.min(imageWidth, imageHeight) / 80)}
+                      fontFamily="ui-monospace, monospace"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                    >
+                      {liveRealMm !== null
+                        ? `${livePx.toFixed(0)} px ≈ ${(liveRealMm / 1000).toFixed(2)} m`
+                        : `${livePx.toFixed(0)} px`}
+                    </text>
+                  </g>
+                )}
+              </svg>
+            )}
+            <img
+              ref={imgRef}
+              src={imageUrl}
+              alt="Drawing preview"
+              className={`${styles.image} ${
+                phase === 'point-a' || phase === 'point-b' ? styles.imageCrosshair : ''
+              }`}
+              onClick={handleImageClick}
+              onMouseMove={handleImageMove}
+              onMouseLeave={handleImageLeave}
+              draggable={false}
+            />
+          </div>
         </div>
       </div>
     </div>

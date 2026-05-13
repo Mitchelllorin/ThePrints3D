@@ -156,10 +156,8 @@ interface AppState {
   measurements: Measurement[]
   measureMode: boolean
   cameraPreset: CameraPreset | null
-  // Annotations
-  annotations: Annotation[]
-  annotateMode: boolean
-  selectedAnnotationId: string | null
+  productCatalog: ProductCatalogItem[]
+  productPlacements: ProductPlacement[]
 
   // Actions
   setView: (view: AppView) => void
@@ -179,20 +177,16 @@ interface AppState {
   buildModel: () => void
   // Measurements
   setMeasureMode: (active: boolean) => void
-  addMeasurement: (m: Omit<Measurement, 'id'>) => void
+  addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
   removeMeasurement: (id: string) => void
   clearMeasurements: () => void
   // Camera
   setCameraPreset: (p: CameraPreset) => void
   consumeCameraPreset: () => void
-  // Annotation actions
-  setAnnotateMode: (active: boolean) => void
-  setSelectedAnnotationId: (id: string | null) => void
-  addAnnotation: (a: Omit<Annotation, 'id' | 'createdAt'>) => void
-  updateAnnotation: (id: string, patch: Partial<Omit<Annotation, 'id' | 'createdAt'>>) => void
-  removeAnnotation: (id: string) => void
-  clearAnnotations: () => void
-  importAnnotations: (json: string) => void
+  setProductCatalog: (items: ProductCatalogItem[]) => void
+  addProductPlacement: (placement: Omit<ProductPlacement, 'id' | 'placedAt'>) => void
+  removeProductPlacement: (id: string) => void
+  clearProductPlacements: () => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -434,7 +428,11 @@ export const useAppStore = create<AppState>()(
 
     addMeasurement: (m) =>
       set((s) => {
-        s.measurements.push({ ...m, id: `meas-${Date.now()}` })
+        s.measurements.push({
+          ...m,
+          id: `meas-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: Date.now(),
+        })
       }),
 
     removeMeasurement: (id) =>
@@ -458,59 +456,29 @@ export const useAppStore = create<AppState>()(
         s.cameraPreset = null
       }),
 
-    setAnnotateMode: (active) =>
+    setProductCatalog: (items) =>
       set((s) => {
-        s.annotateMode = active
-        if (active) s.measureMode = false  // mutually exclusive with measure
+        s.productCatalog = items
       }),
 
-    setSelectedAnnotationId: (id) =>
+    addProductPlacement: (placement) =>
       set((s) => {
-        s.selectedAnnotationId = id
-      }),
-
-    addAnnotation: (a) => {
-      set((s) => {
-        s.annotations.push({ ...a, id: crypto.randomUUID(), createdAt: Date.now() })
-      })
-      saveAnnotations(get().annotations)
-    },
-
-    updateAnnotation: (id, patch) => {
-      set((s) => {
-        const ann = s.annotations.find((a) => a.id === id)
-        if (ann) Object.assign(ann, patch)
-      })
-      saveAnnotations(get().annotations)
-    },
-
-    removeAnnotation: (id) => {
-      set((s) => {
-        const idx = s.annotations.findIndex((a) => a.id === id)
-        if (idx !== -1) s.annotations.splice(idx, 1)
-        if (s.selectedAnnotationId === id) s.selectedAnnotationId = null
-      })
-      saveAnnotations(get().annotations)
-    },
-
-    clearAnnotations: () => {
-      set((s) => {
-        s.annotations = []
-        s.selectedAnnotationId = null
-      })
-      saveAnnotations([])
-    },
-
-    importAnnotations: (json) => {
-      try {
-        const parsed = JSON.parse(json) as Annotation[]
-        if (!Array.isArray(parsed)) return
-        set((s) => {
-          s.annotations = parsed
-          s.selectedAnnotationId = null
+        s.productPlacements.push({
+          ...placement,
+          id: `placement-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+          placedAt: Date.now(),
         })
-        saveAnnotations(get().annotations)
-      } catch { /* ignore invalid JSON */ }
-    },
+      }),
+
+    removeProductPlacement: (id) =>
+      set((s) => {
+        const idx = s.productPlacements.findIndex((p) => p.id === id)
+        if (idx !== -1) s.productPlacements.splice(idx, 1)
+      }),
+
+    clearProductPlacements: () =>
+      set((s) => {
+        s.productPlacements = []
+      }),
   }))
 )

@@ -42,6 +42,13 @@ export default function Sidebar() {
           </ol>
         </section>
       )}
+
+      {view === 'tools' && (
+        <section className={styles.section}>
+          <h2 className={styles.sectionTitle}>Toolbox</h2>
+          <p className={styles.hint}>Convert units and run quick construction calculators.</p>
+        </section>
+      )}
     </aside>
   )
 }

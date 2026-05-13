@@ -69,123 +69,117 @@
   white-space: nowrap;
 }
 
-/* ── Annotation creation form ────────────────────────────────────────────────── */
-
-.annotationForm {
-  position: fixed;
-  z-index: 50;
-  background: rgba(15, 23, 42, 0.97);
-  border: 1px solid #334155;
-  border-radius: 12px;
-  padding: 14px;
-  width: 260px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(8px);
-}
-
-.formTextarea {
-  width: 100%;
-  box-sizing: border-box;
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 7px;
-  color: #f1f5f9;
-  font-size: 13px;
-  padding: 7px 10px;
-  resize: none;
-  outline: none;
-  font-family: inherit;
-  margin-bottom: 10px;
-  transition: border-color 0.15s;
-}
-
-.formTextarea:focus {
-  border-color: #38bdf8;
-}
-
-.formPickerRow {
+.measurementsPanel {
+  position: absolute;
+  top: 66px;
+  right: 12px;
+  width: 280px;
+  max-height: calc(100% - 78px);
+  z-index: 10;
   display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #1e293b;
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  pointer-events: all;
+  overflow: hidden;
 }
 
-.formIconBtn {
-  background: #1e293b;
-  border: 1.5px solid transparent;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 3px 4px;
-  line-height: 1;
-  transition: border-color 0.12s, background 0.12s;
+.measurementsPanelCollapsed {
+  width: 164px;
 }
 
-.formIconBtn:hover {
-  background: #334155;
-}
-
-.formColorBtn {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  padding: 0;
-  transition: border-color 0.12s, transform 0.12s;
-}
-
-.formColorBtn:hover {
-  transform: scale(1.2);
-}
-
-.formBtnActive {
-  border-color: #38bdf8 !important;
-}
-
-.formButtons {
+.measurementsPanelHeader {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  margin-top: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #1e293b;
 }
 
-.formSubmit {
-  flex: 1;
-  background: #1e3a5f;
-  border: 1px solid #38bdf8;
-  color: #38bdf8;
+.measurementsPanelTitle {
+  margin: 0;
   font-size: 13px;
   font-weight: 700;
-  padding: 6px 0;
-  border-radius: 7px;
-  cursor: pointer;
-  transition: background 0.15s;
+  color: #cbd5e1;
 }
 
-.formSubmit:hover:not(:disabled) {
-  background: #0d2a4a;
-}
-
-.formSubmit:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.formCancel {
-  background: #1e293b;
+.measurementsPanelToggle {
   border: 1px solid #334155;
+  background: #1e293b;
   color: #94a3b8;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 7px;
+  border-radius: 6px;
+  width: 28px;
+  height: 24px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
 }
 
-.formCancel:hover {
+.measurementsPanelToggle:hover {
   background: #334155;
   color: #f1f5f9;
+}
+
+.measurementsPanelBody {
+  overflow: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.measurementEmpty {
+  font-size: 12px;
+  color: #64748b;
+  padding: 6px 4px;
+}
+
+.measurementEntry {
+  border: 1px solid #1e3a5f;
+  background: rgba(15, 23, 42, 0.88);
+  border-radius: 8px;
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.measurementValueRow {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.measurementValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fde68a;
+}
+
+.measurementUnit {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.measurementMeta {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.measurementDelete {
+  justify-self: end;
+  border: 1px solid #334155;
+  background: #1e293b;
+  color: #fca5a5;
+  border-radius: 6px;
+  width: 26px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.measurementDelete:hover {
+  background: #3f1d1d;
 }
 
 /* ── Overlays ─────────────────────────────────────────────────────────────────── */
