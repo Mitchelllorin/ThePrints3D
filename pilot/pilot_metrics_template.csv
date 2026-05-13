@@ -1,2 +1,2 @@
-project_id,project_type,input_type,sheet_count,upload_ok,analyze_ok,calibration_ok,build3d_ok,layers_ok,measure_ok,crash_or_blocker,wall_correctness_pct,measurement_error_pct,symbol_text_false_positive_count,time_to_usable_3d_min,top_issue,correction_made,notes,reviewer,review_date
-P-001,residential,pdf,18,yes,yes,yes,yes,yes,yes,no,82,4.5,17,7.8,text_dimensions_classified_as_walls,yes,"baseline sample row",,YYYY-MM-DD
+project_id,project_type,input_type,sheet_count,upload_ok,analyze_ok,calibration_ok,build3d_ok,layers_ok,measure_ok,crash_or_blocker,wall_correctness_pct,measurement_error_pct,symbol_text_false_positive_count,time_to_usable_3d_min,wall_count,floor_count,scale_confidence_auto,scale_confidence_manual,scale_confidence_none,render_time_ms,top_issue,correction_made,notes,reviewer,review_date
+P-001,residential,pdf,18,yes,yes,yes,yes,yes,yes,no,82,4.5,17,7.8,142,3,15,2,1,468000,text_dimensions_classified_as_walls,yes,"baseline sample row",,YYYY-MM-DD
