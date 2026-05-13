@@ -70,18 +70,18 @@ def run_epoch(
     model.train(train)
     total_loss, total_iou, n = 0.0, 0.0, 0
     with torch.set_grad_enabled(train):
-        for imgs, masks in tqdm(loader, leave=False, desc='train' if train else 'val'):
-            imgs = imgs.to(device)
+        for images, masks in tqdm(loader, leave=False, desc='train' if train else 'val'):
+            images = images.to(device)
             masks = masks.to(device)
-            preds = model(imgs)
+            preds = model(images)
             loss = combined_loss(preds, masks)
             if train and optimizer:
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
-            total_loss += loss.item() * imgs.size(0)
-            total_iou += iou_score(preds.detach(), masks.detach()) * imgs.size(0)
-            n += imgs.size(0)
+            total_loss += loss.item() * images.size(0)
+            total_iou += iou_score(preds.detach(), masks.detach()) * images.size(0)
+            n += images.size(0)
     return total_loss / n, total_iou / n
 
 
