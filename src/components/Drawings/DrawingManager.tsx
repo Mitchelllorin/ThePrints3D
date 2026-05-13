@@ -372,8 +372,13 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
           {drawing.status === 'ready' && (
             <>
               <button className={styles.actionBtn} onClick={onCalibrate}>
-                📏 {drawing.scaleConfidence === 'fallback' ? '⚠ ' : ''}Calibrate Scale
+                📏 Calibrate Scale
               </button>
+              {drawing.scaleConfidence === 'fallback' && (
+                <span className={`${styles.scaleConfBadge} ${styles.scaleConfFallback}`}>
+                  ⚠ scale needed
+                </span>
+              )}
               <button
                 className={`${styles.actionBtn} ${traceMode ? styles.actionBtnActive : ''}`}
                 onClick={() => setTraceMode((v) => !v)}
