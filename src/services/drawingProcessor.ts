@@ -5,6 +5,7 @@ import { deriveScaleFromNotation } from './scaleParser'
 import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
 import { classifyWallType, pxToMm, type DrywallConfig } from './wallTypeClassifier'
 import type { Drawing, ParsedWall } from '../types'
+import { detectWallsWithAI } from './aiWallDetector'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -55,17 +56,21 @@ export async function processDrawing(
     // 3. Detect walls (runs in main thread — acceptable for most drawing sizes)
     setProgress(82)
     const isRasterPhoto = drawing.file.type.startsWith('image/')
-    let result = detectWalls(raster.imageData, {
-      // Stricter defaults reduce annotation noise (text/dimension lines)
-      edgeThreshold: isRasterPhoto ? 30 : 34,
-      minWallLengthPx: isRasterPhoto ? 55 : 70,
-      minWallThicknessPx: 3,
-      maxWallThicknessPx: 60,
-      requirePairedEdges: true,
-      mergeGapPx: 4,
-    })
-    // Fallback pass for noisy scans/photos where strict pairing can miss walls.
+    let result = await detectWallsWithAI(raster.imageData)
+    if (!result) {
+      result = detectWalls(raster.imageData, {
+        // Stricter defaults reduce annotation noise (text/dimension lines)
+        edgeThreshold: isRasterPhoto ? 30 : 34,
+        minWallLengthPx: isRasterPhoto ? 55 : 70,
+        minWallThicknessPx: 3,
+        maxWallThicknessPx: 60,
+        requirePairedEdges: true,
+        mergeGapPx: 4,
+      })
+    }
     if (result.walls.length === 0) {
+      // Stricter defaults reduce annotation noise (text/dimension lines)
+      // Fallback pass for noisy scans/photos where strict pairing can miss walls.
       result = detectWalls(raster.imageData, {
         edgeThreshold: isRasterPhoto ? 26 : 30,
         minWallLengthPx: isRasterPhoto ? 40 : 55,
@@ -89,10 +94,19 @@ export async function processDrawing(
     //    Only meaningful once scale is known — otherwise leave as 'unknown'.
     const walls: ParsedWall[] = result.walls.map((w) => {
       const finishedMm = pxToMm(w.thickness, effectiveScale)
-      if (finishedMm === null) return { ...w, wallType: 'unknown' as const }
+      if (finishedMm === null) {
+        return {
+          ...w,
+          source: w.source ?? 'auto',
+          detectionConfidence: w.detectionConfidence ?? 0.65,
+          wallType: 'unknown' as const,
+        }
+      }
       const c = classifyWallType(finishedMm, drywall)
       return {
         ...w,
+        source: w.source ?? 'auto',
+        detectionConfidence: w.detectionConfidence ?? c.confidence,
         wallType: c.type,
         framingMm: c.framingMm,
         finishedMm: c.finishedMm,
