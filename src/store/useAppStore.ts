@@ -402,7 +402,7 @@ export const useAppStore = create<AppState>()(
 
         const unknownIds = floorGroups.get('unknown')
         if (unknownIds && unknownIds.length > 0) {
-          const topKnownFloor = numericEntries.length > 0 ? Math.max(...numericEntries.map(([floorNum]) => floorNum)) : 0
+          const topKnownFloor = numericEntries[numericEntries.length - 1]?.[0] ?? 0
           levels.push({
             id: 'floor-unknown',
             label: 'Unknown',
