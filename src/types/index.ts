@@ -142,3 +142,18 @@ export interface Measurement {
   /** Unix timestamp (ms) when this measurement was created */
   createdAt: number
 }
+
+// ─── Annotations ──────────────────────────────────────────────────────────────
+
+export interface Annotation {
+  id: string
+  /** World-space anchor [x, y, z] */
+  position: [number, number, number]
+  /** Display text */
+  text: string
+  /** Emoji icon */
+  icon: string
+  /** Hex colour string e.g. "#f87171" */
+  color: string
+  createdAt: number
+}

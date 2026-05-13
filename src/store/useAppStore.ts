@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type {
   AppView,
+  Annotation,
   Drawing,
   DrawingType,
   FloorLevel,
@@ -20,6 +21,24 @@ import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
 export interface CameraPreset {
   position: [number, number, number]
   target: [number, number, number]
+}
+
+// ─── Annotation persistence ────────────────────────────────────────────────────
+
+const ANNOTATIONS_KEY = 'blueprint3d-annotations'
+
+function loadPersistedAnnotations(): Annotation[] {
+  try {
+    const raw = localStorage.getItem(ANNOTATIONS_KEY)
+    if (raw) return JSON.parse(raw) as Annotation[]
+  } catch { /* ignore */ }
+  return []
+}
+
+function saveAnnotations(annotations: Annotation[]) {
+  try {
+    localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(annotations))
+  } catch { /* ignore */ }
 }
 
 // ─── Default Layers ────────────────────────────────────────────────────────────
@@ -404,6 +423,7 @@ export const useAppStore = create<AppState>()(
     setMeasureMode: (active) =>
       set((s) => {
         s.measureMode = active
+        if (active) s.annotateMode = false  // mutually exclusive with annotate
       }),
 
     addMeasurement: (m) =>

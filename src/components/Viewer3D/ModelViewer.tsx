@@ -14,6 +14,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useAppStore } from '../../store/useAppStore'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
+import AnnotationTool from './AnnotationTool'
 import CameraHud from './CameraHud'
 import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
@@ -69,6 +70,105 @@ function BuildingProgress() {
   )
 }
 
+// ─── Preset colours/icons used in the creation form ──────────────────────────
+
+const FORM_COLORS = ['#f87171','#fb923c','#facc15','#4ade80','#38bdf8','#818cf8','#e879f9','#f1f5f9']
+const FORM_ICONS  = ['📌','⚠️','💡','❓','✅','🔧','📏','🔴','⭐','🏷️','💬','🚩']
+
+// ─── Annotation creation form ─────────────────────────────────────────────────
+
+interface FormState {
+  position3D: [number, number, number]
+  screenX: number
+  screenY: number
+}
+
+interface AnnotationFormProps {
+  form: FormState
+  onSubmit: (text: string, icon: string, color: string) => void
+  onCancel: () => void
+}
+
+function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
+  const [text, setText]   = useState('')
+  const [icon, setIcon]   = useState('📌')
+  const [color, setColor] = useState('#38bdf8')
+
+  // keep the popover inside the viewport
+  const margin = 16
+  const popW = 260, popH = 260
+  const left = Math.min(form.screenX + 12, window.innerWidth  - popW - margin)
+  const top  = Math.min(form.screenY + 12, window.innerHeight - popH - margin)
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = text.trim()
+    if (!trimmed) return
+    onSubmit(trimmed, icon, color)
+  }
+
+  return (
+    <div
+      className={styles.annotationForm}
+      style={{ left, top }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <form onSubmit={handleSubmit}>
+        <textarea
+          className={styles.formTextarea}
+          value={text}
+          autoFocus
+          placeholder="Add a note…"
+          rows={2}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(e as unknown as React.FormEvent) }
+            if (e.key === 'Escape') onCancel()
+          }}
+        />
+
+        {/* Icon selector */}
+        <div className={styles.formPickerRow}>
+          {FORM_ICONS.map((ic) => (
+            <button
+              key={ic}
+              type="button"
+              className={`${styles.formIconBtn} ${icon === ic ? styles.formBtnActive : ''}`}
+              onClick={() => setIcon(ic)}
+              title={ic}
+            >
+              {ic}
+            </button>
+          ))}
+        </div>
+
+        {/* Colour selector */}
+        <div className={styles.formPickerRow}>
+          {FORM_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className={`${styles.formColorBtn} ${color === c ? styles.formBtnActive : ''}`}
+              style={{ background: c }}
+              onClick={() => setColor(c)}
+              title={c}
+            />
+          ))}
+        </div>
+
+        <div className={styles.formButtons}>
+          <button type="submit" className={styles.formSubmit} disabled={!text.trim()}>
+            📌 Add Pin
+          </button>
+          <button type="button" className={styles.formCancel} onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
 export default function ModelViewer() {
   const model = useAppStore((s) => s.model)
   const layers = useAppStore((s) => s.layers)
@@ -102,11 +202,20 @@ export default function ModelViewer() {
             </button>
           )}
           <button
+            className={`${styles.toolBtn} ${annotateMode ? styles.toolBtnActive : ''}`}
+            onClick={() => { setAnnotateMode(!annotateMode); setPendingForm(null) }}
+            title={annotateMode ? 'Exit annotation mode' : 'Annotate — click the model to place pins'}
+          >
+            📌 {annotateMode ? 'Annotating…' : 'Annotate'}
+            {annotations.length > 0 && !annotateMode && (
+              <span className={styles.toolBadge}>{annotations.length}</span>
+            )}
+          </button>
+          <button
             className={styles.toolBtn}
             onClick={() => {
               const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
               if (!canvas) return
-              // preserveDrawingBuffer is false for perf; force a render before snapshot
               try {
                 const dataUrl = canvas.toDataURL('image/png')
                 const a = document.createElement('a')
@@ -123,9 +232,9 @@ export default function ModelViewer() {
           >
             📤 Share PNG
           </button>
-          {measureMode && (
+          {(measureMode || annotateMode) && (
             <span className={styles.toolHint}>
-              Click a surface to place point A, then point B
+              {measureMode ? 'Click a surface to place point A, then point B' : 'Click a surface to place an annotation pin'}
             </span>
           )}
         </div>
@@ -189,11 +298,20 @@ export default function ModelViewer() {
         </aside>
       )}
 
+      {/* Annotation creation form */}
+      {pendingForm && (
+        <AnnotationForm
+          form={pendingForm}
+          onSubmit={handleFormSubmit}
+          onCancel={() => setPendingForm(null)}
+        />
+      )}
+
       <Canvas
         shadows
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
-        style={{ touchAction: 'none' }}
+        style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
       >
         <CameraRig />
         <ambientLight intensity={0.4} />
@@ -227,6 +345,9 @@ export default function ModelViewer() {
             <BuildingModel layers={layers} />
             <ProductPlacements />
             {model.status === 'ready' && <MeasureTool key={measureMode ? 'measure-on' : 'measure-off'} />}
+            {model.status === 'ready' && (
+              <AnnotationTool onPlaceRequest={handlePlaceRequest} />
+            )}
           </>
         )}
 
