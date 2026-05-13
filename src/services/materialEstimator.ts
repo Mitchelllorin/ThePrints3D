@@ -1,6 +1,10 @@
 import type { ParsedWall } from '../types'
 import type { WallType } from './wallTypeClassifier'
 
+const INCHES_PER_FOOT = 12
+const FEET_PER_YARD = 3
+const CUBIC_FEET_PER_CUBIC_YARD = FEET_PER_YARD ** 3
+
 export interface MaterialEstimateOptions {
   ceilingHeightFt?: number
   studSpacingIn?: 16 | 24
@@ -54,13 +58,22 @@ function round2(value: number): number {
 }
 
 function isFramedType(type: WallType | undefined): boolean {
-  return type === 'partition-thin' || type === 'stud-2x4' || type === 'stud-2x6' || type === 'stud-2x8' || type === 'stud-2x10' || type === 'stud-2x12' || type === 'unknown'
+  const framedTypes: WallType[] = [
+    'partition-thin',
+    'stud-2x4',
+    'stud-2x6',
+    'stud-2x8',
+    'stud-2x10',
+    'stud-2x12',
+    'unknown',
+  ]
+  return framedTypes.includes(type ?? 'unknown')
 }
 
 function averageMasonryThicknessFt(walls: ParsedWall[]): number {
   const candidates = walls
     .filter((w) => w.wallType === 'masonry-thick' && Number.isFinite(w.framingMm))
-    .map((w) => Math.max((w.framingMm ?? 0) / 304.8 / 12, 0.5))
+    .map((w) => Math.max((w.framingMm ?? 0) / 304.8 / INCHES_PER_FOOT, 0.5))
   if (candidates.length === 0) return 0.67
   return candidates.reduce((a, b) => a + b, 0) / candidates.length
 }
@@ -96,7 +109,7 @@ export function estimateMaterials(
     }
   }
 
-  const studCount = Math.ceil((framedWallLengthFt * 12) / studSpacingIn * wasteMultiplier)
+  const studCount = Math.ceil(((framedWallLengthFt * INCHES_PER_FOOT) / studSpacingIn) * wasteMultiplier)
   const plateLinearFeet = framedWallLengthFt * 3 * wasteMultiplier
   const wallAreaSqFt = framedWallLengthFt * ceilingHeightFt
   const drywallAreaSqFt = wallAreaSqFt * 2
@@ -105,7 +118,7 @@ export function estimateMaterials(
   const insulationSqFt = wallAreaSqFt * wasteMultiplier
 
   const masonryThicknessFt = averageMasonryThicknessFt(walls)
-  const masonryVolumeYd3 = (masonryWallLengthFt * ceilingHeightFt * masonryThicknessFt) / 27 * wasteMultiplier
+  const masonryVolumeYd3 = ((masonryWallLengthFt * ceilingHeightFt * masonryThicknessFt) / CUBIC_FEET_PER_CUBIC_YARD) * wasteMultiplier
   const masonryWallAreaSqFt = masonryWallLengthFt * ceilingHeightFt
   const cmuBlocks = Math.ceil((masonryWallAreaSqFt / 0.889) * wasteMultiplier)
 

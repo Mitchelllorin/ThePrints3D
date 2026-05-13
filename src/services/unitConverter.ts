@@ -12,6 +12,7 @@ export type ConverterUnit = LengthUnit | AreaUnit | VolumeUnit | WeightUnit | Te
 const MM_PER_IN = 25.4
 const MM_PER_FT = 304.8
 const MM_PER_YD = 914.4
+const INCH_FRACTION_DENOMINATOR = 16
 const M2_PER_FT2 = 0.09290304
 const M2_PER_YD2 = 0.83612736
 const M3_PER_FT3 = 0.028316846592
@@ -25,10 +26,8 @@ export function parseFeetInches(input: string): number | null {
 
   const normalized = trimmed
     .replace(/\s+/g, ' ')
-    .replace('”', '"')
-    .replace('“', '"')
-    .replace('′', "'")
-    .replace('″', '"')
+    .replace(/[”“″]/g, '"')
+    .replace(/′/g, "'")
 
   const full = normalized.match(/^(\d+(?:\.\d+)?)\s*'\s*(\d+(?:\.\d+)?)?\s*"?$/)
   if (full) {
@@ -46,7 +45,7 @@ export function parseFeetInches(input: string): number | null {
     return feet * 12 + inches
   }
 
-  const inchesOnly = Number(normalized.replace('"', ''))
+  const inchesOnly = Number(normalized.replace(/"/g, ''))
   if (Number.isFinite(inchesOnly) && inchesOnly >= 0) return inchesOnly
 
   return null
@@ -57,7 +56,7 @@ export function inchesToFeetInches(inches: number): string {
   const safeInches = Math.max(0, inches)
   const feet = Math.floor(safeInches / 12)
   const remainder = safeInches - feet * 12
-  const rounded = Math.round(remainder * 16) / 16
+  const rounded = Math.round(remainder * INCH_FRACTION_DENOMINATOR) / INCH_FRACTION_DENOMINATOR
   return `${feet}' ${rounded.toFixed(2).replace(/\.00$/, '')}"`
 }
 

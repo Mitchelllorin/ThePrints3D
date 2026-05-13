@@ -37,7 +37,12 @@ export default function MaterialReportPanel({ drawing }: Props) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${drawing.name.replace(/\.[^/.]+$/, '')}-material-report.csv`
+    const safeName = drawing.name
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[^a-z0-9-_ ]/gi, '-')
+      .trim()
+      .replace(/\s+/g, '_')
+    a.download = `${safeName || 'drawing'}-material-report.csv`
     a.click()
     URL.revokeObjectURL(url)
   }

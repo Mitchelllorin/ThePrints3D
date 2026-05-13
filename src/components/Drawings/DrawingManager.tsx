@@ -188,13 +188,13 @@ export default function DrawingManager() {
 
       <div className={styles.preview}>
         {selected ? (
-          <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', overflow: 'auto' }}>
+          <div className={styles.previewColumn}>
             <DrawingPreview
               drawing={selected}
               onProcess={() => processDrawing(selected.id)}
               onCalibrate={() => setCalibratingId(selected.id)}
             />
-            <div style={{ padding: 12, borderTop: '1px solid #1e293b' }}>
+            <div className={styles.materialPanelWrap}>
               <MaterialReportPanel drawing={selected} />
             </div>
           </div>

@@ -13,6 +13,11 @@ const CATEGORY_LABELS: Record<ProductCategory, string> = {
   lighting: 'Lighting',
 }
 
+const PLACEMENT_GRID_WIDTH = 5
+const PLACEMENT_GRID_SPACING = 1.2
+const PLACEMENT_DEFAULT_HEIGHT = 0.3
+const PLACEMENT_GRID_CENTER_OFFSET = 2
+
 export default function ProductPlacementPanel() {
   const productCatalog = useAppStore((s) => s.productCatalog)
   const productPlacements = useAppStore((s) => s.productPlacements)
@@ -32,7 +37,7 @@ export default function ProductPlacementPanel() {
     const loadCatalog = async () => {
       try {
         const response = await fetch('/products/catalog.json')
-        if (!response.ok) throw new Error(`Failed to load catalog (${response.status})`)
+        if (!response.ok) throw new Error(`Failed to load catalog: ${response.status} ${response.statusText}`)
         const data = await response.json() as ProductCatalogItem[]
         if (!cancelled) {
           setProductCatalog(data)
@@ -69,7 +74,11 @@ export default function ProductPlacementPanel() {
     const offset = productPlacements.length
     addProductPlacement({
       productId: selected.id,
-      position: [((offset % 5) - 2) * 1.2, 0.3, Math.floor(offset / 5) * 1.2 - 2],
+      position: [
+        ((offset % PLACEMENT_GRID_WIDTH) - PLACEMENT_GRID_CENTER_OFFSET) * PLACEMENT_GRID_SPACING,
+        PLACEMENT_DEFAULT_HEIGHT,
+        Math.floor(offset / PLACEMENT_GRID_WIDTH) * PLACEMENT_GRID_SPACING - PLACEMENT_GRID_CENTER_OFFSET,
+      ],
       rotationY: 0,
     })
   }

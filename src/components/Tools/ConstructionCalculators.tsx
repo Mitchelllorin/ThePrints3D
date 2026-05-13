@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import styles from './Toolbox.module.css'
 
+// Roofing "square" is the trade unit for 100 square feet of roof area.
 const SQFT_PER_ROOF_SQUARE = 100
 
 function toNumber(value: string): number {
