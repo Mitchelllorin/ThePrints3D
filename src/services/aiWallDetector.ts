@@ -110,6 +110,18 @@ function readMaskTensor(tensor: { data: Float32Array; dims: readonly number[] })
   return tensor.data
 }
 
+/**
+ * Returns true if the trained ONNX wall-segmentation model is present at the
+ * expected URL.  The result is cached after the first network check.
+ *
+ * The model is built by the pipeline in `ops/train/` and placed at
+ * `public/models/floorplan-wall-segmentation.onnx`.  When the model is
+ * absent the detector falls back to the heuristic edge-based wall finder.
+ */
+export async function isAIModelAvailable(): Promise<boolean> {
+  return modelExists()
+}
+
 export async function detectWallsWithAI(
   imageData: ImageData,
 ): Promise<DetectWallsResult | null> {
