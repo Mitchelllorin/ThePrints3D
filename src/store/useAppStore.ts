@@ -12,7 +12,12 @@ import type {
   Model3D,
 } from '../types'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
-import { groupByFloor, floorToElevation, FLOOR_HEIGHT_M, inferFloorNumber } from '../services/sheetParser'
+import {
+  groupByFloorWithLog,
+  floorToElevation,
+  FLOOR_HEIGHT_M,
+  type FloorGroupingLogEntry,
+} from '../services/sheetParser'
 import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
@@ -151,6 +156,7 @@ interface AppState {
   drawings: Drawing[]
   layers: Layer[]
   model: Model3D
+  floorGroupingLog: FloorGroupingLogEntry[]
   selectedDrawingId: string | null
   sidebarOpen: boolean
   measurements: Measurement[]
@@ -215,6 +221,7 @@ export const useAppStore = create<AppState>()(
     drawings: [],
     layers: DEFAULT_LAYERS,
     model: DEFAULT_MODEL,
+    floorGroupingLog: [],
     selectedDrawingId: null,
     sidebarOpen: true,
     measurements: [],
@@ -395,21 +402,38 @@ export const useAppStore = create<AppState>()(
         s.view = 'model'
 
         // Build floor levels from sheet numbers
-        const floorGroups = groupByFloor(
+        const { groups: floorGroups, floorGroupingLog } = groupByFloorWithLog(
           s.drawings.map((d) => ({
             id: d.id,
             name: d.name,
-            floorNumber: d.floorNumber ?? inferFloorNumber(d.name),
+            floorNumber: d.floorNumber,
           }))
         )
+        s.floorGroupingLog = floorGroupingLog
         const levels: FloorLevel[] = []
-        for (const [floorNum, ids] of Array.from(floorGroups.entries()).sort(([a], [b]) => a - b)) {
+        const numericEntries = Array.from(floorGroups.entries())
+          .filter((entry): entry is [number, string[]] => entry[0] !== 'unknown')
+          .sort(([a], [b]) => a - b)
+
+        for (const [floorNum, ids] of numericEntries) {
           levels.push({
             id: `floor-${floorNum}`,
             label: floorNum === 0 ? 'Ground Floor' : floorNum < 0 ? 'Basement' : `Level ${floorNum}`,
             elevation: floorToElevation(floorNum),
             height: FLOOR_HEIGHT_M,
             drawingIds: ids,
+          })
+        }
+
+        const unknownIds = floorGroups.get('unknown')
+        if (unknownIds && unknownIds.length > 0) {
+          const topKnownFloor = numericEntries[numericEntries.length - 1]?.[0] ?? 0
+          levels.push({
+            id: 'floor-unknown',
+            label: 'Unknown',
+            elevation: floorToElevation(topKnownFloor + 1),
+            height: FLOOR_HEIGHT_M,
+            drawingIds: unknownIds,
           })
         }
         s.model.floorLevels = levels

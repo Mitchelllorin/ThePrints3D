@@ -41,18 +41,52 @@ export function inferFloorNumber(name: string): number | null {
 
 /**
  * Group drawing IDs by floor level.
- * Drawings with no detected floor are assigned to floor 0.
+ * Drawings with no detected floor are assigned to an "unknown" bucket.
  */
+export type FloorBucket = number | 'unknown'
+
+export interface FloorGroupingLogEntry {
+  drawingId: string
+  drawingName: string
+  providedFloorNumber: number | null
+  inferredFloorNumber: number | null
+  assignedBucket: FloorBucket
+  assignmentSource: 'provided' | 'inferred' | 'unknown'
+}
+
 export function groupByFloor(
   drawings: Array<{ id: string; name: string; floorNumber: number | null }>
-): Map<number, string[]> {
-  const map = new Map<number, string[]>()
+): Map<FloorBucket, string[]> {
+  return groupByFloorWithLog(drawings).groups
+}
+
+export function groupByFloorWithLog(
+  drawings: Array<{ id: string; name: string; floorNumber: number | null }>
+): { groups: Map<FloorBucket, string[]>; floorGroupingLog: FloorGroupingLogEntry[] } {
+  const groups = new Map<FloorBucket, string[]>()
+  const floorGroupingLog: FloorGroupingLogEntry[] = []
+
   for (const d of drawings) {
-    const floor = d.floorNumber ?? 0
-    if (!map.has(floor)) map.set(floor, [])
-    map.get(floor)!.push(d.id)
+    const inferredFloorNumber = d.floorNumber == null ? inferFloorNumber(d.name) : null
+    const resolvedFloor = d.floorNumber ?? inferredFloorNumber
+    const assignedBucket: FloorBucket = resolvedFloor ?? 'unknown'
+    const assignmentSource =
+      d.floorNumber != null ? 'provided' : inferredFloorNumber != null ? 'inferred' : 'unknown'
+
+    if (!groups.has(assignedBucket)) groups.set(assignedBucket, [])
+    groups.get(assignedBucket)!.push(d.id)
+
+    floorGroupingLog.push({
+      drawingId: d.id,
+      drawingName: d.name,
+      providedFloorNumber: d.floorNumber,
+      inferredFloorNumber,
+      assignedBucket,
+      assignmentSource,
+    })
   }
-  return map
+
+  return { groups, floorGroupingLog }
 }
 
 /** Standard floor height in metres. */
