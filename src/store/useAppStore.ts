@@ -444,7 +444,7 @@ export const useAppStore = create<AppState>()(
 
     addAnnotation: (a) => {
       set((s) => {
-        s.annotations.push({ ...a, id: `ann-${Date.now()}`, createdAt: Date.now() })
+        s.annotations.push({ ...a, id: crypto.randomUUID(), createdAt: Date.now() })
       })
       saveAnnotations(get().annotations)
     },

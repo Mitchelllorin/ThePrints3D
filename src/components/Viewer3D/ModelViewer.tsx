@@ -8,6 +8,7 @@ import {
   GizmoViewport,
   Stats,
 } from '@react-three/drei'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import BuildingModel from './BuildingModel'
@@ -33,7 +34,7 @@ function CameraRig() {
  * Listens for camera-preset requests from the store (set by the CameraHud).
  * Applies the requested camera pose to the active camera + OrbitControls.
  */
-function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<{ target: THREE.Vector3; update: () => void } | null> }) {
+function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
   const preset = useAppStore((s) => s.cameraPreset)
   const consume = useAppStore((s) => s.consumeCameraPreset)
@@ -176,7 +177,7 @@ export default function ModelViewer() {
   const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
   const annotations = useAppStore((s) => s.annotations)
   const addAnnotation = useAppStore((s) => s.addAnnotation)
-  const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null)
+  const controlsRef = useRef<OrbitControlsImpl | null>(null)
 
   const [pendingForm, setPendingForm] = useState<FormState | null>(null)
 
@@ -317,7 +318,7 @@ export default function ModelViewer() {
         )}
 
         <OrbitControls
-          ref={controlsRef as React.Ref<any>}
+          ref={controlsRef}
           makeDefault
           enableDamping
           dampingFactor={0.12}
