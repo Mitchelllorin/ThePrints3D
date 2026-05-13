@@ -8,6 +8,7 @@ import {
   GizmoViewport,
   Stats,
 } from '@react-three/drei'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import BuildingModel from './BuildingModel'
@@ -169,7 +170,7 @@ export default function ModelViewer() {
         )}
 
         <OrbitControls
-          ref={controlsRef as unknown as React.RefObject<undefined>}
+          ref={controlsRef as unknown as React.RefObject<OrbitControlsImpl>}
           makeDefault
           enableDamping
           dampingFactor={0.12}
