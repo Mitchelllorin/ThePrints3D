@@ -3,6 +3,8 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, FloorLevel, Layer, ParsedWall } from '../../types'
 import { logEvent } from '../../services/logger'
+import glossaryData from '../../symbols/glossary.json'
+import type { SymbolEntry } from '../../symbols/types'
 
 interface Props {
   layers: Layer[]
@@ -293,6 +295,231 @@ function buildMEP(
   }
 }
 
+// ─── LOD component factories ──────────────────────────────────────────────────
+
+const SLOT_MAT = new THREE.MeshStandardMaterial({ color: '#0a0a0a' })
+
+/** Electrical outlet (duplex receptacle) LOD */
+function makeOutletLOD(baseMat: THREE.MeshStandardMaterial): THREE.LOD {
+  const lod = new THREE.LOD()
+
+  // Near level — detailed faceplate with slots (<0.2 m)
+  const nearGroup = new THREE.Group()
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.14, 0.015), baseMat)
+  nearGroup.add(plate)
+  const slotGeo = new THREE.BoxGeometry(0.011, 0.022, 0.02)
+  const slot1 = new THREE.Mesh(slotGeo, SLOT_MAT)
+  slot1.position.set(0.018, 0.022, 0)
+  const slot2 = new THREE.Mesh(slotGeo, SLOT_MAT)
+  slot2.position.set(-0.018, 0.022, 0)
+  const gndGeo = new THREE.CylinderGeometry(0.007, 0.007, 0.02, 6)
+  const gnd = new THREE.Mesh(gndGeo, SLOT_MAT)
+  gnd.rotation.x = Math.PI / 2
+  gnd.position.set(0, -0.02, 0)
+  nearGroup.add(slot1, slot2, gnd)
+  lod.addLevel(nearGroup as unknown as THREE.Mesh, 0)
+
+  // Mid level — simple rectangle (0.2 m – 2 m)
+  lod.addLevel(new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.14, 0.015), baseMat), 0.2)
+
+  // Far level — tiny marker (> 2 m)
+  lod.addLevel(new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.01), baseMat), 2)
+
+  return lod
+}
+
+/** Single-pole switch LOD */
+function makeSwitchLOD(baseMat: THREE.MeshStandardMaterial): THREE.LOD {
+  const lod = new THREE.LOD()
+
+  // Near — rocker plate with paddle
+  const nearGroup = new THREE.Group()
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.015), baseMat)
+  nearGroup.add(plate)
+  const paddle = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.075, 0.02), baseMat)
+  paddle.position.set(0, 0.005, 0.005)
+  nearGroup.add(paddle)
+  lod.addLevel(nearGroup as unknown as THREE.Mesh, 0)
+
+  // Mid — flat rectangle
+  lod.addLevel(new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.12, 0.015), baseMat), 0.2)
+
+  // Far — tiny marker
+  lod.addLevel(new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.04, 0.01), baseMat), 2)
+
+  return lod
+}
+
+/** Recessed pot light LOD */
+function makePotLightLOD(baseMat: THREE.MeshStandardMaterial): THREE.LOD {
+  const lod = new THREE.LOD()
+
+  // Near — trim ring + inner bulb housing
+  const nearGroup = new THREE.Group()
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.012, 8, 24), baseMat)
+  ring.rotation.x = Math.PI / 2
+  nearGroup.add(ring)
+  const bulbMat = new THREE.MeshStandardMaterial({
+    color: '#fffde7',
+    emissive: new THREE.Color('#fffde7'),
+    emissiveIntensity: 0.6,
+  })
+  const bulb = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.04, 16), bulbMat)
+  bulb.position.y = 0.02
+  nearGroup.add(bulb)
+  lod.addLevel(nearGroup as unknown as THREE.Mesh, 0)
+
+  // Mid — flat disc
+  lod.addLevel(new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.01, 16), baseMat), 0.2)
+
+  // Far — tiny disc
+  lod.addLevel(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.005, 8), baseMat), 2)
+
+  return lod
+}
+
+/** Pipe collar / riser LOD */
+function makePipeCollarLOD(baseMat: THREE.MeshStandardMaterial): THREE.LOD {
+  const lod = new THREE.LOD()
+
+  // Near — collar ring with bolt heads
+  const nearGroup = new THREE.Group()
+  const collar = new THREE.Mesh(
+    new THREE.TorusGeometry(0.055, 0.018, 8, 24),
+    baseMat,
+  )
+  collar.rotation.x = Math.PI / 2
+  nearGroup.add(collar)
+  const boltGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.015, 6)
+  for (let i = 0; i < 4; i++) {
+    const bolt = new THREE.Mesh(boltGeo, baseMat)
+    const angle = (i / 4) * Math.PI * 2
+    bolt.position.set(Math.cos(angle) * 0.055, 0, Math.sin(angle) * 0.055)
+    nearGroup.add(bolt)
+  }
+  lod.addLevel(nearGroup as unknown as THREE.Mesh, 0)
+
+  // Mid — simple torus
+  lod.addLevel(new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.018, 6, 16), baseMat), 0.2)
+
+  // Far — tiny disc
+  lod.addLevel(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.005, 8), baseMat), 2)
+
+  return lod
+}
+
+// ─── LOD component placement ──────────────────────────────────────────────────
+
+const INCHES_TO_M = 0.0254
+const OUTLET_HEIGHT_M = 18 * INCHES_TO_M   // 18″ AFF
+const SWITCH_HEIGHT_M = 48 * INCHES_TO_M   // 48″ AFF
+
+/**
+ * Place LOD components (outlets, switches, pot lights, pipe collars) into the
+ * building group. Components are spaced along detected wall segments and on a
+ * ceiling grid. Each LOD object carries `userData.symbolId` + `userData.layer`
+ * so the double-click raycaster can identify it.
+ */
+function buildComponentsLOD(
+  group: THREE.Group,
+  walls: ParsedWall[],
+  mmPerPx: number,
+  cx: number,
+  cy: number,
+  fp: Footprint,
+  elevation: number,
+  floorHeight: number,
+  elecMat: THREE.MeshStandardMaterial,
+  plumbMat: THREE.MeshStandardMaterial,
+  hasElec: boolean,
+  hasPlumb: boolean,
+) {
+  const glossary = (glossaryData as { entries: SymbolEntry[] }).entries
+  const outletEntry = glossary.find((e) => e.id === 'elec_outlet_duplex')
+  const switchEntry = glossary.find((e) => e.id === 'elec_switch_1way')
+  const lightEntry  = glossary.find((e) => e.id === 'elec_fixture_recessed')
+  const pipeEntry   = glossary.find((e) => e.id === 'plumb_sink')
+
+  const s = mmPerPx / 1000  // px → metres
+
+  if (hasElec) {
+    // Place outlets every ~2.5 m along detected horizontal walls
+    const outletSpacing = 2.5
+    for (const w of walls) {
+      const wx1 = (w.x1 - cx) * s
+      const wz1 = (w.y1 - cy) * s
+      const wx2 = (w.x2 - cx) * s
+      const wz2 = (w.y2 - cy) * s
+      const len = Math.sqrt((wx2 - wx1) ** 2 + (wz2 - wz1) ** 2)
+      if (len < outletSpacing) continue
+
+      const steps = Math.floor(len / outletSpacing)
+      for (let i = 1; i <= steps; i++) {
+        const t = i / (steps + 1)
+        const ox = wx1 + t * (wx2 - wx1)
+        const oz = wz1 + t * (wz2 - wz1)
+        const outletLod = makeOutletLOD(elecMat)
+        outletLod.position.set(ox, elevation + OUTLET_HEIGHT_M, oz)
+        outletLod.userData.layer = 'electrical'
+        outletLod.userData.symbolId = outletEntry?.id ?? 'elec_outlet_duplex'
+        group.add(outletLod)
+      }
+    }
+
+    // Place switches near wall endpoints (wall corners) at switch height
+    const placed = new Set<string>()
+    for (const w of walls) {
+      for (const [ex, ey] of [[w.x1, w.y1], [w.x2, w.y2]] as [number, number][]) {
+        const sx = (ex - cx) * s
+        const sz = (ey - cy) * s
+        const key = `${Math.round(sx * 4)},${Math.round(sz * 4)}`
+        if (placed.has(key)) continue
+        placed.add(key)
+        const swLod = makeSwitchLOD(elecMat)
+        swLod.position.set(sx, elevation + SWITCH_HEIGHT_M, sz)
+        swLod.userData.layer = 'electrical'
+        swLod.userData.symbolId = switchEntry?.id ?? 'elec_switch_1way'
+        group.add(swLod)
+      }
+    }
+
+    // Place pot lights in a ceiling grid
+    const W = fp.maxX - fp.minX
+    const D = fp.maxZ - fp.minZ
+    const cols = Math.max(1, Math.round(W / 2.5))
+    const rows = Math.max(1, Math.round(D / 2.5))
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const lx = fp.minX + (W / cols) * (c + 0.5)
+        const lz = fp.minZ + (D / rows) * (r + 0.5)
+        const potLod = makePotLightLOD(elecMat)
+        potLod.position.set(lx, elevation + floorHeight - 0.05, lz)
+        potLod.userData.layer = 'electrical'
+        potLod.userData.symbolId = lightEntry?.id ?? 'elec_fixture_recessed'
+        group.add(potLod)
+      }
+    }
+  }
+
+  if (hasPlumb) {
+    // Place pipe collars at short vertical wall segments (riser candidates)
+    for (const w of walls) {
+      const wx1 = (w.x1 - cx) * s
+      const wz1 = (w.y1 - cy) * s
+      const wx2 = (w.x2 - cx) * s
+      const wz2 = (w.y2 - cy) * s
+      const isVert = Math.abs(wz2 - wz1) > Math.abs(wx2 - wx1)
+      const len = Math.sqrt((wx2 - wx1) ** 2 + (wz2 - wz1) ** 2)
+      if (!isVert || len < 0.3 || len > 2.0) continue
+      const collarLod = makePipeCollarLOD(plumbMat)
+      collarLod.position.set((wx1 + wx2) / 2, elevation + 0.3, (wz1 + wz2) / 2)
+      collarLod.userData.layer = 'plumbing'
+      collarLod.userData.symbolId = pipeEntry?.id ?? 'plumb_sink'
+      group.add(collarLod)
+    }
+  }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function BuildingModel({ layers }: Props) {
@@ -402,12 +629,40 @@ export default function BuildingModel({ layers }: Props) {
       }
 
       // ── MEP Systems ────────────────────────────────────────────────────────
-      buildMEP(
-        group, fp, elev, fh, layers,
-        floorDrawings.some((d) => d.type === 'electrical'),
-        floorDrawings.some((d) => d.type === 'plumbing'),
-        floorDrawings.some((d) => d.type === 'mechanical')
-      )
+      const hasElec = floorDrawings.some((d) => d.type === 'electrical')
+      const hasPlumb = floorDrawings.some((d) => d.type === 'plumbing')
+      const hasMech = floorDrawings.some((d) => d.type === 'mechanical')
+      buildMEP(group, fp, elev, fh, layers, hasElec, hasPlumb, hasMech)
+
+      // ── LOD Components (outlets, switches, pot lights, pipe collars) ────────
+      const elecLayer = layerMap.get('electrical')
+      const plumbLayer = layerMap.get('plumbing')
+      if ((elecLayer?.visible && hasElec) || (plumbLayer?.visible && hasPlumb)) {
+        const allFloorWalls = wallDrawings.flatMap((d) => d.parsedWalls)
+        const eMat = elecLayer
+          ? mat(elecLayer.color, elecLayer.opacity, {
+              emissive: new THREE.Color(elecLayer.color),
+              emissiveIntensity: 0.2,
+            })
+          : mat('#fbbf24', 1)
+        const pMat = plumbLayer
+          ? mat(plumbLayer.color, plumbLayer.opacity, { metalness: 0.5, roughness: 0.4 })
+          : mat('#38bdf8', 1)
+        buildComponentsLOD(
+          group,
+          allFloorWalls,
+          globalMmPerPx,
+          globalCx,
+          globalCy,
+          fp,
+          elev,
+          fh,
+          eMat,
+          pMat,
+          !!(elecLayer?.visible && hasElec),
+          !!(plumbLayer?.visible && hasPlumb),
+        )
+      }
     }
 
     const timer = setTimeout(() => {

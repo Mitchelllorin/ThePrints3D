@@ -1,9 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType } from '../../types'
+import type { LineClass } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
+import { getDatasetStats, exportDatasetNdjson, saveCorrection } from '../../services/datasetCollector'
 import styles from './DrawingManager.module.css'
 
 const DRAWING_TYPES: { value: DrawingType; label: string }[] = [
@@ -48,8 +50,14 @@ export default function DrawingManager() {
   const setDrawingScale = useAppStore((s) => s.setDrawingScale)
 
   const [calibratingId, setCalibratingId] = useState<string | null>(null)
+  const [datasetStats, setDatasetStats] = useState<{ entryCount: number; sampleCount: number } | null>(null)
   const selected = drawings.find((d) => d.id === selectedDrawingId) ?? null
   const calibrating = drawings.find((d) => d.id === calibratingId) ?? null
+
+  // Load dataset stats once on mount and whenever the drawing list changes
+  useEffect(() => {
+    getDatasetStats().then(setDatasetStats)
+  }, [drawings.length])
 
   const processAll = () => {
     for (const d of drawings) {
@@ -63,6 +71,20 @@ export default function DrawingManager() {
     logEvent('pilot.metrics.exported', {
       drawingCount: drawings.length,
       readyCount: drawings.filter((d) => d.status === 'ready').length,
+    })
+  }
+
+  const exportDataset = async () => {
+    const blob = await exportDatasetNdjson()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `blueprint3d-dataset-${new Date().toISOString().slice(0, 10)}.ndjson`
+    a.click()
+    URL.revokeObjectURL(url)
+    logEvent('dataset.exported', {
+      entryCount: datasetStats?.entryCount ?? 0,
+      sampleCount: datasetStats?.sampleCount ?? 0,
     })
   }
 
@@ -182,6 +204,25 @@ export default function DrawingManager() {
               onProcess={() => processDrawing(d.id)}
             />
           ))}
+        </div>
+
+        {/* Dataset stats footer */}
+        <div className={styles.datasetFooter}>
+          <span className={styles.datasetLabel}>
+            🧠 Dataset:{' '}
+            {datasetStats
+              ? `${datasetStats.entryCount} drawing${datasetStats.entryCount !== 1 ? 's' : ''} · ${datasetStats.sampleCount.toLocaleString()} samples`
+              : 'loading…'}
+          </span>
+          {datasetStats && datasetStats.entryCount > 0 && (
+            <button
+              className={styles.datasetExportBtn}
+              onClick={exportDataset}
+              title="Download the training dataset as NDJSON"
+            >
+              ⬇ Export
+            </button>
+          )}
         </div>
       </div>
 
@@ -308,9 +349,35 @@ interface PreviewProps {
   onCalibrate: () => void
 }
 
+const LINE_CLASSES: LineClass[] = ['wall', 'dimension', 'dashed', 'dotted', 'leader', 'unknown']
+const LINE_CLASS_LABELS: Record<LineClass, string> = {
+  wall: 'Wall',
+  dimension: 'Dimension line',
+  dashed: 'Dashed / hidden',
+  dotted: 'Dotted / overhead',
+  leader: 'Leader / short',
+  unknown: 'Unclassified',
+}
+
 function DrawingPreview({ drawing, onProcess, onCalibrate }: PreviewProps) {
   const [scale, setScale] = useState(1)
+  const [reviewMode, setReviewMode] = useState(false)
+  const [corrections, setCorrections] = useState<Record<string, LineClass>>({})
+  const [savedCount, setSavedCount] = useState(0)
   const previewSrc = drawing.rasterUrl ?? drawing.previewUrl
+  const stats = drawing.lineClassificationStats
+
+  const handleSaveCorrections = async () => {
+    const entries = Object.entries(corrections) as [LineClass, LineClass][]
+    if (entries.length === 0) return
+    for (const [originalClass, correctedClass] of entries) {
+      if (originalClass !== correctedClass) {
+        await saveCorrection(drawing.id, { originalClass, correctedClass })
+      }
+    }
+    setSavedCount((n) => n + entries.filter(([a, b]) => a !== b).length)
+    setCorrections({})
+  }
 
   return (
     <div className={styles.previewInner}>
@@ -341,6 +408,15 @@ function DrawingPreview({ drawing, onProcess, onCalibrate }: PreviewProps) {
               📏 Calibrate Scale
             </button>
           )}
+          {drawing.status === 'ready' && stats && stats.total > 0 && (
+            <button
+              className={`${styles.actionBtn} ${reviewMode ? styles.actionBtnActive : ''}`}
+              onClick={() => { setReviewMode((v) => !v); setCorrections({}) }}
+              title="Review and correct line detections to improve the training dataset"
+            >
+              🔍 Review Detections
+            </button>
+          )}
         </div>
 
         <div className={styles.zoomControls}>
@@ -355,6 +431,51 @@ function DrawingPreview({ drawing, onProcess, onCalibrate }: PreviewProps) {
         <div className={styles.processingBar}>
           <div className={styles.processingFill} style={{ width: `${drawing.parseProgress}%` }} />
           <span className={styles.processingLabel}>Analysing… {drawing.parseProgress}%</span>
+        </div>
+      )}
+
+      {/* Correction panel */}
+      {reviewMode && stats && (
+        <div className={styles.correctionPanel}>
+          <p className={styles.correctionTitle}>
+            🧠 Correct line detections — fixes feed the training dataset
+          </p>
+          <div className={styles.correctionGrid}>
+            {LINE_CLASSES.filter((cls) => stats[cls] > 0).map((cls) => (
+              <div key={cls} className={styles.correctionRow}>
+                <span className={styles.correctionClass}>
+                  {LINE_CLASS_LABELS[cls]}
+                  <span className={styles.correctionCount}> ×{stats[cls]}</span>
+                </span>
+                <span className={styles.correctionArrow}>→</span>
+                <select
+                  className={styles.correctionSelect}
+                  value={corrections[cls] ?? cls}
+                  onChange={(e) =>
+                    setCorrections((prev) => ({ ...prev, [cls]: e.target.value as LineClass }))
+                  }
+                >
+                  {LINE_CLASSES.map((opt) => (
+                    <option key={opt} value={opt}>{LINE_CLASS_LABELS[opt]}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className={styles.correctionActions}>
+            <button
+              className={styles.correctionSaveBtn}
+              onClick={handleSaveCorrections}
+              disabled={Object.keys(corrections).length === 0}
+            >
+              💾 Save corrections
+            </button>
+            {savedCount > 0 && (
+              <span className={styles.correctionSavedBadge}>
+                ✓ {savedCount} correction{savedCount !== 1 ? 's' : ''} saved to dataset
+              </span>
+            )}
+          </div>
         </div>
       )}
 

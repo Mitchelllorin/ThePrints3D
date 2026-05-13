@@ -1,4 +1,4 @@
-import { useRef, useEffect, Suspense } from 'react'
+import { useRef, useEffect, useState, useCallback, Suspense } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import {
   OrbitControls,
@@ -8,11 +8,14 @@ import {
   GizmoViewport,
   Stats,
 } from '@react-three/drei'
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
 import CameraHud from './CameraHud'
+import glossaryData from '../../symbols/glossary.json'
+import type { SymbolEntry } from '../../symbols/types'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -32,7 +35,7 @@ function CameraRig() {
  * Listens for camera-preset requests from the store (set by the CameraHud).
  * Applies the requested camera pose to the active camera + OrbitControls.
  */
-function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<{ target: THREE.Vector3; update: () => void } | null> }) {
+function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
   const preset = useAppStore((s) => s.cameraPreset)
   const consume = useAppStore((s) => s.consumeCameraPreset)
@@ -52,6 +55,90 @@ function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObj
   return null
 }
 
+/** Keeps the camera near-plane proportional to the distance from the scene
+ *  origin so the depth buffer stays precise at all zoom levels. */
+function CameraNearUpdater() {
+  useFrame((state) => {
+    const cam = state.camera
+    const dist = cam.position.length()
+    const near = Math.max(0.001, dist * 0.0001)
+    if (Math.abs(cam.near - near) > near * 0.05) {
+      cam.near = near
+      cam.updateProjectionMatrix()
+    }
+  })
+  return null
+}
+
+export interface ComponentInfo {
+  layerId: string
+  symbolId: string
+  worldPosition: THREE.Vector3
+}
+
+/**
+ * Listens for double-clicks on the canvas DOM element. On hit, smoothly
+ * moves the OrbitControls target and camera to frame the clicked object,
+ * and calls onHit with metadata for the component info HUD.
+ */
+function DoubleClickZoom({
+  controlsRef,
+  onHit,
+}: {
+  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>
+  onHit: (info: ComponentInfo | null) => void
+}) {
+  const { camera, scene, gl } = useThree()
+
+  useEffect(() => {
+    const canvas = gl.domElement
+
+    const handleDblClick = (e: MouseEvent) => {
+      const rect = canvas.getBoundingClientRect()
+      const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1
+
+      const raycaster = new THREE.Raycaster()
+      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
+
+      const hits = raycaster.intersectObjects(scene.children, true)
+      if (hits.length === 0) { onHit(null); return }
+
+      const hit = hits[0]
+      const obj = hit.object
+
+      // Walk up the hierarchy looking for layer / symbolId tags
+      let cur: THREE.Object3D | null = obj
+      let layerId = ''
+      let symbolId = ''
+      while (cur) {
+        if (!layerId && cur.userData.layer) layerId = cur.userData.layer as string
+        if (!symbolId && cur.userData.symbolId) symbolId = cur.userData.symbolId as string
+        if (layerId && symbolId) break
+        cur = cur.parent
+      }
+
+      onHit({ layerId, symbolId, worldPosition: hit.point.clone() })
+
+      // Zoom to the hit point
+      const toCamera = camera.position.clone().sub(hit.point).normalize()
+      const newDist = Math.max(0.05, hit.distance * 0.12)
+      const newPos = hit.point.clone().add(toCamera.multiplyScalar(newDist))
+
+      if (controlsRef.current) {
+        controlsRef.current.target.copy(hit.point)
+        camera.position.copy(newPos)
+        controlsRef.current.update()
+      }
+    }
+
+    canvas.addEventListener('dblclick', handleDblClick)
+    return () => canvas.removeEventListener('dblclick', handleDblClick)
+  }, [camera, scene, gl, controlsRef, onHit])
+
+  return null
+}
+
 function BuildingProgress() {
   const mesh = useRef<THREE.Mesh>(null)
   useFrame((_, delta) => {
@@ -65,6 +152,51 @@ function BuildingProgress() {
   )
 }
 
+/** Lookup a glossary entry by symbol ID or layer ID. */
+function findGlossaryEntry(symbolId: string, layerId: string): SymbolEntry | null {
+  const entries = (glossaryData as { entries: SymbolEntry[] }).entries
+  if (symbolId) {
+    const byId = entries.find((e) => e.id === symbolId)
+    if (byId) return byId
+  }
+  if (layerId) {
+    const byCategory = entries.find((e) => e.category === layerId || e.id.startsWith(layerId))
+    if (byCategory) return byCategory
+  }
+  return null
+}
+
+/** Floating card that shows glossary metadata for the double-clicked component. */
+function ComponentInfoCard({ info, onClose }: { info: ComponentInfo; onClose: () => void }) {
+  const entry = findGlossaryEntry(info.symbolId, info.layerId)
+  const label = entry ? entry.common_names[0] : info.symbolId || info.layerId || 'Component'
+  const pos = info.worldPosition
+
+  return (
+    <div className={styles.componentCard}>
+      <button className={styles.componentCardClose} onClick={onClose} title="Dismiss">✕</button>
+      <p className={styles.componentCardTitle}>{label}</p>
+      {entry && (
+        <>
+          <p className={styles.componentCardMeta}>
+            <span className={styles.componentCardBadge}>{entry.category}</span>
+            {entry.default_height_in !== undefined && (
+              <span className={styles.componentCardHint}>{entry.default_height_in}″ AFF</span>
+            )}
+          </p>
+          <p className={styles.componentCardDesc}>{entry.represents}</p>
+          {entry.standards && entry.standards.length > 0 && (
+            <p className={styles.componentCardHint}>{entry.standards.join(' · ')}</p>
+          )}
+        </>
+      )}
+      <p className={styles.componentCardCoords}>
+        {pos.x.toFixed(2)}m, {pos.y.toFixed(2)}m, {pos.z.toFixed(2)}m
+      </p>
+    </div>
+  )
+}
+
 export default function ModelViewer() {
   const model = useAppStore((s) => s.model)
   const layers = useAppStore((s) => s.layers)
@@ -72,7 +204,11 @@ export default function ModelViewer() {
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const measurements = useAppStore((s) => s.measurements)
-  const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null)
+  const controlsRef = useRef<OrbitControlsImpl | null>(null)
+  const [focusedComponent, setFocusedComponent] = useState<ComponentInfo | null>(null)
+  const handleComponentHit = useCallback((info: ComponentInfo | null) => {
+    setFocusedComponent(info)
+  }, [])
 
   return (
     <div className={styles.viewer}>
@@ -122,16 +258,29 @@ export default function ModelViewer() {
               Click a surface to place point A, then point B
             </span>
           )}
+          {!measureMode && (
+            <span className={styles.toolHint}>
+              Double-click any component to zoom in
+            </span>
+          )}
         </div>
       )}
 
       {/* Camera preset HUD — visible whenever the model exists */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
 
+      {/* Component info card — shown on double-click */}
+      {focusedComponent && (
+        <ComponentInfoCard
+          info={focusedComponent}
+          onClose={() => setFocusedComponent(null)}
+        />
+      )}
+
       <Canvas
         shadows
         gl={{ antialias: true, preserveDrawingBuffer: true }}
-        camera={{ fov: 55, near: 0.1, far: 1000 }}
+        camera={{ fov: 55, near: 0.001, far: 2000 }}
         style={{ touchAction: 'none' }}
       >
         <CameraRig />
@@ -169,15 +318,15 @@ export default function ModelViewer() {
         )}
 
         <OrbitControls
-          ref={controlsRef as unknown as React.RefObject<undefined>}
+          ref={controlsRef as React.RefObject<OrbitControlsImpl>}
           makeDefault
           enableDamping
           dampingFactor={0.12}
           rotateSpeed={0.6}
           panSpeed={0.7}
           zoomSpeed={0.7}
-          minDistance={1}
-          maxDistance={200}
+          minDistance={0.001}
+          maxDistance={500}
           enablePan
           screenSpacePanning
           mouseButtons={{
@@ -192,6 +341,8 @@ export default function ModelViewer() {
         />
 
         <CameraPresetApplier controlsRef={controlsRef} />
+        <CameraNearUpdater />
+        <DoubleClickZoom controlsRef={controlsRef} onHit={handleComponentHit} />
 
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport

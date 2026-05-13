@@ -4,6 +4,7 @@ import { inferFloorNumber } from './sheetParser'
 import { deriveScaleFromNotation } from './scaleParser'
 import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
 import { classifyWallType, pxToMm, type DrywallConfig } from './wallTypeClassifier'
+import { captureDrawing } from './datasetCollector'
 import type { Drawing, ParsedWall } from '../types'
 
 export type DrawingPatch = Partial<Drawing>
@@ -38,8 +39,8 @@ export async function processDrawing(
     const discipline = inferDiscipline(drawing.name)
     if (!shouldDetectWalls(discipline)) {
       setProgress(100)
-      return {
-        status: 'ready',
+      const noWallPatch = {
+        status: 'ready' as const,
         rasterUrl: raster.blobUrl,
         rasterWidth: raster.width,
         rasterHeight: raster.height,
@@ -50,6 +51,18 @@ export async function processDrawing(
         scaleMmPerPx: drawing.scaleMmPerPx,
         floorNumber: inferFloorNumber(drawing.name) ?? drawing.floorNumber,
       }
+      captureDrawing(drawing.id, {
+        drawingName: drawing.name,
+        fileSize: drawing.file.size,
+        discipline,
+        scaleNotation: noWallPatch.scaleNotation ?? null,
+        wallCount: 0,
+        stats: { total: 0, wall: 0, dimension: 0, dashed: 0, dotted: 0, leader: 0, unknown: 0 },
+        classified: [],
+        rasterWidth: raster.width,
+        rasterHeight: raster.height,
+      })
+      return noWallPatch
     }
 
     // 3. Detect walls (runs in main thread — acceptable for most drawing sizes)
@@ -105,8 +118,8 @@ export async function processDrawing(
 
     setProgress(100)
 
-    return {
-      status: 'ready',
+    const readyPatch = {
+      status: 'ready' as const,
       rasterUrl: raster.blobUrl,
       rasterWidth: raster.width,
       rasterHeight: raster.height,
@@ -118,6 +131,21 @@ export async function processDrawing(
       scaleMmPerPx: effectiveScale,
       floorNumber: floorNumber ?? drawing.floorNumber,
     }
+
+    // 7. Contribute anonymised features to the local training dataset
+    captureDrawing(drawing.id, {
+      drawingName: drawing.name,
+      fileSize: drawing.file.size,
+      discipline,
+      scaleNotation: readyPatch.scaleNotation ?? null,
+      wallCount: walls.length,
+      stats: classificationStats,
+      classified: result.classified,
+      rasterWidth: raster.width,
+      rasterHeight: raster.height,
+    })
+
+    return readyPatch
   } catch (err) {
     return {
       status: 'error',
