@@ -1,287 +1,40 @@
-name: Build & Preview
+name: PR Preview
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: preview-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build-pr-preview:
-    name: Build PR preview
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+  preview:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Setup Node.js
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: 20
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build PR preview (relative base path)
-        env:
-          VITE_BASE_PATH: ./
+      - name: Build project
         run: npm run build
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      - name: Zip build output
+        run: zip -r dist.zip dist
 
-      - name: Upload PR Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
+      - name: Upload to Emergent Preview
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/zip" \
+            --data-binary @dist.zip \
+            "https://quick-build-185.preview.emergentagent.com/api/preview"
 
-  deploy-pr-preview:
-    name: Deploy PR preview
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    needs: build-pr-preview
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-      issues: write
-      statuses: write
-    environment:
-      name: github-pages-preview
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy PR preview
-        id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          preview: true
-
-      - name: Resolve PR metadata
-        id: pr_metadata
-        uses: actions/github-script@v8
-        env:
-          BRANCH_NAME: ${{ github.ref_name }}
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            let prNumber = context.payload.pull_request?.number ?? null;
-            let prHeadSha = context.payload.pull_request?.head?.sha ?? null;
-
-            if (!prNumber) {
-              const branch = process.env.BRANCH_NAME;
-              const { data: pullRequests } = await github.rest.pulls.list({
-                owner,
-                repo,
-                state: 'open',
-                head: `${owner}:${branch}`,
-                per_page: 1,
-              });
-
-              if (pullRequests.length > 0) {
-                prNumber = pullRequests[0].number;
-                prHeadSha = pullRequests[0].head.sha;
-              }
-            }
-
-            core.setOutput('pr_found', prNumber ? 'true' : 'false');
-            core.setOutput('pr_number', prNumber ? String(prNumber) : '');
-            core.setOutput('pr_head_sha', prHeadSha ?? '');
-
-      - name: Add PR preview button comment
-        if: steps.pr_metadata.outputs.pr_found == 'true'
-        uses: actions/github-script@v8
-        env:
-          PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
-          PR_NUMBER: ${{ steps.pr_metadata.outputs.pr_number }}
-        with:
-          script: |
-            // Unique marker used to find and update the same PR preview comment.
-            const marker = '<!-- blueprint3d-pr-preview-comment:v1 -->';
-            const previewUrl = process.env.PREVIEW_URL;
-            const prNumberRaw = process.env.PR_NUMBER;
-
-            if (!previewUrl) {
-              core.setFailed('Missing preview URL from deployment output.');
-              return;
-            }
-
-            if (!prNumberRaw?.trim()) {
-              core.setFailed('Missing pull request number.');
-              return;
-            }
-
-            const issueNumber = parseInt(prNumberRaw, 10);
-            if (Number.isNaN(issueNumber)) {
-              core.setFailed('Invalid pull request number.');
-              return;
-            }
-
-            const body = [
-              marker,
-              `[![Open PR Preview](https://img.shields.io/badge/Open%20PR%20Preview-%F0%9F%94%8D%20Click%20Here-blue?style=for-the-badge)](${previewUrl})`,
-            ].join('\n');
-
-            const { owner, repo } = context.repo;
-
-            const query = `
-              query($owner: String!, $repo: String!, $issueNumber: Int!, $before: String) {
-                repository(owner: $owner, name: $repo) {
-                  pullRequest(number: $issueNumber) {
-                    comments(last: 50, before: $before) {
-                      pageInfo {
-                        hasPreviousPage
-                        startCursor
-                      }
-                      nodes {
-                        databaseId
-                        body
-                        author {
-                          __typename
-                          ... on Bot {
-                            login
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            `;
-
-            let existing = null;
-            let before = null;
-            let pagesSearched = 0;
-            // 20 pages x 50 comments keeps lookup bounded to the most recent 1,000 comments.
-            const maxPagesToSearch = 20;
-            while (true) {
-              pagesSearched += 1;
-              const commentSearch = await github.graphql(query, {
-                owner,
-                repo,
-                issueNumber,
-                before,
-              });
-
-              const commentConnection = commentSearch.repository.pullRequest.comments;
-              existing = commentConnection.nodes.find(
-                (comment) =>
-                  comment.author?.__typename === 'Bot' &&
-                  comment.author?.login === 'github-actions[bot]' &&
-                  comment.body?.includes(marker),
-              );
-
-              if (
-                existing ||
-                !commentConnection.pageInfo.hasPreviousPage ||
-                pagesSearched >= maxPagesToSearch
-              ) {
-                break;
-              }
-
-              before = commentConnection.pageInfo.startCursor;
-            }
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.databaseId,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number: issueNumber,
-                body,
-              });
-            }
-
-      - name: Publish PR preview status check
-        if: steps.pr_metadata.outputs.pr_found == 'true' && steps.pr_metadata.outputs.pr_head_sha != ''
-        uses: actions/github-script@v8
-        env:
-          PREVIEW_URL: ${{ steps.deployment.outputs.page_url }}
-          PR_HEAD_SHA: ${{ steps.pr_metadata.outputs.pr_head_sha }}
-        with:
-          script: |
-            const previewUrl = process.env.PREVIEW_URL;
-            const sha = process.env.PR_HEAD_SHA;
-
-            if (!previewUrl) {
-              core.setFailed('Missing preview URL from deployment output.');
-              return;
-            }
-
-            if (!sha) {
-              core.setFailed('Missing pull request head SHA.');
-              return;
-            }
-
-            const { owner, repo } = context.repo;
-            await github.rest.repos.createCommitStatus({
-              owner,
-              repo,
-              sha,
-              state: 'success',
-              context: 'PR Preview',
-              description: 'Open deployed PR preview',
-              target_url: previewUrl,
-            });
-
-  build-pages:
-    name: Build Pages production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build for Pages production (repo base path)
-        env:
-          VITE_BASE_PATH: /BluePrint3D/
-        run: npm run build
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy-pages:
-    name: Deploy GitHub Pages production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    needs: build-pages
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Output preview link
+        run: echo "Preview ready for PR #${{ github.event.pull_request.number }}"
