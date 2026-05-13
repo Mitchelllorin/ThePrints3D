@@ -7,10 +7,10 @@ import type { Drawing, Measurement } from '../../types'
 
 const DEFAULT_SCALE_MM_PER_PX = 23.5
 const DEFAULT_WALL_ENDPOINT_SNAP_TOLERANCE_PX = 14
-const snapToleranceFromEnv = Number(import.meta.env.VITE_MEASURE_SNAP_TOLERANCE_PX)
+const envSnapTolerancePx = Number(import.meta.env.VITE_MEASURE_SNAP_TOLERANCE_PX)
 const WALL_ENDPOINT_SNAP_TOLERANCE_PX =
-  Number.isFinite(snapToleranceFromEnv) && snapToleranceFromEnv > 0
-    ? snapToleranceFromEnv
+  Number.isFinite(envSnapTolerancePx) && envSnapTolerancePx > 0
+    ? envSnapTolerancePx
     : DEFAULT_WALL_ENDPOINT_SNAP_TOLERANCE_PX
 
 interface WallEndpointCandidate {
