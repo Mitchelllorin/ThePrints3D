@@ -2,7 +2,6 @@ import AppShell from './components/Layout/AppShell'
 import DrawingUploader from './components/Upload/DrawingUploader'
 import DrawingManager from './components/Drawings/DrawingManager'
 import ModelViewer from './components/Viewer3D/ModelViewer'
-import FeedbackButton from './components/Feedback/FeedbackButton'
 import ProjectLibrary from './components/Projects/ProjectLibrary'
 import { useAppStore } from './store/useAppStore'
 import { useState } from 'react'
@@ -18,7 +17,6 @@ function App() {
         {view === 'drawings' && <DrawingManager />}
         {view === 'model' && <ModelViewer />}
       </AppShell>
-      <FeedbackButton />
       <button
         onClick={() => setLibraryOpen(true)}
         title="My saved projects"
