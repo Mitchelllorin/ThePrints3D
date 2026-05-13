@@ -139,4 +139,6 @@ export interface Measurement {
   pointB: [number, number, number]
   /** Distance in metres */
   distanceM: number
+  /** Unix timestamp (ms) when this measurement was created */
+  createdAt: number
 }

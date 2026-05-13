@@ -67,10 +67,14 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
       const p = await loadProject(id)
       if (!p) return
       const restored = p.drawings.map(deserializeDrawing)
+      const restoredMeasurements = p.measurements.map((m, idx) => ({
+        ...m,
+        createdAt: typeof m.createdAt === 'number' ? m.createdAt : p.updatedAt + idx,
+      }))
       useAppStore.setState({
         drawings: restored,
         layers: p.layers,
-        measurements: p.measurements,
+        measurements: restoredMeasurements,
         model: p.model,
         view: restored.length > 0 ? (p.model.status === 'ready' ? 'model' : 'drawings') : 'upload',
       })
