@@ -277,7 +277,7 @@ jobs:
       name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'cloudflare-production' || 'cloudflare-preview' }}
     steps:
       - name: Download dist artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v4.1.3
         with:
           name: cloudflare-dist
           path: dist
