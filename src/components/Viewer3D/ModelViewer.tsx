@@ -164,7 +164,9 @@ export default function ModelViewer() {
                         <span className={styles.measurementUnit}>{unit}</span>
                       </div>
                       <div className={styles.measurementMeta}>
-                        {new Date(m.createdAt).toLocaleString()}
+                        {typeof m.createdAt === 'number'
+                          ? new Date(m.createdAt).toLocaleString()
+                          : 'Unknown'}
                       </div>
                       <button
                         className={styles.measurementDelete}
