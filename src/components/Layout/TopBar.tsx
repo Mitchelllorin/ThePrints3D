@@ -52,6 +52,12 @@ export default function TopBar() {
         >
           3D Model
         </button>
+        <button
+          className={`${styles.navBtn} ${view === 'tools' ? styles.active : ''}`}
+          onClick={() => setView('tools')}
+        >
+          Toolbox
+        </button>
       </nav>
 
       <div className={styles.right}>

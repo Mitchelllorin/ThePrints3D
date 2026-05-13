@@ -18,6 +18,7 @@ function App() {
         {view === 'upload' && <DrawingUploader />}
         {view === 'drawings' && <DrawingManager />}
         {view === 'model' && <ModelViewer />}
+        {view === 'tools' && <Toolbox />}
       </AppShell>
       <button
         onClick={() => setLibraryOpen(true)}

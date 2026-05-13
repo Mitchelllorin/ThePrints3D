@@ -5,6 +5,7 @@ import ScaleCalibrator from './ScaleCalibrator'
 import WallTracer from './WallTracer'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
+import MaterialReportPanel from '../Tools/MaterialReportPanel'
 import styles from './DrawingManager.module.css'
 
 const DRAWING_TYPES: { value: DrawingType; label: string }[] = [
