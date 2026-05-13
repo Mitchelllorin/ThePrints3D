@@ -54,6 +54,7 @@ function buildRealWalls(
   elevation: number,
   floorHeight: number,
   wallMat: THREE.MeshStandardMaterial,
+  userWallMat: THREE.MeshStandardMaterial,
   layerId: string
 ) {
   const s = mmPerPx / 1000  // px → metres
@@ -72,7 +73,7 @@ function buildRealWalls(
     const angle = Math.atan2(wz2 - wz1, wx2 - wx1)
 
     const geo = new THREE.BoxGeometry(len, floorHeight - 0.15, Math.max(thick, 0.05))
-    const mesh = new THREE.Mesh(geo, wallMat)
+    const mesh = new THREE.Mesh(geo, w.source === 'user' ? userWallMat : wallMat)
 
     mesh.position.set(
       (wx1 + wx2) / 2,
@@ -376,11 +377,12 @@ export default function BuildingModel({ layers }: Props) {
       const wallLayer = layerMap.get('walls')
       if (wallLayer?.visible) {
         const wMat = mat(wallLayer.color, wallLayer.opacity, { roughness: 0.7 })
+        const userWMat = mat('#60a5fa', wallLayer.opacity, { roughness: 0.45, metalness: 0.15 })
         if (wallDrawings.length > 0) {
           // Real geometry from detected walls
           for (const d of wallDrawings) {
             const mmPx = d.scaleMmPerPx ?? globalMmPerPx
-            buildRealWalls(group, d.parsedWalls, mmPx, globalCx, globalCy, elev, fh, wMat, 'walls')
+            buildRealWalls(group, d.parsedWalls, mmPx, globalCx, globalCy, elev, fh, wMat, userWMat, 'walls')
           }
         } else {
           buildProceduralWalls(group, fp, elev, fh, wMat)

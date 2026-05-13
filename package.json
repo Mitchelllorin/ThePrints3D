@@ -15,14 +15,15 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@types/three": "^0.184.1",
+    "idb": "^8.0.0",
     "immer": "^11.1.8",
+    "onnxruntime-web": "^1.26.0",
     "pdfjs-dist": "^5.7.284",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-dropzone": "^15.0.0",
     "three": "^0.184.0",
-    "zustand": "^5.0.13",
-    "idb": "^8.0.0"
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",

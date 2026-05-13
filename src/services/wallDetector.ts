@@ -301,6 +301,8 @@ export function detectWalls(
       x2: c.x2,
       y2: c.y2,
       thickness: c.thickness,
+      source: 'auto',
+      detectionConfidence: c.confidence,
     }))
 
   return { walls, stats, classified }
