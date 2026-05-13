@@ -35,7 +35,7 @@ describe('unitConverter', () => {
   it('converts weight, temperature, and pressure', () => {
     expect(convertWeight(10, 'kg', 'lb')).toBeCloseTo(22.046, 3)
     expect(convertTemperature(32, 'f', 'c')).toBeCloseTo(0, 4)
-    expect(convertPressure(100, 'psi', 'kpa')).toBeCloseTo(689.47, 2)
+    expect(convertPressure(100, 'psi', 'kpa')).toBeCloseTo(689.48, 2)
   })
 
   it('converts through generic dispatcher', () => {

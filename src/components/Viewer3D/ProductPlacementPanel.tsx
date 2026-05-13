@@ -49,12 +49,6 @@ export default function ProductPlacementPanel() {
     }
   }, [productCatalog.length, setProductCatalog])
 
-  useEffect(() => {
-    if (productCatalog.length > 0 && !selectedProductId) {
-      setSelectedProductId(productCatalog[0].id)
-    }
-  }, [productCatalog, selectedProductId])
-
   const filteredProducts = useMemo(() => {
     return category === 'all' ? productCatalog : productCatalog.filter((p) => p.category === category)
   }, [category, productCatalog])

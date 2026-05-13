@@ -111,7 +111,7 @@ export function estimateMaterials(
 
   const itemDefinitions: Array<Omit<MaterialItem, 'unitCost' | 'estimatedCost'>> = [
     { id: 'wall-linear-feet', label: 'Wall Linear Footage', quantity: totalWallLengthFt, unit: 'lf' },
-    { id: 'stud-count', label: `Studs (${studSpacingIn}\" OC)`, quantity: studCount, unit: 'pcs' },
+    { id: 'stud-count', label: `Studs (${studSpacingIn}" OC)`, quantity: studCount, unit: 'pcs' },
     { id: 'plate-linear-feet', label: 'Plates (top + bottom)', quantity: plateLinearFeet, unit: 'lf' },
     { id: 'drywall-sheets', label: `Drywall Sheets (${drywallSheetSize})`, quantity: drywallSheets, unit: 'sheets' },
     { id: 'insulation-sqft', label: 'Insulation Coverage', quantity: insulationSqFt, unit: 'sqft' },

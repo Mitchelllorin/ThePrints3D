@@ -58,7 +58,7 @@ export function inchesToFeetInches(inches: number): string {
   const feet = Math.floor(safeInches / 12)
   const remainder = safeInches - feet * 12
   const rounded = Math.round(remainder * 16) / 16
-  return `${feet}' ${rounded.toFixed(2).replace(/\.00$/, '')}\"`
+  return `${feet}' ${rounded.toFixed(2).replace(/\.00$/, '')}"`
 }
 
 function lengthToMm(value: number, unit: LengthUnit): number {

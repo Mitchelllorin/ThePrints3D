@@ -114,7 +114,7 @@ export default function UnitConverter() {
         </div>
 
         <div className={styles.field}>
-          <label>Input value {from === 'ft-in' ? '(e.g. 10\' 6\")' : ''}</label>
+          <label>Input value {from === 'ft-in' ? '(e.g. 10\' 6")' : ''}</label>
           <input className={styles.input} value={input} onChange={(e) => setInput(e.target.value)} />
         </div>
       </div>
