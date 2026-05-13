@@ -2,17 +2,25 @@ import { rasterizeFile } from './pdfRasterizer'
 import { detectWalls } from './wallDetector'
 import { inferFloorNumber } from './sheetParser'
 import { deriveScaleFromNotation } from './scaleParser'
-import type { Drawing } from '../types'
+import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
+import { classifyWallType, pxToMm, type DrywallConfig } from './wallTypeClassifier'
+import type { Drawing, ParsedWall } from '../types'
 
 export type DrawingPatch = Partial<Drawing>
 
 /**
  * Full processing pipeline for a single drawing.
  * Resolves with a patch to apply to the Drawing in the store.
+ *
+ * @param drywall Drywall configuration assumed when converting finished →
+ *                framing thickness. Defaults to single-layer 5/8" both sides
+ *                (residential). Override to 'double-layer' for fire-rated
+ *                demising / shaft walls common in multi-unit / commercial.
  */
 export async function processDrawing(
   drawing: Drawing,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  drywall: DrywallConfig = 'single-layer',
 ): Promise<DrawingPatch> {
   try {
     let lastProgress = 0
@@ -25,7 +33,26 @@ export async function processDrawing(
     // 1. Rasterize
     const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8))
 
-    // 2. Detect walls (runs in main thread — acceptable for most drawing sizes)
+    // 2. Discipline gate — skip wall detection on M/E/P/C/L/F/T sheets where
+    //    "thick parallels" are ducts/pipes/conduit, not walls.
+    const discipline = inferDiscipline(drawing.name)
+    if (!shouldDetectWalls(discipline)) {
+      setProgress(100)
+      return {
+        status: 'ready',
+        rasterUrl: raster.blobUrl,
+        rasterWidth: raster.width,
+        rasterHeight: raster.height,
+        pageCount: raster.pageCount,
+        parsedWalls: [],
+        parseProgress: 100,
+        scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
+        scaleMmPerPx: drawing.scaleMmPerPx,
+        floorNumber: inferFloorNumber(drawing.name) ?? drawing.floorNumber,
+      }
+    }
+
+    // 3. Detect walls (runs in main thread — acceptable for most drawing sizes)
     setProgress(82)
     const isRasterPhoto = drawing.file.type.startsWith('image/')
     let result = detectWalls(raster.imageData, {
@@ -48,17 +75,32 @@ export async function processDrawing(
         mergeGapPx: 6,
       })
     }
-    const walls = result.walls
     const classificationStats = result.stats
-    setProgress(95)
+    setProgress(92)
 
-    // 3. Derive scale from notation if available
+    // 4. Derive scale from notation if available
     let scaleMmPerPx: number | null = null
     if (raster.scaleNotation) {
       scaleMmPerPx = deriveScaleFromNotation(raster.scaleNotation)
     }
+    const effectiveScale = scaleMmPerPx ?? drawing.scaleMmPerPx
 
-    // 4. Parse floor number from filename
+    // 5. Classify each detected wall into a structural type (2x4 / 2x6 / etc.)
+    //    Only meaningful once scale is known — otherwise leave as 'unknown'.
+    const walls: ParsedWall[] = result.walls.map((w) => {
+      const finishedMm = pxToMm(w.thickness, effectiveScale)
+      if (finishedMm === null) return { ...w, wallType: 'unknown' as const }
+      const c = classifyWallType(finishedMm, drywall)
+      return {
+        ...w,
+        wallType: c.type,
+        framingMm: c.framingMm,
+        finishedMm: c.finishedMm,
+        typeConfidence: c.confidence,
+      }
+    })
+
+    // 6. Floor number from filename
     const floorNumber = inferFloorNumber(drawing.name)
 
     setProgress(100)
@@ -73,7 +115,7 @@ export async function processDrawing(
       lineClassificationStats: classificationStats,
       parseProgress: 100,
       scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
-      scaleMmPerPx: scaleMmPerPx ?? drawing.scaleMmPerPx,
+      scaleMmPerPx: effectiveScale,
       floorNumber: floorNumber ?? drawing.floorNumber,
     }
   } catch (err) {
