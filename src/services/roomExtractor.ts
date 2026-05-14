@@ -80,7 +80,7 @@ export interface RoomExtractorOptions {
    * image histogram, which adapts to different scan exposures.
    * @default auto (Otsu)
    */
-  wallThreshold?: number | null
+  wallThreshold?: number
   /** Real-world scale used to compute areaSqM. */
   scaleMmPerPx?: number | null
 }
@@ -98,7 +98,7 @@ export function extractRooms(
 ): ParsedRoom[] {
   const {
     minAreaPx = 600,
-    wallThreshold: wallThresholdOpt = null,
+    wallThreshold: wallThresholdOpt,
     scaleMmPerPx = null,
   } = options
 
@@ -106,7 +106,7 @@ export function extractRooms(
 
   // Use caller-supplied threshold if provided, otherwise auto-compute via Otsu.
   const wallThreshold =
-    wallThresholdOpt !== null
+    wallThresholdOpt !== undefined
       ? wallThresholdOpt
       : otsuThreshold(data, width, height, WALL_GRAY_THRESHOLD)
   const dw = Math.ceil(width / DOWNSAMPLE)

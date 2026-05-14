@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
-import WallTracer from './WallTracer'
+import WallTracer, { WALL_LEGEND_AUTO, WALL_LEGEND_LOW_CONFIDENCE, WALL_COLOR_USER } from './WallTracer'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
 import MaterialReportPanel from '../Tools/MaterialReportPanel'
@@ -369,9 +369,9 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
 
         {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
           <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 12, flexWrap: 'wrap' }}>
-            <span style={{ color: 'rgba(52,211,153,0.9)', fontWeight: 500 }}>━ Auto-detected wall</span>
-            <span style={{ color: 'rgba(251,191,36,0.9)', fontWeight: 500 }}>╌ Low-confidence wall</span>
-            <span style={{ color: '#60a5fa', fontWeight: 500 }}>━ User-traced wall</span>
+            <span style={{ color: WALL_LEGEND_AUTO, fontWeight: 500 }}>━ Auto-detected wall</span>
+            <span style={{ color: WALL_LEGEND_LOW_CONFIDENCE, fontWeight: 500 }}>╌ Low-confidence wall</span>
+            <span style={{ color: WALL_COLOR_USER, fontWeight: 500 }}>━ User-traced wall</span>
           </div>
         )}
 

@@ -86,7 +86,7 @@ export function classifyLine(
   }
   const dark_ratio = isDark.filter(Boolean).length / SAMPLE_COUNT
 
-  // ── Decide ──
+  // Every branch in the decision tree below assigns both classification and confidence.
   let classification: LineClass
   let confidence: number
 
