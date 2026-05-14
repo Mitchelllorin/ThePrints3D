@@ -10,7 +10,6 @@ import {
 } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useAppStore } from '../../store/useAppStore'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
