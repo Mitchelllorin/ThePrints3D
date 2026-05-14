@@ -62,6 +62,10 @@ interface Props {
 export default function SymbolReferencePanel({ onClose }: Props) {
   const [activeTab, setActiveTab] = useState<SymbolCategory | 'all'>('all')
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') onClose()
+  }
+
   const entries = (glossary.entries as Array<{
     id: string
     category: SymbolCategory
@@ -75,7 +79,7 @@ export default function SymbolReferencePanel({ onClose }: Props) {
     .filter((a): a is { filename: string; url: string } => a.url !== undefined)
 
   return (
-    <div className={styles.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+    <div className={styles.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose() }} onKeyDown={handleKeyDown}>
       <div className={styles.panel} role="dialog" aria-modal="true" aria-label="Symbol Reference">
         <div className={styles.header}>
           <span className={styles.title}>📐 Symbol Reference</span>
@@ -104,7 +108,7 @@ export default function SymbolReferencePanel({ onClose }: Props) {
               <h3 className={styles.sectionTitle}>Reference Sheets</h3>
               <div className={styles.sheets}>
                 {referenceSheets.map(({ filename, url }) => (
-                  <a key={filename} href={url} target="_blank" rel="noopener noreferrer" className={styles.sheetLink}>
+                  <a key={filename} href={url} target="_blank" rel="noopener noreferrer" className={styles.sheetLink} aria-label={`Open ${filename} reference sheet in new tab`}>
                     <img src={url} alt={filename} className={styles.sheetImg} />
                     <span className={styles.sheetLabel}>{filename}</span>
                   </a>
@@ -136,8 +140,8 @@ export default function SymbolReferencePanel({ onClose }: Props) {
                     )}
                     {assetUrls.length > 0 && (
                       <div className={styles.entryAssets}>
-                        {assetUrls.map((url, i) => (
-                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                        {assetUrls.map((url) => (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${entry.common_names[0]} reference image in new tab`}>
                             <img
                               src={url}
                               alt={`${entry.common_names[0]} reference`}

@@ -20,6 +20,11 @@ const _rawGlob = import.meta.glob('../assets/**/*.{jpg,jpeg,png,webp,svg}', {
 const _assetMap: Record<string, string> = {}
 for (const [path, url] of Object.entries(_rawGlob)) {
   const filename = path.split('/').pop() ?? path
+  if (import.meta.env.DEV && filename in _assetMap) {
+    console.warn(
+      `[assetRegistry] Duplicate asset filename "${filename}" — the entry from "${path}" overwrites a previous one.`
+    )
+  }
   _assetMap[filename] = url
 }
 
@@ -31,4 +36,4 @@ export function resolveSymbolAsset(filename: string): string | undefined {
   return _assetMap[filename]
 }
 
-export default _assetMap
+export default Object.freeze({ ..._assetMap })
