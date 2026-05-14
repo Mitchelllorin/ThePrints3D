@@ -287,6 +287,7 @@ export const useAppStore = create<AppState>()(
             status: 'pending',
             scaleMmPerPx: null,
             scaleNotation: null,
+            scaleConfidence: null,
             uploadedAt: Date.now(),
           }
           s.drawings.push(drawing)
@@ -332,6 +333,7 @@ export const useAppStore = create<AppState>()(
         if (d) {
           d.scaleMmPerPx = mmPerPx
           d.scaleNotation = notation
+          d.scaleConfidence = 'parsed'
         }
       }),
 

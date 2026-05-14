@@ -41,6 +41,11 @@ export async function processDrawing(
     const discipline = inferDiscipline(drawing.name)
     if (!shouldDetectWalls(discipline)) {
       setProgress(100)
+      const gatedScaleConf: ScaleConfidence = raster.scaleNotation
+        ? 'parsed'
+        : drawing.scaleMmPerPx !== null
+          ? 'inferred'
+          : 'fallback'
       return {
         status: 'ready',
         rasterUrl: raster.blobUrl,
@@ -53,6 +58,7 @@ export async function processDrawing(
         parseProgress: 100,
         scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
         scaleMmPerPx: drawing.scaleMmPerPx,
+        scaleConfidence: gatedScaleConf,
         floorNumber: inferFloorNumber(drawing.name) ?? drawing.floorNumber,
       }
     }
@@ -106,6 +112,13 @@ export async function processDrawing(
     }
     const effectiveScale = scaleMmPerPx ?? drawing.scaleMmPerPx
 
+    // Determine confidence based on how the scale was sourced.
+    const scaleConfidence: ScaleConfidence = raster.scaleNotation
+      ? 'parsed'
+      : drawing.scaleMmPerPx !== null
+        ? 'inferred'
+        : 'fallback'
+
     // 5. Classify each detected wall into a structural type (2x4 / 2x6 / etc.)
     //    Only meaningful once scale is known — otherwise leave as 'unknown'.
     const walls: ParsedWall[] = result.walls.map((w) => {
@@ -158,6 +171,7 @@ export async function processDrawing(
       parseProgress: 100,
       scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
       scaleMmPerPx: effectiveScale,
+      scaleConfidence,
       floorNumber: floorNumber ?? drawing.floorNumber,
     }
   } catch (err) {

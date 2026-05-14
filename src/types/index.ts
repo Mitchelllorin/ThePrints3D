@@ -15,6 +15,14 @@ export type DrawingType =
 
 export type DrawingStatus = 'pending' | 'processing' | 'ready' | 'error'
 
+/**
+ * How the scale value was determined:
+ * - 'parsed'   — extracted directly from the PDF text layer (title block)
+ * - 'inferred' — carried over from a previous run or user calibration
+ * - 'fallback' — no scale information found; manual calibration needed
+ */
+export type ScaleConfidence = 'parsed' | 'inferred' | 'fallback'
+
 export interface ParsedWall {
   /** Pixel coordinates on the rasterized image */
   x1: number
@@ -104,6 +112,8 @@ export interface Drawing {
   scaleMmPerPx: number | null
   /** Parsed scale notation from title block, e.g. "1:100" */
   scaleNotation: string | null
+  /** How the scale value was determined */
+  scaleConfidence: ScaleConfidence | null
   uploadedAt: number
 }
 

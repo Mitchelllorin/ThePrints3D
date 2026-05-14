@@ -17,6 +17,8 @@ export interface RasterResult {
   pageCount: number
   /** Scale notation found in text layer, e.g. "1:100" */
   scaleNotation: string | null
+  /** How the scale was determined: 'parsed' if found in text layer, 'fallback' otherwise */
+  scaleConfidence: 'parsed' | 'fallback'
 }
 
 const SCALE_REGEX = /\b1\s*[:/]\s*(\d+)\b|\b(\d+)\s*[:/]\s*1\b/g
@@ -94,6 +96,7 @@ export async function rasterizePDF(
     height: canvas.height,
     pageCount: pdf.numPages,
     scaleNotation,
+    scaleConfidence: scaleNotation !== null ? 'parsed' : 'fallback',
   }
 }
 
@@ -140,6 +143,7 @@ export async function rasterizeImage(
     height: h,
     pageCount: 1,
     scaleNotation: null,
+    scaleConfidence: 'fallback' as const,
   }
 }
 
