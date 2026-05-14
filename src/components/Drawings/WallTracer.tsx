@@ -16,6 +16,7 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
   const [stroke, setStroke] = useState<StrokePoint[]>([])
 
   const userWalls = useMemo(() => walls.filter((w) => w.source === 'user'), [walls])
+  const autoWalls = useMemo(() => walls.filter((w) => w.source !== 'user'), [walls])
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current
@@ -31,6 +32,24 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
     const sx = canvas.clientWidth / imageWidth
     const sy = canvas.clientHeight / imageHeight
 
+    // Auto-detected walls — always visible so the user can see what was found
+    // and know where to supplement with manual traces.
+    for (const wall of autoWalls) {
+      const confidence = wall.detectionConfidence ?? 1
+      const isLowConfidence = confidence < 0.65
+      ctx.strokeStyle = isLowConfidence
+        ? 'rgba(251,191,36,0.55)'  // amber for low-confidence walls
+        : 'rgba(52,211,153,0.55)'  // teal for normal auto walls
+      ctx.lineWidth = Math.max(1.5, (wall.thickness > 1 ? wall.thickness : 4) * ((sx + sy) / 2) * 0.35)
+      ctx.setLineDash(isLowConfidence ? [4, 4] : [])
+      ctx.beginPath()
+      ctx.moveTo(wall.x1 * sx, wall.y1 * sy)
+      ctx.lineTo(wall.x2 * sx, wall.y2 * sy)
+      ctx.stroke()
+    }
+    ctx.setLineDash([])
+
+    // User-traced walls — shown in blue, always on top
     for (const wall of userWalls) {
       ctx.strokeStyle = '#60a5fa'
       ctx.lineWidth = Math.max(2, wall.thickness * ((sx + sy) / 2))
@@ -50,7 +69,7 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
       }
       ctx.stroke()
     }
-  }, [imageHeight, imageWidth, stroke, userWalls])
+  }, [imageHeight, imageWidth, stroke, userWalls, autoWalls])
 
   useEffect(() => {
     redraw()

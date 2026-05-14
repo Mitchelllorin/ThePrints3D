@@ -19,6 +19,49 @@ import type { ParsedRoom } from '../types'
 const WALL_GRAY_THRESHOLD = 110
 
 /**
+ * Compute an Otsu-optimal binary threshold from the image data.
+ * Falls back to `fallback` when the image lacks bimodal contrast.
+ * This adapts to both high-key architectural prints and dark-background scans.
+ */
+function otsuThreshold(data: Uint8ClampedArray, width: number, height: number, fallback: number): number {
+  const hist = new Int32Array(256)
+  const total = width * height
+  for (let i = 0; i < total; i++) {
+    const gray = Math.round(0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2])
+    hist[gray]++
+  }
+
+  let sumAll = 0
+  for (let t = 0; t < 256; t++) sumAll += t * hist[t]
+
+  let sumB = 0
+  let wB = 0
+  let maxVar = 0
+  let bestT = fallback
+
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t]
+    if (wB === 0) continue
+    const wF = total - wB
+    if (wF === 0) break
+    sumB += t * hist[t]
+    const meanB = sumB / wB
+    const meanF = (sumAll - sumB) / wF
+    const varBetween = wB * wF * (meanB - meanF) ** 2
+    if (varBetween > maxVar) {
+      maxVar = varBetween
+      bestT = t
+    }
+  }
+
+  // Only use Otsu result when there's meaningful bimodal contrast.
+  // If the between-class variance is tiny the image may be nearly uniform
+  // and Otsu would pick a bad threshold; fall back to the fixed default.
+  const relativeVar = maxVar / (total * total)
+  return relativeVar > 1e-4 ? bestT : fallback
+}
+
+/**
  * Downsample factor applied before flood-fill.
  * 2 → every other pixel, making BFS 4× faster at the cost of 2px spatial precision.
  */
@@ -33,9 +76,11 @@ export interface RoomExtractorOptions {
   minAreaPx?: number
   /**
    * Grayscale threshold below which a pixel counts as a wall.
-   * @default 110
+   * When omitted an Otsu-optimal threshold is computed automatically from the
+   * image histogram, which adapts to different scan exposures.
+   * @default auto (Otsu)
    */
-  wallThreshold?: number
+  wallThreshold?: number | null
   /** Real-world scale used to compute areaSqM. */
   scaleMmPerPx?: number | null
 }
@@ -53,11 +98,17 @@ export function extractRooms(
 ): ParsedRoom[] {
   const {
     minAreaPx = 600,
-    wallThreshold = WALL_GRAY_THRESHOLD,
+    wallThreshold: wallThresholdOpt = null,
     scaleMmPerPx = null,
   } = options
 
   const { data, width, height } = imageData
+
+  // Use caller-supplied threshold if provided, otherwise auto-compute via Otsu.
+  const wallThreshold =
+    wallThresholdOpt !== null
+      ? wallThresholdOpt
+      : otsuThreshold(data, width, height, WALL_GRAY_THRESHOLD)
   const dw = Math.ceil(width / DOWNSAMPLE)
   const dh = Math.ceil(height / DOWNSAMPLE)
 

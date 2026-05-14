@@ -367,6 +367,14 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
           )}
         </div>
 
+        {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
+          <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 12, flexWrap: 'wrap' }}>
+            <span style={{ color: 'rgba(52,211,153,0.9)', fontWeight: 500 }}>━ Auto-detected wall</span>
+            <span style={{ color: 'rgba(251,191,36,0.9)', fontWeight: 500 }}>╌ Low-confidence wall</span>
+            <span style={{ color: '#60a5fa', fontWeight: 500 }}>━ User-traced wall</span>
+          </div>
+        )}
+
         <div className={styles.zoomControls}>
           <button onClick={() => setScale((s) => Math.max(0.25, s - 0.25))}>−</button>
           <span>{Math.round(scale * 100)}%</span>

@@ -27,8 +27,10 @@ const WINDOW_MAX_MM = 3000
 /**
  * Maximum wall-to-wall perpendicular offset (px) that still counts as the
  * "same wall line" when grouping co-linear segments.
+ * Increased from 8 → 16 to tolerate slight raster skew, scan noise, and
+ * the fact that thick walls produce two edge lines up to ~15 px apart.
  */
-const LINE_SNAP_PX = 8
+const LINE_SNAP_PX = 16
 
 export interface OpeningDetectorOptions {
   /** Real-world scale used to classify opening type. */
@@ -132,7 +134,7 @@ export function detectOpenings(
   walls: ParsedWall[],
   options: OpeningDetectorOptions = {},
 ): ParsedOpening[] {
-  const { scaleMmPerPx = null, minGapPx = 12 } = options
+  const { scaleMmPerPx = null, minGapPx = 8 } = options
 
   const defaultMaxGapPx =
     scaleMmPerPx != null ? Math.round(WINDOW_MAX_MM / scaleMmPerPx) : 300
