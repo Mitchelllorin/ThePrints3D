@@ -345,6 +345,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
   }
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return
     e.currentTarget.setPointerCapture(e.pointerId)
     const pt = getImgCoords(e)
     activeTraceRef.current = [pt]
@@ -369,14 +370,30 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
     setActiveTrace([])
   }
 
+  const disableSmartTrace = () => {
+    clearTraces()
+    setSmartTrace(false)
+    drawingGuard.current = false
+    activeTraceRef.current = []
+    setActiveTrace([])
+  }
+
   const toggleSmartTrace = () => {
     if (smartTrace) {
-      clearTraces()
-      setSmartTrace(false)
-    } else {
-      startTraceMode()
-      setSmartTrace(true)
+      disableSmartTrace()
+      return
     }
+    startTraceMode()
+    setTraceMode(false)
+    setSmartTrace(true)
+  }
+
+  const toggleManualTrace = () => {
+    setTraceMode((v) => {
+      const next = !v
+      if (next && smartTrace) disableSmartTrace()
+      return next
+    })
   }
 
   const handleProcessSeeds = async () => {
@@ -416,7 +433,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
               </button>
               <button
                 className={`${styles.actionBtn} ${traceMode ? styles.actionBtnActive : ''}`}
-                onClick={() => { setTraceMode((v) => !v); if (smartTrace) toggleSmartTrace() }}
+                onClick={toggleManualTrace}
               >
                 ✍️ Trace Walls
               </button>
@@ -424,7 +441,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
                 className={`${styles.traceBtn} ${smartTrace ? styles.traceBtnActive : ''}`}
                 onClick={toggleSmartTrace}
               >
-                👆 Smart Trace
+                👆 SMART Trace
               </button>
               {userTraceCount > 0 && (
                 <button className={styles.actionBtn} onClick={onClearUserWalls}>
@@ -494,6 +511,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
               {smartTrace && imgNatural.w > 0 && (
                 <svg
                   viewBox={`0 0 ${imgNatural.w} ${imgNatural.h}`}
+                  className={styles.smartTraceOverlay}
                   style={{
                     position: 'absolute', top: 0, left: 0,
                     width: '100%', height: '100%',
@@ -503,6 +521,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
+                  onPointerLeave={handlePointerUp}
                   onPointerCancel={handlePointerUp}
                 >
                   {userTraces.map((trace, i) => (
