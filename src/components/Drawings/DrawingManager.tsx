@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType, ScaleConfidence } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
-import WallTracer from './WallTracer'
+import WallTracer, { WALL_LEGEND_AUTO, WALL_LEGEND_LOW_CONFIDENCE, WALL_COLOR_USER } from './WallTracer'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
 import styles from './DrawingManager.module.css'
@@ -345,6 +345,69 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
   const lowConfidenceCount = drawing.parsedWalls.filter((w) => (w.detectionConfidence ?? 1) < 0.75).length
   const userTraceCount = drawing.parsedWalls.filter((w) => w.source === 'user').length
 
+  const userTraces = useAppStore((s) => s.userTraces)
+  const startTraceMode = useAppStore((s) => s.startTraceMode)
+  const addTrace = useAppStore((s) => s.addTrace)
+  const clearTraces = useAppStore((s) => s.clearTraces)
+  const processWithSeeds = useAppStore((s) => s.processWithSeeds)
+
+  const [smartTrace, setSmartTrace] = useState(false)
+  const [activeTrace, setActiveTrace] = useState<[number, number][]>([])
+  const [seedsProcessing, setSeedsProcessing] = useState(false)
+  const [imgNatural, setImgNatural] = useState({ w: 800, h: 600 })
+  const imgRef = useRef<HTMLImageElement>(null)
+  const activeTraceRef = useRef<[number, number][]>([])
+  const drawingGuard = useRef(false)
+
+  const getImgCoords = (e: React.PointerEvent<SVGSVGElement>): [number, number] => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    return [
+      ((e.clientX - rect.left) / rect.width) * imgNatural.w,
+      ((e.clientY - rect.top) / rect.height) * imgNatural.h,
+    ]
+  }
+
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const pt = getImgCoords(e)
+    activeTraceRef.current = [pt]
+    setActiveTrace([pt])
+    drawingGuard.current = true
+  }
+
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!drawingGuard.current) return
+    const pt = getImgCoords(e)
+    activeTraceRef.current = [...activeTraceRef.current, pt]
+    setActiveTrace(activeTraceRef.current)
+  }
+
+  const handlePointerUp = () => {
+    if (!drawingGuard.current) return
+    drawingGuard.current = false
+    if (activeTraceRef.current.length >= 2) {
+      addTrace({ points: activeTraceRef.current, timestamp: Date.now() })
+    }
+    activeTraceRef.current = []
+    setActiveTrace([])
+  }
+
+  const toggleSmartTrace = () => {
+    if (smartTrace) {
+      clearTraces()
+      setSmartTrace(false)
+    } else {
+      startTraceMode()
+      setSmartTrace(true)
+    }
+  }
+
+  const handleProcessSeeds = async () => {
+    setSeedsProcessing(true)
+    await processWithSeeds(drawing.id)
+    setSeedsProcessing(false)
+  }
+
   return (
     <div className={styles.previewInner}>
       <div className={styles.previewHeader}>
@@ -381,18 +444,44 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
               )}
               <button
                 className={`${styles.actionBtn} ${traceMode ? styles.actionBtnActive : ''}`}
-                onClick={() => setTraceMode((v) => !v)}
+                onClick={() => { setTraceMode((v) => !v); if (smartTrace) toggleSmartTrace() }}
               >
                 ✍️ Trace Walls
+              </button>
+              <button
+                className={`${styles.traceBtn} ${smartTrace ? styles.traceBtnActive : ''}`}
+                onClick={toggleSmartTrace}
+              >
+                👆 Smart Trace
               </button>
               {userTraceCount > 0 && (
                 <button className={styles.actionBtn} onClick={onClearUserWalls}>
                   🧹 Clear Traces ({userTraceCount})
                 </button>
               )}
+              {smartTrace && (
+                <span className={styles.traceInfo}>{userTraces.length} trace{userTraces.length !== 1 ? 's' : ''}</span>
+              )}
+              {smartTrace && userTraces.length >= 2 && (
+                <button
+                  className={styles.processSeedsBtn}
+                  onClick={handleProcessSeeds}
+                  disabled={seedsProcessing}
+                >
+                  {seedsProcessing ? '⚙ Detecting…' : `🔍 Detect (${userTraces.length})`}
+                </button>
+              )}
             </>
           )}
         </div>
+
+        {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
+          <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 12, flexWrap: 'wrap' }}>
+            <span style={{ color: WALL_LEGEND_AUTO, fontWeight: 500 }}>━ Auto-detected wall</span>
+            <span style={{ color: WALL_LEGEND_LOW_CONFIDENCE, fontWeight: 500 }}>╌ Low-confidence wall</span>
+            <span style={{ color: WALL_COLOR_USER, fontWeight: 500 }}>━ User-traced wall</span>
+          </div>
+        )}
 
         <div className={styles.zoomControls}>
           <button onClick={() => setScale((s) => Math.max(0.25, s - 0.25))}>−</button>
@@ -414,12 +503,14 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
           {previewSrc ? (
             <div className={styles.previewImgWrap}>
               <img
+                ref={imgRef}
                 src={previewSrc}
                 alt={drawing.name}
                 className={styles.previewImg}
                 draggable={false}
+                onLoad={(e) => setImgNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
               />
-              {drawing.status === 'ready' && (
+              {drawing.status === 'ready' && !smartTrace && (
                 <WallTracer
                   active={traceMode}
                   imageWidth={drawing.rasterWidth ?? 800}
@@ -427,6 +518,37 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
                   walls={drawing.parsedWalls}
                   onAddWall={onAddUserWall}
                 />
+              )}
+              {smartTrace && imgNatural.w > 0 && (
+                <svg
+                  viewBox={`0 0 ${imgNatural.w} ${imgNatural.h}`}
+                  style={{
+                    position: 'absolute', top: 0, left: 0,
+                    width: '100%', height: '100%',
+                    pointerEvents: 'auto', cursor: 'crosshair',
+                    zIndex: 10,
+                  }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                >
+                  {userTraces.map((trace, i) => (
+                    <polyline
+                      key={i}
+                      points={trace.points.map(p => `${p[0]},${p[1]}`).join(' ')}
+                      fill="none" stroke="#ffd700" strokeWidth={3}
+                      strokeLinecap="round" strokeLinejoin="round" opacity={0.8}
+                    />
+                  ))}
+                  {activeTrace.length > 1 && (
+                    <polyline
+                      points={activeTrace.map(p => `${p[0]},${p[1]}`).join(' ')}
+                      fill="none" stroke="#ff6b6b" strokeWidth={3}
+                      strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 3"
+                    />
+                  )}
+                </svg>
               )}
             </div>
           ) : (

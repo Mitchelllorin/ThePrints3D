@@ -1,21 +1,80 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useThree } from '@react-three/fiber'
-import { Html, Line } from '@react-three/drei'
+import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
-import type { Measurement } from '../../types'
+import type { Drawing, Measurement } from '../../types'
 
-// ─── Single measurement line + label ─────────────────────────────────────────
+const DEFAULT_SCALE_MM_PER_PX = 23.5
+const DEFAULT_WALL_ENDPOINT_SNAP_TOLERANCE_PX = 14
+const envSnapTolerancePx = Number(import.meta.env.VITE_MEASURE_SNAP_TOLERANCE_PX)
+const WALL_ENDPOINT_SNAP_TOLERANCE_PX =
+  Number.isFinite(envSnapTolerancePx) && envSnapTolerancePx > 0
+    ? envSnapTolerancePx
+    : DEFAULT_WALL_ENDPOINT_SNAP_TOLERANCE_PX
+
+interface WallEndpointCandidate {
+  x: number
+  z: number
+  toleranceM: number
+}
+
+function centerOfWalls(walls: Drawing['parsedWalls']): [number, number] {
+  if (walls.length === 0) return [0, 0]
+  let sx = 0
+  let sy = 0
+  for (const w of walls) {
+    sx += (w.x1 + w.x2) / 2
+    sy += (w.y1 + w.y2) / 2
+  }
+  return [sx / walls.length, sy / walls.length]
+}
+
+function buildWallEndpointCandidates(drawings: Drawing[]): WallEndpointCandidate[] {
+  const parsedDrawings = drawings.filter((d) => d.parsedWalls.length > 0)
+  if (parsedDrawings.length === 0) return []
+
+  const ref = parsedDrawings.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
+  const [globalCx, globalCy] = centerOfWalls(ref.parsedWalls)
+  const globalMmPerPx = ref.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
+
+  const out: WallEndpointCandidate[] = []
+  for (const d of parsedDrawings) {
+    const mmPerPx = d.scaleMmPerPx ?? globalMmPerPx
+    const worldPerPx = mmPerPx / 1000
+    const toleranceM = WALL_ENDPOINT_SNAP_TOLERANCE_PX * worldPerPx
+    for (const w of d.parsedWalls) {
+      out.push(
+        { x: (w.x1 - globalCx) * worldPerPx, z: (w.y1 - globalCy) * worldPerPx, toleranceM },
+        { x: (w.x2 - globalCx) * worldPerPx, z: (w.y2 - globalCy) * worldPerPx, toleranceM }
+      )
+    }
+  }
+  return out
+}
+
+function snapToWallEndpoint(
+  point: [number, number, number],
+  candidates: WallEndpointCandidate[]
+): [number, number, number] {
+  let best: WallEndpointCandidate | null = null
+  let bestDistSq = Infinity
+  for (const c of candidates) {
+    const dx = c.x - point[0]
+    const dz = c.z - point[2]
+    const distSq = dx * dx + dz * dz
+    if (distSq <= c.toleranceM * c.toleranceM && distSq < bestDistSq) {
+      best = c
+      bestDistSq = distSq
+    }
+  }
+  if (!best) return point
+  return [best.x, point[1], best.z]
+}
+
+// ─── Single measurement line ──────────────────────────────────────────────────
 
 function MeasurementLine({ m }: { m: Measurement }) {
-  const mid: [number, number, number] = [
-    (m.pointA[0] + m.pointB[0]) / 2,
-    (m.pointA[1] + m.pointB[1]) / 2 + 0.15,
-    (m.pointA[2] + m.pointB[2]) / 2,
-  ]
-  const removeMeasurement = useAppStore((s) => s.removeMeasurement)
-  const dist = m.distanceM >= 1 ? `${m.distanceM.toFixed(2)} m` : `${(m.distanceM * 1000).toFixed(0)} mm`
-
   return (
     <group>
       <Line
@@ -33,33 +92,6 @@ function MeasurementLine({ m }: { m: Measurement }) {
         <sphereGeometry args={[0.06, 8, 8]} />
         <meshBasicMaterial color="#f59e0b" />
       </mesh>
-      <Html position={mid} center distanceFactor={10}>
-        <div
-          style={{
-            background: 'rgba(15,23,42,0.92)',
-            border: '1px solid #f59e0b',
-            borderRadius: 6,
-            padding: '3px 8px',
-            color: '#fde68a',
-            fontSize: 12,
-            fontWeight: 700,
-            whiteSpace: 'nowrap',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            cursor: 'pointer',
-            userSelect: 'none',
-          }}
-        >
-          {dist}
-          <span
-            style={{ color: '#94a3b8', fontSize: 11, cursor: 'pointer' }}
-            onClick={() => removeMeasurement(m.id)}
-          >
-            ✕
-          </span>
-        </div>
-      </Html>
     </group>
   )
 }
@@ -82,8 +114,10 @@ export default function MeasureTool() {
   const measureMode = useAppStore((s) => s.measureMode)
   const measurements = useAppStore((s) => s.measurements)
   const addMeasurement = useAppStore((s) => s.addMeasurement)
+  const drawings = useAppStore((s) => s.drawings)
 
   const [pendingA, setPendingA] = useState<[number, number, number] | null>(null)
+  const wallEndpointCandidates = useMemo(() => buildWallEndpointCandidates(drawings), [drawings])
 
   const handleCanvasClick = useCallback(
     (e: MouseEvent) => {
@@ -108,19 +142,20 @@ export default function MeasureTool() {
 
       const pt = hits[0].point
       const coord: [number, number, number] = [pt.x, pt.y, pt.z]
+      const snappedCoord = snapToWallEndpoint(coord, wallEndpointCandidates)
 
       if (!pendingA) {
-        setPendingA(coord)
+        setPendingA(snappedCoord)
       } else {
-        const dx = coord[0] - pendingA[0]
-        const dy = coord[1] - pendingA[1]
-        const dz = coord[2] - pendingA[2]
+        const dx = snappedCoord[0] - pendingA[0]
+        const dy = snappedCoord[1] - pendingA[1]
+        const dz = snappedCoord[2] - pendingA[2]
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-        addMeasurement({ label: null, pointA: pendingA, pointB: coord, distanceM: dist })
+        addMeasurement({ label: null, pointA: pendingA, pointB: snappedCoord, distanceM: dist })
         setPendingA(null)
       }
     },
-    [measureMode, pendingA, raycaster, camera, scene, gl, addMeasurement]
+    [measureMode, pendingA, raycaster, camera, scene, gl, addMeasurement, wallEndpointCandidates]
   )
 
   // Attach/detach click listener on the canvas

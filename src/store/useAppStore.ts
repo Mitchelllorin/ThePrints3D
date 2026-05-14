@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type {
   AppView,
+  Annotation,
+  DetectedWallType,
   Drawing,
   DrawingType,
   FloorLevel,
@@ -9,17 +11,43 @@ import type {
   LayerId,
   Measurement,
   Model3D,
+  UserTrace,
+  WallType,
 } from '../types'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
-import { groupByFloor, floorToElevation, FLOOR_HEIGHT_M, inferFloorNumber } from '../services/sheetParser'
+import {
+  groupByFloorWithLog,
+  floorToElevation,
+  FLOOR_HEIGHT_M,
+  type FloorGroupingLogEntry,
+} from '../services/sheetParser'
 import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
+import { defaultSmartProcessingState } from './smartProcessingSlice'
 
 // ─── Camera Presets ────────────────────────────────────────────────────────────
 export interface CameraPreset {
   position: [number, number, number]
   target: [number, number, number]
+}
+
+// ─── Annotation persistence ────────────────────────────────────────────────────
+
+const ANNOTATIONS_KEY = 'blueprint3d-annotations'
+
+function loadPersistedAnnotations(): Annotation[] {
+  try {
+    const raw = localStorage.getItem(ANNOTATIONS_KEY)
+    if (raw) return JSON.parse(raw) as Annotation[]
+  } catch { /* ignore */ }
+  return []
+}
+
+function saveAnnotations(annotations: Annotation[]) {
+  try {
+    localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(annotations))
+  } catch { /* ignore */ }
 }
 
 // ─── Default Layers ────────────────────────────────────────────────────────────
@@ -132,11 +160,24 @@ interface AppState {
   drawings: Drawing[]
   layers: Layer[]
   model: Model3D
+  floorGroupingLog: FloorGroupingLogEntry[]
   selectedDrawingId: string | null
   sidebarOpen: boolean
   measurements: Measurement[]
   measureMode: boolean
   cameraPreset: CameraPreset | null
+  productCatalog: ProductCatalogItem[]
+  productPlacements: ProductPlacement[]
+
+  // Smart Processing
+  smartProcessor: 'heuristic' | 'ai' | 'seed-guided'
+  userTraces: UserTrace[]
+  seedMode: boolean
+  wallTypes: WallType[]
+  projectWallTypes: WallType[]
+  smartStageLabel: string
+  correctionCount: number
+  detectedWallTypes: DetectedWallType[]
 
   // Actions
   setView: (view: AppView) => void
@@ -156,12 +197,24 @@ interface AppState {
   buildModel: () => void
   // Measurements
   setMeasureMode: (active: boolean) => void
-  addMeasurement: (m: Omit<Measurement, 'id'>) => void
+  addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
   removeMeasurement: (id: string) => void
   clearMeasurements: () => void
   // Camera
   setCameraPreset: (p: CameraPreset) => void
   consumeCameraPreset: () => void
+  setProductCatalog: (items: ProductCatalogItem[]) => void
+  addProductPlacement: (placement: Omit<ProductPlacement, 'id' | 'placedAt'>) => void
+  removeProductPlacement: (id: string) => void
+  clearProductPlacements: () => void
+  // Smart processing actions
+  startTraceMode: () => void
+  addTrace: (trace: UserTrace) => void
+  clearTraces: () => void
+  processWithSeeds: (drawingId: string) => Promise<void>
+  correctElement: (wallId: string, wallTypeId: string) => void
+  setProjectWallTypes: (types: WallType[]) => void
+  exportCorrectionDataset: () => string
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -190,11 +243,22 @@ export const useAppStore = create<AppState>()(
     drawings: [],
     layers: DEFAULT_LAYERS,
     model: DEFAULT_MODEL,
+    floorGroupingLog: [],
     selectedDrawingId: null,
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
     cameraPreset: null,
+
+    // Smart processing defaults
+    smartProcessor: defaultSmartProcessingState.processor,
+    userTraces: defaultSmartProcessingState.userTraces,
+    seedMode: defaultSmartProcessingState.seedMode,
+    wallTypes: defaultSmartProcessingState.wallTypes,
+    projectWallTypes: defaultSmartProcessingState.projectWallTypes,
+    smartStageLabel: defaultSmartProcessingState.stageLabel,
+    correctionCount: defaultSmartProcessingState.correctionCount,
+    detectedWallTypes: [],
 
     setView: (view) =>
       set((s) => {
@@ -216,6 +280,8 @@ export const useAppStore = create<AppState>()(
             rasterWidth: null,
             rasterHeight: null,
             parsedWalls: [],
+            parsedRooms: [],
+            parsedOpenings: [],
             parseProgress: 0,
             floorNumber: null,
             status: 'pending',
@@ -333,6 +399,8 @@ export const useAppStore = create<AppState>()(
         logEvent('drawing.processing.completed', {
           drawingId: id,
           wallCount: patch.parsedWalls?.length ?? 0,
+          roomCount: patch.parsedRooms?.length ?? 0,
+          openingCount: patch.parsedOpenings?.length ?? 0,
           floorNumber: patch.floorNumber,
           scaleNotation: patch.scaleNotation,
         })
@@ -372,21 +440,38 @@ export const useAppStore = create<AppState>()(
         s.view = 'model'
 
         // Build floor levels from sheet numbers
-        const floorGroups = groupByFloor(
+        const { groups: floorGroups, floorGroupingLog } = groupByFloorWithLog(
           s.drawings.map((d) => ({
             id: d.id,
             name: d.name,
-            floorNumber: d.floorNumber ?? inferFloorNumber(d.name),
+            floorNumber: d.floorNumber,
           }))
         )
+        s.floorGroupingLog = floorGroupingLog
         const levels: FloorLevel[] = []
-        for (const [floorNum, ids] of Array.from(floorGroups.entries()).sort(([a], [b]) => a - b)) {
+        const numericEntries = Array.from(floorGroups.entries())
+          .filter((entry): entry is [number, string[]] => entry[0] !== 'unknown')
+          .sort(([a], [b]) => a - b)
+
+        for (const [floorNum, ids] of numericEntries) {
           levels.push({
             id: `floor-${floorNum}`,
             label: floorNum === 0 ? 'Ground Floor' : floorNum < 0 ? 'Basement' : `Level ${floorNum}`,
             elevation: floorToElevation(floorNum),
             height: FLOOR_HEIGHT_M,
             drawingIds: ids,
+          })
+        }
+
+        const unknownIds = floorGroups.get('unknown')
+        if (unknownIds && unknownIds.length > 0) {
+          const topKnownFloor = numericEntries[numericEntries.length - 1]?.[0] ?? 0
+          levels.push({
+            id: 'floor-unknown',
+            label: 'Unknown',
+            elevation: floorToElevation(topKnownFloor + 1),
+            height: FLOOR_HEIGHT_M,
+            drawingIds: unknownIds,
           })
         }
         s.model.floorLevels = levels
@@ -400,11 +485,16 @@ export const useAppStore = create<AppState>()(
     setMeasureMode: (active) =>
       set((s) => {
         s.measureMode = active
+        if (active) s.annotateMode = false  // mutually exclusive with annotate
       }),
 
     addMeasurement: (m) =>
       set((s) => {
-        s.measurements.push({ ...m, id: `meas-${Date.now()}` })
+        s.measurements.push({
+          ...m,
+          id: `meas-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: Date.now(),
+        })
       }),
 
     removeMeasurement: (id) =>
@@ -427,5 +517,128 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         s.cameraPreset = null
       }),
+
+    setProductCatalog: (items) =>
+      set((s) => {
+        s.productCatalog = items
+      }),
+
+    addProductPlacement: (placement) =>
+      set((s) => {
+        s.productPlacements.push({
+          ...placement,
+          id: `placement-${Date.now()}-${Math.round(Math.random() * 10000)}`,
+          placedAt: Date.now(),
+        })
+      }),
+
+    removeProductPlacement: (id) =>
+      set((s) => {
+        const idx = s.productPlacements.findIndex((p) => p.id === id)
+        if (idx !== -1) s.productPlacements.splice(idx, 1)
+      }),
+
+    clearProductPlacements: () =>
+      set((s) => {
+        s.productPlacements = []
+      }),
+
+    // ─── Smart Processing Actions ──────────────────────────────────────────────
+
+    startTraceMode: () =>
+      set((s) => {
+        s.seedMode = true
+        s.smartStageLabel = 'Trace Mode: Draw on walls'
+      }),
+
+    addTrace: (trace) =>
+      set((s) => {
+        s.userTraces.push(trace)
+      }),
+
+    clearTraces: () =>
+      set((s) => {
+        s.userTraces = []
+        s.seedMode = false
+        s.smartStageLabel = 'Heuristic Detection'
+      }),
+
+    processWithSeeds: async (drawingId) => {
+      const drawing = get().drawings.find((d) => d.id === drawingId)
+      if (!drawing) return
+      const traces = get().userTraces
+      const types = get().projectWallTypes
+
+      set((s) => {
+        s.smartProcessor = 'seed-guided'
+        s.smartStageLabel = 'Seed-guided Detection'
+      })
+
+      const { rasterizeFile } = await import('../services/pdfRasterizer')
+      const { detectWalls } = await import('../services/enhancedWallDetector')
+      const { extractSeedFromTraces } = await import('../services/seedDetector')
+
+      try {
+        const raster = await rasterizeFile(drawing.file, () => {})
+        const seeds = extractSeedFromTraces(traces)
+        const result = detectWalls(raster.imageData, seeds, types, drawing.scaleMmPerPx, {
+          edgeThreshold: 20,
+          minWallLengthPx: 40,
+          minWallThicknessPx: 2,
+          maxWallThicknessPx: 120,
+          mergeGapPx: 4,
+        })
+
+        set((s) => {
+          const d = s.drawings.find((dr) => dr.id === drawingId)
+          if (d) {
+            const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+            const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+            const merged = mergeAutoAndUserWalls(autoWalls, userWalls)
+            d.parsedWalls = merged
+          }
+          s.detectedWallTypes = result
+            .filter((w) => w.wallTypeId && w.wallTypeId !== 'unknown')
+            .map((w) => ({
+              wallId: `${w.x1},${w.y1}`,
+              wallType: types.find((t) => t.id === w.wallTypeId)!,
+              confidence: w.confidence,
+              fromSeed: true,
+            }))
+            .filter((dwt) => dwt.wallType != null)
+          s.smartStageLabel = 'Complete'
+        })
+      } catch {
+        set((s) => { s.smartStageLabel = 'Error' })
+      }
+    },
+
+    correctElement: (wallId, wallTypeId) =>
+      set((s) => {
+        s.correctionCount += 1
+        const idx = s.detectedWallTypes.findIndex((d) => d.wallId === wallId)
+        if (idx !== -1) {
+          const newType = s.projectWallTypes.find((t) => t.id === wallTypeId)
+          if (newType) s.detectedWallTypes[idx] = { ...s.detectedWallTypes[idx], wallType: newType }
+        }
+      }),
+
+    setProjectWallTypes: (types) =>
+      set((s) => {
+        s.projectWallTypes = types
+      }),
+
+    exportCorrectionDataset: () => {
+      const state = get()
+      return JSON.stringify({
+        corrections: state.detectedWallTypes.map((d) => ({
+          wallId: d.wallId,
+          typeId: d.wallType.id,
+          confidence: d.confidence,
+          fromSeed: d.fromSeed,
+        })),
+        correctionCount: state.correctionCount,
+      }, null, 2)
+    },
   }))
 )

@@ -45,6 +45,38 @@ export interface ParsedWall {
   typeConfidence?: number
 }
 
+/** A room (enclosed region) detected by flood-filling the rasterized image. */
+export interface ParsedRoom {
+  id: string
+  /** Centroid in pixel coordinates */
+  cx: number
+  cy: number
+  /** Bounding box in pixel coordinates */
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  /** Area in square pixels */
+  areaPx: number
+  /** Area in square metres (null if scale unknown) */
+  areaSqM: number | null
+}
+
+/** A door or window opening detected as a gap between co-linear wall segments. */
+export interface ParsedOpening {
+  /** Gap midpoint in pixel coordinates */
+  x: number
+  y: number
+  /** Width of the gap in pixels */
+  widthPx: number
+  /** Width in mm (null if scale unknown) */
+  widthMm: number | null
+  /** Orientation of the wall containing this opening */
+  orientation: 'horizontal' | 'vertical'
+  /** Best guess at opening type based on gap width */
+  type: 'door' | 'window' | 'unknown'
+}
+
 // Re-export so the Drawing type can reference it without circular imports.
 export type { LineClassificationStats, ClassifiedLine, LineClass } from '../symbols/types'
 
@@ -64,6 +96,10 @@ export interface Drawing {
   rasterHeight: number | null
   /** Wall segments detected from the rasterized image */
   parsedWalls: ParsedWall[]
+  /** Enclosed room regions detected by flood-filling the rasterized image */
+  parsedRooms: ParsedRoom[]
+  /** Door/window openings detected as gaps between co-linear wall segments */
+  parsedOpenings: ParsedOpening[]
   /** Breakdown of every candidate line by class — surfaces what was filtered out. */
   lineClassificationStats?: _LineClassificationStats
   /** 0–100 processing progress */
@@ -130,7 +166,7 @@ export interface Model3D {
 
 // ─── App State ─────────────────────────────────────────────────────────────────
 
-export type AppView = 'upload' | 'drawings' | 'model'
+export type AppView = 'upload' | 'drawings' | 'model' | 'tools'
 
 export interface ScaleCalibration {
   /** px distance measured on canvas */
@@ -149,4 +185,61 @@ export interface Measurement {
   pointB: [number, number, number]
   /** Distance in metres */
   distanceM: number
+  /** Unix timestamp (ms) when this measurement was created */
+  createdAt: number
+}
+
+// ─── Smart Processing / Seed-Guided Detection ────────────────────────────────
+
+export interface WallLayer {
+  name: string
+  thicknessMm: number
+  material: string
+}
+
+export interface WallType {
+  id: string
+  name: string
+  thicknessMm: number
+  layers: WallLayer[]
+  loadBearing: boolean
+  usage: 'interior' | 'exterior' | 'partition'
+  markupTag: string
+  color: string
+}
+
+export interface UserTrace {
+  points: [number, number][]
+  timestamp: number
+}
+
+export interface SeedWall {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  thicknessPx: number
+  confidence: number
+}
+
+export interface DetectedWallType {
+  wallId: string
+  wallType: WallType
+  confidence: number
+  fromSeed: boolean
+}
+
+// ─── Annotations ──────────────────────────────────────────────────────────────
+
+export interface Annotation {
+  id: string
+  /** World-space anchor [x, y, z] */
+  position: [number, number, number]
+  /** Display text */
+  text: string
+  /** Emoji icon */
+  icon: string
+  /** Hex colour string e.g. "#f87171" */
+  color: string
+  createdAt: number
 }

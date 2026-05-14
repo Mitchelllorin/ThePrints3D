@@ -4,7 +4,9 @@ import { inferFloorNumber } from './sheetParser'
 import { deriveScaleFromNotation } from './scaleParser'
 import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
 import { classifyWallType, pxToMm, type DrywallConfig } from './wallTypeClassifier'
-import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
+import { extractRooms } from './roomExtractor'
+import { detectOpenings } from './openingDetector'
+import type { Drawing, ParsedWall } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
 
 export type DrawingPatch = Partial<Drawing>
@@ -51,6 +53,8 @@ export async function processDrawing(
         rasterHeight: raster.height,
         pageCount: raster.pageCount,
         parsedWalls: [],
+        parsedRooms: [],
+        parsedOpenings: [],
         parseProgress: 100,
         scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
         scaleMmPerPx: drawing.scaleMmPerPx,
@@ -84,6 +88,18 @@ export async function processDrawing(
         maxWallThicknessPx: 72,
         requirePairedEdges: false,
         mergeGapPx: 6,
+      })
+    }
+    if (result.walls.length === 0) {
+      // Third pass: very lenient — targets heavily degraded scans, low-contrast
+      // prints, and hand-drawn sketches where normal edge magnitudes are low.
+      result = detectWalls(raster.imageData, {
+        edgeThreshold: isRasterPhoto ? 16 : 20,
+        minWallLengthPx: isRasterPhoto ? 28 : 38,
+        minWallThicknessPx: 2,
+        maxWallThicknessPx: 120,
+        requirePairedEdges: false,
+        mergeGapPx: 8,
       })
     }
     const classificationStats = result.stats
@@ -127,7 +143,17 @@ export async function processDrawing(
       }
     })
 
-    // 6. Floor number from filename
+    // 6. Extract enclosed room regions from the rasterized image
+    const rooms = extractRooms(raster.imageData, {
+      scaleMmPerPx: effectiveScale,
+    })
+
+    // 7. Detect door/window openings as gaps between co-linear wall segments
+    const openings = detectOpenings(walls, {
+      scaleMmPerPx: effectiveScale,
+    })
+
+    // 8. Floor number from filename
     const floorNumber = inferFloorNumber(drawing.name)
 
     setProgress(100)
@@ -139,6 +165,8 @@ export async function processDrawing(
       rasterHeight: raster.height,
       pageCount: raster.pageCount,
       parsedWalls: walls,
+      parsedRooms: rooms,
+      parsedOpenings: openings,
       lineClassificationStats: classificationStats,
       parseProgress: 100,
       scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,

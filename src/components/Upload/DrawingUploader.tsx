@@ -24,14 +24,8 @@ export default function DrawingUploader() {
 
   const onCameraCapture = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files
-      if (!files || files.length === 0) return
-      addDrawings(Array.from(files))
-      // Reset so the same file can be re-captured if user retries
-      if (cameraInputRef.current) cameraInputRef.current.value = ''
       const files = Array.from(e.target.files ?? [])
       if (files.length > 0) addDrawings(files)
-      // Reset so the same file can be re-captured if needed
       e.target.value = ''
     },
     [addDrawings]

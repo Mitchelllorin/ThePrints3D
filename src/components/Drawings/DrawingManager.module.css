@@ -270,6 +270,19 @@
   justify-content: center;
 }
 
+.previewColumn {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.materialPanelWrap {
+  padding: 12px;
+  border-top: 1px solid #1e293b;
+}
+
 .noSelection {
   display: flex;
   flex-direction: column;
@@ -488,33 +501,59 @@
   border-radius: 8px;
 }
 
-/* Scale confidence badges */
-.scaleConfBadge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: 8px;
+/* ── Smart Trace ──────────────────────────────────────────────────────────────── */
+
+.traceBtn {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
   white-space: nowrap;
 }
 
-.scaleConfParsed {
-  color: #4ade80;
-  background: #052e16;
+.traceBtn:hover {
+  background: #334155;
+  color: #f1f5f9;
 }
 
-.scaleConfInferred {
-  color: #fbbf24;
-  background: #422006;
+.traceBtnActive {
+  background: #1e3a5f !important;
+  border-color: #38bdf8 !important;
+  color: #38bdf8 !important;
 }
 
-.scaleConfFallback {
-  color: #f87171;
-  background: #3b0a0a;
+.traceInfo {
+  font-size: 11px;
+  color: #38bdf8;
+  background: #0f172a;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
-/* Warning banner on card when scale confidence is fallback */
-.cardFallbackWarn {
-  font-size: 10px;
-  color: #f87171;
-  margin: 2px 0 0;
+.processSeedsBtn {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #000;
+  border: none;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.processSeedsBtn:hover {
+  opacity: 0.9;
+}
+
+.processSeedsBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
