@@ -57,6 +57,41 @@ Open the app URL printed by Vite.
 - `ops/data_governance_controls.txt` – governance controls baseline
 - `ops/data_access_register_template.csv` – permission/access register template
 
+## AI wall-segmentation model
+
+`src/services/aiWallDetector.ts` looks for a trained ONNX model at
+`public/models/floorplan-wall-segmentation.onnx`.  When the file is present
+it is loaded by ONNX Runtime Web (WebGPU → WASM fallback) and used instead
+of the heuristic edge detector.  When absent, processing falls back
+transparently to the heuristic detector.
+
+The model is a lightweight U-Net (~1.5 M parameters, ~6 MB) trained on the
+[CubiCasa5k][cubicasa5k] open floor-plan dataset
+(Creative Commons Attribution 4.0).
+
+### Training the model
+
+```bash
+# 1. Install Python deps
+pip install -r ops/train/requirements.txt
+
+# 2. Download dataset (~1.8 GB)
+git clone --depth 1 https://github.com/CubiCasa/CubiCasa5k data/cubicasa5k
+
+# 3. Train (~30 epochs, ≈1 h GPU / 6 h CPU)
+python ops/train/train.py --data data/cubicasa5k --out checkpoints/
+
+# 4. Export to public/models/
+python ops/train/export.py --checkpoint checkpoints/best.pth
+```
+
+See [`ops/train/README.md`](ops/train/README.md) for full documentation.
+
+A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a
+quick smoke-test and upload the ONNX as a workflow artifact.
+
+[cubicasa5k]: https://github.com/CubiCasa/CubiCasa5k
+
 ## Known limitations
 
 - Wall detection is heuristic and may over/under-detect on noisy scans and text-heavy plans.
