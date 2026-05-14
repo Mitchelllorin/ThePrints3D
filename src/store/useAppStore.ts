@@ -3,6 +3,7 @@ import { immer } from 'zustand/middleware/immer'
 import type {
   AppView,
   Annotation,
+  DetectedWallType,
   Drawing,
   DrawingType,
   FloorLevel,
@@ -10,6 +11,8 @@ import type {
   LayerId,
   Measurement,
   Model3D,
+  UserTrace,
+  WallType,
 } from '../types'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import {
@@ -21,6 +24,7 @@ import {
 import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
+import { defaultSmartProcessingState } from './smartProcessingSlice'
 
 // ─── Camera Presets ────────────────────────────────────────────────────────────
 export interface CameraPreset {
@@ -165,6 +169,16 @@ interface AppState {
   productCatalog: ProductCatalogItem[]
   productPlacements: ProductPlacement[]
 
+  // Smart Processing
+  smartProcessor: 'heuristic' | 'ai' | 'seed-guided'
+  userTraces: UserTrace[]
+  seedMode: boolean
+  wallTypes: WallType[]
+  projectWallTypes: WallType[]
+  smartStageLabel: string
+  correctionCount: number
+  detectedWallTypes: DetectedWallType[]
+
   // Actions
   setView: (view: AppView) => void
   addDrawings: (files: File[]) => void
@@ -193,6 +207,14 @@ interface AppState {
   addProductPlacement: (placement: Omit<ProductPlacement, 'id' | 'placedAt'>) => void
   removeProductPlacement: (id: string) => void
   clearProductPlacements: () => void
+  // Smart processing actions
+  startTraceMode: () => void
+  addTrace: (trace: UserTrace) => void
+  clearTraces: () => void
+  processWithSeeds: (drawingId: string) => Promise<void>
+  correctElement: (wallId: string, wallTypeId: string) => void
+  setProjectWallTypes: (types: WallType[]) => void
+  exportCorrectionDataset: () => string
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -227,6 +249,16 @@ export const useAppStore = create<AppState>()(
     measurements: [],
     measureMode: false,
     cameraPreset: null,
+
+    // Smart processing defaults
+    smartProcessor: defaultSmartProcessingState.processor,
+    userTraces: defaultSmartProcessingState.userTraces,
+    seedMode: defaultSmartProcessingState.seedMode,
+    wallTypes: defaultSmartProcessingState.wallTypes,
+    projectWallTypes: defaultSmartProcessingState.projectWallTypes,
+    smartStageLabel: defaultSmartProcessingState.stageLabel,
+    correctionCount: defaultSmartProcessingState.correctionCount,
+    detectedWallTypes: [],
 
     setView: (view) =>
       set((s) => {
@@ -508,5 +540,103 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         s.productPlacements = []
       }),
+
+    // ─── Smart Processing Actions ──────────────────────────────────────────────
+
+    startTraceMode: () =>
+      set((s) => {
+        s.seedMode = true
+        s.smartStageLabel = 'Trace Mode: Draw on walls'
+      }),
+
+    addTrace: (trace) =>
+      set((s) => {
+        s.userTraces.push(trace)
+      }),
+
+    clearTraces: () =>
+      set((s) => {
+        s.userTraces = []
+        s.seedMode = false
+        s.smartStageLabel = 'Heuristic Detection'
+      }),
+
+    processWithSeeds: async (drawingId) => {
+      const drawing = get().drawings.find((d) => d.id === drawingId)
+      if (!drawing) return
+      const traces = get().userTraces
+      const types = get().projectWallTypes
+
+      set((s) => {
+        s.smartProcessor = 'seed-guided'
+        s.smartStageLabel = 'Seed-guided Detection'
+      })
+
+      const { rasterizeFile } = await import('../services/pdfRasterizer')
+      const { detectWalls } = await import('../services/enhancedWallDetector')
+      const { extractSeedFromTraces } = await import('../services/seedDetector')
+
+      try {
+        const raster = await rasterizeFile(drawing.file, () => {})
+        const seeds = extractSeedFromTraces(traces)
+        const result = detectWalls(raster.imageData, seeds, types, drawing.scaleMmPerPx, {
+          edgeThreshold: 20,
+          minWallLengthPx: 40,
+          minWallThicknessPx: 2,
+          maxWallThicknessPx: 120,
+          mergeGapPx: 4,
+        })
+
+        set((s) => {
+          const d = s.drawings.find((dr) => dr.id === drawingId)
+          if (d) {
+            const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+            const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+            const merged = mergeAutoAndUserWalls(autoWalls, userWalls)
+            d.parsedWalls = merged
+          }
+          s.detectedWallTypes = result
+            .filter((w) => w.wallTypeId && w.wallTypeId !== 'unknown')
+            .map((w) => ({
+              wallId: `${w.x1},${w.y1}`,
+              wallType: types.find((t) => t.id === w.wallTypeId)!,
+              confidence: w.confidence,
+              fromSeed: true,
+            }))
+            .filter((dwt) => dwt.wallType != null)
+          s.smartStageLabel = 'Complete'
+        })
+      } catch {
+        set((s) => { s.smartStageLabel = 'Error' })
+      }
+    },
+
+    correctElement: (wallId, wallTypeId) =>
+      set((s) => {
+        s.correctionCount += 1
+        const idx = s.detectedWallTypes.findIndex((d) => d.wallId === wallId)
+        if (idx !== -1) {
+          const newType = s.projectWallTypes.find((t) => t.id === wallTypeId)
+          if (newType) s.detectedWallTypes[idx] = { ...s.detectedWallTypes[idx], wallType: newType }
+        }
+      }),
+
+    setProjectWallTypes: (types) =>
+      set((s) => {
+        s.projectWallTypes = types
+      }),
+
+    exportCorrectionDataset: () => {
+      const state = get()
+      return JSON.stringify({
+        corrections: state.detectedWallTypes.map((d) => ({
+          wallId: d.wallId,
+          typeId: d.wallType.id,
+          confidence: d.confidence,
+          fromSeed: d.fromSeed,
+        })),
+        correctionCount: state.correctionCount,
+      }, null, 2)
+    },
   }))
 )

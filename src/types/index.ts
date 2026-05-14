@@ -179,6 +179,46 @@ export interface Measurement {
   createdAt: number
 }
 
+// ─── Smart Processing / Seed-Guided Detection ────────────────────────────────
+
+export interface WallLayer {
+  name: string
+  thicknessMm: number
+  material: string
+}
+
+export interface WallType {
+  id: string
+  name: string
+  thicknessMm: number
+  layers: WallLayer[]
+  loadBearing: boolean
+  usage: 'interior' | 'exterior' | 'partition'
+  markupTag: string
+  color: string
+}
+
+export interface UserTrace {
+  points: [number, number][]
+  timestamp: number
+}
+
+export interface SeedWall {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  thicknessPx: number
+  confidence: number
+}
+
+export interface DetectedWallType {
+  wallId: string
+  wallType: WallType
+  confidence: number
+  fromSeed: boolean
+}
+
 // ─── Annotations ──────────────────────────────────────────────────────────────
 
 export interface Annotation {

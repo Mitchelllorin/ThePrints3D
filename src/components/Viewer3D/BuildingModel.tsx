@@ -534,9 +534,9 @@ export default function BuildingModel({ layers }: Props) {
         buildCeiling(group, fp, elev, fh, ceilLayer.color, ceilLayer.opacity)
       }
 
-      // ── Structure ─────────────────────────────────────────────────────────
+      // ── Structure (only from real detected walls) ─────────────────────────
       const structLayer = layerMap.get('structure')
-      if (structLayer?.visible) {
+      if (structLayer?.visible && wallDrawings.length > 0) {
         const sMat = mat(structLayer.color, structLayer.opacity, { roughness: 0.5 })
         buildStructure(group, fp, elev, fh, sMat)
       }
