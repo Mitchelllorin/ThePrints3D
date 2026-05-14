@@ -248,6 +248,8 @@ export const useAppStore = create<AppState>()(
             rasterWidth: null,
             rasterHeight: null,
             parsedWalls: [],
+            parsedRooms: [],
+            parsedOpenings: [],
             parseProgress: 0,
             floorNumber: null,
             status: 'pending',
@@ -363,6 +365,8 @@ export const useAppStore = create<AppState>()(
         logEvent('drawing.processing.completed', {
           drawingId: id,
           wallCount: patch.parsedWalls?.length ?? 0,
+          roomCount: patch.parsedRooms?.length ?? 0,
+          openingCount: patch.parsedOpenings?.length ?? 0,
           floorNumber: patch.floorNumber,
           scaleNotation: patch.scaleNotation,
         })

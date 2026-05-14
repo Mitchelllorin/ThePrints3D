@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
-import type { Drawing, FloorLevel, Layer, ParsedWall } from '../../types'
+import type { Drawing, FloorLevel, Layer, ParsedOpening, ParsedRoom, ParsedWall } from '../../types'
 import { logEvent } from '../../services/logger'
 
 interface Props {
@@ -294,6 +294,111 @@ function buildMEP(
   }
 }
 
+// ─── Room floor plates ────────────────────────────────────────────────────────
+
+/** Cycle of muted, semi-transparent tints for individual room floor plates. */
+const ROOM_TINTS = [
+  '#bfdbfe', // blue-200
+  '#bbf7d0', // green-200
+  '#fde68a', // amber-200
+  '#fecaca', // red-200
+  '#e9d5ff', // purple-200
+  '#fed7aa', // orange-200
+  '#a5f3fc', // cyan-200
+  '#d9f99d', // lime-200
+]
+
+function buildRoomPlates(
+  group: THREE.Group,
+  rooms: ParsedRoom[],
+  mmPerPx: number,
+  cx: number,
+  cy: number,
+  elevation: number,
+  layerId: string
+) {
+  const s = mmPerPx / 1000  // px → metres
+  rooms.forEach((room, i) => {
+    const rx1 = (room.x1 - cx) * s
+    const rz1 = (room.y1 - cy) * s
+    const rx2 = (room.x2 - cx) * s
+    const rz2 = (room.y2 - cy) * s
+
+    const rw = rx2 - rx1
+    const rd = rz2 - rz1
+    if (rw <= 0 || rd <= 0) return
+
+    const geo = new THREE.BoxGeometry(rw, 0.01, rd)
+    const color = ROOM_TINTS[i % ROOM_TINTS.length]
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color),
+        transparent: true,
+        opacity: 0.35,
+        roughness: 0.9,
+        side: THREE.DoubleSide,
+      }),
+    )
+    mesh.position.set(
+      (rx1 + rx2) / 2,
+      elevation + 0.02,
+      (rz1 + rz2) / 2,
+    )
+    mesh.receiveShadow = true
+    mesh.userData.layer = layerId
+    group.add(mesh)
+  })
+}
+
+// ─── Opening markers ──────────────────────────────────────────────────────────
+
+function buildOpeningMarkers(
+  group: THREE.Group,
+  openings: ParsedOpening[],
+  mmPerPx: number,
+  cx: number,
+  cy: number,
+  elevation: number,
+  floorHeight: number,
+  doorColor: string,
+  windowColor: string,
+  layerId: string
+) {
+  const s = mmPerPx / 1000
+
+  for (const op of openings) {
+    const ox = (op.x - cx) * s
+    const oz = (op.y - cy) * s
+    const widthM = Math.max(op.widthPx * s, 0.05)
+
+    const isDoor = op.type === 'door'
+    const markerH = isDoor ? floorHeight * 0.85 : floorHeight * 0.45
+    const markerY = isDoor ? elevation + markerH / 2 : elevation + floorHeight * 0.35 + markerH / 2
+    const color = isDoor ? doorColor : windowColor
+
+    const markerW = widthM
+    const markerD = 0.05  // thin slab
+
+    const geoW = op.orientation === 'horizontal' ? markerW : markerD
+    const geoD = op.orientation === 'horizontal' ? markerD : markerW
+
+    const geo = new THREE.BoxGeometry(geoW, markerH, geoD)
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color),
+        transparent: true,
+        opacity: 0.6,
+        roughness: 0.4,
+      }),
+    )
+    mesh.position.set(ox, markerY, oz)
+    mesh.userData.layer = layerId
+    group.add(mesh)
+  }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function BuildingModel({ layers }: Props) {
@@ -386,6 +491,39 @@ export default function BuildingModel({ layers }: Props) {
           }
         } else {
           buildProceduralWalls(group, fp, elev, fh, wMat)
+        }
+      }
+
+      // ── Rooms ─────────────────────────────────────────────────────────────
+      const floorLayer2 = layerMap.get('floors')
+      if (floorLayer2?.visible) {
+        for (const d of wallDrawings) {
+          if (d.parsedRooms.length > 0) {
+            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+            buildRoomPlates(group, d.parsedRooms, mmPx, globalCx, globalCy, elev, 'floors')
+          }
+        }
+      }
+
+      // ── Openings (doors & windows) ─────────────────────────────────────────
+      const dwLayer = layerMap.get('doors-windows')
+      if (dwLayer?.visible) {
+        for (const d of wallDrawings) {
+          if (d.parsedOpenings.length > 0) {
+            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+            buildOpeningMarkers(
+              group,
+              d.parsedOpenings,
+              mmPx,
+              globalCx,
+              globalCy,
+              elev,
+              fh,
+              '#7dd3fc',  // door colour (sky-300)
+              '#a5b4fc',  // window colour (indigo-300)
+              'doors-windows',
+            )
+          }
         }
       }
 

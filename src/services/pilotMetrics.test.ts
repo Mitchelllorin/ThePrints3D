@@ -17,6 +17,8 @@ function makeDrawing(overrides: Partial<Drawing> = {}): Drawing {
     rasterWidth: null,
     rasterHeight: null,
     parsedWalls: [],
+    parsedRooms: [],
+    parsedOpenings: [],
     parseProgress: 100,
     floorNumber: null,
     status: 'ready',
