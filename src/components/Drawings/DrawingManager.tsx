@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
-import WallTracer from './WallTracer'
+import WallTracer, { WALL_LEGEND_AUTO, WALL_LEGEND_LOW_CONFIDENCE, WALL_COLOR_USER } from './WallTracer'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
 import MaterialReportPanel from '../Tools/MaterialReportPanel'
@@ -366,6 +366,14 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
             </>
           )}
         </div>
+
+        {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
+          <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 12, flexWrap: 'wrap' }}>
+            <span style={{ color: WALL_LEGEND_AUTO, fontWeight: 500 }}>━ Auto-detected wall</span>
+            <span style={{ color: WALL_LEGEND_LOW_CONFIDENCE, fontWeight: 500 }}>╌ Low-confidence wall</span>
+            <span style={{ color: WALL_COLOR_USER, fontWeight: 500 }}>━ User-traced wall</span>
+          </div>
+        )}
 
         <div className={styles.zoomControls}>
           <button onClick={() => setScale((s) => Math.max(0.25, s - 0.25))}>−</button>

@@ -93,18 +93,20 @@ describe('detectOpenings', () => {
   })
 
   it('groups walls within LINE_SNAP_PX tolerance as co-linear', () => {
-    // y=7  → bucket = round(7/8)*8  = 1*8 = 8
-    // y=10 → bucket = round(10/8)*8 = 1*8 = 8  (both in same bucket)
+    // With LINE_SNAP_PX = 16, bucket = Math.round(y / 16) * 16
+    // y=4  → round(4/16)*16  = 0*16 = 0
+    // y=7  → round(7/16)*16  = 0*16 = 0  (both in same bucket)
     const walls = [
-      wall(0, 7, 100, 7),
-      wall(150, 10, 300, 10), // y offset = 3px — same bucket as y=7
+      wall(0, 4, 100, 4),
+      wall(150, 7, 300, 7), // y offset = 3px — same bucket as y=4
     ]
     const openings = detectOpenings(walls, { minGapPx: 10, maxGapPx: 200 })
     expect(openings).toHaveLength(1)
   })
 
   it('does not group walls beyond LINE_SNAP_PX tolerance', () => {
-    // y=7  → bucket = 8; y=30 → bucket = round(30/8)*8 = 4*8 = 32 — different buckets
+    // y=7  → bucket = round(7/16)*16  = 0*16 = 0
+    // y=30 → bucket = round(30/16)*16 = 2*16 = 32  — different buckets
     const walls = [
       wall(0, 7, 100, 7),
       wall(150, 30, 300, 30),

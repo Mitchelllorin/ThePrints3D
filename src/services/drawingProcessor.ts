@@ -84,6 +84,18 @@ export async function processDrawing(
         mergeGapPx: 6,
       })
     }
+    if (result.walls.length === 0) {
+      // Third pass: very lenient — targets heavily degraded scans, low-contrast
+      // prints, and hand-drawn sketches where normal edge magnitudes are low.
+      result = detectWalls(raster.imageData, {
+        edgeThreshold: isRasterPhoto ? 16 : 20,
+        minWallLengthPx: isRasterPhoto ? 28 : 38,
+        minWallThicknessPx: 2,
+        maxWallThicknessPx: 120,
+        requirePairedEdges: false,
+        mergeGapPx: 8,
+      })
+    }
     const classificationStats = result.stats
     setProgress(92)
 

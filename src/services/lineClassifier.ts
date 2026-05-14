@@ -86,9 +86,9 @@ export function classifyLine(
   }
   const dark_ratio = isDark.filter(Boolean).length / SAMPLE_COUNT
 
-  // ── Decide ──
+  // Every branch in the decision tree below assigns both classification and confidence.
   let classification: LineClass
-  let confidence = 0.5
+  let confidence: number
 
   if (length < leaderMaxLengthPx) {
     classification = 'leader'
@@ -101,18 +101,30 @@ export function classifyLine(
     // Some gaps = dashed
     classification = 'dashed'
     confidence = 0.75
-  } else if (transitions <= 4 && dark_ratio > 0.7) {
+  } else if (transitions <= 4 && dark_ratio > 0.55) {
     // Mostly continuous dark = solid line. Use thickness to split wall vs dim.
+    // Lowered dark_ratio threshold from 0.7 → 0.55 to capture faded/lightly
+    // scanned blueprint lines that are still clearly walls.
     if (line.thickness < minWallThicknessPx) {
       classification = 'dimension'
-      confidence = 0.7
+      confidence = dark_ratio > 0.7 ? 0.7 : 0.5
     } else if (length < minWallLengthPx) {
       classification = 'leader'
       confidence = 0.65
     } else {
       classification = 'wall'
-      confidence = 0.9
+      confidence = dark_ratio > 0.7 ? 0.9 : 0.65
     }
+  } else if (
+    transitions <= 6 &&
+    dark_ratio > 0.40 &&
+    line.thickness >= minWallThicknessPx &&
+    length >= minWallLengthPx
+  ) {
+    // Borderline: slightly discontinuous but long and thick enough to be a wall.
+    // Captures walls with minor scanning gaps, staircase artefacts, or light ink.
+    classification = 'wall'
+    confidence = 0.5
   } else {
     classification = 'unknown'
     confidence = 0.4

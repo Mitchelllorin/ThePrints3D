@@ -155,8 +155,9 @@ function mergeAxisAligned(
   const groups = new Map<number, ParsedWall[]>()
   for (const seg of segs) {
     const key = axis === 'h' ? seg.y1 : seg.x1
-    // Round to nearest 2px bucket
-    const bucket = Math.round(key / 2) * 2
+    // Round to nearest 4px bucket (wider than the previous 2px bucket to tolerate
+    // slight scan skew and sub-pixel quantisation of parallel wall faces).
+    const bucket = Math.round(key / 4) * 4
     if (!groups.has(bucket)) groups.set(bucket, [])
     groups.get(bucket)!.push(seg)
   }
@@ -190,8 +191,10 @@ function mergeAxisAligned(
     result.push(cur)
   }
 
-  // Now detect parallel pairs → set thickness
-  detectWallPairs(result, axis, gap * 5)
+  // Now detect parallel pairs → set thickness.
+  // maxSep = gap * 12 to handle thick walls (e.g. 150 mm concrete) that produce
+  // widely-separated edge pairs.  Previously gap*5 missed walls >~20 px thick.
+  detectWallPairs(result, axis, gap * 12)
 
   return result
 }
