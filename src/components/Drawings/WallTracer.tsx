@@ -98,6 +98,7 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
 
   const onPointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!active) return
+    if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
     const p = eventToPoint(event)
     if (!p) return
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -114,6 +115,9 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
   const onPointerUp = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!active) return
     const p = eventToPoint(event)
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
     setStroke((prev) => {
       const points = p ? [...prev, p] : prev
       const wall = reduceStrokeToWall(points)
@@ -130,6 +134,7 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
       />
       {active && <div className={styles.hint}>Trace main walls with your finger/mouse</div>}
     </div>

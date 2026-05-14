@@ -349,6 +349,8 @@
 .previewActions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .actionBtn {
@@ -362,6 +364,7 @@
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
   white-space: nowrap;
+  min-height: 36px;
 }
 
 .actionBtn:hover {
@@ -514,6 +517,7 @@
   cursor: pointer;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
   white-space: nowrap;
+  min-height: 36px;
 }
 
 .traceBtn:hover {
@@ -536,6 +540,10 @@
   white-space: nowrap;
 }
 
+.smartTraceOverlay {
+  touch-action: none;
+}
+
 .processSeedsBtn {
   background: linear-gradient(135deg, #f59e0b, #d97706);
   color: #000;
@@ -547,6 +555,7 @@
   cursor: pointer;
   transition: opacity 0.15s;
   white-space: nowrap;
+  min-height: 36px;
 }
 
 .processSeedsBtn:hover {
@@ -556,4 +565,52 @@
 .processSeedsBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .page {
+    flex-direction: column;
+  }
+
+  .list {
+    width: 100%;
+    max-height: 46%;
+    border-right: none;
+    border-bottom: 1px solid #1e293b;
+  }
+
+  .previewHeader {
+    gap: 10px;
+  }
+
+  .previewTitle {
+    min-width: 180px;
+  }
+
+  .previewActions {
+    width: 100%;
+  }
+
+  .actionBtn,
+  .traceBtn,
+  .processSeedsBtn {
+    min-height: 42px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .zoomControls {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .zoomControls button {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .previewCanvas {
+    padding: 8px;
+  }
 }
