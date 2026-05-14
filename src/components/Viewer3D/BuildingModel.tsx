@@ -519,8 +519,8 @@ export default function BuildingModel({ layers }: Props) {
               globalCy,
               elev,
               fh,
-              '#7dd3fc',  // door colour (sky-300)
-              '#a5b4fc',  // window colour (indigo-300)
+              '#7dd3fc',  // door color (sky-300)
+              '#a5b4fc',  // window color (indigo-300)
               'doors-windows',
             )
           }
