@@ -361,6 +361,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
   const imgRef = useRef<HTMLImageElement>(null)
   const activeTraceRef = useRef<[number, number][]>([])
   const drawingGuard = useRef(false)
+  const hasUsableSeedTrace = userTraces.some((t) => t.points.length >= 8)
 
   const getImgCoords = (e: React.PointerEvent<SVGSVGElement>): [number, number] => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -482,7 +483,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
               {smartTrace && (
                 <span className={styles.traceInfo}>{userTraces.length} trace{userTraces.length !== 1 ? 's' : ''}</span>
               )}
-              {smartTrace && userTraces.length >= 1 && (
+              {smartTrace && hasUsableSeedTrace && (
                 <button
                   className={styles.processSeedsBtn}
                   onClick={handleProcessSeeds}
@@ -496,7 +497,8 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
         </div>
         {smartTrace && (
           <div style={{ marginTop: 6, fontSize: 12, color: '#cbd5e1' }}>
-            Draw at least one trace over a key wall run, then use Smart Refine to re-run seeded detection.
+            Draw at least one clear trace over a key wall run, then use Smart Refine to re-run seeded detection.
+            {!hasUsableSeedTrace && ' Keep tracing until at least one stroke is long enough.'}
           </div>
         )}
 

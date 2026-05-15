@@ -85,7 +85,7 @@ export default function ProjectContextPanel({ phase }: Props) {
         <textarea
           value={data.wallTypes}
           onChange={(e) => patch({ wallTypes: e.target.value })}
-          placeholder="e.g. 6in exterior CMU, 3-5/8in metal stud interior"
+          placeholder="e.g. 6 inch exterior CMU, 3-5/8 inch metal stud interior"
           rows={2}
           style={{ width: '100%', marginTop: 4, borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8 }}
         />
