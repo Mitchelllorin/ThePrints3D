@@ -3,6 +3,7 @@ import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType, ScaleConfidence } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
 import WallTracer, { WALL_LEGEND_AUTO, WALL_LEGEND_LOW_CONFIDENCE, WALL_COLOR_USER } from './WallTracer'
+import SymbolReferencePanel from './SymbolReferencePanel'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
 import styles from './DrawingManager.module.css'
@@ -71,6 +72,7 @@ export default function DrawingManager() {
   const clearUserTracedWalls = useAppStore((s) => s.clearUserTracedWalls)
 
   const [calibratingId, setCalibratingId] = useState<string | null>(null)
+  const [symbolRefOpen, setSymbolRefOpen] = useState(false)
   const selected = drawings.find((d) => d.id === selectedDrawingId) ?? null
   const calibrating = drawings.find((d) => d.id === calibratingId) ?? null
 
@@ -114,6 +116,13 @@ export default function DrawingManager() {
             </button>
             <button className={styles.processBtn} onClick={exportPilotMetrics} title="Export pilot metrics CSV">
               ⬇ Export Pilot CSV
+            </button>
+            <button
+              className={styles.processBtn}
+              onClick={() => setSymbolRefOpen(true)}
+              title="View floor plan symbol reference"
+            >
+              📐 Symbols
             </button>
           </div>
         </div>
@@ -237,6 +246,10 @@ export default function DrawingManager() {
           }}
           onClose={() => setCalibratingId(null)}
         />
+      )}
+
+      {symbolRefOpen && (
+        <SymbolReferencePanel onClose={() => setSymbolRefOpen(false)} />
       )}
     </div>
   )

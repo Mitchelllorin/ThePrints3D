@@ -1,0 +1,244 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 16px;
+}
+
+.panel {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  width: min(900px, 100%);
+  max-height: min(800px, 90vh);
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1;
+  transition: color 0.1s, background 0.1s;
+}
+
+.closeBtn:hover {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────────────── */
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e293b;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+
+.tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.1s;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.tab:hover {
+  background: #1e293b;
+  color: #94a3b8;
+}
+
+.tabActive {
+  background: #1e3a5f;
+  border-color: #3b82f6;
+  color: #93c5fd;
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────────── */
+
+.body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 12px;
+}
+
+/* ── Reference sheets ────────────────────────────────────────────────────────── */
+
+.sheetsSection {
+  flex-shrink: 0;
+}
+
+.sheets {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sheetLink {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #1e293b;
+  background: #0b0f1a;
+  transition: border-color 0.15s;
+}
+
+.sheetLink:hover {
+  border-color: #3b82f6;
+}
+
+.sheetImg {
+  width: 200px;
+  height: 140px;
+  object-fit: cover;
+  display: block;
+}
+
+.sheetLabel {
+  font-size: 10px;
+  color: #64748b;
+  padding: 4px 8px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Symbol entries ──────────────────────────────────────────────────────────── */
+
+.entriesSection {
+  flex-shrink: 0;
+}
+
+.entries {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.entry {
+  background: #0b0f1a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.15s;
+}
+
+.entry:hover {
+  border-color: #334155;
+}
+
+.entryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.entryName {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.entryCategory {
+  font-size: 10px;
+  color: #475569;
+  background: #1e293b;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.entryDesc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.entryAliases {
+  font-size: 10px;
+  color: #475569;
+  margin: 0;
+}
+
+.entryAssets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.entryAssetImg {
+  width: 60px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #1e293b;
+  transition: border-color 0.15s;
+}
+
+.entryAssetImg:hover {
+  border-color: #3b82f6;
+}
