@@ -344,6 +344,9 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
   const previewSrc = drawing.rasterUrl ?? drawing.previewUrl
   const lowConfidenceCount = drawing.parsedWalls.filter((w) => (w.detectionConfidence ?? 1) < 0.75).length
   const userTraceCount = drawing.parsedWalls.filter((w) => w.source === 'user').length
+  const doorCount = drawing.parsedOpenings.filter((o) => o.type === 'door').length
+  const windowCount = drawing.parsedOpenings.filter((o) => o.type === 'window').length
+  const unknownOpeningCount = drawing.parsedOpenings.filter((o) => o.type === 'unknown').length
 
   const userTraces = useAppStore((s) => s.userTraces)
   const startTraceMode = useAppStore((s) => s.startTraceMode)
@@ -479,18 +482,23 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
               {smartTrace && (
                 <span className={styles.traceInfo}>{userTraces.length} trace{userTraces.length !== 1 ? 's' : ''}</span>
               )}
-              {smartTrace && userTraces.length >= 2 && (
+              {smartTrace && userTraces.length >= 1 && (
                 <button
                   className={styles.processSeedsBtn}
                   onClick={handleProcessSeeds}
                   disabled={seedsProcessing}
                 >
-                  {seedsProcessing ? '⚙ Detecting…' : `🔍 Detect (${userTraces.length})`}
+                  {seedsProcessing ? '⚙ Detecting…' : `🔍 Smart Refine (${userTraces.length})`}
                 </button>
               )}
             </>
           )}
         </div>
+        {smartTrace && (
+          <div style={{ marginTop: 6, fontSize: 12, color: '#cbd5e1' }}>
+            Draw at least one trace over a key wall run, then use Smart Refine to re-run seeded detection.
+          </div>
+        )}
 
         {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
           <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 12, flexWrap: 'wrap' }}>
@@ -604,6 +612,19 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
           <span className={styles.confidenceBadge}>
             ⚠ {lowConfidenceCount} low-confidence wall{lowConfidenceCount !== 1 ? 's' : ''}
           </span>
+        )}
+        {drawing.status === 'ready' && (
+          <>
+            <span className={styles.wallBadge}>
+              🧠 Semantic: {drawing.parsedRooms.length} room{drawing.parsedRooms.length !== 1 ? 's' : ''}, {drawing.parsedOpenings.length} opening{drawing.parsedOpenings.length !== 1 ? 's' : ''}
+            </span>
+            {(doorCount + windowCount + unknownOpeningCount) > 0 && (
+              <span className={styles.wallBadge}>
+                🚪 {doorCount} door{doorCount !== 1 ? 's' : ''} · 🪟 {windowCount} window{windowCount !== 1 ? 's' : ''}
+                {unknownOpeningCount > 0 ? ` · ❓ ${unknownOpeningCount} unknown` : ''}
+              </span>
+            )}
+          </>
         )}
       </div>
     </div>
