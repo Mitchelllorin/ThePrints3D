@@ -187,7 +187,9 @@ interface AppState {
   setDrawingType: (id: string, type: DrawingType) => void
   setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
   addUserTracedWall: (id: string, wall: ParsedWall) => void
+  replaceUserWalls: (id: string, userWalls: ParsedWall[]) => void
   clearUserTracedWalls: (id: string) => void
+  resetDrawingScale: (id: string) => void
   selectDrawing: (id: string | null) => void
   processDrawing: (id: string) => Promise<void>
   toggleLayer: (id: LayerId) => void
@@ -349,11 +351,29 @@ export const useAppStore = create<AppState>()(
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
       }),
 
+    replaceUserWalls: (id, userWalls) =>
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+      }),
+
     clearUserTracedWalls: (id) =>
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         d.parsedWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+      }),
+
+    resetDrawingScale: (id) =>
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (d) {
+          d.scaleMmPerPx = null
+          d.scaleNotation = null
+          d.scaleConfidence = 'fallback'
+        }
       }),
 
     selectDrawing: (id) =>

@@ -9,6 +9,7 @@ interface Props {
   imageHeight: number
   existingMmPerPx: number | null
   onCalibrate: (mmPerPx: number, notation: string) => void
+  onReset?: () => void
   onClose: () => void
 }
 
@@ -20,6 +21,7 @@ export default function ScaleCalibrator({
   imageHeight,
   existingMmPerPx,
   onCalibrate,
+  onReset,
   onClose,
 }: Props) {
   const [phase, setPhase] = useState<Phase>('idle')
@@ -144,9 +146,20 @@ export default function ScaleCalibrator({
         <p className={styles.instruction}>{instructions[phase]}</p>
 
         {phase === 'idle' && (
-          <button className={styles.startBtn} onClick={() => setPhase('point-a')}>
-            Start Calibration
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className={styles.startBtn} onClick={() => setPhase('point-a')}>
+              Start Calibration
+            </button>
+            {existingMmPerPx !== null && onReset && (
+              <button
+                className={styles.cancelBtn}
+                onClick={onReset}
+                title="Clear the saved scale so this drawing is marked as uncalibrated"
+              >
+                🔄 Reset Scale
+              </button>
+            )}
+          </div>
         )}
 
         {(phase === 'point-a' || phase === 'point-b') && (

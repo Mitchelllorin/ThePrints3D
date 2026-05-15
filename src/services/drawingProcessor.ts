@@ -69,37 +69,37 @@ export async function processDrawing(
     let result = await detectWallsWithAI(raster.imageData)
     if (!result) {
       result = detectWalls(raster.imageData, {
-        // Stricter defaults reduce annotation noise (text/dimension lines)
-        edgeThreshold: isRasterPhoto ? 30 : 34,
-        minWallLengthPx: isRasterPhoto ? 55 : 70,
+        // Lower threshold + contrast normalisation now handles faded/lightly
+        // printed blueprints without increasing annotation noise.
+        edgeThreshold: isRasterPhoto ? 24 : 28,
+        minWallLengthPx: isRasterPhoto ? 45 : 55,
         minWallThicknessPx: 3,
         maxWallThicknessPx: 60,
         requirePairedEdges: true,
-        mergeGapPx: 4,
+        mergeGapPx: 5,
       })
     }
     if (result.walls.length === 0) {
-      // Stricter defaults reduce annotation noise (text/dimension lines)
       // Fallback pass for noisy scans/photos where strict pairing can miss walls.
       result = detectWalls(raster.imageData, {
-        edgeThreshold: isRasterPhoto ? 26 : 30,
-        minWallLengthPx: isRasterPhoto ? 40 : 55,
+        edgeThreshold: isRasterPhoto ? 20 : 24,
+        minWallLengthPx: isRasterPhoto ? 32 : 42,
         minWallThicknessPx: 2,
         maxWallThicknessPx: 72,
         requirePairedEdges: false,
-        mergeGapPx: 6,
+        mergeGapPx: 7,
       })
     }
     if (result.walls.length === 0) {
       // Third pass: very lenient — targets heavily degraded scans, low-contrast
       // prints, and hand-drawn sketches where normal edge magnitudes are low.
       result = detectWalls(raster.imageData, {
-        edgeThreshold: isRasterPhoto ? 16 : 20,
-        minWallLengthPx: isRasterPhoto ? 28 : 38,
+        edgeThreshold: isRasterPhoto ? 12 : 16,
+        minWallLengthPx: isRasterPhoto ? 22 : 30,
         minWallThicknessPx: 2,
         maxWallThicknessPx: 120,
         requirePairedEdges: false,
-        mergeGapPx: 8,
+        mergeGapPx: 10,
       })
     }
     const classificationStats = result.stats

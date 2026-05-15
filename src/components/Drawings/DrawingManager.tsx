@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType, ScaleConfidence } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
@@ -68,7 +68,9 @@ export default function DrawingManager() {
   const processDrawing = useAppStore((s) => s.processDrawing)
   const setDrawingScale = useAppStore((s) => s.setDrawingScale)
   const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
+  const replaceUserWalls = useAppStore((s) => s.replaceUserWalls)
   const clearUserTracedWalls = useAppStore((s) => s.clearUserTracedWalls)
+  const resetDrawingScale = useAppStore((s) => s.resetDrawingScale)
 
   const [calibratingId, setCalibratingId] = useState<string | null>(null)
   const selected = drawings.find((d) => d.id === selectedDrawingId) ?? null
@@ -215,6 +217,7 @@ export default function DrawingManager() {
             onProcess={() => processDrawing(selected.id)}
             onCalibrate={() => setCalibratingId(selected.id)}
             onAddUserWall={(wall) => addUserTracedWall(selected.id, wall)}
+            onReplaceUserWalls={(walls) => replaceUserWalls(selected.id, walls)}
             onClearUserWalls={() => clearUserTracedWalls(selected.id)}
           />
         ) : (
@@ -233,6 +236,10 @@ export default function DrawingManager() {
           existingMmPerPx={calibrating.scaleMmPerPx}
           onCalibrate={(mmPerPx, notation) => {
             setDrawingScale(calibrating.id, mmPerPx, notation)
+            setCalibratingId(null)
+          }}
+          onReset={() => {
+            resetDrawingScale(calibrating.id)
             setCalibratingId(null)
           }}
           onClose={() => setCalibratingId(null)}
@@ -335,15 +342,49 @@ interface PreviewProps {
   onProcess: () => void
   onCalibrate: () => void
   onAddUserWall: (wall: Drawing['parsedWalls'][number]) => void
+  onReplaceUserWalls: (walls: Drawing['parsedWalls']) => void
   onClearUserWalls: () => void
 }
 
-function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClearUserWalls }: PreviewProps) {
+function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onReplaceUserWalls, onClearUserWalls }: PreviewProps) {
   const [scale, setScale] = useState(1)
   const [traceMode, setTraceMode] = useState(false)
   const previewSrc = drawing.rasterUrl ?? drawing.previewUrl
   const lowConfidenceCount = drawing.parsedWalls.filter((w) => (w.detectionConfidence ?? 1) < 0.75).length
-  const userTraceCount = drawing.parsedWalls.filter((w) => w.source === 'user').length
+  const userWalls = drawing.parsedWalls.filter((w) => w.source === 'user')
+  const userTraceCount = userWalls.length
+
+  // Undo / redo stacks for user-traced walls (local to this preview session)
+  const [undoStack, setUndoStack] = useState<Drawing['parsedWalls'][]>([])
+  const [redoStack, setRedoStack] = useState<Drawing['parsedWalls'][]>([])
+
+  const handleAddUserWall = useCallback((wall: Drawing['parsedWalls'][number]) => {
+    setUndoStack((prev) => [...prev, userWalls])
+    setRedoStack([])
+    onAddUserWall(wall)
+  }, [userWalls, onAddUserWall])
+
+  const handleUndo = useCallback(() => {
+    if (undoStack.length === 0) return
+    const snapshot = undoStack[undoStack.length - 1]
+    setUndoStack(undoStack.slice(0, -1))
+    setRedoStack((r) => [...r, userWalls])
+    onReplaceUserWalls(snapshot)
+  }, [undoStack, userWalls, onReplaceUserWalls])
+
+  const handleRedo = useCallback(() => {
+    if (redoStack.length === 0) return
+    const snapshot = redoStack[redoStack.length - 1]
+    setRedoStack(redoStack.slice(0, -1))
+    setUndoStack((u) => [...u, userWalls])
+    onReplaceUserWalls(snapshot)
+  }, [redoStack, userWalls, onReplaceUserWalls])
+
+  const handleClearUserWalls = useCallback(() => {
+    setUndoStack((prev) => [...prev, userWalls])
+    setRedoStack([])
+    onClearUserWalls()
+  }, [userWalls, onClearUserWalls])
 
   const userTraces = useAppStore((s) => s.userTraces)
   const startTraceMode = useAppStore((s) => s.startTraceMode)
@@ -358,6 +399,22 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
   const imgRef = useRef<HTMLImageElement>(null)
   const activeTraceRef = useRef<[number, number][]>([])
   const drawingGuard = useRef(false)
+
+  // Keyboard shortcuts: Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!traceMode && !smartTrace) return
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        handleUndo()
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault()
+        handleRedo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [traceMode, smartTrace, handleUndo, handleRedo])
 
   const getImgCoords = (e: React.PointerEvent<SVGSVGElement>): [number, number] => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -472,9 +529,29 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
                 👆 SMART Trace
               </button>
               {userTraceCount > 0 && (
-                <button className={styles.actionBtn} onClick={onClearUserWalls}>
+                <button className={styles.actionBtn} onClick={handleClearUserWalls}>
                   🧹 Clear Traces ({userTraceCount})
                 </button>
+              )}
+              {(traceMode || userTraceCount > 0) && (
+                <>
+                  <button
+                    className={styles.actionBtn}
+                    onClick={handleUndo}
+                    disabled={undoStack.length === 0}
+                    title="Undo last trace (Ctrl+Z)"
+                  >
+                    ↩ Undo
+                  </button>
+                  <button
+                    className={styles.actionBtn}
+                    onClick={handleRedo}
+                    disabled={redoStack.length === 0}
+                    title="Redo (Ctrl+Y)"
+                  >
+                    ↪ Redo
+                  </button>
+                </>
               )}
               {smartTrace && (
                 <span className={styles.traceInfo}>{userTraces.length} trace{userTraces.length !== 1 ? 's' : ''}</span>
@@ -533,7 +610,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
                   imageWidth={drawing.rasterWidth ?? 800}
                   imageHeight={drawing.rasterHeight ?? 600}
                   walls={drawing.parsedWalls}
-                  onAddWall={onAddUserWall}
+                  onAddWall={handleAddUserWall}
                 />
               )}
               {smartTrace && imgNatural.w > 0 && (

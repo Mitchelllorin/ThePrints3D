@@ -15,6 +15,35 @@ function toGrayscale(data: Uint8ClampedArray, width: number, height: number): Fl
   return gray
 }
 
+/**
+ * Stretch the grayscale range to [0, 255] to boost low-contrast scans.
+ * Uses the 2nd and 98th percentile to avoid clipping on extreme outliers
+ * (e.g. a single pure-black pixel in a border). Uses an O(n) histogram
+ * rather than sorting to keep large-image processing fast.
+ */
+function normalizeContrast(gray: Float32Array): Float32Array {
+  // Build 256-bucket histogram in O(n)
+  const hist = new Int32Array(256)
+  for (let i = 0; i < gray.length; i++) {
+    hist[Math.min(255, Math.max(0, gray[i] | 0))]++
+  }
+  const loTarget = gray.length * 0.02
+  const hiTarget = gray.length * 0.98
+  let lo = 0, hi = 255, cumul = 0
+  for (let i = 0; i <= 255; i++) {
+    cumul += hist[i]
+    if (cumul <= loTarget) lo = i
+    if (cumul <= hiTarget) hi = i
+  }
+  if (hi <= lo) return gray
+  const range = hi - lo
+  const out = new Float32Array(gray.length)
+  for (let i = 0; i < gray.length; i++) {
+    out[i] = Math.max(0, Math.min(255, ((gray[i] - lo) / range) * 255))
+  }
+  return out
+}
+
 function gaussianBlur(src: Float32Array, width: number, height: number): Float32Array {
   // 5x5 Gaussian kernel σ≈1.0
   const kernel = [
@@ -119,6 +148,70 @@ function findLineSegments(
         walls.push({ x1: x, y1: runStart, x2: x, y2: height, thickness: 1 })
       }
     }
+  }
+
+  return walls
+}
+
+/**
+ * Scan along ±45° diagonals to find diagonal wall segments.
+ * Anti-diagonal (y − x = c) and main-diagonal (y + x = c) lines are scanned
+ * independently and runs of edge pixels longer than minLength are kept.
+ */
+function findDiagonalSegments(
+  edges: Float32Array,
+  width: number,
+  height: number,
+  threshold: number,
+  minLength: number
+): ParsedWall[] {
+  const walls: ParsedWall[] = []
+  const minLenDiag = Math.round(minLength * Math.SQRT2)
+
+  // Anti-diagonals: y - x = c, ranging from -(width-1) to (height-1)
+  const addDiagWall = (pts: { x: number; y: number }[]) => {
+    if (pts.length < 2) return
+    const s = pts[0], e = pts[pts.length - 1]
+    const len = Math.hypot(e.x - s.x, e.y - s.y)
+    if (len >= minLenDiag) {
+      walls.push({ x1: s.x, y1: s.y, x2: e.x, y2: e.y, thickness: 1 })
+    }
+  }
+
+  // Anti-diagonals (slope +1, direction NE-SW): y - x = c
+  for (let c = -(width - 1); c < height; c++) {
+    let run: { x: number; y: number }[] = []
+    const xStart = Math.max(0, -c)
+    const xEnd = Math.min(width - 1, height - 1 - c)
+    for (let x = xStart; x <= xEnd; x++) {
+      const y = x + c
+      if (y < 0 || y >= height) continue
+      if (edges[y * width + x] > threshold) {
+        run.push({ x, y })
+      } else {
+        addDiagWall(run)
+        run = []
+      }
+    }
+    addDiagWall(run)
+  }
+
+  // Main diagonals (slope -1, direction NW-SE): y + x = c
+  for (let c = 0; c < width + height - 1; c++) {
+    let run: { x: number; y: number }[] = []
+    const xStart = Math.max(0, c - (height - 1))
+    const xEnd = Math.min(width - 1, c)
+    for (let x = xStart; x <= xEnd; x++) {
+      const y = c - x
+      if (y < 0 || y >= height) continue
+      if (edges[y * width + x] > threshold) {
+        run.push({ x, y })
+      } else {
+        addDiagWall(run)
+        run = []
+      }
+    }
+    addDiagWall(run)
   }
 
   return walls
@@ -273,11 +366,13 @@ export function detectWalls(
   } = options
 
   const gray = toGrayscale(data, width, height)
-  const blurred = gaussianBlur(gray, width, height)
+  const normalized = normalizeContrast(gray)
+  const blurred = gaussianBlur(normalized, width, height)
   const edges = sobelEdges(blurred, width, height)
 
   const segments = findLineSegments(edges, width, height, edgeThreshold, minWallLengthPx)
-  const merged = mergeSegments(segments, mergeGapPx)
+  const diagSegments = findDiagonalSegments(edges, width, height, edgeThreshold, minWallLengthPx)
+  const merged = mergeSegments([...segments, ...diagSegments], mergeGapPx)
 
   // First-pass length / thickness gate (keeps the classifier cheap)
   const candidates = merged.filter((w) => {
