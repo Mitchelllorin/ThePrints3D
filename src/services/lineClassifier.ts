@@ -27,6 +27,11 @@ const SAMPLE_COUNT = 60
 const NEIGHBORHOOD = 1   // sample a (2*N+1) x (2*N+1) neighborhood around each centerline pixel
 const DARK_THRESHOLD = 128
 
+interface LineClassifierContext {
+  darkThreshold: number
+  brightnessSpan: number
+}
+
 /** Sample brightness at a pixel with a tiny neighborhood average. */
 function sampleBrightness(
   data: Uint8ClampedArray,
@@ -53,6 +58,68 @@ function sampleBrightness(
   return count > 0 ? sum / count : 255
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return DARK_THRESHOLD
+  if (sorted.length === 1) return sorted[0]
+  const idx = clamp(Math.round((sorted.length - 1) * p), 0, sorted.length - 1)
+  return sorted[idx]
+}
+
+function sampleLineBrightness(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  line: { x1: number; y1: number; x2: number; y2: number },
+  sampleCount = 16,
+): number[] {
+  const dx = line.x2 - line.x1
+  const dy = line.y2 - line.y1
+  const samples: number[] = []
+  for (let i = 0; i < sampleCount; i++) {
+    const t = sampleCount === 1 ? 0.5 : i / (sampleCount - 1)
+    const x = Math.round(line.x1 + t * dx)
+    const y = Math.round(line.y1 + t * dy)
+    samples.push(sampleBrightness(data, width, height, x, y))
+  }
+  return samples
+}
+
+function buildClassifierContext(
+  imageData: ImageData,
+  lines: Array<{ x1: number; y1: number; x2: number; y2: number }>,
+): LineClassifierContext {
+  const { data, width, height } = imageData
+  const imageSamples: number[] = []
+  const totalPixels = width * height
+  const stride = Math.max(4, Math.round(Math.sqrt(totalPixels / 2048)))
+  for (let y = 0; y < height; y += stride) {
+    for (let x = 0; x < width; x += stride) {
+      imageSamples.push(sampleBrightness(data, width, height, x, y))
+    }
+  }
+
+  const lineSamples = lines.flatMap((line) =>
+    sampleLineBrightness(data, width, height, line),
+  )
+
+  imageSamples.sort((a, b) => a - b)
+  lineSamples.sort((a, b) => a - b)
+
+  const backgroundBrightness = percentile(imageSamples, 0.9)
+  const candidateDark = percentile(lineSamples, 0.2)
+  const span = Math.max(24, backgroundBrightness - candidateDark)
+  const darkThreshold = clamp(candidateDark + span * 0.45, 72, 208)
+
+  return {
+    darkThreshold,
+    brightnessSpan: span,
+  }
+}
+
 export function classifyLine(
   imageData: ImageData,
   line: { x1: number; y1: number; x2: number; y2: number; thickness: number },
@@ -60,24 +127,34 @@ export function classifyLine(
     minWallLengthPx?: number
     minWallThicknessPx?: number
     leaderMaxLengthPx?: number
+    classifierContext?: LineClassifierContext
   } = {},
 ): ClassifiedLine {
   const { data, width, height } = imageData
-  const { minWallLengthPx = 60, minWallThicknessPx = 3, leaderMaxLengthPx = 40 } = options
+  const {
+    minWallLengthPx = 60,
+    minWallThicknessPx = 3,
+    leaderMaxLengthPx = 40,
+    classifierContext,
+  } = options
 
   const dx = line.x2 - line.x1
   const dy = line.y2 - line.y1
   const length = Math.sqrt(dx * dx + dy * dy)
 
   // ── Sample N points along the centerline ──
+  const darkThreshold = classifierContext?.darkThreshold ?? DARK_THRESHOLD
+  const brightnessSamples: number[] = []
   const isDark: boolean[] = []
   for (let i = 0; i < SAMPLE_COUNT; i++) {
     const t = i / (SAMPLE_COUNT - 1)
     const x = Math.round(line.x1 + t * dx)
     const y = Math.round(line.y1 + t * dy)
     const b = sampleBrightness(data, width, height, x, y)
-    isDark.push(b < DARK_THRESHOLD)
+    brightnessSamples.push(b)
+    isDark.push(b < darkThreshold)
   }
+  const averageBrightness = brightnessSamples.reduce((sum, value) => sum + value, 0) / brightnessSamples.length
 
   // Count dark→light transitions
   let transitions = 0
@@ -85,6 +162,12 @@ export function classifyLine(
     if (isDark[i] !== isDark[i - 1]) transitions++
   }
   const dark_ratio = isDark.filter(Boolean).length / SAMPLE_COUNT
+  const brightnessSpan = classifierContext?.brightnessSpan ?? 64
+  const darknessMargin = clamp(
+    (darkThreshold - averageBrightness) / Math.max(24, brightnessSpan),
+    -0.25,
+    0.25,
+  )
 
   // Every branch in the decision tree below assigns both classification and confidence.
   let classification: LineClass
@@ -107,13 +190,13 @@ export function classifyLine(
     // scanned blueprint lines that are still clearly walls.
     if (line.thickness < minWallThicknessPx) {
       classification = 'dimension'
-      confidence = dark_ratio > 0.7 ? 0.7 : 0.5
+      confidence = clamp((dark_ratio > 0.7 ? 0.7 : 0.5) + darknessMargin * 0.4, 0.45, 0.8)
     } else if (length < minWallLengthPx) {
       classification = 'leader'
       confidence = 0.65
     } else {
       classification = 'wall'
-      confidence = dark_ratio > 0.7 ? 0.9 : 0.65
+      confidence = clamp((dark_ratio > 0.7 ? 0.9 : 0.65) + darknessMargin * 0.5, 0.55, 0.95)
     }
   } else if (
     transitions <= 6 &&
@@ -148,7 +231,10 @@ export function classifyLines(
   lines: Array<{ x1: number; y1: number; x2: number; y2: number; thickness: number }>,
   options?: Parameters<typeof classifyLine>[2],
 ): { classified: ClassifiedLine[]; stats: LineClassificationStats } {
-  const classified = lines.map((l) => classifyLine(imageData, l, options))
+  const classifierContext = buildClassifierContext(imageData, lines)
+  const classified = lines.map((l) =>
+    classifyLine(imageData, l, { ...options, classifierContext }),
+  )
   const stats: LineClassificationStats = {
     total: classified.length,
     wall: 0,

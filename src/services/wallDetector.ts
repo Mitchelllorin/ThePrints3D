@@ -15,6 +15,49 @@ function toGrayscale(data: Uint8ClampedArray, width: number, height: number): Fl
   return gray
 }
 
+function stretchContrast(gray: Float32Array): Float32Array {
+  const hist = new Uint32Array(256)
+  for (let i = 0; i < gray.length; i++) {
+    hist[Math.max(0, Math.min(255, Math.round(gray[i])))]++
+  }
+
+  const total = gray.length
+  const lowTarget = Math.max(1, Math.round(total * 0.02))
+  const highTarget = Math.max(lowTarget + 1, Math.round(total * 0.98))
+
+  let low = 0
+  let accum = 0
+  while (low < 255 && accum < lowTarget) {
+    accum += hist[low]
+    low++
+  }
+
+  let high = 255
+  accum = total
+  while (high > 0 && accum > highTarget) {
+    accum -= hist[high]
+    high--
+  }
+
+  if (high - low < 20) return gray.slice()
+
+  const scale = 255 / (high - low)
+  const stretched = new Float32Array(gray.length)
+  for (let i = 0; i < gray.length; i++) {
+    stretched[i] = Math.max(0, Math.min(255, (gray[i] - low) * scale))
+  }
+  return stretched
+}
+
+function blendGray(base: Float32Array, overlay: Float32Array, overlayWeight: number): Float32Array {
+  const blended = new Float32Array(base.length)
+  const baseWeight = 1 - overlayWeight
+  for (let i = 0; i < base.length; i++) {
+    blended[i] = base[i] * baseWeight + overlay[i] * overlayWeight
+  }
+  return blended
+}
+
 function gaussianBlur(src: Float32Array, width: number, height: number): Float32Array {
   // 5x5 Gaussian kernel σ≈1.0
   const kernel = [
@@ -273,7 +316,9 @@ export function detectWalls(
   } = options
 
   const gray = toGrayscale(data, width, height)
-  const blurred = gaussianBlur(gray, width, height)
+  const normalized = stretchContrast(gray)
+  const enhanced = blendGray(gray, normalized, 0.7)
+  const blurred = gaussianBlur(enhanced, width, height)
   const edges = sobelEdges(blurred, width, height)
 
   const segments = findLineSegments(edges, width, height, edgeThreshold, minWallLengthPx)

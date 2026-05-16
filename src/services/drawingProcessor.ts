@@ -6,8 +6,9 @@ import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
 import { classifyWallType, pxToMm, type DrywallConfig } from './wallTypeClassifier'
 import { extractRooms } from './roomExtractor'
 import { detectOpenings } from './openingDetector'
-import type { Drawing, ParsedWall } from '../types'
+import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
+import { inferScaleFromStructure } from './scaleInference'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -109,6 +110,9 @@ export async function processDrawing(
     let scaleMmPerPx: number | null = null
     if (raster.scaleNotation) {
       scaleMmPerPx = deriveScaleFromNotation(raster.scaleNotation)
+    }
+    if (scaleMmPerPx == null && drawing.scaleMmPerPx == null) {
+      scaleMmPerPx = inferScaleFromStructure(result.walls, drywall)?.scaleMmPerPx ?? null
     }
     const effectiveScale = scaleMmPerPx ?? drawing.scaleMmPerPx
 
