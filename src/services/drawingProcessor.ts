@@ -8,7 +8,7 @@ import { extractRooms } from './roomExtractor'
 import { detectOpenings } from './openingDetector'
 import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
-import { detectSemanticEntities } from './symbolDetection'
+import { inferScaleFromStructure } from './scaleInference'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -114,12 +114,15 @@ export async function processDrawing(
     if (raster.scaleNotation) {
       scaleMmPerPx = deriveScaleFromNotation(raster.scaleNotation)
     }
+    if (scaleMmPerPx == null && drawing.scaleMmPerPx == null) {
+      scaleMmPerPx = inferScaleFromStructure(result.walls, drywall)?.scaleMmPerPx ?? null
+    }
     const effectiveScale = scaleMmPerPx ?? drawing.scaleMmPerPx
 
     // Determine confidence based on how the scale was sourced.
     const scaleConfidence: ScaleConfidence = raster.scaleNotation
       ? 'parsed'
-      : drawing.scaleMmPerPx !== null
+      : effectiveScale !== null
         ? 'inferred'
         : 'fallback'
 
