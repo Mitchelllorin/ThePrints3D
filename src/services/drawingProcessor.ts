@@ -119,7 +119,7 @@ export async function processDrawing(
     // Determine confidence based on how the scale was sourced.
     const scaleConfidence: ScaleConfidence = raster.scaleNotation
       ? 'parsed'
-      : drawing.scaleMmPerPx !== null
+      : effectiveScale !== null
         ? 'inferred'
         : 'fallback'
 
