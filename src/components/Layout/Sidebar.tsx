@@ -2,6 +2,7 @@ import { useAppStore } from '../../store/useAppStore'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
+import ProjectContextPanel from '../ProjectContext/ProjectContextPanel'
 import styles from './Sidebar.module.css'
 
 export default function Sidebar() {
@@ -33,14 +34,22 @@ export default function Sidebar() {
               detectedIds={detectedWallTypes.map((d) => d.wallType.id)}
             />
           </section>
+          <section className={styles.section}>
+            <ProjectContextPanel phase="post3d" />
+          </section>
         </>
       )}
 
       {view === 'drawings' && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Drawing Set</h2>
-          <p className={styles.hint}>Select a drawing to preview it</p>
-        </section>
+        <>
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Drawing Set</h2>
+            <p className={styles.hint}>Select a drawing to preview it</p>
+          </section>
+          <section className={styles.section}>
+            <ProjectContextPanel phase="pre3d" />
+          </section>
+        </>
       )}
 
       {view === 'upload' && (

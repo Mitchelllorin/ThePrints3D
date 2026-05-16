@@ -4,6 +4,7 @@ import DrawingManager from './components/Drawings/DrawingManager'
 import ModelViewer from './components/Viewer3D/ModelViewer'
 import ProjectLibrary from './components/Projects/ProjectLibrary'
 import PrivacyPolicy from './components/Legal/PrivacyPolicy'
+import Toolbox from './components/Tools/Toolbox'
 import { useAppStore } from './store/useAppStore'
 import { useState } from 'react'
 
