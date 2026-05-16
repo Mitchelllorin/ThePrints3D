@@ -77,6 +77,40 @@ export interface ParsedOpening {
   type: 'door' | 'window' | 'unknown'
 }
 
+/** Parsed text entity detected from drawing text layers (or future OCR). */
+export interface ParsedTextEntity {
+  id: string
+  text: string
+  x: number
+  y: number
+  kind: 'room_tag' | 'dimension' | 'callout' | 'note'
+  confidence: number
+  source: 'pdf_text' | 'ocr'
+}
+
+/** Symbol candidate mapped to a glossary symbol entry. */
+export interface ParsedSymbol {
+  id: string
+  symbolId: string
+  category: import('../symbols/types').SymbolCategory
+  label: string
+  x: number
+  y: number
+  confidence: number
+  source: 'line_classifier' | 'opening_detector' | 'room_extractor' | 'wall_detector'
+}
+
+/** Annotation candidate inferred from parsed text/symbol context on the sheet. */
+export interface ParsedAnnotationCandidate {
+  id: string
+  x: number
+  y: number
+  text?: string
+  kind: 'room_tag' | 'dimension' | 'callout' | 'note'
+  confidence: number
+  source: 'text' | 'room' | 'symbol'
+}
+
 // Re-export so the Drawing type can reference it without circular imports.
 export type { LineClassificationStats, ClassifiedLine, LineClass } from '../symbols/types'
 
@@ -100,6 +134,12 @@ export interface Drawing {
   parsedRooms: ParsedRoom[]
   /** Door/window openings detected as gaps between co-linear wall segments */
   parsedOpenings: ParsedOpening[]
+  /** Text entities detected from the source document */
+  parsedText: ParsedTextEntity[]
+  /** Symbol detections mapped against the canonical symbol glossary */
+  parsedSymbols: ParsedSymbol[]
+  /** Inferred annotation candidates detected on the sheet */
+  parsedAnnotationCandidates: ParsedAnnotationCandidate[]
   /** Breakdown of every candidate line by class — surfaces what was filtered out. */
   lineClassificationStats?: _LineClassificationStats
   /** 0–100 processing progress */

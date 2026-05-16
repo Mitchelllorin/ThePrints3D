@@ -56,6 +56,9 @@ export async function processDrawing(
         parsedWalls: [],
         parsedRooms: [],
         parsedOpenings: [],
+        parsedText: [],
+        parsedSymbols: [],
+        parsedAnnotationCandidates: [],
         parseProgress: 100,
         scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
         scaleMmPerPx: drawing.scaleMmPerPx,
@@ -157,7 +160,17 @@ export async function processDrawing(
       scaleMmPerPx: effectiveScale,
     })
 
-    // 8. Floor number from filename
+    // 8. Derive text/symbol/annotation semantics by combining detector outputs
+    //    with the canonical symbol glossary.
+    const semantic = detectSemanticEntities({
+      classifiedLines: result.classified,
+      walls,
+      openings,
+      rooms,
+      textTokens: raster.textTokens,
+    })
+
+    // 9. Floor number from filename
     const floorNumber = inferFloorNumber(drawing.name)
 
     setProgress(100)
@@ -171,6 +184,9 @@ export async function processDrawing(
       parsedWalls: walls,
       parsedRooms: rooms,
       parsedOpenings: openings,
+      parsedText: semantic.text,
+      parsedSymbols: semantic.symbols,
+      parsedAnnotationCandidates: semantic.annotations,
       lineClassificationStats: classificationStats,
       parseProgress: 100,
       scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
