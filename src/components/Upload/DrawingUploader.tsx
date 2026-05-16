@@ -31,7 +31,8 @@ export default function DrawingUploader() {
     [addDrawings]
   )
 
-  const triggerCamera = useCallback(() => {
+  const openCameraCapture = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {
+    e?.stopPropagation()
     cameraInputRef.current?.click()
   }, [])
 
@@ -61,6 +62,7 @@ export default function DrawingUploader() {
         type="file"
         accept="image/*"
         capture="environment"
+        multiple={false}
         onChange={onCameraCapture}
         style={{ display: 'none' }}
         data-testid="camera-capture-input"
@@ -69,7 +71,7 @@ export default function DrawingUploader() {
       {/* Primary CTA — phones default to the camera flow. */}
       <button
         type="button"
-        onClick={triggerCamera}
+        onClick={openCameraCapture}
         className={styles.cameraBtn}
         data-testid="scan-with-camera-btn"
       >
@@ -99,25 +101,12 @@ export default function DrawingUploader() {
           <button
             className={styles.scanBtn}
             type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              cameraInputRef.current?.click()
-            }}
+            onClick={openCameraCapture}
             title="Use your phone camera to photograph a printed blueprint"
           >
             📷 Scan Print
           </button>
         </div>
-        {/* Hidden input that opens the rear camera on mobile devices */}
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          style={{ display: 'none' }}
-          onChange={onCameraCapture}
-          onClick={(e) => e.stopPropagation()}
-        />
       </div>
 
       <div className={styles.features}>
