@@ -19,6 +19,15 @@ export interface RasterResult {
   scaleNotation: string | null
   /** How the scale was determined: 'parsed' if found in text layer, 'fallback' otherwise */
   scaleConfidence: 'parsed' | 'fallback'
+  /** Text tokens extracted from PDF text layer (empty for image uploads). */
+  textTokens: RasterTextToken[]
+}
+
+export interface RasterTextToken {
+  text: string
+  x: number
+  y: number
+  confidence: number
 }
 
 const SCALE_REGEX = /\b1\s*[:/]\s*(\d+)\b|\b(\d+)\s*[:/]\s*1\b/g
@@ -69,11 +78,23 @@ export async function rasterizePDF(
 
   // Try to extract scale notation from text layer
   let scaleNotation: string | null = null
+  const textTokens: RasterTextToken[] = []
     try {
       const textContent = await page.getTextContent()
-      const fullText = textContent.items
-        .map((item) => ('str' in item ? item.str : ''))
-        .join(' ')
+      const parts: string[] = []
+      for (const item of textContent.items) {
+        if (!('str' in item)) continue
+        const text = item.str.trim()
+        if (!text) continue
+        parts.push(text)
+        const transform = 'transform' in item && Array.isArray(item.transform)
+          ? item.transform
+          : [1, 0, 0, 1, 0, 0]
+        const x = Number(transform[4] ?? 0)
+        const y = viewport.height - Number(transform[5] ?? 0)
+        textTokens.push({ text, x, y, confidence: 0.9 })
+      }
+      const fullText = parts.join(' ')
       scaleNotation = pickBestScaleNotation(fullText)
     } catch {
       // Text extraction is best-effort
@@ -97,6 +118,7 @@ export async function rasterizePDF(
     pageCount: pdf.numPages,
     scaleNotation,
     scaleConfidence: scaleNotation !== null ? 'parsed' : 'fallback',
+    textTokens,
   }
 }
 
@@ -144,6 +166,7 @@ export async function rasterizeImage(
     pageCount: 1,
     scaleNotation: null,
     scaleConfidence: 'fallback' as const,
+    textTokens: [],
   }
 }
 
