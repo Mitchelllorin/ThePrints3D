@@ -24,6 +24,7 @@ function makeDrawing(overrides: Partial<Drawing> = {}): Drawing {
     status: 'ready',
     scaleMmPerPx: null,
     scaleNotation: null,
+    scaleConfidence: null,
     uploadedAt: Date.now(),
     ...overrides,
   }
