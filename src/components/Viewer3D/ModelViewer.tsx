@@ -173,11 +173,31 @@ export default function ModelViewer() {
   const layers = useAppStore((s) => s.layers)
   const measureMode = useAppStore((s) => s.measureMode)
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
+  const annotateMode = useAppStore((s) => s.annotateMode)
+  const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
+  const annotations = useAppStore((s) => s.annotations)
+  const addAnnotation = useAppStore((s) => s.addAnnotation)
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
   const measurements = useAppStore((s) => s.measurements)
-  const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null)
+  const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
+  const [pendingForm, setPendingForm] = useState<FormState | null>(null)
+
+  function handlePlaceRequest(position: [number, number, number], screenX: number, screenY: number) {
+    setPendingForm({ position3D: position, screenX, screenY })
+  }
+
+  function handleFormSubmit(text: string, icon: string, color: string) {
+    if (!pendingForm) return
+    addAnnotation({
+      position: pendingForm.position3D,
+      text,
+      icon,
+      color,
+    })
+    setPendingForm(null)
+  }
 
   return (
     <div className={styles.viewer}>
@@ -351,7 +371,7 @@ export default function ModelViewer() {
         )}
 
         <OrbitControls
-          ref={controlsRef as unknown as React.RefObject<OrbitControlsImpl>}
+          ref={controlsRef}
           makeDefault
           enableDamping
           dampingFactor={0.12}

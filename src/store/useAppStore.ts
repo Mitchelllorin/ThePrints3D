@@ -14,6 +14,7 @@ import type {
   UserTrace,
   WallType,
 } from '../types'
+import type { ProductCatalogItem, ProductPlacement } from '../types/products'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import {
   groupByFloorWithLog,
@@ -165,6 +166,9 @@ interface AppState {
   sidebarOpen: boolean
   measurements: Measurement[]
   measureMode: boolean
+  annotations: Annotation[]
+  selectedAnnotationId: string | null
+  annotateMode: boolean
   cameraPreset: CameraPreset | null
   productCatalog: ProductCatalogItem[]
   productPlacements: ProductPlacement[]
@@ -200,6 +204,14 @@ interface AppState {
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
   removeMeasurement: (id: string) => void
   clearMeasurements: () => void
+  // Annotations
+  setAnnotateMode: (active: boolean) => void
+  addAnnotation: (annotation: Omit<Annotation, 'id' | 'createdAt'>) => void
+  removeAnnotation: (id: string) => void
+  clearAnnotations: () => void
+  updateAnnotation: (id: string, patch: Partial<Pick<Annotation, 'text' | 'icon' | 'color'>>) => void
+  setSelectedAnnotationId: (id: string | null) => void
+  importAnnotations: (rawJson: string) => void
   // Camera
   setCameraPreset: (p: CameraPreset) => void
   consumeCameraPreset: () => void
@@ -248,7 +260,12 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
+    annotations: loadPersistedAnnotations(),
+    selectedAnnotationId: null,
+    annotateMode: false,
     cameraPreset: null,
+    productCatalog: [],
+    productPlacements: [],
 
     // Smart processing defaults
     smartProcessor: defaultSmartProcessingState.processor,
@@ -509,6 +526,91 @@ export const useAppStore = create<AppState>()(
     clearMeasurements: () =>
       set((s) => {
         s.measurements = []
+      }),
+
+    setAnnotateMode: (active) =>
+      set((s) => {
+        s.annotateMode = active
+        if (active) s.measureMode = false // mutually exclusive with measure
+      }),
+
+    addAnnotation: (annotation) =>
+      set((s) => {
+        const created: Annotation = {
+          ...annotation,
+          id: `ann-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: Date.now(),
+        }
+        s.annotations.push(created)
+        s.selectedAnnotationId = created.id
+        saveAnnotations(s.annotations)
+      }),
+
+    removeAnnotation: (id) =>
+      set((s) => {
+        const idx = s.annotations.findIndex((a) => a.id === id)
+        if (idx !== -1) s.annotations.splice(idx, 1)
+        if (s.selectedAnnotationId === id) s.selectedAnnotationId = null
+        saveAnnotations(s.annotations)
+      }),
+
+    clearAnnotations: () =>
+      set((s) => {
+        s.annotations = []
+        s.selectedAnnotationId = null
+        saveAnnotations(s.annotations)
+      }),
+
+    updateAnnotation: (id, patch) =>
+      set((s) => {
+        const ann = s.annotations.find((a) => a.id === id)
+        if (!ann) return
+        if (typeof patch.text === 'string') ann.text = patch.text
+        if (typeof patch.icon === 'string') ann.icon = patch.icon
+        if (typeof patch.color === 'string') ann.color = patch.color
+        saveAnnotations(s.annotations)
+      }),
+
+    setSelectedAnnotationId: (id) =>
+      set((s) => {
+        s.selectedAnnotationId = id
+      }),
+
+    importAnnotations: (rawJson) =>
+      set((s) => {
+        try {
+          const parsed = JSON.parse(rawJson)
+          if (!Array.isArray(parsed)) throw new Error('Invalid annotation file')
+          const normalized = parsed
+            .filter((item): item is Annotation => {
+              return (
+                item &&
+                typeof item.id === 'string' &&
+                Array.isArray(item.position) &&
+                item.position.length === 3 &&
+                typeof item.position[0] === 'number' &&
+                typeof item.position[1] === 'number' &&
+                typeof item.position[2] === 'number' &&
+                typeof item.text === 'string' &&
+                typeof item.icon === 'string' &&
+                typeof item.color === 'string' &&
+                typeof item.createdAt === 'number'
+              )
+            })
+            .map((item) => ({
+              id: item.id,
+              position: [item.position[0], item.position[1], item.position[2]] as [number, number, number],
+              text: item.text,
+              icon: item.icon,
+              color: item.color,
+              createdAt: item.createdAt,
+            }))
+          s.annotations = normalized
+          s.selectedAnnotationId = null
+          saveAnnotations(s.annotations)
+        } catch {
+          // Keep existing annotations unchanged on malformed JSON
+        }
       }),
 
     setCameraPreset: (p) =>
