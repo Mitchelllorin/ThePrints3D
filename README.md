@@ -1,123 +1,122 @@
 # BluePrint3D
 
-BluePrint3D is a React + TypeScript web app that converts drawing sets (PDF/image sheets) into an interactive 3D model with layer toggles and distance measurement.
+BluePrint3D is a React + TypeScript application that converts floor-plan drawings (PDF/images) into an interactive 3D building view with measurable geometry, layer controls, symbol awareness, and local project persistence.
 
-## Current product stage
+## What the app does
 
-- Prototype with end-to-end flow:
-  1) Upload drawing set
-  2) Analyze/rasterize sheets
-  3) Detect walls + infer floor level + infer/calibrate scale
-  4) Build and inspect 3D model
-- Optimized for pilot validation, not yet production hardened.
+1. Upload one or more drawing sheets (PDF or image files).
+2. Rasterize and analyze each sheet (discipline, wall extraction, scale, floor, openings, rooms, symbols/text).
+3. Build a multi-floor 3D representation from parsed drawing data.
+4. Explore the model with layer toggles, measurement tools, annotations, and lightweight construction utilities.
 
-## Local setup
+## Current scope
+
+- Prototype / pilot-oriented product.
+- Processing is primarily client-side.
+- Includes optional AI-assisted wall detection when an ONNX model exists locally.
+
+## Tech stack
+
+- **Frontend:** React 19, TypeScript, Vite
+- **State:** Zustand + Immer
+- **3D:** Three.js via @react-three/fiber + drei
+- **File handling:** PDF.js + canvas image processing
+- **Persistence:** IndexedDB (via `idb`) + localStorage
+- **Testing:** Vitest
+- **Linting:** ESLint
+
+## Quick start
 
 ```bash
 npm ci
 npm run dev
 ```
 
-Open the app URL printed by Vite.
+Then open the Vite URL shown in terminal.
 
-## Commands
+> Recommended runtime aligns with CI (`Node.js 22`).
 
-- `npm run dev` – local development
-- `npm run lint` – ESLint checks
-- `npm run test` – unit tests (Vitest)
-- `npm run build` – TypeScript build + Vite production bundle
-- `npm run preview` – preview built app
+## NPM scripts
 
-## Input support
+- `npm run dev` - start local dev server
+- `npm run lint` - run ESLint
+- `npm run test` - run Vitest test suite
+- `npm run build` - type-check + production build
+- `npm run preview` - preview production build
+- `npm run build:android` - build web assets and sync Capacitor Android
+- `npm run open:android` - open Android project in Android Studio
+- `npm run cap:sync` - sync Capacitor assets/plugins
+- `npm run cap:assets` - regenerate app icons/splash assets
 
-- PDFs (`.pdf`)
-- Images (`.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.webp`)
+## Supported inputs
 
-## High-level architecture
+- `.pdf`
+- `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.webp`
 
-- `src/components/Upload` – file intake
-- `src/components/Drawings` – sheet management, preview, scale calibration
-- `src/components/Viewer3D` – Three.js model visualization and measuring
-- `src/store/useAppStore.ts` – centralized app state/actions (Zustand + Immer)
-- `src/services/pdfRasterizer.ts` – PDF/image rasterization + scale text extraction
-- `src/services/wallDetector.ts` – heuristic wall detection in raster space
-- `src/services/sheetParser.ts` – floor inference/grouping helpers
-- `src/services/drawingProcessor.ts` – drawing processing pipeline orchestration
-- `src/services/logger.ts` – structured app event logging
-- `src/services/pilotMetrics.ts` – pilot CSV snapshot/export utilities
+## Repository structure (key areas)
 
-## Pilot and operations artifacts
+- `src/components/Upload` - drawing upload and camera capture UX
+- `src/components/Drawings` - sheet management, analysis controls, preview, calibration, symbol reference
+- `src/components/Viewer3D` - 3D scene, navigation, measurement, annotation, product placement
+- `src/components/Projects` - project save/load library (IndexedDB-backed)
+- `src/components/Tools` - unit converter and construction calculators
+- `src/store/useAppStore.ts` - primary app state and orchestration actions
+- `src/services` - rasterization, parsing, detection, inference, metrics, logging, persistence services
+- `src/symbols` - symbol glossary and asset mapping used for semantic tagging
+- `ops/` - operational docs and model training utilities
+- `pilot/` - pilot runbooks, templates, and execution artifacts
+- `.github/workflows` - CI, PR preview build, and model-training workflow
 
-- `pilot/pilot_runbook.txt` – 2-week pilot operational runbook
-- `pilot/pilot_metrics_template.csv` – required pilot metrics schema
-- `pilot/two_week_execution_loop.txt` – daily execution/fix cadence
-- `ops/day1_setup_checklist.txt` – setup checklist
-- `ops/data_permission_template.txt` – permissions capture template
-- `ops/mvp_acceptance_criteria.md` – MVP readiness/exit criteria
-- `ops/data_governance_controls.txt` – governance controls baseline
-- `ops/data_access_register_template.csv` – permission/access register template
+## Processing pipeline summary
 
-## AI wall-segmentation model
+`drawingProcessor` orchestrates:
 
-`src/services/aiWallDetector.ts` looks for a trained ONNX model at
-`public/models/floorplan-wall-segmentation.onnx`.  When the file is present
-it is loaded by ONNX Runtime Web (WebGPU → WASM fallback) and used instead
-of the heuristic edge detector.  When absent, processing falls back
-transparently to the heuristic detector.
+1. Rasterize source file (`pdfRasterizer`)
+2. Infer discipline and optionally gate wall detection (`sheetDiscipline`)
+3. Detect walls (AI ONNX model if available, otherwise heuristic detector)
+4. Resolve drawing scale (parsed notation, inferred structure, or fallback)
+5. Classify wall types
+6. Extract enclosed rooms
+7. Detect openings from wall gaps
+8. Derive semantic entities (parsed text/symbol/annotation candidates)
+9. Infer floor number from naming patterns
 
-The model is a lightweight U-Net (~1.5 M parameters, ~6 MB) trained on the
-[CubiCasa5k][cubicasa5k] open floor-plan dataset
-(Creative Commons Attribution 4.0).
+## Data handling and privacy model
 
-### Training the model
+- Uploaded files are processed locally in-browser.
+- Saved projects are stored in IndexedDB on-device.
+- App logs/metadata are stored in localStorage.
+- No mandatory backend account flow is required for core usage.
 
-```bash
-# 1. Install Python deps
-pip install -r ops/train/requirements.txt
+See `src/components/Legal/PrivacyPolicy.tsx` for current in-app policy text.
 
-# 2. Download dataset (~1.8 GB)
-git clone --depth 1 https://github.com/CubiCasa/CubiCasa5k data/cubicasa5k
+## AI wall model (optional)
 
-# 3. Train (~30 epochs, ≈1 h GPU / 6 h CPU)
-python ops/train/train.py --data data/cubicasa5k --out checkpoints/
+If `public/models/floorplan-wall-segmentation.onnx` exists, the app attempts ONNX Runtime Web inference (`webgpu` with `wasm` fallback). If missing/unavailable, the app falls back to heuristic wall detection automatically.
 
-# 4. Export to public/models/
-python ops/train/export.py --checkpoint checkpoints/best.pth
-```
+Training utilities and workflow:
 
-See [`ops/train/README.md`](ops/train/README.md) for full documentation.
+- `ops/train/` scripts
+- `.github/workflows/train-model.yml` (manual workflow dispatch)
 
-A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a
-quick smoke-test and upload the ONNX as a workflow artifact.
+## CI and preview workflows
 
-[cubicasa5k]: https://github.com/CubiCasa/CubiCasa5k
+- **CI** (`.github/workflows/ci.yml`)
+  - Runs lint, test, and build on pushes/PRs.
+- **PR Preview** (`.github/workflows/preview.yml`)
+  - Builds PR branch and uploads `dist` bundle to external preview endpoint.
 
 ## Known limitations
 
-- Wall detection is heuristic and may over/under-detect on noisy scans and text-heavy plans.
-- Model geometry is partially procedural fallback when parsed wall fidelity is low.
-- Scale inference is best-effort and may require manual calibration.
-- No backend persistence yet (client-side processing/state only).
+- Parsing quality varies with drawing quality, scan noise, and annotation density.
+- Scale inference can still require manual calibration.
+- 3D geometry blends parsed results with procedural fallback logic in lower-confidence cases.
+- Project persistence is local-device only (no shared cloud workspace).
 
-## Quality gates
+## Additional docs
 
-CI workflow (`.github/workflows/ci.yml`) runs:
-- lint
-- tests
-- build
-
-## Build and preview pipeline
-
-- `npm run build` creates production assets in `dist/`
-- `npm run preview` serves the built `dist/` locally for verification
-- GitHub Actions preview workflow (`.github/workflows/preview.yml`):
-  - On pull requests: builds and deploys a GitHub Pages preview environment (relative base path `./`)
-  - On `main`: builds and deploys production GitHub Pages (base path `/BluePrint3D/`)
-
-## Near-term roadmap
-
-1. Improve noisy-input robustness (false positives/false negatives)
-2. Strengthen scale inference and floor stacking confidence
-3. Expand parser/service unit coverage
-4. Add richer pilot telemetry and result dashboards
-5. Introduce secure backend data handling and retention enforcement
+- `ops/mvp_acceptance_criteria.md`
+- `ops/day1_setup_checklist.txt`
+- `ops/data_governance_controls.txt`
+- `pilot/pilot_runbook.txt`
+- `ops/train/README.md`
