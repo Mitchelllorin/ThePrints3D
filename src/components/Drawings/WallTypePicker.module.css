@@ -1,0 +1,269 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.picker {
+  position: fixed;
+  z-index: 201;
+  width: 320px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 14px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.toggles {
+  display: flex;
+  gap: 6px;
+}
+
+.toggle {
+  font-size: 11px;
+  padding: 4px 8px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #94a3b8;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toggle:hover {
+  border-color: #475569;
+}
+
+.toggleActive {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+/* Quick row — most common presets as compact chips */
+.quickRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.quickBtn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1.5px solid #334155;
+  background: #0f172a;
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.quickBtn:hover {
+  border-color: var(--accent, #38bdf8);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.quickBtnActive {
+  border-color: var(--accent, #38bdf8);
+  background: color-mix(in srgb, var(--accent, #38bdf8) 20%, #0f172a);
+  color: #f1f5f9;
+}
+
+/* Full list — expanded view by category */
+.fullList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.categoryGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.categoryLabel {
+  font-size: 10px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.categoryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.presetBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1.5px solid #334155;
+  background: #0f172a;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  min-width: 80px;
+}
+
+.presetBtn:hover {
+  border-color: var(--accent, #38bdf8);
+}
+
+.presetBtnActive {
+  border-color: var(--accent, #38bdf8);
+  background: color-mix(in srgb, var(--accent, #38bdf8) 15%, #0f172a);
+}
+
+.presetLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.presetDesc {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.showMoreBtn {
+  font-size: 11px;
+  color: #38bdf8;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.showMoreBtn:hover {
+  text-decoration: underline;
+}
+
+/* Custom thickness input */
+.customRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.customLabel {
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.customInputRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.customInput {
+  width: 80px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 13px;
+}
+
+.customInput:focus {
+  outline: none;
+  border-color: #38bdf8;
+}
+
+.customUnit {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.preview {
+  font-size: 12px;
+  color: #94a3b8;
+  background: #0f172a;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+/* Action buttons */
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.confirmBtn {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: #38bdf8;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.confirmBtn:hover {
+  opacity: 0.85;
+}
+
+.continueBtn {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: #10b981;
+  color: #0f172a;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.continueBtn:hover {
+  opacity: 0.85;
+}
+
+.dismissBtn {
+  font-size: 13px;
+  padding: 8px 14px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.dismissBtn:hover {
+  color: #94a3b8;
+  border-color: #475569;
+}

@@ -12,12 +12,24 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import BuildingModel from './BuildingModel'
+import SelectionManager from './SelectionManager'
+import Toolbar from './Toolbar'
+import PropertiesPanel from './PropertiesPanel'
 import MeasureTool from './MeasureTool'
 import AnnotationTool from './AnnotationTool'
 import CameraHud from './CameraHud'
 import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
+import { clearSelection } from '../../services/editing/selectionSystem'
 import styles from './ModelViewer.module.css'
+
+function SceneBackground() {
+  const { scene } = useThree()
+  useEffect(() => {
+    scene.background = new THREE.Color('#1e293b')
+  }, [scene])
+  return null
+}
 
 function CameraRig() {
   const { camera } = useThree()
@@ -36,7 +48,7 @@ function CameraRig() {
  * Listens for camera-preset requests from the store (set by the CameraHud).
  * Applies the requested camera pose to the active camera + OrbitControls.
  */
-function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
+function CameraPresetApplier({ controlsRef }: { controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
   const preset = useAppStore((s) => s.cameraPreset)
   const consume = useAppStore((s) => s.consumeCameraPreset)
@@ -176,8 +188,25 @@ export default function ModelViewer() {
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
   const measurements = useAppStore((s) => s.measurements)
-  const controlsRef = useRef<{ target: THREE.Vector3; update: () => void } | null>(null)
+  const annotateMode = useAppStore((s) => s.annotateMode)
+  const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
+  const annotations = useAppStore((s) => s.annotations)
+  const addAnnotation = useAppStore((s) => s.addAnnotation)
+  const setView = useAppStore((s) => s.setView)
+  const setModelStatus = useAppStore((s) => s.setModelStatus)
+  const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
+  const [pendingForm, setPendingForm] = useState<FormState | null>(null)
+
+  const handlePlaceRequest = (position: [number, number, number], screenX: number, screenY: number) => {
+    setPendingForm({ position3D: position, screenX, screenY })
+  }
+
+  const handleFormSubmit = (text: string, icon: string, color: string) => {
+    if (!pendingForm) return
+    addAnnotation({ text, icon, color, position: pendingForm.position3D })
+    setPendingForm(null)
+  }
 
   return (
     <div className={styles.viewer}>
@@ -239,7 +268,13 @@ export default function ModelViewer() {
         </div>
       )}
 
-      {/* Camera preset HUD — visible whenever the model exists */}
+      {/* Editing toolbar (left) */}
+      {model.status === 'ready' && <Toolbar />}
+
+      {/* Properties panel (right) */}
+      {model.status === 'ready' && <PropertiesPanel />}
+
+      {/* Camera preset HUD */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
       {model.status === 'ready' && <ProductPlacementPanel />}
 
@@ -308,33 +343,42 @@ export default function ModelViewer() {
 
       <Canvas
         shadows
+        onPointerMissed={() => clearSelection()}
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
-        style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
+        style={{ touchAction: 'none', background: '#1e293b', cursor: annotateMode ? 'crosshair' : 'default' }}
       >
         <CameraRig />
-        <ambientLight intensity={0.4} />
+        <SceneBackground />
+        <ambientLight intensity={0.7} />
+        <hemisphereLight args={['#87ceeb', '#3a3a3a', 0.6]} />
         <directionalLight
           position={[20, 30, 20]}
-          intensity={1.2}
+          intensity={2}
           castShadow
           shadow-mapSize={[2048, 2048]}
         />
-        <directionalLight position={[-15, 20, -10]} intensity={0.4} />
+        <directionalLight position={[-15, 20, -10]} intensity={0.8} />
 
         <Suspense fallback={null}>
-          <Environment preset="city" />
+          <Environment preset="city" background={false} />
         </Suspense>
+
+        {/* Ground plane — always visible, gives spatial reference */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
+          <planeGeometry args={[60, 60]} />
+          <meshStandardMaterial color="#1e293b" roughness={0.9} />
+        </mesh>
 
         <Grid
           args={[50, 50]}
           cellSize={1}
-          cellThickness={0.4}
-          cellColor="#1e3a5f"
+          cellThickness={0.6}
+          cellColor="#334155"
           sectionSize={5}
-          sectionThickness={0.8}
-          sectionColor="#1e4080"
-          fadeDistance={60}
+          sectionThickness={1.2}
+          sectionColor="#475569"
+          fadeDistance={80}
           position={[0, -0.01, 0]}
         />
 
@@ -343,6 +387,7 @@ export default function ModelViewer() {
           <>
             <BuildingModel layers={layers} />
             <ProductPlacements />
+            {model.status === 'ready' && <SelectionManager />}
             {model.status === 'ready' && <MeasureTool key={measureMode ? 'measure-on' : 'measure-off'} />}
             {model.status === 'ready' && (
               <AnnotationTool onPlaceRequest={handlePlaceRequest} />
@@ -351,7 +396,7 @@ export default function ModelViewer() {
         )}
 
         <OrbitControls
-          ref={controlsRef as unknown as React.RefObject<OrbitControlsImpl>}
+          ref={controlsRef}
           makeDefault
           enableDamping
           dampingFactor={0.12}
@@ -385,11 +430,14 @@ export default function ModelViewer() {
         <Stats className={styles.stats} />
       </Canvas>
 
-      {model.status === 'building' && (
+      {model.status === 'error' && (
         <div className={styles.overlay}>
-          <div className={styles.buildingMsg}>
-            <span className={styles.spinner}>⬡</span>
-            Building 3D model…
+          <div className={styles.errorMsg}>
+            <p>⚠️ Could not build 3D model</p>
+            <p className={styles.hint}>Try analysing the drawings first, then click Build 3D again</p>
+            <button className={styles.dismissBtn} onClick={() => { setView('drawings'); setModelStatus('idle') }}>
+              Back to Drawings
+            </button>
           </div>
         </div>
       )}

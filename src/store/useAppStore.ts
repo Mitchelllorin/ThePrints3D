@@ -24,6 +24,7 @@ import {
 import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
+import { generateModelFromWizardAnswers } from '../services/modelGenerator'
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 
 // ─── Camera Presets ────────────────────────────────────────────────────────────
@@ -143,6 +144,42 @@ const DEFAULT_LAYERS: Layer[] = [
     sourceTypes: ['floor-plan', 'rcp', 'architectural', 'structural', 'electrical', 'plumbing', 'mechanical'],
     icon: '📐',
   },
+  {
+    id: 'framing',
+    label: 'Framing',
+    color: '#d97706',
+    visible: false,
+    opacity: 1,
+    sourceTypes: ['floor-plan', 'architectural'],
+    icon: '🪵',
+  },
+  {
+    id: 'drywall',
+    label: 'Drywall',
+    color: '#e2e8f0',
+    visible: false,
+    opacity: 0.9,
+    sourceTypes: ['floor-plan', 'architectural'],
+    icon: '🧱',
+  },
+  {
+    id: 'insulation',
+    label: 'Insulation',
+    color: '#fde68a',
+    visible: false,
+    opacity: 0.8,
+    sourceTypes: ['floor-plan', 'architectural'],
+    icon: '🛡️',
+  },
+  {
+    id: 'finishes',
+    label: 'Finishes',
+    color: '#f9a8d4',
+    visible: false,
+    opacity: 0.8,
+    sourceTypes: ['floor-plan', 'architectural'],
+    icon: '🎨',
+  },
 ]
 
 const DEFAULT_MODEL: Model3D = {
@@ -165,6 +202,9 @@ interface AppState {
   sidebarOpen: boolean
   measurements: Measurement[]
   measureMode: boolean
+  annotateMode: boolean
+  annotations: Annotation[]
+  selectedAnnotationId: string | null
   cameraPreset: CameraPreset | null
   productCatalog: ProductCatalogItem[]
   productPlacements: ProductPlacement[]
@@ -179,6 +219,10 @@ interface AppState {
   correctionCount: number
   detectedWallTypes: DetectedWallType[]
 
+  // Wizard
+  wizardOpen: boolean
+  wizardAnswers: Record<string, string | boolean>
+
   // Actions
   setView: (view: AppView) => void
   addDrawings: (files: File[]) => void
@@ -187,7 +231,9 @@ interface AppState {
   setDrawingType: (id: string, type: DrawingType) => void
   setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
   addUserTracedWall: (id: string, wall: ParsedWall) => void
+  removeLastUserTracedWall: (id: string) => void
   clearUserTracedWalls: (id: string) => void
+  undoScaleCalibration: (id: string) => void
   selectDrawing: (id: string | null) => void
   processDrawing: (id: string) => Promise<void>
   toggleLayer: (id: LayerId) => void
@@ -200,6 +246,14 @@ interface AppState {
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
   removeMeasurement: (id: string) => void
   clearMeasurements: () => void
+  // Annotations
+  setAnnotateMode: (active: boolean) => void
+  setSelectedAnnotationId: (id: string | null) => void
+  addAnnotation: (ann: Omit<Annotation, 'id' | 'createdAt'>) => void
+  removeAnnotation: (id: string) => void
+  clearAnnotations: () => void
+  updateAnnotation: (id: string, patch: Partial<Pick<Annotation, 'text' | 'icon' | 'color'>>) => void
+  importAnnotations: (json: string) => void
   // Camera
   setCameraPreset: (p: CameraPreset) => void
   consumeCameraPreset: () => void
@@ -215,6 +269,11 @@ interface AppState {
   correctElement: (wallId: string, wallTypeId: string) => void
   setProjectWallTypes: (types: WallType[]) => void
   exportCorrectionDataset: () => string
+  // Wizard
+  setWizardOpen: (open: boolean) => void
+  setWizardAnswer: (questionId: string, value: string | boolean) => void
+  clearWizardAnswers: () => void
+  updateModelFromWizard: () => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -248,7 +307,12 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
+    annotateMode: false,
+    annotations: [],
+    selectedAnnotationId: null,
     cameraPreset: null,
+    productCatalog: [],
+    productPlacements: [],
 
     // Smart processing defaults
     smartProcessor: defaultSmartProcessingState.processor,
@@ -259,6 +323,10 @@ export const useAppStore = create<AppState>()(
     smartStageLabel: defaultSmartProcessingState.stageLabel,
     correctionCount: defaultSmartProcessingState.correctionCount,
     detectedWallTypes: [],
+
+    // Wizard defaults
+    wizardOpen: false,
+    wizardAnswers: {},
 
     setView: (view) =>
       set((s) => {
@@ -334,9 +402,25 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)
         if (d) {
+          d._prevScaleMmPerPx = d.scaleMmPerPx
+          d._prevScaleNotation = d.scaleNotation
+          d._prevScaleConfidence = d.scaleConfidence
           d.scaleMmPerPx = mmPerPx
           d.scaleNotation = notation
           d.scaleConfidence = 'parsed'
+        }
+      }),
+
+    undoScaleCalibration: (id) =>
+      set((s) => {
+        const d = s.drawings.find((d) => d.id === id)
+        if (d && d._prevScaleMmPerPx !== undefined) {
+          d.scaleMmPerPx = d._prevScaleMmPerPx
+          d.scaleNotation = d._prevScaleNotation ?? null
+          d.scaleConfidence = d._prevScaleConfidence ?? 'fallback'
+          d._prevScaleMmPerPx = undefined
+          d._prevScaleNotation = undefined
+          d._prevScaleConfidence = undefined
         }
       }),
 
@@ -349,6 +433,17 @@ export const useAppStore = create<AppState>()(
           ...d.parsedWalls.filter((w) => w.source === 'user'),
           { ...wall, source: 'user' as const, detectionConfidence: 1 },
         ]
+        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+      }),
+
+    removeLastUserTracedWall: (id) =>
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+        if (userWalls.length === 0) return
+        userWalls.pop()
+        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
       }),
 
@@ -511,6 +606,49 @@ export const useAppStore = create<AppState>()(
         s.measurements = []
       }),
 
+    // ─── Annotations ────────────────────────────────────────────────────────────
+
+    setAnnotateMode: (active) =>
+      set((s) => {
+        s.annotateMode = active
+        if (active) s.measureMode = false
+      }),
+
+    setSelectedAnnotationId: (id) =>
+      set((s) => { s.selectedAnnotationId = id }),
+
+    addAnnotation: (ann) =>
+      set((s) => {
+        s.annotations.push({
+          ...ann,
+          id: `ann-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: Date.now(),
+        })
+      }),
+
+    removeAnnotation: (id) =>
+      set((s) => {
+        const idx = s.annotations.findIndex((a) => a.id === id)
+        if (idx !== -1) s.annotations.splice(idx, 1)
+      }),
+
+    clearAnnotations: () =>
+      set((s) => { s.annotations = []; s.selectedAnnotationId = null }),
+
+    updateAnnotation: (id, patch) =>
+      set((s) => {
+        const ann = s.annotations.find((a) => a.id === id)
+        if (ann) Object.assign(ann, patch)
+      }),
+
+    importAnnotations: (json) =>
+      set((s) => {
+        try {
+          const parsed = JSON.parse(json)
+          if (Array.isArray(parsed)) s.annotations = parsed
+        } catch { /* ignore */ }
+      }),
+
     setCameraPreset: (p) =>
       set((s) => {
         s.cameraPreset = p
@@ -643,5 +781,114 @@ export const useAppStore = create<AppState>()(
         correctionCount: state.correctionCount,
       }, null, 2)
     },
+
+    // ─── Wizard Actions ──────────────────────────────────────────────────────
+
+    setWizardOpen: (open) =>
+      set((s) => {
+        s.wizardOpen = open
+      }),
+
+    setWizardAnswer: (questionId, value) =>
+      set((s) => {
+        if (value === '' || value === undefined || value === null) {
+          delete s.wizardAnswers[questionId]
+        } else {
+          s.wizardAnswers[questionId] = value
+        }
+      }),
+
+    clearWizardAnswers: () =>
+      set((s) => {
+        s.wizardAnswers = {}
+      }),
+
+    updateModelFromWizard: () =>
+      set((s) => {
+        s.model.status = 'building'
+        s.model.generatedAt = null
+
+        // Remove previous synthetic drawing
+        const synIdx = s.drawings.findIndex((d) => d.id === '_synthetic')
+        if (synIdx !== -1) {
+          const prev = s.drawings[synIdx]
+          if (prev.previewUrl) URL.revokeObjectURL(prev.previewUrl)
+          if (prev.rasterUrl) URL.revokeObjectURL(prev.rasterUrl)
+          s.drawings.splice(synIdx, 1)
+        }
+
+        // Generate new model from current wizard answers
+        const hasAnswers = Object.keys(s.wizardAnswers).length > 0
+        if (hasAnswers) {
+          const synth = generateModelFromWizardAnswers(s.wizardAnswers)
+          synth.walls.forEach((w) => {
+            ;(w as any)._synth = true
+          })
+          const syntheticDrawing: Drawing = {
+            id: '_synthetic',
+            name: 'Generated Model',
+            type: 'floor-plan',
+            file: new File([], '_synthetic'),
+            pageCount: 1,
+            currentPage: 1,
+            previewUrl: null,
+            rasterUrl: null,
+            rasterWidth: null,
+            rasterHeight: null,
+            parsedWalls: synth.walls,
+            parsedRooms: synth.rooms,
+            parsedOpenings: synth.openings,
+            parsedSymbols: synth.symbols,
+            parsedText: [],
+            parsedAnnotationCandidates: [],
+            parseProgress: 100,
+            floorNumber: 0,
+            status: 'ready',
+            scaleMmPerPx: synth.scaleMmPerPx,
+            scaleNotation: null,
+            scaleConfidence: 'fallback',
+            uploadedAt: Date.now(),
+          }
+          s.drawings.push(syntheticDrawing)
+        }
+
+        // Build floor levels
+        const { groups: floorGroups, floorGroupingLog } = groupByFloorWithLog(
+          s.drawings.map((d) => ({
+            id: d.id,
+            name: d.name,
+            floorNumber: d.floorNumber,
+          }))
+        )
+        s.floorGroupingLog = floorGroupingLog
+        const levels: FloorLevel[] = []
+        const numericEntries = Array.from(floorGroups.entries())
+          .filter((entry): entry is [number, string[]] => entry[0] !== 'unknown')
+          .sort(([a], [b]) => a - b)
+
+        for (const [floorNum, ids] of numericEntries) {
+          levels.push({
+            id: `floor-${floorNum}`,
+            label: floorNum === 0 ? 'Ground Floor' : floorNum < 0 ? 'Basement' : `Level ${floorNum}`,
+            elevation: floorToElevation(floorNum),
+            height: FLOOR_HEIGHT_M,
+            drawingIds: ids,
+          })
+        }
+
+        const unknownIds = floorGroups.get('unknown')
+        if (unknownIds && unknownIds.length > 0) {
+          const topKnownFloor = numericEntries[numericEntries.length - 1]?.[0] ?? 0
+          levels.push({
+            id: 'floor-unknown',
+            label: 'Unknown',
+            elevation: floorToElevation(topKnownFloor + 1),
+            height: FLOOR_HEIGHT_M,
+            drawingIds: unknownIds,
+          })
+        }
+        s.model.floorLevels = levels
+        s.view = 'model'
+      }),
   }))
 )

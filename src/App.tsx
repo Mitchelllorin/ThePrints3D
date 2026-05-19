@@ -2,6 +2,8 @@ import AppShell from './components/Layout/AppShell'
 import DrawingUploader from './components/Upload/DrawingUploader'
 import DrawingManager from './components/Drawings/DrawingManager'
 import ModelViewer from './components/Viewer3D/ModelViewer'
+import BlueprintMaker from './components/Create/BlueprintMaker'
+import Wizard from './components/Wizard/Wizard'
 import ProjectLibrary from './components/Projects/ProjectLibrary'
 import PrivacyPolicy from './components/Legal/PrivacyPolicy'
 import Toolbox from './components/Tools/Toolbox'
@@ -20,7 +22,9 @@ function App() {
         {view === 'drawings' && <DrawingManager />}
         {view === 'model' && <ModelViewer />}
         {view === 'tools' && <Toolbox />}
+        {view === 'create' && <BlueprintMaker />}
       </AppShell>
+      <Wizard />
       <button
         onClick={() => setLibraryOpen(true)}
         title="My saved projects"
@@ -44,28 +48,30 @@ function App() {
       >
         📁
       </button>
-      <button
-        onClick={() => setPrivacyOpen(true)}
-        title="Privacy Policy"
-        aria-label="Open privacy policy"
-        style={{
-          position: 'fixed',
-          bottom: 'calc(var(--safe-bottom, 0px) + 86px)',
-          left: 20,
-          padding: '0 12px',
-          height: 32,
-          borderRadius: 16,
-          background: 'transparent',
-          color: '#475569',
-          border: '1px solid #1e293b',
-          cursor: 'pointer',
-          zIndex: 99,
-          fontSize: 11,
-          letterSpacing: '0.02em',
-        }}
-      >
-        Privacy
-      </button>
+      {view === 'upload' && (
+        <button
+          onClick={() => setPrivacyOpen(true)}
+          title="Privacy Policy"
+          aria-label="Open privacy policy"
+          style={{
+            position: 'fixed',
+            bottom: 'calc(var(--safe-bottom, 0px) + 86px)',
+            left: 20,
+            padding: '0 12px',
+            height: 32,
+            borderRadius: 16,
+            background: 'transparent',
+            color: '#475569',
+            border: '1px solid #1e293b',
+            cursor: 'pointer',
+            zIndex: 99,
+            fontSize: 11,
+            letterSpacing: '0.02em',
+          }}
+        >
+          Privacy
+        </button>
+      )}
       {libraryOpen && <ProjectLibrary onClose={() => setLibraryOpen(false)} />}
       {privacyOpen && <PrivacyPolicy onClose={() => setPrivacyOpen(false)} />}
     </>

@@ -1,12 +1,30 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useAppStore } from '../../store/useAppStore'
-import type { Drawing, DrawingType, ScaleConfidence } from '../../types'
+import type { Drawing, DrawingType, ScaleConfidence, ParsedWall } from '../../types'
 import ScaleCalibrator from './ScaleCalibrator'
 import WallTracer, { WALL_LEGEND_AUTO, WALL_LEGEND_LOW_CONFIDENCE, WALL_COLOR_USER } from './WallTracer'
+import WallTypePicker from './WallTypePicker'
+import ConfirmBubble from './ConfirmBubble'
+import SampleDrawingGallery from './SampleDrawingGallery'
 import SymbolReferencePanel from './SymbolReferencePanel'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
+import { getWallMemory, setWallFromPreset } from '../../wizard/wallMemory'
+import type { WallTypePreset } from '../../types'
 import styles from './DrawingManager.module.css'
+
+const WALL_PRESETS: WallTypePreset[] = [
+  { id: 'stud-2x4',    label: 'Stud 2×4',    description: 'Timber stud, 90mm', thicknessMm: 90,   category: 'stud',   defaultLoadBearing: false, defaultInternal: true,  color: '#fbbf24' },
+  { id: 'stud-2x6',    label: 'Stud 2×6',    description: 'Timber stud, 140mm', thicknessMm: 140,  category: 'stud',   defaultLoadBearing: true,  defaultInternal: false, color: '#f59e0b' },
+  { id: 'steel-stud',  label: 'Steel Stud',  description: 'Light-gauge steel', thicknessMm: 92,    category: 'steel',  defaultLoadBearing: false, defaultInternal: true,  color: '#94a3b8' },
+  { id: 'steel-ls',    label: 'Steel L/S',   description: 'Heavy-gauge load-bearing steel stud', thicknessMm: 150, category: 'steel', defaultLoadBearing: true,  defaultInternal: false, color: '#64748b' },
+  { id: 'block-4',     label: 'Block 4″',    description: 'Concrete block, 100mm', thicknessMm: 100, category: 'block',  defaultLoadBearing: true,  defaultInternal: false, color: '#a78bfa' },
+  { id: 'block-6',     label: 'Block 6″',    description: 'Concrete block, 150mm', thicknessMm: 150, category: 'block',  defaultLoadBearing: true,  defaultInternal: false, color: '#8b5cf6' },
+  { id: 'block-8',     label: 'Block 8″',    description: 'Concrete block, 200mm', thicknessMm: 200, category: 'block',  defaultLoadBearing: true,  defaultInternal: false, color: '#7c3aed' },
+  { id: 'cavity',      label: 'Cavity Wall', description: 'Brick/block cavity, ~300mm', thicknessMm: 300, category: 'other', defaultLoadBearing: true,  defaultInternal: false, color: '#fb923c' },
+  { id: 'partition-2', label: 'Partition 2½″', description: 'Light timber, 63mm', thicknessMm: 63,  category: 'stud',   defaultLoadBearing: false, defaultInternal: true,  color: '#fde68a' },
+  { id: 'slab-conc',   label: 'Concrete Slab', description: 'Cast in-situ concrete', thicknessMm: 200, category: 'other', defaultLoadBearing: true,  defaultInternal: false, color: '#d4d4d8' },
+]
 
 const DRAWING_TYPES: { value: DrawingType; label: string }[] = [
   { value: 'floor-plan', label: 'Floor Plan' },
@@ -68,13 +86,89 @@ export default function DrawingManager() {
   const buildModel = useAppStore((s) => s.buildModel)
   const processDrawing = useAppStore((s) => s.processDrawing)
   const setDrawingScale = useAppStore((s) => s.setDrawingScale)
+  const undoScaleCalibration = useAppStore((s) => s.undoScaleCalibration)
   const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
+  const removeLastUserTracedWall = useAppStore((s) => s.removeLastUserTracedWall)
   const clearUserTracedWalls = useAppStore((s) => s.clearUserTracedWalls)
 
   const [calibratingId, setCalibratingId] = useState<string | null>(null)
   const [symbolRefOpen, setSymbolRefOpen] = useState(false)
+  const [pendingWall, setPendingWall] = useState<{ wall: ParsedWall; drawingId: string; screenPos: { x: number; y: number } } | null>(null)
+  const [adjustingWall, setAdjustingWall] = useState<{ wall: ParsedWall; drawingId: string } | null>(null)
+  const [continueTraceTick, setContinueTraceTick] = useState(0)
   const selected = drawings.find((d) => d.id === selectedDrawingId) ?? null
   const calibrating = drawings.find((d) => d.id === calibratingId) ?? null
+
+  const getScreenPosForWall = useCallback((midX: number, midY: number, drawing: Drawing): { x: number; y: number } => {
+    const el = document.getElementById('preview-canvas-area')
+    if (!el) return { x: window.innerWidth / 2 - 100, y: window.innerHeight / 2 - 60 }
+    const rect = el.getBoundingClientRect()
+    const scaleX = rect.width / (drawing.rasterWidth ?? 800)
+    const scaleY = rect.height / (drawing.rasterHeight ?? 600)
+    return {
+      x: rect.left + midX * scaleX,
+      y: rect.top + midY * scaleY - 40,
+    }
+  }, [])
+
+  const handleRequestConfirm = (wall: ParsedWall, midPoint: { x: number; y: number }) => {
+    if (!selected) return
+    const userWalls = selected.parsedWalls.filter((w) => w.source === 'user')
+    if (userWalls.length === 0) {
+      // First wall — open WallTypePicker directly
+      setAdjustingWall({ wall, drawingId: selected.id })
+    } else {
+      // Subsequent wall — ask "Use same wall type?"
+      const screenPos = getScreenPosForWall(midPoint.x, midPoint.y, selected)
+      setPendingWall({ wall, drawingId: selected.id, screenPos })
+    }
+  }
+
+  const handleBubbleConfirm = (wall: ParsedWall) => {
+    if (!pendingWall) return
+    const mem = getWallMemory()
+    addUserTracedWall(pendingWall.drawingId, {
+      ...wall,
+      framingMm: mem.thicknessMm,
+      finishedMm: mem.thicknessMm + (mem.isInternal ? 25 : 50),
+      wallType: mem.presetId as any,
+      isLoadBearing: mem.loadBearing,
+      isInternal: mem.isInternal,
+    })
+    setPendingWall(null)
+  }
+
+  const handleBubbleAdjust = (wall: ParsedWall) => {
+    if (!pendingWall) return
+    setAdjustingWall({ wall, drawingId: pendingWall.drawingId })
+    setPendingWall(null)
+  }
+
+  const handleBubbleCancel = () => {
+    setPendingWall(null)
+  }
+
+  const handleWallTypeConfirm = (enriched: ParsedWall) => {
+    if (adjustingWall) {
+      if (enriched.wallType) {
+        const preset = WALL_PRESETS.find((p) => p.id === enriched.wallType)
+        if (preset) {
+          setWallFromPreset(preset, enriched.isLoadBearing ?? false, enriched.isInternal ?? true)
+        }
+      }
+      addUserTracedWall(adjustingWall.drawingId, enriched)
+      setAdjustingWall(null)
+    }
+  }
+
+  const handleWallTypeContinue = (enriched: ParsedWall) => {
+    handleWallTypeConfirm(enriched)
+    setContinueTraceTick((t) => t + 1)
+  }
+
+  const handleWallTypeDismiss = () => {
+    setAdjustingWall(null)
+  }
 
   const processAll = () => {
     for (const d of drawings) {
@@ -103,6 +197,7 @@ export default function DrawingManager() {
         <div className={styles.listHeader}>
           <h2 className={styles.listTitle}>Drawing Set ({drawings.length})</h2>
           <div className={styles.listActions}>
+            <SampleDrawingGallery />
             {anyPending && !anyProcessing && (
               <button className={styles.processBtn} onClick={processAll} title="Process all unprocessed drawings">
                 ⚙ Analyse All
@@ -111,7 +206,7 @@ export default function DrawingManager() {
             {anyProcessing && (
               <span className={styles.processingBadge}>⚙ Analysing…</span>
             )}
-            <button className={styles.buildBtn} onClick={buildModel}>
+            <button className={styles.buildBtn} onClick={buildModel} disabled={readyCount === 0} title={readyCount === 0 ? 'Analyse drawings first' : 'Build 3D model from analysed drawings'}>
               ⬡ Build 3D
             </button>
             <button className={styles.processBtn} onClick={exportPilotMetrics} title="Export pilot metrics CSV">
@@ -223,8 +318,12 @@ export default function DrawingManager() {
             drawing={selected}
             onProcess={() => processDrawing(selected.id)}
             onCalibrate={() => setCalibratingId(selected.id)}
-            onAddUserWall={(wall) => addUserTracedWall(selected.id, wall)}
+            onAddUserWall={() => {}}
+            onRequestConfirm={handleRequestConfirm}
             onClearUserWalls={() => clearUserTracedWalls(selected.id)}
+            onUndoUserWall={() => removeLastUserTracedWall(selected.id)}
+            onUndoScale={() => undoScaleCalibration(selected.id)}
+            continueTraceTick={continueTraceTick}
           />
         ) : (
           <div className={styles.noSelection}>
@@ -237,8 +336,8 @@ export default function DrawingManager() {
       {calibrating && (
         <ScaleCalibrator
           imageUrl={calibrating.rasterUrl ?? calibrating.previewUrl ?? ''}
-          imageWidth={calibrating.rasterWidth ?? 800}
-          imageHeight={calibrating.rasterHeight ?? 600}
+          imageWidth={calibrating.rasterWidth ?? 1200}
+          imageHeight={calibrating.rasterHeight ?? 900}
           existingMmPerPx={calibrating.scaleMmPerPx}
           onCalibrate={(mmPerPx, notation) => {
             setDrawingScale(calibrating.id, mmPerPx, notation)
@@ -246,6 +345,30 @@ export default function DrawingManager() {
           }}
           onClose={() => setCalibratingId(null)}
         />
+      )}
+
+      {pendingWall && (
+        <ConfirmBubble
+          wall={pendingWall.wall}
+          position={pendingWall.screenPos}
+          onConfirm={handleBubbleConfirm}
+          onAdjust={handleBubbleAdjust}
+          onCancel={handleBubbleCancel}
+        />
+      )}
+
+      {adjustingWall && (
+        <WallTypePicker
+          wall={adjustingWall.wall}
+          position={{ x: window.innerWidth / 2 - 160, y: window.innerHeight / 2 - 180 }}
+          onConfirm={handleWallTypeConfirm}
+          onDismiss={handleWallTypeDismiss}
+          onContinueDrawing={handleWallTypeContinue}
+        />
+      )}
+
+      {symbolRefOpen && selected && (
+        <SymbolReferencePanel drawingId={selected.id} onClose={() => setSymbolRefOpen(false)} />
       )}
 
       {symbolRefOpen && (
@@ -347,12 +470,18 @@ interface PreviewProps {
   drawing: Drawing
   onProcess: () => void
   onCalibrate: () => void
-  onAddUserWall: (wall: Drawing['parsedWalls'][number]) => void
+  onAddUserWall: (wall: ParsedWall) => void
+  onRequestConfirm?: (wall: ParsedWall, midPoint: { x: number; y: number }) => void
   onClearUserWalls: () => void
+  onUndoUserWall: () => void
+  onUndoScale: () => void
+  continueTraceTick?: number
 }
 
-function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClearUserWalls }: PreviewProps) {
+function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onRequestConfirm, onClearUserWalls, onUndoUserWall, onUndoScale, continueTraceTick }: PreviewProps) {
   const [scale, setScale] = useState(1)
+  const [panX, setPanX] = useState(0)
+  const [panY, setPanY] = useState(0)
   const [traceMode, setTraceMode] = useState(false)
   const previewSrc = drawing.rasterUrl ?? drawing.previewUrl
   const lowConfidenceCount = drawing.parsedWalls.filter((w) => (w.detectionConfidence ?? 1) < 0.75).length
@@ -375,6 +504,8 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
   const activeTraceRef = useRef<[number, number][]>([])
   const drawingGuard = useRef(false)
   const hasUsableSeedTrace = userTraces.some((t) => t.points.length >= 8)
+  const touchPointsRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const pinchRef = useRef<{ dist: number; cx: number; cy: number; scale: number; px: number; py: number } | null>(null)
 
   const getImgCoords = (e: React.PointerEvent<SVGSVGElement>): [number, number] => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -436,6 +567,73 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
     })
   }
 
+  const prevContinueTickRef = useRef(0)
+  useEffect(() => {
+    if (continueTraceTick !== undefined && continueTraceTick !== prevContinueTickRef.current && continueTraceTick > 0) {
+      prevContinueTickRef.current = continueTraceTick
+      setTraceMode(true)
+    }
+  }, [continueTraceTick])
+
+  // Multi-touch gesture handling for pinch-to-zoom and two-finger pan
+  const scaleRef = useRef(scale)
+  scaleRef.current = scale
+  const panRef = useRef({ x: panX, y: panY })
+  panRef.current = { x: panX, y: panY }
+  useEffect(() => {
+    const el = document.getElementById('preview-canvas-area')
+    if (!el) return
+    const onTouchStart = (e: TouchEvent) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i]
+        touchPointsRef.current.set(t.identifier, { x: t.clientX, y: t.clientY })
+      }
+      if (touchPointsRef.current.size >= 2) {
+        e.preventDefault()
+        const pts = Array.from(touchPointsRef.current.values())
+        const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        pinchRef.current = { dist, cx: (pts[0].x + pts[1].x) / 2, cy: (pts[0].y + pts[1].y) / 2, scale: scaleRef.current, px: panRef.current.x, py: panRef.current.y }
+      }
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i]
+        touchPointsRef.current.set(t.identifier, { x: t.clientX, y: t.clientY })
+      }
+      if (touchPointsRef.current.size >= 2) {
+        e.preventDefault()
+        const p = pinchRef.current
+        if (!p) return
+        const pts = Array.from(touchPointsRef.current.values())
+        const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y
+        const dist = Math.sqrt(dx * dx + dy * dy)
+        const ratio = dist / p.dist
+        const mx = (pts[0].x + pts[1].x) / 2
+        const my = (pts[0].y + pts[1].y) / 2
+        setScale(() => Math.max(0.25, Math.min(6, p.scale * ratio)))
+        setPanX(() => p.px + (mx - p.cx))
+        setPanY(() => p.py + (my - p.cy))
+      }
+    }
+    const onTouchEnd = (e: TouchEvent) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        touchPointsRef.current.delete(e.changedTouches[i].identifier)
+      }
+      if (touchPointsRef.current.size < 2) pinchRef.current = null
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: false })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd)
+    el.addEventListener('touchcancel', onTouchEnd)
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [])
+
   const handleProcessSeeds = async () => {
     setSeedsProcessing(true)
     await processWithSeeds(drawing.id)
@@ -468,7 +666,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
           )}
           {drawing.status === 'ready' && (
             <>
-              <button className={styles.actionBtn} onClick={onCalibrate}>
+              <button className={styles.actionBtn} onClick={() => { setTraceMode(false); onCalibrate() }}>
                 📏 Calibrate Scale
               </button>
               {drawing.scaleConfidence === 'fallback' && (
@@ -524,10 +722,28 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
         )}
 
         <div className={styles.zoomControls}>
-          <button onClick={() => setScale((s) => Math.max(0.25, s - 0.25))}>−</button>
+          <button onClick={() => setScale((s) => Math.max(0.25, s - 0.25))} title="Zoom out">−</button>
+          <input
+            type="range"
+            min={25}
+            max={400}
+            value={Math.round(scale * 100)}
+            onChange={(e) => setScale(parseInt(e.target.value) / 100)}
+            style={{ width: 80, accentColor: '#38bdf8' }}
+          />
           <span>{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale((s) => Math.min(4, s + 0.25))}>+</button>
-          <button onClick={() => setScale(1)}>Reset</button>
+          <button onClick={() => setScale((s) => Math.min(4, s + 0.25))} title="Zoom in">+</button>
+          <button onClick={() => { setScale(1); setPanX(0); setPanY(0) }} title="Reset view">⟲</button>
+          {drawing._prevScaleMmPerPx !== undefined && (
+            <button onClick={onUndoScale} className={styles.undoBtn} title="Undo scale calibration">
+              ↩ Scale
+            </button>
+          )}
+          {userTraceCount > 0 && (
+            <button onClick={onUndoUserWall} className={styles.undoBtn} title="Undo last traced wall">
+              ↩ Undo Trace
+            </button>
+          )}
         </div>
       </div>
 
@@ -538,8 +754,19 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
         </div>
       )}
 
-      <div className={styles.previewCanvas}>
-        <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', transition: 'transform 0.15s', position: 'relative' }}>
+      <div
+        id="preview-canvas-area"
+        className={styles.previewCanvas}
+        style={{ touchAction: 'none' }}
+        onWheel={(e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault()
+            const delta = -e.deltaY * 0.002
+            setScale((s) => Math.max(0.25, Math.min(6, s * (1 + delta))))
+          }
+        }}
+      >
+        <div style={{ transform: `translate(${panX}px, ${panY}px) scale(${scale})`, transformOrigin: 'top left', transition: 'transform 0.15s', position: 'relative' }}>
           {previewSrc ? (
             <div className={styles.previewImgWrap}>
               <img
@@ -557,6 +784,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
                   imageHeight={drawing.rasterHeight ?? 600}
                   walls={drawing.parsedWalls}
                   onAddWall={onAddUserWall}
+                  onRequestConfirm={onRequestConfirm}
                 />
               )}
               {smartTrace && imgNatural.w > 0 && (
@@ -579,15 +807,15 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
                     <polyline
                       key={i}
                       points={trace.points.map(p => `${p[0]},${p[1]}`).join(' ')}
-                      fill="none" stroke="#ffd700" strokeWidth={3}
+                      fill="none" stroke="#ffd700" strokeWidth={5}
                       strokeLinecap="round" strokeLinejoin="round" opacity={0.8}
                     />
                   ))}
                   {activeTrace.length > 1 && (
                     <polyline
                       points={activeTrace.map(p => `${p[0]},${p[1]}`).join(' ')}
-                      fill="none" stroke="#ff6b6b" strokeWidth={3}
-                      strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 3"
+                      fill="none" stroke="#ff6b6b" strokeWidth={5}
+                      strokeLinecap="round" strokeLinejoin="round" strokeDasharray="8 4"
                     />
                   )}
                 </svg>

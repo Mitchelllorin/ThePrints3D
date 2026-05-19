@@ -43,6 +43,21 @@ export interface ParsedWall {
   finishedMm?: number
   /** 0..1 — how cleanly this wall fits its assigned bucket */
   typeConfidence?: number
+  /** User-assigned: whether this wall is load-bearing */
+  isLoadBearing?: boolean
+  /** User-assigned: whether this wall is internal (vs exterior) */
+  isInternal?: boolean
+}
+
+export interface WallTypePreset {
+  id: string
+  label: string
+  description: string
+  thicknessMm: number
+  category: 'stud' | 'steel' | 'block' | 'other'
+  defaultLoadBearing: boolean
+  defaultInternal: boolean
+  color: string
 }
 
 /** A room (enclosed region) detected by flood-filling the rasterized image. */
@@ -154,6 +169,10 @@ export interface Drawing {
   scaleNotation: string | null
   /** How the scale value was determined */
   scaleConfidence: ScaleConfidence | null
+  /** Previous scale values for undo support */
+  _prevScaleMmPerPx?: number | null
+  _prevScaleNotation?: string | null
+  _prevScaleConfidence?: ScaleConfidence | null
   uploadedAt: number
 }
 
@@ -170,6 +189,10 @@ export type LayerId =
   | 'mechanical'
   | 'furniture'
   | 'annotations'
+  | 'framing'
+  | 'drywall'
+  | 'insulation'
+  | 'finishes'
 
 export interface Layer {
   id: LayerId
@@ -206,7 +229,7 @@ export interface Model3D {
 
 // ─── App State ─────────────────────────────────────────────────────────────────
 
-export type AppView = 'upload' | 'drawings' | 'model' | 'tools'
+export type AppView = 'upload' | 'drawings' | 'model' | 'tools' | 'wizard' | 'create'
 
 export interface ScaleCalibration {
   /** px distance measured on canvas */
