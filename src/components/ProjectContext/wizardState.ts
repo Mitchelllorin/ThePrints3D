@@ -74,6 +74,17 @@ export function patchWizardData(
   }
 }
 
+export function setWizardCurrentGroup(
+  prev: ProjectContextWizardState,
+  groupId: WizardGroupId,
+): ProjectContextWizardState {
+  return {
+    ...prev,
+    currentGroup: groupId,
+    savedAt: Date.now(),
+  }
+}
+
 export function completeWizardGroup(
   prev: ProjectContextWizardState,
   groupId: WizardGroupId,

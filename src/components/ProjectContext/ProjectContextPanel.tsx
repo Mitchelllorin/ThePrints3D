@@ -11,6 +11,7 @@ import {
   loadWizardState,
   patchWizardData,
   saveWizardState,
+  setWizardCurrentGroup,
   type ProjectContextWizardState,
 } from './wizardState'
 
@@ -60,7 +61,7 @@ export default function ProjectContextPanel({ phase }: Props) {
   }
 
   const jumpToGroup = (groupId: WizardGroupId) => {
-    setAndPersist({ ...wizard, currentGroup: groupId, savedAt: Date.now() })
+    setAndPersist(setWizardCurrentGroup(wizard, groupId))
   }
 
   const goBack = () => {
