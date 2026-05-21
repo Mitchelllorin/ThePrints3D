@@ -18,7 +18,7 @@ function App() {
       <AppShell>
         {view === 'upload' && <DrawingUploader />}
         {view === 'drawings' && <DrawingManager />}
-        {view === 'model' && <ModelViewer />}
+        {(view === 'model' || (view !== 'upload' && view !== 'drawings' && view !== 'tools')) && <ModelViewer />}
         {view === 'tools' && <Toolbox />}
       </AppShell>
       <button

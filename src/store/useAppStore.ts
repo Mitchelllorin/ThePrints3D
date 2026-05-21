@@ -292,7 +292,7 @@ function computeFloorLevels(drawings: Drawing[]) {
 
 export const useAppStore = create<AppState>()(
   immer((set, get) => ({
-    view: 'upload',
+    view: 'model',
     drawings: [],
     layers: DEFAULT_LAYERS,
     model: DEFAULT_MODEL,
@@ -361,7 +361,7 @@ export const useAppStore = create<AppState>()(
             size: drawing.file.size,
           })
         }
-        if (s.view === 'upload') s.view = 'drawings'
+        if (s.view === 'upload') s.view = 'model'
       }),
 
     removeDrawing: (id) =>

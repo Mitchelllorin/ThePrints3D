@@ -46,9 +46,8 @@ export default function TopBar() {
           {hasDrawings && <span className={styles.badge}>{drawings.length}</span>}
         </button>
         <button
-          className={`${styles.navBtn} ${view === 'model' ? styles.active : ''} ${!hasDrawings ? styles.disabled : ''}`}
-          onClick={() => hasDrawings && setView('model')}
-          disabled={!hasDrawings}
+          className={`${styles.navBtn} ${view === 'model' ? styles.active : ''}`}
+          onClick={() => setView('model')}
         >
           3D Model
         </button>
