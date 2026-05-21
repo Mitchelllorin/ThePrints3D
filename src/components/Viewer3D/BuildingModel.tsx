@@ -11,6 +11,11 @@ interface Props {
 // Default scale when no calibration exists: 1:100 metric floor plan at 108 DPI
 const DEFAULT_SCALE_MM_PER_PX = 23.5
 
+function resolveValidScaleMmPerPx(scaleMmPerPx: number | null | undefined, fallback: number): number {
+  if (Number.isFinite(scaleMmPerPx) && scaleMmPerPx! > 0) return scaleMmPerPx!
+  return fallback
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function mat(color: string, opacity: number, extra?: Partial<THREE.MeshStandardMaterialParameters>) {
@@ -431,7 +436,7 @@ export default function BuildingModel({ layers }: Props) {
       const [rcx, rcy] = centerOfWalls(ref.parsedWalls)
       globalCx = rcx
       globalCy = rcy
-      globalMmPerPx = ref.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
+      globalMmPerPx = resolveValidScaleMmPerPx(ref.scaleMmPerPx, DEFAULT_SCALE_MM_PER_PX)
     }
     const fallbackScaleUsages = drawings.filter((d) => d.parsedWalls.length > 0 && !d.scaleMmPerPx).length
     if (fallbackScaleUsages > 0) {
@@ -444,7 +449,7 @@ export default function BuildingModel({ layers }: Props) {
     // Compute global footprint
     let globalFp: Footprint | null = null
     for (const d of allParsed) {
-      const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+      const mmPx = resolveValidScaleMmPerPx(d.scaleMmPerPx, globalMmPerPx)
       const fp = footprintOf(d.parsedWalls, mmPx, globalCx, globalCy)
       if (!globalFp) {
         globalFp = fp
@@ -486,7 +491,7 @@ export default function BuildingModel({ layers }: Props) {
         if (wallDrawings.length > 0) {
           // Real geometry from detected walls
           for (const d of wallDrawings) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+            const mmPx = resolveValidScaleMmPerPx(d.scaleMmPerPx, globalMmPerPx)
             buildRealWalls(group, d.parsedWalls, mmPx, globalCx, globalCy, elev, fh, wMat, userWMat, 'walls')
           }
         } else {
@@ -499,7 +504,7 @@ export default function BuildingModel({ layers }: Props) {
       if (floorLayer2?.visible) {
         for (const d of wallDrawings) {
           if (d.parsedRooms.length > 0) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+            const mmPx = resolveValidScaleMmPerPx(d.scaleMmPerPx, globalMmPerPx)
             buildRoomPlates(group, d.parsedRooms, mmPx, globalCx, globalCy, elev, 'floors')
           }
         }
@@ -510,7 +515,7 @@ export default function BuildingModel({ layers }: Props) {
       if (dwLayer?.visible) {
         for (const d of wallDrawings) {
           if (d.parsedOpenings.length > 0) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+            const mmPx = resolveValidScaleMmPerPx(d.scaleMmPerPx, globalMmPerPx)
             buildOpeningMarkers(
               group,
               d.parsedOpenings,

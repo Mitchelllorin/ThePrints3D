@@ -13,6 +13,8 @@ interface Props {
 }
 
 type Phase = 'idle' | 'point-a' | 'point-b' | 'enter-distance'
+const MIN_MANUAL_MM_PER_PX = 0.01
+const MAX_MANUAL_MM_PER_PX = 200
 
 export default function ScaleCalibrator({
   imageUrl,
@@ -101,8 +103,9 @@ export default function ScaleCalibrator({
     if (!isFinite(realDist) || realDist <= 0) return
     const realMm = toMm(realDist)
     const pxDist = pixelDistance()
-    if (pxDist < 1) return
+    if (!Number.isFinite(pxDist) || pxDist < 1) return
     const mmPerPx = realMm / pxDist
+    if (!Number.isFinite(mmPerPx) || mmPerPx < MIN_MANUAL_MM_PER_PX || mmPerPx > MAX_MANUAL_MM_PER_PX) return
     const notationRatio = Math.round((25.4 / 72) * (1 / mmPerPx))
     const notation = notationRatio > 0 ? `1:${notationRatio}` : `custom`
     onCalibrate(mmPerPx, notation)

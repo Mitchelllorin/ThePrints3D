@@ -36,6 +36,8 @@ export interface CameraPreset {
 // ─── Annotation persistence ────────────────────────────────────────────────────
 
 const ANNOTATIONS_KEY = 'blueprint3d-annotations'
+const MIN_VALID_SCALE_MM_PER_PX = 0.01
+const MAX_VALID_SCALE_MM_PER_PX = 200
 
 function loadPersistedAnnotations(): Annotation[] {
   try {
@@ -349,6 +351,14 @@ export const useAppStore = create<AppState>()(
 
     setDrawingScale: (id, mmPerPx, notation) =>
       set((s) => {
+        if (
+          !Number.isFinite(mmPerPx) ||
+          mmPerPx < MIN_VALID_SCALE_MM_PER_PX ||
+          mmPerPx > MAX_VALID_SCALE_MM_PER_PX
+        ) {
+          logEvent('drawing.scale.manual.invalid', { drawingId: id, mmPerPx }, 'warn')
+          return
+        }
         const d = s.drawings.find((d) => d.id === id)
         if (d) {
           d.scaleMmPerPx = mmPerPx

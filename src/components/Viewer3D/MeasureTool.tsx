@@ -19,6 +19,11 @@ interface WallEndpointCandidate {
   toleranceM: number
 }
 
+function resolveValidScaleMmPerPx(scaleMmPerPx: number | null | undefined, fallback: number): number {
+  if (Number.isFinite(scaleMmPerPx) && scaleMmPerPx! > 0) return scaleMmPerPx!
+  return fallback
+}
+
 function centerOfWalls(walls: Drawing['parsedWalls']): [number, number] {
   if (walls.length === 0) return [0, 0]
   let sx = 0
@@ -36,11 +41,11 @@ function buildWallEndpointCandidates(drawings: Drawing[]): WallEndpointCandidate
 
   const ref = parsedDrawings.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
   const [globalCx, globalCy] = centerOfWalls(ref.parsedWalls)
-  const globalMmPerPx = ref.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
+  const globalMmPerPx = resolveValidScaleMmPerPx(ref.scaleMmPerPx, DEFAULT_SCALE_MM_PER_PX)
 
   const out: WallEndpointCandidate[] = []
   for (const d of parsedDrawings) {
-    const mmPerPx = d.scaleMmPerPx ?? globalMmPerPx
+    const mmPerPx = resolveValidScaleMmPerPx(d.scaleMmPerPx, globalMmPerPx)
     const worldPerPx = mmPerPx / 1000
     const toleranceM = WALL_ENDPOINT_SNAP_TOLERANCE_PX * worldPerPx
     for (const w of d.parsedWalls) {
