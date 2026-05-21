@@ -24,9 +24,25 @@ function mat(color: string, opacity: number, extra?: Partial<THREE.MeshStandardM
 
 interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number }
 
+const MIN_REASONABLE_MM_PER_PX = 0.1
+const MAX_REASONABLE_MM_PER_PX = 500
+
+function normalizeMmPerPx(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_SCALE_MM_PER_PX
+  if (value < MIN_REASONABLE_MM_PER_PX || value > MAX_REASONABLE_MM_PER_PX) return DEFAULT_SCALE_MM_PER_PX
+  return value
+}
+
+function isValidFootprint(fp: Footprint) {
+  if (!Number.isFinite(fp.minX) || !Number.isFinite(fp.maxX) || !Number.isFinite(fp.minZ) || !Number.isFinite(fp.maxZ)) {
+    return false
+  }
+  return fp.maxX - fp.minX > 0.2 && fp.maxZ - fp.minZ > 0.2
+}
+
 function footprintOf(walls: ParsedWall[], mmPerPx: number, cx: number, cy: number): Footprint {
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
-  const s = mmPerPx / 1000
+  const s = normalizeMmPerPx(mmPerPx) / 1000
   for (const w of walls) {
     const x1 = (w.x1 - cx) * s, x2 = (w.x2 - cx) * s
     const z1 = (w.y1 - cy) * s, z2 = (w.y2 - cy) * s
@@ -431,9 +447,13 @@ export default function BuildingModel({ layers }: Props) {
       const [rcx, rcy] = centerOfWalls(ref.parsedWalls)
       globalCx = rcx
       globalCy = rcy
-      globalMmPerPx = ref.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
+      globalMmPerPx = normalizeMmPerPx(ref.scaleMmPerPx)
     }
-    const fallbackScaleUsages = drawings.filter((d) => d.parsedWalls.length > 0 && !d.scaleMmPerPx).length
+    const fallbackScaleUsages = drawings.filter((d) => {
+      if (d.parsedWalls.length === 0) return false
+      const mmPx = d.scaleMmPerPx
+      return typeof mmPx !== 'number' || !Number.isFinite(mmPx) || mmPx < MIN_REASONABLE_MM_PER_PX || mmPx > MAX_REASONABLE_MM_PER_PX
+    }).length
     if (fallbackScaleUsages > 0) {
       logEvent('model.scale.fallback_used', {
         fallbackScaleMmPerPx: DEFAULT_SCALE_MM_PER_PX,
@@ -444,8 +464,9 @@ export default function BuildingModel({ layers }: Props) {
     // Compute global footprint
     let globalFp: Footprint | null = null
     for (const d of allParsed) {
-      const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+      const mmPx = normalizeMmPerPx(d.scaleMmPerPx ?? globalMmPerPx)
       const fp = footprintOf(d.parsedWalls, mmPx, globalCx, globalCy)
+      if (!isValidFootprint(fp)) continue
       if (!globalFp) {
         globalFp = fp
       } else {
@@ -456,7 +477,7 @@ export default function BuildingModel({ layers }: Props) {
       }
     }
     const defaultFp: Footprint = { minX: -7.5, maxX: 7.5, minZ: -5, maxZ: 5 }
-    const fp = globalFp ?? defaultFp
+    const fp = globalFp && isValidFootprint(globalFp) ? globalFp : defaultFp
 
     // Build each floor
     for (const level of floorLevels) {
@@ -486,7 +507,7 @@ export default function BuildingModel({ layers }: Props) {
         if (wallDrawings.length > 0) {
           // Real geometry from detected walls
           for (const d of wallDrawings) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+            const mmPx = normalizeMmPerPx(d.scaleMmPerPx ?? globalMmPerPx)
             buildRealWalls(group, d.parsedWalls, mmPx, globalCx, globalCy, elev, fh, wMat, userWMat, 'walls')
           }
         } else {
@@ -499,7 +520,7 @@ export default function BuildingModel({ layers }: Props) {
       if (floorLayer2?.visible) {
         for (const d of wallDrawings) {
           if (d.parsedRooms.length > 0) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+            const mmPx = normalizeMmPerPx(d.scaleMmPerPx ?? globalMmPerPx)
             buildRoomPlates(group, d.parsedRooms, mmPx, globalCx, globalCy, elev, 'floors')
           }
         }
@@ -510,7 +531,7 @@ export default function BuildingModel({ layers }: Props) {
       if (dwLayer?.visible) {
         for (const d of wallDrawings) {
           if (d.parsedOpenings.length > 0) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+            const mmPx = normalizeMmPerPx(d.scaleMmPerPx ?? globalMmPerPx)
             buildOpeningMarkers(
               group,
               d.parsedOpenings,

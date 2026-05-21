@@ -22,7 +22,11 @@ interface Props {
 
 export default function WallTracer({ active, imageWidth, imageHeight, walls, onAddWall }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [stroke, setStroke] = useState<StrokePoint[]>([])
+  const [startPoint, setStartPoint] = useState<StrokePoint | null>(null)
+  const [cursor, setCursor] = useState<StrokePoint | null>(null)
+  const drawingRef = useRef(false)
+  const moveRafRef = useRef<number | null>(null)
+  const pendingCursorRef = useRef<StrokePoint | null>(null)
 
   const userWalls = useMemo(() => walls.filter((w) => w.source === 'user'), [walls])
   const autoWalls = useMemo(() => walls.filter((w) => w.source !== 'user'), [walls])
@@ -68,23 +72,31 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
       ctx.stroke()
     }
 
-    if (stroke.length > 1) {
+    if (startPoint && cursor) {
       ctx.strokeStyle = '#38bdf8'
       ctx.lineWidth = 2
+      ctx.setLineDash([6, 3])
       ctx.beginPath()
-      ctx.moveTo(stroke[0].x * sx, stroke[0].y * sy)
-      for (let i = 1; i < stroke.length; i++) {
-        ctx.lineTo(stroke[i].x * sx, stroke[i].y * sy)
-      }
+      ctx.moveTo(startPoint.x * sx, startPoint.y * sy)
+      ctx.lineTo(cursor.x * sx, cursor.y * sy)
       ctx.stroke()
+      ctx.setLineDash([])
     }
-  }, [imageHeight, imageWidth, stroke, userWalls, autoWalls])
+  }, [imageHeight, imageWidth, startPoint, cursor, userWalls, autoWalls])
 
   useEffect(() => {
     redraw()
   }, [redraw])
 
-  const eventToPoint = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+  useEffect(() => {
+    return () => {
+      if (moveRafRef.current !== null) {
+        window.cancelAnimationFrame(moveRafRef.current)
+      }
+    }
+  }, [])
+
+  const eventToPoint = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     const canvas = canvasRef.current
     if (!canvas) return null
     const rect = canvas.getBoundingClientRect()
@@ -96,46 +108,125 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
     }
   }, [imageHeight, imageWidth])
 
-  const onPointerDown = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+  const onPointerDown = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (!active) return
     if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
     const p = eventToPoint(event)
     if (!p) return
     event.currentTarget.setPointerCapture(event.pointerId)
-    setStroke([p])
+    drawingRef.current = true
+    pendingCursorRef.current = p
+    setStartPoint(p)
+    setCursor(p)
   }, [active, eventToPoint])
 
-  const onPointerMove = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!active) return
+  const onPointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+    if (!active || !drawingRef.current) return
     const p = eventToPoint(event)
     if (!p) return
-    setStroke((prev) => (prev.length === 0 ? prev : [...prev, p]))
+    pendingCursorRef.current = p
+    if (moveRafRef.current !== null) return
+    moveRafRef.current = window.requestAnimationFrame(() => {
+      moveRafRef.current = null
+      setCursor(pendingCursorRef.current)
+    })
   }, [active, eventToPoint])
 
-  const onPointerUp = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+  const onPointerUp = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
     if (!active) return
+    if (!drawingRef.current) return
     const p = eventToPoint(event)
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
-    setStroke((prev) => {
-      const points = p ? [...prev, p] : prev
-      const wall = reduceStrokeToWall(points)
+    drawingRef.current = false
+    const end = p ?? cursor ?? startPoint
+    if (startPoint && end) {
+      const wall = reduceStrokeToWall([startPoint, end])
       if (wall) onAddWall(wall)
-      return []
-    })
-  }, [active, eventToPoint, onAddWall])
+    }
+    setStartPoint(null)
+    setCursor(null)
+    pendingCursorRef.current = null
+    if (moveRafRef.current !== null) {
+      window.cancelAnimationFrame(moveRafRef.current)
+      moveRafRef.current = null
+    }
+  }, [active, eventToPoint, onAddWall, startPoint, cursor])
+
+  const onPointerCancel = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    drawingRef.current = false
+    setStartPoint(null)
+    setCursor(null)
+    pendingCursorRef.current = null
+    if (moveRafRef.current !== null) {
+      window.cancelAnimationFrame(moveRafRef.current)
+      moveRafRef.current = null
+    }
+  }, [])
+
+  const arrowEnd = cursor ?? startPoint
 
   return (
     <div className={`${styles.overlay} ${active ? styles.active : ''}`}>
       <canvas
         ref={canvasRef}
         className={styles.canvas}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
       />
+      {active && (
+        <svg
+          className={styles.capture}
+          viewBox={`0 0 ${imageWidth} ${imageHeight}`}
+          preserveAspectRatio="none"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={onPointerUp}
+          onPointerCancel={onPointerCancel}
+        >
+          <defs>
+            <marker
+              id="trace-arrow-end"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8" />
+            </marker>
+            <marker
+              id="trace-arrow-start"
+              viewBox="0 0 10 10"
+              refX="1"
+              refY="5"
+              markerWidth="6"
+              markerHeight="6"
+              orient="auto-start-reverse"
+            >
+              <path d="M 10 0 L 0 5 L 10 10 z" fill="#38bdf8" />
+            </marker>
+          </defs>
+          {startPoint && arrowEnd && (
+            <line
+              x1={startPoint.x}
+              y1={startPoint.y}
+              x2={arrowEnd.x}
+              y2={arrowEnd.y}
+              stroke="#38bdf8"
+              strokeWidth={2}
+              strokeDasharray="6 3"
+              strokeLinecap="round"
+              markerStart="url(#trace-arrow-start)"
+              markerEnd="url(#trace-arrow-end)"
+            />
+          )}
+        </svg>
+      )}
       {active && <div className={styles.hint}>Trace main walls with your finger/mouse</div>}
     </div>
   )
