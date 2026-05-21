@@ -27,11 +27,12 @@ function dedupeGroups(groups: WizardGroupId[]): WizardGroupId[] {
 
 function normalizeData(raw?: Partial<ProjectContextData>): ProjectContextData {
   return {
-    wallTypes: raw?.wallTypes ?? '',
-    materials: raw?.materials ?? '',
-    constructionMetrics: raw?.constructionMetrics ?? '',
-    symbolTargets: raw?.symbolTargets ?? '',
-    correctionNotes: raw?.correctionNotes ?? '',
+    set1BuildingBasics: raw?.set1BuildingBasics ?? '',
+    set1Clarifications: raw?.set1Clarifications ?? '',
+    set2StructuralDetails: raw?.set2StructuralDetails ?? '',
+    set2Clarifications: raw?.set2Clarifications ?? '',
+    set3FinishingDetails: raw?.set3FinishingDetails ?? '',
+    set3Clarifications: raw?.set3Clarifications ?? '',
   }
 }
 

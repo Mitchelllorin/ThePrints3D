@@ -6,6 +6,7 @@ import type {
   DetectedWallType,
   Drawing,
   DrawingType,
+  FloorplanOverlayState,
   FloorLevel,
   Layer,
   LayerId,
@@ -155,6 +156,42 @@ const DEFAULT_MODEL: Model3D = {
   generatedAt: null,
 }
 
+const DEFAULT_FLOORPLAN_OVERLAY: FloorplanOverlayState = {
+  drawingId: null,
+  visible: true,
+  locked: false,
+  snapToGrid: true,
+  calibrationMode: false,
+  guidedStep: 1,
+  position: [0, 0],
+  scale: [12, 8],
+  rotationDeg: 0,
+  opacity: 0.65,
+}
+
+const HISTORY_LIMIT = 80
+
+interface WorkspaceHistorySnapshot {
+  drawingStates: Array<{
+    id: string
+    parsedWalls: ParsedWall[]
+    scaleMmPerPx: number | null
+    scaleNotation: string | null
+    scaleConfidence: Drawing['scaleConfidence']
+  }>
+  layers: Array<Pick<Layer, 'id' | 'visible' | 'opacity'>>
+  productPlacements: ProductPlacement[]
+  annotations: Annotation[]
+  measurements: Measurement[]
+  userTraces: UserTrace[]
+  floorplanOverlay: FloorplanOverlayState
+}
+
+function deepCopy<T>(value: T): T {
+  if (typeof structuredClone === 'function') return structuredClone(value)
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
 // ─── Store Interface ───────────────────────────────────────────────────────────
 
 interface AppState {
@@ -174,6 +211,9 @@ interface AppState {
   productCatalog: ProductCatalogItem[]
   productPlacements: ProductPlacement[]
   wizardInputs: WorkspaceWizardInputs | null
+  floorplanOverlay: FloorplanOverlayState
+  historyPast: WorkspaceHistorySnapshot[]
+  historyFuture: WorkspaceHistorySnapshot[]
 
   // Smart Processing
   smartProcessor: 'heuristic' | 'ai' | 'seed-guided'
@@ -202,6 +242,10 @@ interface AppState {
   setModelStatus: (status: Model3D['status']) => void
   buildModel: () => void
   update3DModel: (finalInputs: WorkspaceWizardInputs) => void
+  setFloorplanOverlayDrawing: (drawingId: string | null) => void
+  updateFloorplanOverlay: (patch: Partial<FloorplanOverlayState>) => void
+  undo: () => void
+  redo: () => void
   // Measurements
   setMeasureMode: (active: boolean) => void
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
@@ -290,9 +334,63 @@ function computeFloorLevels(drawings: Drawing[]) {
   return { levels, floorGroupingLog }
 }
 
+function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
+  return deepCopy({
+    drawingStates: state.drawings.map((d) => ({
+      id: d.id,
+      parsedWalls: d.parsedWalls,
+      scaleMmPerPx: d.scaleMmPerPx,
+      scaleNotation: d.scaleNotation,
+      scaleConfidence: d.scaleConfidence,
+    })),
+    layers: state.layers.map((l) => ({
+      id: l.id,
+      visible: l.visible,
+      opacity: l.opacity,
+    })),
+    productPlacements: state.productPlacements,
+    annotations: state.annotations,
+    measurements: state.measurements,
+    userTraces: state.userTraces,
+    floorplanOverlay: state.floorplanOverlay,
+  })
+}
+
+function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
+  for (const ds of snapshot.drawingStates) {
+    const drawing = state.drawings.find((d) => d.id === ds.id)
+    if (!drawing) continue
+    drawing.parsedWalls = deepCopy(ds.parsedWalls)
+    drawing.scaleMmPerPx = ds.scaleMmPerPx
+    drawing.scaleNotation = ds.scaleNotation
+    drawing.scaleConfidence = ds.scaleConfidence
+  }
+  for (const layerPatch of snapshot.layers) {
+    const layer = state.layers.find((l) => l.id === layerPatch.id)
+    if (!layer) continue
+    layer.visible = layerPatch.visible
+    layer.opacity = layerPatch.opacity
+  }
+  state.productPlacements = deepCopy(snapshot.productPlacements)
+  state.annotations = deepCopy(snapshot.annotations)
+  state.measurements = deepCopy(snapshot.measurements)
+  state.userTraces = deepCopy(snapshot.userTraces)
+  state.floorplanOverlay = deepCopy(snapshot.floorplanOverlay)
+  saveAnnotations(state.annotations)
+}
+
 export const useAppStore = create<AppState>()(
-  immer((set, get) => ({
-    view: 'upload',
+  immer((set, get) => {
+    const pushHistory = () => {
+      set((s) => {
+        s.historyPast.push(captureSnapshot(s))
+        if (s.historyPast.length > HISTORY_LIMIT) s.historyPast.shift()
+        s.historyFuture = []
+      })
+    }
+
+    return {
+    view: 'model',
     drawings: [],
     layers: DEFAULT_LAYERS,
     model: DEFAULT_MODEL,
@@ -308,6 +406,9 @@ export const useAppStore = create<AppState>()(
     productCatalog: [],
     productPlacements: [],
     wizardInputs: null,
+    floorplanOverlay: deepCopy(DEFAULT_FLOORPLAN_OVERLAY),
+    historyPast: [],
+    historyFuture: [],
 
     // Smart processing defaults
     smartProcessor: defaultSmartProcessingState.processor,
@@ -353,6 +454,9 @@ export const useAppStore = create<AppState>()(
             uploadedAt: Date.now(),
           }
           s.drawings.push(drawing)
+          if (!s.floorplanOverlay.drawingId) {
+            s.floorplanOverlay.drawingId = drawing.id
+          }
           logEvent('drawing.uploaded', {
             drawingId: drawing.id,
             name: drawing.name,
@@ -364,7 +468,8 @@ export const useAppStore = create<AppState>()(
         if (s.view === 'upload') s.view = 'drawings'
       }),
 
-    removeDrawing: (id) =>
+    removeDrawing: (id) => {
+      pushHistory()
       set((s) => {
         const idx = s.drawings.findIndex((d) => d.id === id)
         if (idx !== -1) {
@@ -375,7 +480,11 @@ export const useAppStore = create<AppState>()(
           s.drawings.splice(idx, 1)
         }
         if (s.selectedDrawingId === id) s.selectedDrawingId = null
-      }),
+        if (s.floorplanOverlay.drawingId === id) {
+          s.floorplanOverlay.drawingId = s.drawings[0]?.id ?? null
+        }
+      })
+    },
 
     updateDrawing: (id, patch) =>
       set((s) => {
@@ -389,7 +498,8 @@ export const useAppStore = create<AppState>()(
         if (d) d.type = type
       }),
 
-    setDrawingScale: (id, mmPerPx, notation) =>
+    setDrawingScale: (id, mmPerPx, notation) => {
+      pushHistory()
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)
         if (d) {
@@ -397,9 +507,11 @@ export const useAppStore = create<AppState>()(
           d.scaleNotation = notation
           d.scaleConfidence = 'parsed'
         }
-      }),
+      })
+    },
 
-    addUserTracedWall: (id, wall) =>
+    addUserTracedWall: (id, wall) => {
+      pushHistory()
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
@@ -409,14 +521,17 @@ export const useAppStore = create<AppState>()(
           { ...wall, source: 'user' as const, detectionConfidence: 1 },
         ]
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
-      }),
+      })
+    },
 
-    clearUserTracedWalls: (id) =>
+    clearUserTracedWalls: (id) => {
+      pushHistory()
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         d.parsedWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
-      }),
+      })
+    },
 
     selectDrawing: (id) =>
       set((s) => {
@@ -473,17 +588,21 @@ export const useAppStore = create<AppState>()(
       }
     },
 
-    toggleLayer: (id) =>
+    toggleLayer: (id) => {
+      pushHistory()
       set((s) => {
         const layer = s.layers.find((l) => l.id === id)
         if (layer) layer.visible = !layer.visible
-      }),
+      })
+    },
 
-    setLayerOpacity: (id, opacity) =>
+    setLayerOpacity: (id, opacity) => {
+      pushHistory()
       set((s) => {
         const layer = s.layers.find((l) => l.id === id)
         if (layer) layer.opacity = opacity
-      }),
+      })
+    },
 
     setSidebarOpen: (open) =>
       set((s) => {
@@ -497,7 +616,7 @@ export const useAppStore = create<AppState>()(
 
     buildModel: () =>
       set((s) => {
-        s.model.status = 'building'
+        s.model.status = s.drawings.length > 0 ? 'building' : 'idle'
         s.model.generatedAt = null
         s.view = 'model'
 
@@ -524,12 +643,46 @@ export const useAppStore = create<AppState>()(
         logEvent('workspace.wizard.group.completed', {
           completedGroup: finalInputs.completedGroup,
           completedAt: finalInputs.completedAt,
-          hasWallTypes: finalInputs.wallTypes.length > 0,
-          hasMaterials: finalInputs.materials.length > 0,
-          hasMetrics: finalInputs.constructionMetrics.length > 0,
-          hasSymbolTargets: finalInputs.symbolTargets.length > 0,
-          hasCorrectionNotes: finalInputs.correctionNotes.length > 0,
+          hasSet1Basics: finalInputs.set1BuildingBasics.length > 0,
+          hasSet1Clarifications: finalInputs.set1Clarifications.length > 0,
+          hasSet2Details: finalInputs.set2StructuralDetails.length > 0,
+          hasSet2Clarifications: finalInputs.set2Clarifications.length > 0,
+          hasSet3Finishing: finalInputs.set3FinishingDetails.length > 0,
+          hasSet3Clarifications: finalInputs.set3Clarifications.length > 0,
         })
+      }),
+
+    setFloorplanOverlayDrawing: (drawingId) =>
+      set((s) => {
+        s.floorplanOverlay.drawingId = drawingId
+      }),
+
+    updateFloorplanOverlay: (patch) => {
+      pushHistory()
+      set((s) => {
+        s.floorplanOverlay = {
+          ...s.floorplanOverlay,
+          ...patch,
+        }
+      })
+    },
+
+    undo: () =>
+      set((s) => {
+        if (s.historyPast.length === 0) return
+        const previous = s.historyPast.pop()
+        if (!previous) return
+        s.historyFuture.push(captureSnapshot(s))
+        applySnapshot(s, previous)
+      }),
+
+    redo: () =>
+      set((s) => {
+        if (s.historyFuture.length === 0) return
+        const next = s.historyFuture.pop()
+        if (!next) return
+        s.historyPast.push(captureSnapshot(s))
+        applySnapshot(s, next)
       }),
 
     setMeasureMode: (active) =>
@@ -538,25 +691,31 @@ export const useAppStore = create<AppState>()(
         if (active) s.annotateMode = false  // mutually exclusive with annotate
       }),
 
-    addMeasurement: (m) =>
+    addMeasurement: (m) => {
+      pushHistory()
       set((s) => {
         s.measurements.push({
           ...m,
           id: `meas-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           createdAt: Date.now(),
         })
-      }),
+      })
+    },
 
-    removeMeasurement: (id) =>
+    removeMeasurement: (id) => {
+      pushHistory()
       set((s) => {
         const idx = s.measurements.findIndex((m) => m.id === id)
         if (idx !== -1) s.measurements.splice(idx, 1)
-      }),
+      })
+    },
 
-    clearMeasurements: () =>
+    clearMeasurements: () => {
+      pushHistory()
       set((s) => {
         s.measurements = []
-      }),
+      })
+    },
 
     setAnnotateMode: (active) =>
       set((s) => {
@@ -564,7 +723,8 @@ export const useAppStore = create<AppState>()(
         if (active) s.measureMode = false // mutually exclusive with measure
       }),
 
-    addAnnotation: (annotation) =>
+    addAnnotation: (annotation) => {
+      pushHistory()
       set((s) => {
         const created: Annotation = {
           ...annotation,
@@ -574,24 +734,30 @@ export const useAppStore = create<AppState>()(
         s.annotations.push(created)
         s.selectedAnnotationId = created.id
         saveAnnotations(s.annotations)
-      }),
+      })
+    },
 
-    removeAnnotation: (id) =>
+    removeAnnotation: (id) => {
+      pushHistory()
       set((s) => {
         const idx = s.annotations.findIndex((a) => a.id === id)
         if (idx !== -1) s.annotations.splice(idx, 1)
         if (s.selectedAnnotationId === id) s.selectedAnnotationId = null
         saveAnnotations(s.annotations)
-      }),
+      })
+    },
 
-    clearAnnotations: () =>
+    clearAnnotations: () => {
+      pushHistory()
       set((s) => {
         s.annotations = []
         s.selectedAnnotationId = null
         saveAnnotations(s.annotations)
-      }),
+      })
+    },
 
-    updateAnnotation: (id, patch) =>
+    updateAnnotation: (id, patch) => {
+      pushHistory()
       set((s) => {
         const ann = s.annotations.find((a) => a.id === id)
         if (!ann) return
@@ -599,14 +765,16 @@ export const useAppStore = create<AppState>()(
         if (typeof patch.icon === 'string') ann.icon = patch.icon
         if (typeof patch.color === 'string') ann.color = patch.color
         saveAnnotations(s.annotations)
-      }),
+      })
+    },
 
     setSelectedAnnotationId: (id) =>
       set((s) => {
         s.selectedAnnotationId = id
       }),
 
-    importAnnotations: (rawJson) =>
+    importAnnotations: (rawJson) => {
+      pushHistory()
       set((s) => {
         try {
           const parsed = JSON.parse(rawJson)
@@ -641,7 +809,8 @@ export const useAppStore = create<AppState>()(
         } catch {
           // Keep existing annotations unchanged on malformed JSON
         }
-      }),
+      })
+    },
 
     setCameraPreset: (p) =>
       set((s) => {
@@ -658,25 +827,31 @@ export const useAppStore = create<AppState>()(
         s.productCatalog = items
       }),
 
-    addProductPlacement: (placement) =>
+    addProductPlacement: (placement) => {
+      pushHistory()
       set((s) => {
         s.productPlacements.push({
           ...placement,
           id: `placement-${Date.now()}-${Math.round(Math.random() * 10000)}`,
           placedAt: Date.now(),
         })
-      }),
+      })
+    },
 
-    removeProductPlacement: (id) =>
+    removeProductPlacement: (id) => {
+      pushHistory()
       set((s) => {
         const idx = s.productPlacements.findIndex((p) => p.id === id)
         if (idx !== -1) s.productPlacements.splice(idx, 1)
-      }),
+      })
+    },
 
-    clearProductPlacements: () =>
+    clearProductPlacements: () => {
+      pushHistory()
       set((s) => {
         s.productPlacements = []
-      }),
+      })
+    },
 
     // ─── Smart Processing Actions ──────────────────────────────────────────────
 
@@ -686,17 +861,21 @@ export const useAppStore = create<AppState>()(
         s.smartStageLabel = 'Trace Mode: Draw on walls'
       }),
 
-    addTrace: (trace) =>
+    addTrace: (trace) => {
+      pushHistory()
       set((s) => {
         s.userTraces.push(trace)
-      }),
+      })
+    },
 
-    clearTraces: () =>
+    clearTraces: () => {
+      pushHistory()
       set((s) => {
         s.userTraces = []
         s.seedMode = false
         s.smartStageLabel = 'Heuristic Detection'
-      }),
+      })
+    },
 
     processWithSeeds: async (drawingId) => {
       const drawing = get().drawings.find((d) => d.id === drawingId)
@@ -748,7 +927,8 @@ export const useAppStore = create<AppState>()(
       }
     },
 
-    correctElement: (wallId, wallTypeId) =>
+    correctElement: (wallId, wallTypeId) => {
+      pushHistory()
       set((s) => {
         s.correctionCount += 1
         const idx = s.detectedWallTypes.findIndex((d) => d.wallId === wallId)
@@ -756,12 +936,15 @@ export const useAppStore = create<AppState>()(
           const newType = s.projectWallTypes.find((t) => t.id === wallTypeId)
           if (newType) s.detectedWallTypes[idx] = { ...s.detectedWallTypes[idx], wallType: newType }
         }
-      }),
+      })
+    },
 
-    setProjectWallTypes: (types) =>
+    setProjectWallTypes: (types) => {
+      pushHistory()
       set((s) => {
         s.projectWallTypes = types
-      }),
+      })
+    },
 
     exportCorrectionDataset: () => {
       const state = get()
@@ -775,5 +958,6 @@ export const useAppStore = create<AppState>()(
         correctionCount: state.correctionCount,
       }, null, 2)
     },
-  }))
+    }
+  })
 )

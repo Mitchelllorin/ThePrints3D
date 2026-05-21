@@ -6,6 +6,10 @@ export default function TopBar() {
   const setView = useAppStore((s) => s.setView)
   const drawings = useAppStore((s) => s.drawings)
   const buildModel = useAppStore((s) => s.buildModel)
+  const undo = useAppStore((s) => s.undo)
+  const redo = useAppStore((s) => s.redo)
+  const canUndo = useAppStore((s) => s.historyPast.length > 0)
+  const canRedo = useAppStore((s) => s.historyFuture.length > 0)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
 
@@ -46,9 +50,8 @@ export default function TopBar() {
           {hasDrawings && <span className={styles.badge}>{drawings.length}</span>}
         </button>
         <button
-          className={`${styles.navBtn} ${view === 'model' ? styles.active : ''} ${!hasDrawings ? styles.disabled : ''}`}
-          onClick={() => hasDrawings && setView('model')}
-          disabled={!hasDrawings}
+          className={`${styles.navBtn} ${view === 'model' ? styles.active : ''}`}
+          onClick={() => setView('model')}
         >
           3D Model
         </button>
@@ -61,6 +64,22 @@ export default function TopBar() {
       </nav>
 
       <div className={styles.right}>
+        <button
+          className={styles.undoBtn}
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo"
+        >
+          ↶ Undo
+        </button>
+        <button
+          className={styles.undoBtn}
+          onClick={redo}
+          disabled={!canRedo}
+          title="Redo"
+        >
+          ↷ Redo
+        </button>
         {hasDrawings && view !== 'model' && (
           <button className={styles.buildBtn} onClick={buildModel}>
             ⬡ Build 3D Model

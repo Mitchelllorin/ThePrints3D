@@ -111,6 +111,27 @@
   min-width: 200px;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.undoBtn {
+  background: #0f172a;
+  color: #cbd5e1;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.undoBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.undoBtn:hover:not(:disabled) {
+  background: #1e293b;
 }
 
 .buildBtn {
