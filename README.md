@@ -138,7 +138,10 @@ python ops/train/export.py --checkpoint checkpoints/best.pth
 See [`ops/train/README.md`](ops/train/README.md) for full documentation.  
 A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smoke-test and upload the ONNX as a build artifact.
 
-[cubicasa5k]: https://github.com/CubiCasa/CubiCasa5k
+- **CI** (`.github/workflows/ci.yml`)
+  - Runs lint, test, and build on pushes/PRs.
+- **PR Preview** (`.github/workflows/preview.yml`)
+  - Builds PR branch and uploads `dist` bundle to external preview endpoint.
 
 ---
 
