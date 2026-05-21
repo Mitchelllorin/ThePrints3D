@@ -13,6 +13,7 @@ import type {
   Model3D,
   UserTrace,
   WallType,
+  WorkspaceWizardInputs,
 } from '../types'
 import type { ProductCatalogItem, ProductPlacement } from '../types/products'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
@@ -172,6 +173,7 @@ interface AppState {
   cameraPreset: CameraPreset | null
   productCatalog: ProductCatalogItem[]
   productPlacements: ProductPlacement[]
+  wizardInputs: WorkspaceWizardInputs | null
 
   // Smart Processing
   smartProcessor: 'heuristic' | 'ai' | 'seed-guided'
@@ -199,6 +201,7 @@ interface AppState {
   setSidebarOpen: (open: boolean) => void
   setModelStatus: (status: Model3D['status']) => void
   buildModel: () => void
+  update3DModel: (finalInputs: WorkspaceWizardInputs) => void
   // Measurements
   setMeasureMode: (active: boolean) => void
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
@@ -249,6 +252,44 @@ function inferDrawingType(name: string): DrawingType {
   return 'floor-plan'
 }
 
+function computeFloorLevels(drawings: Drawing[]) {
+  const { groups: floorGroups, floorGroupingLog } = groupByFloorWithLog(
+    drawings.map((d) => ({
+      id: d.id,
+      name: d.name,
+      floorNumber: d.floorNumber,
+    })),
+  )
+  const levels: FloorLevel[] = []
+  const numericEntries = Array.from(floorGroups.entries())
+    .filter((entry): entry is [number, string[]] => entry[0] !== 'unknown')
+    .sort(([a], [b]) => a - b)
+
+  for (const [floorNum, ids] of numericEntries) {
+    levels.push({
+      id: `floor-${floorNum}`,
+      label: floorNum === 0 ? 'Ground Floor' : floorNum < 0 ? 'Basement' : `Level ${floorNum}`,
+      elevation: floorToElevation(floorNum),
+      height: FLOOR_HEIGHT_M,
+      drawingIds: ids,
+    })
+  }
+
+  const unknownIds = floorGroups.get('unknown')
+  if (unknownIds && unknownIds.length > 0) {
+    const topKnownFloor = numericEntries[numericEntries.length - 1]?.[0] ?? 0
+    levels.push({
+      id: 'floor-unknown',
+      label: 'Unknown',
+      elevation: floorToElevation(topKnownFloor + 1),
+      height: FLOOR_HEIGHT_M,
+      drawingIds: unknownIds,
+    })
+  }
+
+  return { levels, floorGroupingLog }
+}
+
 export const useAppStore = create<AppState>()(
   immer((set, get) => ({
     view: 'upload',
@@ -266,6 +307,7 @@ export const useAppStore = create<AppState>()(
     cameraPreset: null,
     productCatalog: [],
     productPlacements: [],
+    wizardInputs: null,
 
     // Smart processing defaults
     smartProcessor: defaultSmartProcessingState.processor,
@@ -460,45 +502,33 @@ export const useAppStore = create<AppState>()(
         s.view = 'model'
 
         // Build floor levels from sheet numbers
-        const { groups: floorGroups, floorGroupingLog } = groupByFloorWithLog(
-          s.drawings.map((d) => ({
-            id: d.id,
-            name: d.name,
-            floorNumber: d.floorNumber,
-          }))
-        )
+        const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
         s.floorGroupingLog = floorGroupingLog
-        const levels: FloorLevel[] = []
-        const numericEntries = Array.from(floorGroups.entries())
-          .filter((entry): entry is [number, string[]] => entry[0] !== 'unknown')
-          .sort(([a], [b]) => a - b)
-
-        for (const [floorNum, ids] of numericEntries) {
-          levels.push({
-            id: `floor-${floorNum}`,
-            label: floorNum === 0 ? 'Ground Floor' : floorNum < 0 ? 'Basement' : `Level ${floorNum}`,
-            elevation: floorToElevation(floorNum),
-            height: FLOOR_HEIGHT_M,
-            drawingIds: ids,
-          })
-        }
-
-        const unknownIds = floorGroups.get('unknown')
-        if (unknownIds && unknownIds.length > 0) {
-          const topKnownFloor = numericEntries[numericEntries.length - 1]?.[0] ?? 0
-          levels.push({
-            id: 'floor-unknown',
-            label: 'Unknown',
-            elevation: floorToElevation(topKnownFloor + 1),
-            height: FLOOR_HEIGHT_M,
-            drawingIds: unknownIds,
-          })
-        }
         s.model.floorLevels = levels
         logEvent('model.build.started', {
           drawingCount: s.drawings.length,
           floorCount: levels.length,
           uncalibratedCount: s.drawings.filter((d) => !d.scaleMmPerPx).length,
+        })
+      }),
+
+    update3DModel: (finalInputs) =>
+      set((s) => {
+        const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
+        s.wizardInputs = finalInputs
+        s.floorGroupingLog = floorGroupingLog
+        s.model.floorLevels = levels
+        s.model.status = 'building'
+        s.model.generatedAt = Date.now()
+        s.view = 'model'
+        logEvent('workspace.wizard.group.completed', {
+          completedGroup: finalInputs.completedGroup,
+          completedAt: finalInputs.completedAt,
+          hasWallTypes: finalInputs.wallTypes.length > 0,
+          hasMaterials: finalInputs.materials.length > 0,
+          hasMetrics: finalInputs.constructionMetrics.length > 0,
+          hasSymbolTargets: finalInputs.symbolTargets.length > 0,
+          hasCorrectionNotes: finalInputs.correctionNotes.length > 0,
         })
       }),
 

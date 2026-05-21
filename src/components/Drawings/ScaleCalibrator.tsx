@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import styles from './ScaleCalibrator.module.css'
 
 interface Point { x: number; y: number }
@@ -29,6 +29,8 @@ export default function ScaleCalibrator({
   const [distInput, setDistInput] = useState('')
   const [unit, setUnit] = useState<'mm' | 'm' | 'ft' | 'in'>('mm')
   const imgRef = useRef<HTMLImageElement>(null)
+  const moveRafRef = useRef<number | null>(null)
+  const pendingCursorRef = useRef<Point | null>(null)
 
   // Convert unit to mm
   function toMm(value: number): number {
@@ -45,6 +47,7 @@ export default function ScaleCalibrator({
     const el = imgRef.current
     if (!el) return null
     const rect = el.getBoundingClientRect()
+    if (rect.width < 1 || rect.height < 1) return null
     const scaleX = imageWidth / rect.width
     const scaleY = imageHeight / rect.height
     return {
@@ -76,13 +79,27 @@ export default function ScaleCalibrator({
     (e: React.MouseEvent<HTMLImageElement>) => {
       if (phase !== 'point-a' && phase !== 'point-b') return
       const p = eventToImagePx(e.clientX, e.clientY)
-      if (p) setCursor(p)
+      if (!p) return
+      pendingCursorRef.current = p
+      if (moveRafRef.current !== null) return
+      moveRafRef.current = window.requestAnimationFrame(() => {
+        moveRafRef.current = null
+        setCursor(pendingCursorRef.current)
+      })
     },
     [phase, eventToImagePx]
   )
 
   const handleImageLeave = useCallback(() => {
     setCursor(null)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (moveRafRef.current !== null) {
+        window.cancelAnimationFrame(moveRafRef.current)
+      }
+    }
   }, [])
 
   function pixelDistance(): number {

@@ -9,6 +9,7 @@ import { detectOpenings } from './openingDetector'
 import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
 import { inferScaleFromStructure } from './scaleInference'
+import { detectSemanticEntities } from './symbolDetection'
 
 export type DrawingPatch = Partial<Drawing>
 

@@ -283,3 +283,17 @@ export interface Annotation {
   color: string
   createdAt: number
 }
+
+// ─── Unified 2D→3D Wizard Context ─────────────────────────────────────────────
+
+export type WizardGroupId = 'group1' | 'group2' | 'group3'
+
+export interface WorkspaceWizardInputs {
+  wallTypes: string
+  materials: string
+  constructionMetrics: string
+  symbolTargets: string
+  correctionNotes: string
+  completedGroup: WizardGroupId
+  completedAt: number
+}
