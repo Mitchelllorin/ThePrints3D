@@ -239,6 +239,9 @@ interface AppState {
   correctionCount: number
   detectedWallTypes: DetectedWallType[]
 
+  /** True while the FloorplanOverlay is in wall-trace mode (used to disable OrbitControls) */
+  overlayTraceModeActive: boolean
+
   // Actions
   setView: (view: AppView) => void
   addDrawings: (files: File[]) => void
@@ -288,6 +291,7 @@ interface AppState {
   removeProductPlacement: (id: string) => void
   clearProductPlacements: () => void
   // Smart processing actions
+  setOverlayTraceModeActive: (active: boolean) => void
   startTraceMode: () => void
   addTrace: (trace: UserTrace) => void
   clearTraces: () => void
@@ -448,10 +452,12 @@ export const useAppStore = create<AppState>()(
     smartStageLabel: defaultSmartProcessingState.stageLabel,
     correctionCount: defaultSmartProcessingState.correctionCount,
     detectedWallTypes: [],
+    overlayTraceModeActive: false,
 
     setView: (view) =>
       set((s) => {
         s.view = view
+        s.overlayTraceModeActive = false
       }),
 
     checkpointHistory: () => {
@@ -499,7 +505,7 @@ export const useAppStore = create<AppState>()(
             size: drawing.file.size,
           })
         }
-        if (s.view === 'upload') s.view = 'drawings'
+        if (s.view === 'upload') s.view = 'model'
       }),
 
     removeDrawing: (id) => {
@@ -993,6 +999,11 @@ export const useAppStore = create<AppState>()(
     },
 
     // ─── Smart Processing Actions ──────────────────────────────────────────────
+
+    setOverlayTraceModeActive: (active) =>
+      set((s) => {
+        s.overlayTraceModeActive = active
+      }),
 
     startTraceMode: () =>
       set((s) => {

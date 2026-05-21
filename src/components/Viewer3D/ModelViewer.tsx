@@ -182,9 +182,19 @@ export default function ModelViewer() {
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
   const measurements = useAppStore((s) => s.measurements)
+  const overlay = useAppStore((s) => s.floorplanOverlay)
+  const overlayTraceModeActive = useAppStore((s) => s.overlayTraceModeActive)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm] = useState<FormState | null>(null)
+
+  /** OrbitControls must yield to the overlay during calibration or wall-tracing */
+  const orbitEnabled = !overlayTraceModeActive && !overlay.calibrationMode
+
+  /** Cursor feedback: crosshair during any interactive overlay mode or annotation */
+  const canvasCursor = annotateMode || overlayTraceModeActive || overlay.calibrationMode
+    ? 'crosshair'
+    : 'default'
 
   function handlePlaceRequest(position: [number, number, number], screenX: number, screenY: number) {
     setPendingForm({ position3D: position, screenX, screenY })
@@ -332,7 +342,7 @@ export default function ModelViewer() {
         shadows
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
-        style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
+        style={{ touchAction: 'none', cursor: canvasCursor }}
       >
         <CameraRig />
         <ambientLight intensity={0.4} />
@@ -377,6 +387,7 @@ export default function ModelViewer() {
         <OrbitControls
           ref={controlsRef}
           makeDefault
+          enabled={orbitEnabled}
           enableDamping
           dampingFactor={0.12}
           rotateSpeed={0.6}

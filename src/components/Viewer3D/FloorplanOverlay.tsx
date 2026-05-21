@@ -53,6 +53,8 @@ export default function FloorplanOverlay() {
   const addTrace = useAppStore((s) => s.addTrace)
   const processWithSeeds = useAppStore((s) => s.processWithSeeds)
   const loadPresetDrawing = useAppStore((s) => s.loadPresetDrawing)
+  const traceMode = useAppStore((s) => s.overlayTraceModeActive)
+  const setTraceMode = useAppStore((s) => s.setOverlayTraceModeActive)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageUrl = drawing ? (drawing.rasterUrl ?? drawing.previewUrl) : null
@@ -70,7 +72,6 @@ export default function FloorplanOverlay() {
   }, [imageUrl])
 
   const [drag, setDrag] = useState<DragState | null>(null)
-  const [traceMode, setTraceMode] = useState(false)
   const [traceStroke, setTraceStroke] = useState<[number, number][]>([])
   const [hoverPixel, setHoverPixel] = useState<[number, number] | null>(null)
   const [calibrationA, setCalibrationA] = useState<[number, number] | null>(null)
