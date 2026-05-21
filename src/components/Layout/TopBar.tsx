@@ -36,6 +36,12 @@ export default function TopBar() {
 
       <nav className={styles.nav}>
         <button
+          className={`${styles.navBtn} ${view === 'model' ? styles.active : ''}`}
+          onClick={() => setView('model')}
+        >
+          3D Workspace
+        </button>
+        <button
           className={`${styles.navBtn} ${view === 'upload' ? styles.active : ''}`}
           onClick={() => setView('upload')}
         >
@@ -46,14 +52,8 @@ export default function TopBar() {
           onClick={() => hasDrawings && setView('drawings')}
           disabled={!hasDrawings}
         >
-          Drawings
+          Sheets
           {hasDrawings && <span className={styles.badge}>{drawings.length}</span>}
-        </button>
-        <button
-          className={`${styles.navBtn} ${view === 'model' ? styles.active : ''}`}
-          onClick={() => setView('model')}
-        >
-          3D Model
         </button>
         <button
           className={`${styles.navBtn} ${view === 'tools' ? styles.active : ''}`}

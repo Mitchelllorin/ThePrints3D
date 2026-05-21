@@ -251,6 +251,7 @@
   gap: 8px;
   color: #cbd5e1;
   font-size: 12px;
+  pointer-events: all;
 }
 
 .floorplanPanelHeader {
@@ -265,6 +266,17 @@
   gap: 4px;
 }
 
+.floorplanActionRow {
+  display: flex;
+  gap: 6px;
+}
+
+.floorplanActionGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
 .floorplanChecks {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -272,6 +284,15 @@
 }
 
 .floorplanSelect {
+  width: 100%;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 6px;
+}
+
+.floorplanInput {
   width: 100%;
   background: #0f172a;
   color: #e2e8f0;
@@ -307,4 +328,61 @@
   display: flex;
   gap: 6px;
   justify-content: flex-end;
+}
+
+.floorplanMeta {
+  display: grid;
+  gap: 2px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.floorplanCalibrationRow {
+  display: grid;
+  grid-template-columns: 1fr 90px auto;
+  gap: 6px;
+}
+
+.floorplanModalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  pointer-events: all;
+}
+
+.floorplanModal {
+  width: min(520px, calc(100vw - 32px));
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.floorplanPresetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.floorplanPresetCard {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.floorplanPresetCard:hover {
+  border-color: #38bdf8;
+  background: rgba(14, 165, 233, 0.12);
 }

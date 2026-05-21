@@ -1,40 +1,21 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useAppStore } from '../../store/useAppStore'
-import type { WorkspaceWizardInputs, WizardGroupId } from '../../types'
+import type { WizardGroupId } from '../../types'
 import {
   WIZARD_GROUPS,
   getPreviousWizardGroup,
-  type ProjectContextData,
 } from './wizardGroups'
-import {
-  completeWizardGroup,
-  loadWizardState,
-  patchWizardData,
-  saveWizardState,
-  setWizardCurrentGroup,
-  type ProjectContextWizardState,
-} from './wizardState'
 
 interface Props {
   phase: 'pre3d' | 'post3d'
 }
 
-function buildFinalInputs(data: ProjectContextData, completedGroup: WizardGroupId): WorkspaceWizardInputs {
-  return {
-    set1BuildingBasics: data.set1BuildingBasics.trim(),
-    set1Clarifications: data.set1Clarifications.trim(),
-    set2StructuralDetails: data.set2StructuralDetails.trim(),
-    set2Clarifications: data.set2Clarifications.trim(),
-    set3FinishingDetails: data.set3FinishingDetails.trim(),
-    set3Clarifications: data.set3Clarifications.trim(),
-    completedGroup,
-    completedAt: Date.now(),
-  }
-}
-
 export default function ProjectContextPanel({ phase }: Props) {
-  const update3DModel = useAppStore((s) => s.update3DModel)
-  const [wizard, setWizard] = useState<ProjectContextWizardState>(() => loadWizardState())
+  const wizard = useAppStore((s) => s.wizardState)
+  const updateWizardData = useAppStore((s) => s.updateWizardData)
+  const jumpToWizardGroup = useAppStore((s) => s.jumpToWizardGroup)
+  const completeWizardGroup = useAppStore((s) => s.completeWizardGroup)
+  const resetWizard = useAppStore((s) => s.resetWizard)
 
   const activeGroup = useMemo(
     () => WIZARD_GROUPS.find((group) => group.id === wizard.currentGroup) ?? WIZARD_GROUPS[0],
@@ -49,26 +30,17 @@ export default function ProjectContextPanel({ phase }: Props) {
   )
 
   const subtitlePrefix = phase === 'pre3d'
-    ? 'Pre-3D context'
-    : 'Post-3D correction context'
-
-  const setAndPersist = (next: ProjectContextWizardState) => {
-    saveWizardState(next)
-    setWizard(next)
-  }
-
-  const patchData = (partial: Partial<ProjectContextData>) => {
-    setAndPersist(patchWizardData(wizard, partial))
-  }
+    ? '3D-first setup'
+    : 'Live 3D construction context'
 
   const jumpToGroup = (groupId: WizardGroupId) => {
     const targetIndex = WIZARD_GROUPS.findIndex((group) => group.id === groupId)
     const highestCompletedIndex = Math.max(
       -1,
-      ...wizard.completedGroups.map((groupId) => WIZARD_GROUPS.findIndex((group) => group.id === groupId)),
+      ...wizard.completedGroups.map((completedId) => WIZARD_GROUPS.findIndex((group) => group.id === completedId)),
     )
     if (targetIndex > highestCompletedIndex + 1) return
-    setAndPersist(setWizardCurrentGroup(wizard, groupId))
+    jumpToWizardGroup(groupId)
   }
 
   const goBack = () => {
@@ -77,12 +49,10 @@ export default function ProjectContextPanel({ phase }: Props) {
     jumpToGroup(previous)
   }
 
-  const completeCurrentGroup = () => {
+  const handleCompleteCurrentGroup = () => {
     const missing = activeGroup.fields.some((field) => wizard.data[field.key].trim().length === 0)
     if (missing) return
-    const next = completeWizardGroup(wizard, activeGroup.id)
-    setAndPersist(next)
-    update3DModel(buildFinalInputs(next.data, activeGroup.id))
+    completeWizardGroup(activeGroup.id)
   }
 
   const isGroupComplete = (groupId: WizardGroupId) => wizard.completedGroups.includes(groupId)
@@ -91,10 +61,10 @@ export default function ProjectContextPanel({ phase }: Props) {
   return (
     <div style={{ display: 'grid', gap: 8 }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>
-        Unified Context Wizard · 2D → 3D
+        Unified Construction Wizard
       </div>
       <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>
-        {subtitlePrefix} · Complete Group 1 → Group 2 → Group 3. Each completion refreshes the 3D workspace model context.
+        {subtitlePrefix} · Complete Set 1 → Set 2 → Set 3 to drive the live 3D workspace.
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -137,7 +107,7 @@ export default function ProjectContextPanel({ phase }: Props) {
           </ul>
           <textarea
             value={wizard.data[field.key]}
-            onChange={(e) => patchData({ [field.key]: e.target.value })}
+            onChange={(e) => updateWizardData({ [field.key]: e.target.value })}
             placeholder={field.placeholder}
             rows={field.rows}
             style={{
@@ -153,7 +123,7 @@ export default function ProjectContextPanel({ phase }: Props) {
         </label>
       ))}
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button
           type="button"
           onClick={goBack}
@@ -168,11 +138,11 @@ export default function ProjectContextPanel({ phase }: Props) {
             fontSize: 12,
           }}
         >
-          ← Previous Group
+          ← Previous Set
         </button>
         <button
           type="button"
-          onClick={completeCurrentGroup}
+          onClick={handleCompleteCurrentGroup}
           style={{
             background: '#0ea5e9',
             color: '#082f49',
@@ -184,12 +154,27 @@ export default function ProjectContextPanel({ phase }: Props) {
             fontWeight: 700,
           }}
         >
-          {isFinalGroup ? 'Complete Group 3 + Update 3D' : 'Complete Group + Update 3D →'}
+          {isFinalGroup ? 'Complete Set 3 + Update 3D' : 'Complete Set + Update 3D →'}
+        </button>
+        <button
+          type="button"
+          onClick={resetWizard}
+          style={{
+            background: '#1e293b',
+            color: '#fca5a5',
+            border: '1px solid #334155',
+            padding: '6px 10px',
+            borderRadius: 8,
+            cursor: 'pointer',
+            fontSize: 12,
+          }}
+        >
+          Cancel wizard
         </button>
       </div>
 
       <div style={{ fontSize: 11, color: '#94a3b8' }}>
-        {filledCount}/5 fields filled · {wizard.completedGroups.length}/3 groups completed
+        {filledCount}/6 fields filled · {wizard.completedGroups.length}/3 sets completed
         {wizard.savedAt ? ` · saved ${new Date(wizard.savedAt).toLocaleTimeString()}` : ''}
       </div>
     </div>

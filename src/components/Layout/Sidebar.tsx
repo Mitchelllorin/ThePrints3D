@@ -43,8 +43,8 @@ export default function Sidebar() {
       {view === 'drawings' && (
         <>
           <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Drawing Set</h2>
-            <p className={styles.hint}>Select a drawing to preview it</p>
+            <h2 className={styles.sectionTitle}>Drawing Library</h2>
+            <p className={styles.hint}>Preview sheets here, then return to the 3D workspace for calibration and tracing.</p>
           </section>
           <section className={styles.section}>
             <ProjectContextPanel phase="pre3d" />
@@ -54,12 +54,12 @@ export default function Sidebar() {
 
       {view === 'upload' && (
         <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Getting Started</h2>
+          <h2 className={styles.sectionTitle}>3D-first workflow</h2>
           <ol className={styles.steps}>
-            <li>Upload your drawing set (PDF or images)</li>
-            <li>Tag each sheet by discipline</li>
-            <li>Click "Build 3D Model"</li>
-            <li>Toggle layers to explore systems</li>
+            <li>Upload or scan a print</li>
+            <li>Open the 3D workspace overlay</li>
+            <li>Calibrate, align, and trace on the grid</li>
+            <li>Build and review the 3D structure</li>
           </ol>
         </section>
       )}

@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, FloorLevel, Layer, ParsedOpening, ParsedRoom, ParsedWall } from '../../types'
 import { logEvent } from '../../services/logger'
+import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 
 interface Props {
   layers: Layer[]
@@ -55,10 +56,10 @@ function buildRealWalls(
   floorHeight: number,
   wallMat: THREE.MeshStandardMaterial,
   userWallMat: THREE.MeshStandardMaterial,
-  layerId: string
+   layerId: string,
+   defaultThicknessM: number,
 ) {
   const s = mmPerPx / 1000  // px → metres
-  const DEFAULT_THICK = 0.2  // metres
 
   for (const w of walls) {
     const wx1 = (w.x1 - cx) * s
@@ -69,7 +70,7 @@ function buildRealWalls(
     const len = Math.sqrt((wx2 - wx1) ** 2 + (wz2 - wz1) ** 2)
     if (len < 0.1) continue  // skip tiny segments (<10cm)
 
-    const thick = w.thickness > 1 ? w.thickness * s : DEFAULT_THICK
+    const thick = w.thickness > 1 ? w.thickness * s : defaultThicknessM
     const angle = Math.atan2(wz2 - wz1, wx2 - wx1)
 
     const geo = new THREE.BoxGeometry(len, floorHeight - 0.15, Math.max(thick, 0.05))
@@ -87,6 +88,71 @@ function buildRealWalls(
     group.add(mesh)
   }
 }
+
+function buildFoundation(
+  group: THREE.Group,
+  fp: Footprint,
+  foundationType: string,
+) {
+  const W = fp.maxX - fp.minX + 0.8
+  const D = fp.maxZ - fp.minZ + 0.8
+  const cx = (fp.minX + fp.maxX) / 2
+  const cz = (fp.minZ + fp.maxZ) / 2
+  const depth = /basement/i.test(foundationType) ? 1.2 : /pier|pile/i.test(foundationType) ? 0.5 : 0.35
+  const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#334155'),
+    metalness: 0.08,
+    roughness: 0.92,
+  })
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(W, depth, D), material)
+  slab.position.set(cx, -depth / 2, cz)
+  slab.receiveShadow = true
+  slab.userData.layer = 'structure'
+  group.add(slab)
+}
+
+function buildSpecialFeatures(
+  group: THREE.Group,
+  fp: Footprint,
+  elevation: number,
+  floorHeight: number,
+  features: string[],
+) {
+  if (features.length === 0) return
+  const cx = (fp.minX + fp.maxX) / 2
+  const cz = (fp.minZ + fp.maxZ) / 2
+  const featureMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f59e0b'),
+    transparent: true,
+    opacity: 0.45,
+    roughness: 0.5,
+  })
+  if (features.includes('soffit') || features.includes('bulkhead')) {
+    const soffit = new THREE.Mesh(new THREE.BoxGeometry((fp.maxX - fp.minX) * 0.35, 0.28, 0.6), featureMat)
+    soffit.position.set(cx, elevation + floorHeight - 0.25, fp.minZ + 0.8)
+    soffit.userData.layer = 'ceiling'
+    group.add(soffit)
+  }
+  if (features.includes('niche') || features.includes('reveal')) {
+    const niche = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.2), featureMat)
+    niche.position.set(fp.maxX - 0.5, elevation + 1, cz)
+    niche.userData.layer = 'walls'
+    group.add(niche)
+  }
+}
+
+const SCENE_MODULE_ORDER = [
+  'foundation',
+  'floors',
+  'walls',
+  'rooms',
+  'openings',
+  'ceiling',
+  'structure',
+  'mep',
+  'special-features',
+  'excavation',
+] as const
 
 // ─── Procedural footprint geometry (fallback) ─────────────────────────────────
 
@@ -405,6 +471,7 @@ export default function BuildingModel({ layers }: Props) {
   const groupRef = useRef<THREE.Group>(null)
   const drawings = useAppStore((s) => s.drawings)
   const model = useAppStore((s) => s.model)
+  const wizardInputs = useAppStore((s) => s.wizardInputs)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
 
   useEffect(() => {
@@ -413,26 +480,41 @@ export default function BuildingModel({ layers }: Props) {
     while (group.children.length > 0) group.remove(group.children[0])
 
     const layerMap = new Map(layers.map((l) => [l.id, l]))
-    const floorHeight = 3.2
+    const sceneConfig = deriveWorkspaceSceneConfig(wizardInputs)
+    const floorHeight = sceneConfig.wallHeightM
 
-    // Determine floor levels to render
-    const floorLevels: FloorLevel[] =
-      model.floorLevels.length > 0
-        ? model.floorLevels
-        : [{ id: 'floor-0', label: 'Ground Floor', elevation: 0, height: floorHeight, drawingIds: drawings.map((d) => d.id) }]
+    const seededLevels = model.floorLevels.length > 0
+      ? model.floorLevels
+      : [{ id: 'floor-0', label: 'Ground Floor', elevation: 0, height: floorHeight, drawingIds: drawings.map((d) => d.id) }]
 
-    // Determine building footprint — use all walls across all levels
+    const floorLevels: FloorLevel[] = Array.from(
+      { length: Math.max(sceneConfig.floorCount, seededLevels.length) },
+      (_, index) => seededLevels[index] ?? {
+        id: `floor-${index}`,
+        label: index === 0 ? 'Ground Floor' : `Level ${index}`,
+        elevation: index * floorHeight,
+        height: floorHeight,
+        drawingIds: index === 0 ? drawings.map((d) => d.id) : [],
+      },
+    ).map((level, index) => ({
+      ...level,
+      elevation: index * floorHeight,
+      height: floorHeight,
+    }))
+
     const allParsed = drawings.filter((d) => d.parsedWalls.length > 0)
-    let globalCx = 0, globalCy = 0, globalMmPerPx = DEFAULT_SCALE_MM_PER_PX
+    let globalCx = 0
+    let globalCy = 0
+    let globalMmPerPx = DEFAULT_SCALE_MM_PER_PX
 
     if (allParsed.length > 0) {
-      // Use the drawing with the most walls as reference
       const ref = allParsed.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
       const [rcx, rcy] = centerOfWalls(ref.parsedWalls)
       globalCx = rcx
       globalCy = rcy
       globalMmPerPx = ref.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
     }
+
     const fallbackScaleUsages = drawings.filter((d) => d.parsedWalls.length > 0 && !d.scaleMmPerPx).length
     if (fallbackScaleUsages > 0) {
       logEvent('model.scale.fallback_used', {
@@ -441,7 +523,6 @@ export default function BuildingModel({ layers }: Props) {
       }, 'warn')
     }
 
-    // Compute global footprint
     let globalFp: Footprint | null = null
     for (const d of allParsed) {
       const mmPx = d.scaleMmPerPx ?? globalMmPerPx
@@ -455,99 +536,136 @@ export default function BuildingModel({ layers }: Props) {
         globalFp.maxZ = Math.max(globalFp.maxZ, fp.maxZ)
       }
     }
-    const defaultFp: Footprint = { minX: -7.5, maxX: 7.5, minZ: -5, maxZ: 5 }
-    const fp = globalFp ?? defaultFp
 
-    // Build each floor
+    const defaultFp: Footprint = {
+      minX: -sceneConfig.footprintWidthM / 2,
+      maxX: sceneConfig.footprintWidthM / 2,
+      minZ: -sceneConfig.footprintDepthM / 2,
+      maxZ: sceneConfig.footprintDepthM / 2,
+    }
+    const fp = globalFp ?? defaultFp
+    const baseWallDrawings = drawings.filter(
+      (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0,
+    )
+
+    buildFoundation(group, fp, sceneConfig.foundationType)
+
     for (const level of floorLevels) {
       const elev = level.elevation
-      const fh = level.height
-
-      // Collect parsed drawings for this floor
+      const fh = floorHeight
       const floorDrawings: Drawing[] = level.drawingIds
         .map((id) => drawings.find((d) => d.id === id))
         .filter(Boolean) as Drawing[]
-
-      const wallDrawings = floorDrawings.filter(
-        (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0
+      const floorWallDrawings = floorDrawings.filter(
+        (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0,
       )
+      const wallDrawings = floorWallDrawings.length > 0 ? floorWallDrawings : baseWallDrawings
 
-      // ── Floors ────────────────────────────────────────────────────────────
-      const floorLayer = layerMap.get('floors')
-      if (floorLayer?.visible) {
-        buildFloorSlab(group, fp, elev, floorLayer.color, floorLayer.opacity)
-      }
-
-      // ── Walls ─────────────────────────────────────────────────────────────
-      const wallLayer = layerMap.get('walls')
-      if (wallLayer?.visible) {
-        const wMat = mat(wallLayer.color, wallLayer.opacity, { roughness: 0.7 })
-        const userWMat = mat('#60a5fa', wallLayer.opacity, { roughness: 0.45, metalness: 0.15 })
-        if (wallDrawings.length > 0) {
-          // Real geometry from detected walls
-          for (const d of wallDrawings) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
-            buildRealWalls(group, d.parsedWalls, mmPx, globalCx, globalCy, elev, fh, wMat, userWMat, 'walls')
+      for (const module of SCENE_MODULE_ORDER) {
+        switch (module) {
+          case 'foundation':
+          case 'excavation':
+            break
+          case 'floors': {
+            const floorLayer = layerMap.get('floors')
+            if (floorLayer?.visible) {
+              buildFloorSlab(group, fp, elev, floorLayer.color, floorLayer.opacity)
+            }
+            break
           }
-        } else {
-          buildProceduralWalls(group, fp, elev, fh, wMat)
-        }
-      }
-
-      // ── Rooms ─────────────────────────────────────────────────────────────
-      const floorLayer2 = layerMap.get('floors')
-      if (floorLayer2?.visible) {
-        for (const d of wallDrawings) {
-          if (d.parsedRooms.length > 0) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
-            buildRoomPlates(group, d.parsedRooms, mmPx, globalCx, globalCy, elev, 'floors')
+          case 'walls': {
+            const wallLayer = layerMap.get('walls')
+            if (!wallLayer?.visible) break
+            const wMat = mat(wallLayer.color, wallLayer.opacity, { roughness: 0.7 })
+            const userWMat = mat('#60a5fa', wallLayer.opacity, { roughness: 0.45, metalness: 0.15 })
+            if (wallDrawings.length > 0) {
+              for (const d of wallDrawings) {
+                const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+                buildRealWalls(
+                  group,
+                  d.parsedWalls,
+                  mmPx,
+                  globalCx,
+                  globalCy,
+                  elev,
+                  fh,
+                  wMat,
+                  userWMat,
+                  'walls',
+                  sceneConfig.defaultWallThicknessM,
+                )
+              }
+            } else {
+              buildProceduralWalls(group, fp, elev, fh, wMat)
+            }
+            break
           }
-        }
-      }
-
-      // ── Openings (doors & windows) ─────────────────────────────────────────
-      const dwLayer = layerMap.get('doors-windows')
-      if (dwLayer?.visible) {
-        for (const d of wallDrawings) {
-          if (d.parsedOpenings.length > 0) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
-            buildOpeningMarkers(
+          case 'rooms': {
+            const floorLayer = layerMap.get('floors')
+            if (!floorLayer?.visible) break
+            for (const d of wallDrawings) {
+              if (d.parsedRooms.length > 0) {
+                const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+                buildRoomPlates(group, d.parsedRooms, mmPx, globalCx, globalCy, elev, 'floors')
+              }
+            }
+            break
+          }
+          case 'openings': {
+            const dwLayer = layerMap.get('doors-windows')
+            if (!dwLayer?.visible) break
+            for (const d of wallDrawings) {
+              if (d.parsedOpenings.length > 0) {
+                const mmPx = d.scaleMmPerPx ?? globalMmPerPx
+                buildOpeningMarkers(
+                  group,
+                  d.parsedOpenings,
+                  mmPx,
+                  globalCx,
+                  globalCy,
+                  elev,
+                  fh,
+                  '#7dd3fc',
+                  '#a5b4fc',
+                  'doors-windows',
+                )
+              }
+            }
+            break
+          }
+          case 'ceiling': {
+            const ceilLayer = layerMap.get('ceiling')
+            const hasRCP = floorDrawings.some((d) => d.type === 'rcp') || sceneConfig.specialFeatures.length > 0
+            if (ceilLayer?.visible && hasRCP) {
+              buildCeiling(group, fp, elev, fh, ceilLayer.color, ceilLayer.opacity)
+            }
+            break
+          }
+          case 'structure': {
+            const structLayer = layerMap.get('structure')
+            if (structLayer?.visible && (wallDrawings.length > 0 || sceneConfig.hasLoadBearingWalls)) {
+              const sMat = mat(structLayer.color, structLayer.opacity, { roughness: 0.5 })
+              buildStructure(group, fp, elev, fh, sMat)
+            }
+            break
+          }
+          case 'mep':
+            buildMEP(
               group,
-              d.parsedOpenings,
-              mmPx,
-              globalCx,
-              globalCy,
+              fp,
               elev,
               fh,
-              '#7dd3fc',  // door color (sky-300)
-              '#a5b4fc',  // window color (indigo-300)
-              'doors-windows',
+              layers,
+              floorDrawings.some((d) => d.type === 'electrical'),
+              floorDrawings.some((d) => d.type === 'plumbing'),
+              floorDrawings.some((d) => d.type === 'mechanical'),
             )
-          }
+            break
+          case 'special-features':
+            buildSpecialFeatures(group, fp, elev, fh, sceneConfig.specialFeatures)
+            break
         }
       }
-
-      // ── Ceiling / RCP ─────────────────────────────────────────────────────
-      const ceilLayer = layerMap.get('ceiling')
-      const hasRCP = floorDrawings.some((d) => d.type === 'rcp')
-      if (ceilLayer?.visible && hasRCP) {
-        buildCeiling(group, fp, elev, fh, ceilLayer.color, ceilLayer.opacity)
-      }
-
-      // ── Structure (only from real detected walls) ─────────────────────────
-      const structLayer = layerMap.get('structure')
-      if (structLayer?.visible && wallDrawings.length > 0) {
-        const sMat = mat(structLayer.color, structLayer.opacity, { roughness: 0.5 })
-        buildStructure(group, fp, elev, fh, sMat)
-      }
-
-      // ── MEP Systems ────────────────────────────────────────────────────────
-      buildMEP(
-        group, fp, elev, fh, layers,
-        floorDrawings.some((d) => d.type === 'electrical'),
-        floorDrawings.some((d) => d.type === 'plumbing'),
-        floorDrawings.some((d) => d.type === 'mechanical')
-      )
     }
 
     const timer = setTimeout(() => {
@@ -558,7 +676,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, model.floorLevels, layers, setModelStatus])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs])
 
   return <group ref={groupRef} />
 }
