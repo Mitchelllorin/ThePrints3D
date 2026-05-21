@@ -289,11 +289,25 @@ export interface Annotation {
 export type WizardGroupId = 'group1' | 'group2' | 'group3'
 
 export interface WorkspaceWizardInputs {
-  wallTypes: string
-  materials: string
-  constructionMetrics: string
-  symbolTargets: string
-  correctionNotes: string
+  set1BuildingBasics: string
+  set1Clarifications: string
+  set2StructuralDetails: string
+  set2Clarifications: string
+  set3FinishingDetails: string
+  set3Clarifications: string
   completedGroup: WizardGroupId
   completedAt: number
+}
+
+export interface FloorplanOverlayState {
+  drawingId: string | null
+  visible: boolean
+  locked: boolean
+  snapToGrid: boolean
+  calibrationMode: boolean
+  guidedStep: number
+  position: [number, number]
+  scale: [number, number]
+  rotationDeg: number
+  opacity: number
 }

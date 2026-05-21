@@ -1,11 +1,12 @@
 import type { WizardGroupId } from '../../types'
 
 export interface ProjectContextData {
-  wallTypes: string
-  materials: string
-  constructionMetrics: string
-  symbolTargets: string
-  correctionNotes: string
+  set1BuildingBasics: string
+  set1Clarifications: string
+  set2StructuralDetails: string
+  set2Clarifications: string
+  set3FinishingDetails: string
+  set3Clarifications: string
 }
 
 export interface WizardFieldConfig {
@@ -13,6 +14,7 @@ export interface WizardFieldConfig {
   label: string
   placeholder: string
   rows: number
+  subQuestions: string[]
 }
 
 export interface WizardGroupConfig {
@@ -23,62 +25,97 @@ export interface WizardGroupConfig {
 }
 
 export const DEFAULT_PROJECT_CONTEXT_DATA: ProjectContextData = {
-  wallTypes: '',
-  materials: '',
-  constructionMetrics: '',
-  symbolTargets: '',
-  correctionNotes: '',
+  set1BuildingBasics: '',
+  set1Clarifications: '',
+  set2StructuralDetails: '',
+  set2Clarifications: '',
+  set3FinishingDetails: '',
+  set3Clarifications: '',
 }
 
 export const WIZARD_GROUPS: WizardGroupConfig[] = [
   {
     id: 'group1',
-    title: 'Group 1 · Core Assemblies',
-    subtitle: 'Define known wall systems and primary materials before the first 3D pass.',
+    title: 'Set 1 · Building Basics',
+    subtitle: 'Define dimensions, wall heights, floor count, and baseline footprint assumptions first.',
     fields: [
       {
-        key: 'wallTypes',
-        label: 'Wall types / assemblies',
-        placeholder: 'e.g. 6 inch exterior CMU, 3-5/8 inch metal stud interior',
-        rows: 3,
+        key: 'set1BuildingBasics',
+        label: 'Building basics',
+        placeholder: 'e.g. 28m x 18m footprint, wall height 3.2m, 2 floors with basement',
+        rows: 4,
+        subQuestions: [
+          'What are the overall building dimensions?',
+          'What is the standard wall height per level?',
+          'How many floors (including basements/mezzanines)?',
+          'Any major grid/module spacing constraints?',
+        ],
       },
       {
-        key: 'materials',
-        label: 'Materials',
-        placeholder: 'e.g. drywall layers, glazing type, framing material',
+        key: 'set1Clarifications',
+        label: 'Set 1 clarifying notes',
+        placeholder: 'Add clarifications if dimensions vary by zone or floor.',
         rows: 3,
+        subQuestions: [
+          'Do any levels have different floor-to-floor heights?',
+          'Any irregular geometry the model should prioritize?',
+        ],
       },
     ],
   },
   {
     id: 'group2',
-    title: 'Group 2 · Build Calibration Targets',
-    subtitle: 'Capture construction metrics and priority symbols for extraction + alignment.',
+    title: 'Set 2 · Structural Details',
+    subtitle: 'Capture doors, windows, openings, and load-bearing constraints before refinement.',
     fields: [
       {
-        key: 'constructionMetrics',
-        label: 'Construction metrics',
-        placeholder: 'e.g. floor-to-floor height, module spacing, tolerance assumptions',
-        rows: 3,
+        key: 'set2StructuralDetails',
+        label: 'Structural details',
+        placeholder: 'e.g. load-bearing walls on axis A/C, door swings required, window opening widths',
+        rows: 4,
+        subQuestions: [
+          'Which walls are load-bearing vs partition?',
+          'Where are major doors, windows, and openings?',
+          'Any openings to exclude from framing interpretation?',
+        ],
       },
       {
-        key: 'symbolTargets',
-        label: 'Symbol targets (doors/windows/sweeps/fixtures)',
-        placeholder: 'e.g. prioritize door swings, storefront windows, floor sweeps',
+        key: 'set2Clarifications',
+        label: 'Set 2 clarifying notes',
+        placeholder: 'Add clarifications for ambiguous openings and structural intent.',
         rows: 3,
+        subQuestions: [
+          'Which opening symbols are critical for extraction?',
+          'Any discipline conflicts to resolve first?',
+        ],
       },
     ],
   },
   {
     id: 'group3',
-    title: 'Group 3 · Correction Loop',
-    subtitle: 'Capture post-build corrections so the 2D trace and 3D model stay aligned.',
+    title: 'Set 3 · Finishing Details',
+    subtitle: 'Capture materials, thicknesses, and special finish conditions.',
     fields: [
       {
-        key: 'correctionNotes',
-        label: 'Post-3D edits / correction notes',
-        placeholder: 'e.g. fix missed openings on level 2 west wall',
+        key: 'set3FinishingDetails',
+        label: 'Finishing details',
+        placeholder: 'e.g. gypsum + tile finish in wet rooms, slab thickening at core walls',
         rows: 4,
+        subQuestions: [
+          'What finishing materials should be applied by area?',
+          'Are there required thickness overrides?',
+          'Any special features (soffits, reveals, bulkheads, niches)?',
+        ],
+      },
+      {
+        key: 'set3Clarifications',
+        label: 'Set 3 clarifying notes',
+        placeholder: 'Add unresolved finish clarifications and follow-up checks.',
+        rows: 3,
+        subQuestions: [
+          'Which finish assumptions are tentative?',
+          'What should reviewers verify after generation?',
+        ],
       },
     ],
   },

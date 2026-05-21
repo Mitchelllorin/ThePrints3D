@@ -21,11 +21,12 @@ interface Props {
 
 function buildFinalInputs(data: ProjectContextData, completedGroup: WizardGroupId): WorkspaceWizardInputs {
   return {
-    wallTypes: data.wallTypes.trim(),
-    materials: data.materials.trim(),
-    constructionMetrics: data.constructionMetrics.trim(),
-    symbolTargets: data.symbolTargets.trim(),
-    correctionNotes: data.correctionNotes.trim(),
+    set1BuildingBasics: data.set1BuildingBasics.trim(),
+    set1Clarifications: data.set1Clarifications.trim(),
+    set2StructuralDetails: data.set2StructuralDetails.trim(),
+    set2Clarifications: data.set2Clarifications.trim(),
+    set3FinishingDetails: data.set3FinishingDetails.trim(),
+    set3Clarifications: data.set3Clarifications.trim(),
     completedGroup,
     completedAt: Date.now(),
   }
@@ -61,6 +62,12 @@ export default function ProjectContextPanel({ phase }: Props) {
   }
 
   const jumpToGroup = (groupId: WizardGroupId) => {
+    const targetIndex = WIZARD_GROUPS.findIndex((group) => group.id === groupId)
+    const highestCompletedIndex = Math.max(
+      -1,
+      ...wizard.completedGroups.map((groupId) => WIZARD_GROUPS.findIndex((group) => group.id === groupId)),
+    )
+    if (targetIndex > highestCompletedIndex + 1) return
     setAndPersist(setWizardCurrentGroup(wizard, groupId))
   }
 
@@ -71,6 +78,8 @@ export default function ProjectContextPanel({ phase }: Props) {
   }
 
   const completeCurrentGroup = () => {
+    const missing = activeGroup.fields.some((field) => wizard.data[field.key].trim().length === 0)
+    if (missing) return
     const next = completeWizardGroup(wizard, activeGroup.id)
     setAndPersist(next)
     update3DModel(buildFinalInputs(next.data, activeGroup.id))
@@ -106,6 +115,7 @@ export default function ProjectContextPanel({ phase }: Props) {
                 fontSize: 11,
                 cursor: 'pointer',
               }}
+              disabled={index > Math.max(0, wizard.completedGroups.length)}
               title={group.title}
             >
               {index + 1}. {complete ? '✓ ' : ''}{group.id.toUpperCase()}
@@ -120,6 +130,11 @@ export default function ProjectContextPanel({ phase }: Props) {
       {activeGroup.fields.map((field) => (
         <label key={field.key} style={{ fontSize: 12, color: '#cbd5e1' }}>
           {field.label}
+          <ul style={{ marginTop: 6, marginBottom: 6, paddingLeft: 18, color: '#94a3b8', lineHeight: 1.3 }}>
+            {field.subQuestions.map((question) => (
+              <li key={question}>{question}</li>
+            ))}
+          </ul>
           <textarea
             value={wizard.data[field.key]}
             onChange={(e) => patchData({ [field.key]: e.target.value })}

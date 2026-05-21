@@ -17,6 +17,7 @@ import AnnotationTool from './AnnotationTool'
 import CameraHud from './CameraHud'
 import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
+import FloorplanOverlay from './FloorplanOverlay'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -170,6 +171,7 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 
 export default function ModelViewer() {
   const model = useAppStore((s) => s.model)
+  const drawings = useAppStore((s) => s.drawings)
   const layers = useAppStore((s) => s.layers)
   const measureMode = useAppStore((s) => s.measureMode)
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
@@ -357,6 +359,8 @@ export default function ModelViewer() {
           fadeDistance={60}
           position={[0, -0.01, 0]}
         />
+
+        {drawings.length > 0 && <FloorplanOverlay />}
 
         {model.status === 'building' && <BuildingProgress />}
         {(model.status === 'building' || model.status === 'ready') && (
