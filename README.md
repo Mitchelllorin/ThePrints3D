@@ -1,122 +1,213 @@
 # BluePrint3D
 
-BluePrint3D is a React + TypeScript application that converts floor-plan drawings (PDF/images) into an interactive 3D building view with measurable geometry, layer controls, symbol awareness, and local project persistence.
+[![CI](https://github.com/Mitchelllorin/BluePrint3D/actions/workflows/ci.yml/badge.svg)](https://github.com/Mitchelllorin/BluePrint3D/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)](https://react.dev/)
+[![Three.js](https://img.shields.io/badge/Three.js-0.184-black?logo=threedotjs)](https://threejs.org/)
+[![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vite.dev/)
+[![PWA Ready](https://img.shields.io/badge/PWA-ready-5A0FC8?logo=pwa)](https://web.dev/progressive-web-apps/)
 
-## What the app does
+**Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely in the browser.**
 
-1. Upload one or more drawing sheets (PDF or image files).
-2. Rasterize and analyze each sheet (discipline, wall extraction, scale, floor, openings, rooms, symbols/text).
-3. Build a multi-floor 3D representation from parsed drawing data.
-4. Explore the model with layer toggles, measurement tools, annotations, and lightweight construction utilities.
+BluePrint3D is a React + TypeScript web application that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. All processing happens client-side — no drawings ever leave your device.
 
-## Current scope
+🌐 **[Landing page](https://mitchelllorin.github.io/BluePrint3D/landing.html)** &nbsp;|&nbsp; 🚀 **[Launch the app](https://mitchelllorin.github.io/BluePrint3D/)**
 
-- Prototype / pilot-oriented product.
-- Processing is primarily client-side.
-- Includes optional AI-assisted wall detection when an ONNX model exists locally.
+---
 
-## Tech stack
+## ✨ Features
 
-- **Frontend:** React 19, TypeScript, Vite
-- **State:** Zustand + Immer
-- **3D:** Three.js via @react-three/fiber + drei
-- **File handling:** PDF.js + canvas image processing
-- **Persistence:** IndexedDB (via `idb`) + localStorage
-- **Testing:** Vitest
-- **Linting:** ESLint
+| Feature | Description |
+|---|---|
+| **Drag-and-drop upload** | PDF, PNG, JPG, TIFF, WebP — all accepted |
+| **AI wall detection** | U-Net ONNX model (WebGPU → WASM fallback) trained on CubiCasa5k |
+| **Heuristic fallback** | Edge-based wall detector when no model is present |
+| **Interactive 3D viewer** | Orbit, pan, zoom; camera presets; perspective/orthographic |
+| **Layer toggles** | Show/hide walls, doors, windows, rooms independently |
+| **Distance measurement** | Click two surface points to get real-world distances |
+| **Annotation pins** | Place labelled, colour-coded notes anywhere on the model |
+| **Product placement** | Drop doors, windows, plumbing, HVAC, lighting into the scene |
+| **Material estimator** | Auto-estimates studs, plates, drywall, insulation from parsed walls |
+| **Scale calibration** | Auto-detected from title block; manual override available |
+| **Unit converter** | Imperial ↔ metric conversions for common construction units |
+| **Construction calculators** | On-the-fly estimating helpers |
+| **Project library** | Save and reopen projects from browser IndexedDB |
+| **Share PNG** | Export a snapshot of the current 3D view |
+| **PWA / offline** | Installable; works offline after first load |
+| **Privacy-first** | 100 % client-side — no server, no uploads |
 
-## Quick start
+---
+
+## 🚀 Quick start
 
 ```bash
+git clone https://github.com/Mitchelllorin/BluePrint3D.git
+cd BluePrint3D
 npm ci
 npm run dev
 ```
 
-Then open the Vite URL shown in terminal.
+Open the URL printed by Vite (usually `http://localhost:5173`).
 
-> Recommended runtime aligns with CI (`Node.js 22`).
+### Supported input formats
 
-## NPM scripts
+- **PDF** (`.pdf`) — rasterised via PDF.js; scale text is extracted from the title block
+- **Images** (`.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.webp`)
 
-- `npm run dev` - start local dev server
-- `npm run lint` - run ESLint
-- `npm run test` - run Vitest test suite
-- `npm run build` - type-check + production build
-- `npm run preview` - preview production build
-- `npm run build:android` - build web assets and sync Capacitor Android
-- `npm run open:android` - open Android project in Android Studio
-- `npm run cap:sync` - sync Capacitor assets/plugins
-- `npm run cap:assets` - regenerate app icons/splash assets
+---
 
-## Supported inputs
+## 🛠 Commands
 
-- `.pdf`
-- `.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.webp`
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Local development server (HMR) |
+| `npm run build` | TypeScript check + Vite production bundle → `dist/` |
+| `npm run preview` | Serve the built `dist/` locally |
+| `npm run lint` | ESLint quality checks |
+| `npm run test` | Unit tests (Vitest) |
+| `npm run build:android` | Build + sync to Capacitor Android project |
 
-## Repository structure (key areas)
+---
 
-- `src/components/Upload` - drawing upload and camera capture UX
-- `src/components/Drawings` - sheet management, analysis controls, preview, calibration, symbol reference
-- `src/components/Viewer3D` - 3D scene, navigation, measurement, annotation, product placement
-- `src/components/Projects` - project save/load library (IndexedDB-backed)
-- `src/components/Tools` - unit converter and construction calculators
-- `src/store/useAppStore.ts` - primary app state and orchestration actions
-- `src/services` - rasterization, parsing, detection, inference, metrics, logging, persistence services
-- `src/symbols` - symbol glossary and asset mapping used for semantic tagging
-- `ops/` - operational docs and model training utilities
-- `pilot/` - pilot runbooks, templates, and execution artifacts
-- `.github/workflows` - CI, PR preview build, and model-training workflow
+## 🏗 Architecture
 
-## Processing pipeline summary
+```
+src/
+├── components/
+│   ├── Upload/          # Drag-and-drop file intake
+│   ├── Drawings/        # Sheet list, preview, scale calibration UI
+│   ├── Viewer3D/        # Three.js canvas, camera HUD, measure & annotate tools
+│   ├── Layers/          # Layer visibility panel
+│   ├── Tools/           # Unit converter + construction calculators
+│   ├── Projects/        # Project library (IndexedDB)
+│   ├── Annotations/     # Annotation pin components
+│   └── Layout/          # App shell, navigation
+├── services/
+│   ├── pdfRasterizer.ts        # PDF/image → canvas rasterisation
+│   ├── aiWallDetector.ts       # ONNX U-Net wall segmentation
+│   ├── wallDetector.ts         # Heuristic edge-based wall detector
+│   ├── enhancedWallDetector.ts # Post-processing & refinement
+│   ├── lineClassifier.ts       # Line-segment wall/non-wall classifier
+│   ├── wallTraceReducer.ts     # Wall-trace simplification
+│   ├── wallTypeClassifier.ts   # Interior / exterior / partition labelling
+│   ├── openingDetector.ts      # Door & window gap detection
+│   ├── roomExtractor.ts        # BFS flood-fill room segmentation
+│   ├── scaleInference.ts       # Scale auto-detection from title block
+│   ├── scaleParser.ts          # Scale string parser
+│   ├── sheetParser.ts          # Floor level inference & sheet grouping
+│   ├── sheetDiscipline.ts      # Sheet discipline classification
+│   ├── drawingProcessor.ts     # End-to-end processing pipeline
+│   ├── materialEstimator.ts    # Bill-of-materials estimator
+│   ├── projectStorage.ts       # IndexedDB project persistence
+│   ├── datasetCollector.ts     # Anonymous feature collection for model training
+│   ├── pilotMetrics.ts         # Pilot CSV snapshot/export utilities
+│   └── logger.ts               # Structured event logging
+├── store/
+│   └── useAppStore.ts          # Centralised state + actions (Zustand + Immer)
+└── types/                      # Shared TypeScript types
+```
 
-`drawingProcessor` orchestrates:
+---
 
-1. Rasterize source file (`pdfRasterizer`)
-2. Infer discipline and optionally gate wall detection (`sheetDiscipline`)
-3. Detect walls (AI ONNX model if available, otherwise heuristic detector)
-4. Resolve drawing scale (parsed notation, inferred structure, or fallback)
-5. Classify wall types
-6. Extract enclosed rooms
-7. Detect openings from wall gaps
-8. Derive semantic entities (parsed text/symbol/annotation candidates)
-9. Infer floor number from naming patterns
+## 🤖 AI wall-segmentation model
 
-## Data handling and privacy model
+`src/services/aiWallDetector.ts` looks for a trained ONNX model at
+`public/models/floorplan-wall-segmentation.onnx`. When present it is loaded
+via ONNX Runtime Web (WebGPU → WASM fallback). When absent, processing falls
+back to the heuristic detector.
 
-- Uploaded files are processed locally in-browser.
-- Saved projects are stored in IndexedDB on-device.
-- App logs/metadata are stored in localStorage.
-- No mandatory backend account flow is required for core usage.
+The model is a lightweight U-Net (~1.5 M parameters, ~6 MB) trained on the
+[CubiCasa5k][cubicasa5k] open floor-plan dataset (CC BY 4.0).
 
-See `src/components/Legal/PrivacyPolicy.tsx` for current in-app policy text.
+### Train your own model
 
-## AI wall model (optional)
+```bash
+# 1. Install Python dependencies
+pip install -r ops/train/requirements.txt
 
-If `public/models/floorplan-wall-segmentation.onnx` exists, the app attempts ONNX Runtime Web inference (`webgpu` with `wasm` fallback). If missing/unavailable, the app falls back to heuristic wall detection automatically.
+# 2. Download the CubiCasa5k dataset (~1.8 GB)
+git clone --depth 1 https://github.com/CubiCasa/CubiCasa5k data/cubicasa5k
 
-Training utilities and workflow:
+# 3. Train (~30 epochs — ≈1 h on GPU, ≈6 h on CPU)
+python ops/train/train.py --data data/cubicasa5k --out checkpoints/
 
-- `ops/train/` scripts
-- `.github/workflows/train-model.yml` (manual workflow dispatch)
+# 4. Export to ONNX
+python ops/train/export.py --checkpoint checkpoints/best.pth
+```
 
-## CI and preview workflows
+See [`ops/train/README.md`](ops/train/README.md) for full documentation.  
+A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smoke-test and upload the ONNX as a build artifact.
 
 - **CI** (`.github/workflows/ci.yml`)
   - Runs lint, test, and build on pushes/PRs.
 - **PR Preview** (`.github/workflows/preview.yml`)
   - Builds PR branch and uploads `dist` bundle to external preview endpoint.
 
-## Known limitations
+---
 
-- Parsing quality varies with drawing quality, scan noise, and annotation density.
-- Scale inference can still require manual calibration.
-- 3D geometry blends parsed results with procedural fallback logic in lower-confidence cases.
-- Project persistence is local-device only (no shared cloud workspace).
+## 🧱 Tech stack
 
-## Additional docs
+| Layer | Technology |
+|---|---|
+| UI framework | React 19 + TypeScript 6 |
+| 3D rendering | Three.js 0.184 + React Three Fiber + Drei |
+| State management | Zustand 5 + Immer |
+| Build tooling | Vite 8 + Rolldown |
+| PDF rendering | PDF.js 5 |
+| AI inference | ONNX Runtime Web 1.26 (WebGPU / WASM) |
+| Persistence | IndexedDB via idb |
+| Mobile | Capacitor 8 (Android) |
+| PWA | vite-plugin-pwa + Workbox |
+| Testing | Vitest |
+| Linting | ESLint 10 + typescript-eslint |
 
-- `ops/mvp_acceptance_criteria.md`
-- `ops/day1_setup_checklist.txt`
-- `ops/data_governance_controls.txt`
-- `pilot/pilot_runbook.txt`
-- `ops/train/README.md`
+---
+
+## ⚠️ Known limitations
+
+- Wall detection is heuristic and may over/under-detect on noisy scans or text-heavy plans.
+- 3D geometry falls back to procedural generation when parsed wall fidelity is low.
+- Scale inference is best-effort; manual calibration may be needed for non-standard title blocks.
+- No server-side persistence — all state lives in browser memory / IndexedDB.
+
+---
+
+## 🗺 Near-term roadmap
+
+1. Improve noisy-input robustness (reduce false positives / false negatives)
+2. Strengthen scale inference and multi-floor stacking confidence
+3. Expand unit-test coverage across parser and service modules
+4. Add richer telemetry and result dashboards for pilot tracking
+5. Introduce secure backend data handling and retention enforcement
+
+---
+
+## 🔧 Ops & pilot artifacts
+
+| File | Purpose |
+|---|---|
+| `pilot/pilot_runbook.txt` | 2-week pilot operational runbook |
+| `pilot/pilot_metrics_template.csv` | Required pilot metrics schema |
+| `pilot/two_week_execution_loop.txt` | Daily execution and fix cadence |
+| `ops/day1_setup_checklist.txt` | Day-1 setup checklist |
+| `ops/data_permission_template.txt` | Permissions capture template |
+| `ops/mvp_acceptance_criteria.md` | MVP readiness / exit criteria |
+| `ops/data_governance_controls.txt` | Governance controls baseline |
+| `ops/data_access_register_template.csv` | Permission / access register |
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repo and create a feature branch (`git checkout -b feature/my-thing`)
+2. Make your changes and add tests where applicable
+3. Ensure all quality gates pass: `npm run lint && npm run test && npm run build`
+4. Open a pull request — the CI workflow and a preview deployment will run automatically
+
+---
+
+## 📄 CI / deployment
+
+The CI workflow (`.github/workflows/ci.yml`) runs **lint → test → build** on every push and pull request.
+
+The preview workflow (`.github/workflows/preview.yml`) builds and deploys a preview environment for every pull request.
