@@ -248,6 +248,7 @@ interface AppState {
   setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
   addUserTracedWall: (id: string, wall: ParsedWall) => void
   clearUserTracedWalls: (id: string) => void
+  clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
   processDrawing: (id: string) => Promise<void>
   toggleLayer: (id: LayerId) => void
@@ -563,6 +564,18 @@ export const useAppStore = create<AppState>()(
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         d.parsedWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+      })
+    },
+
+    clearTracingForDrawing: (id) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        d.parsedWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        s.userTraces = []
+        s.seedMode = false
+        s.smartStageLabel = 'Heuristic Detection'
       })
     },
 

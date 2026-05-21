@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Html, Line } from '@react-three/drei'
 import * as THREE from 'three'
@@ -47,11 +47,10 @@ export default function FloorplanOverlay() {
   const buildModel = useAppStore((s) => s.buildModel)
   const processDrawing = useAppStore((s) => s.processDrawing)
   const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
-  const clearUserTracedWalls = useAppStore((s) => s.clearUserTracedWalls)
+  const clearTracingForDrawing = useAppStore((s) => s.clearTracingForDrawing)
   const setDrawingScale = useAppStore((s) => s.setDrawingScale)
   const userTraces = useAppStore((s) => s.userTraces)
   const addTrace = useAppStore((s) => s.addTrace)
-  const clearTraces = useAppStore((s) => s.clearTraces)
   const processWithSeeds = useAppStore((s) => s.processWithSeeds)
   const loadPresetDrawing = useAppStore((s) => s.loadPresetDrawing)
 
@@ -87,16 +86,6 @@ export default function FloorplanOverlay() {
     setOverlayDrawing(drawing.id)
   }, [drawing, overlay.drawingId, setOverlayDrawing])
 
-  useEffect(() => {
-    setTraceMode(false)
-    setTraceStroke([])
-    setCalibrationA(null)
-    setCalibrationB(null)
-    setHoverPixel(null)
-    setDistanceInput('')
-    updateOverlay({ calibrationMode: false }, false)
-  }, [drawing?.id, updateOverlay])
-
   const estimatedScale = useMemo<[number, number]>(() => {
     if (!drawing) return overlay.scale
     const widthPx = drawing.rasterWidth ?? 1400
@@ -123,12 +112,12 @@ export default function FloorplanOverlay() {
   const hasUsableSeedTrace = userTraces.some((trace) => trace.points.length >= 8)
   const userWallCount = drawing?.parsedWalls.filter((wall) => wall.source === 'user').length ?? 0
 
-  const planeLocalToWorld = (pixel: [number, number]): [number, number, number] => {
+  const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width
     const localZ = ((pixel[1] / imageHeight) - 0.5) * depth
     const rotated = new THREE.Vector3(localX, 0.03, localZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationRad)
     return [overlay.position[0] + rotated.x, 0.03, overlay.position[1] + rotated.z]
-  }
+  }, [depth, imageHeight, imageWidth, overlay.position, rotationRad, width])
 
   const worldToPixel = (point: THREE.Vector3): [number, number] => {
     const translated = new THREE.Vector3(point.x - overlay.position[0], 0, point.z - overlay.position[1])
@@ -143,7 +132,7 @@ export default function FloorplanOverlay() {
 
   const traceWorldPoints = useMemo(
     () => traceStroke.map(planeLocalToWorld),
-    [traceStroke, imageHeight, imageWidth, overlay.position, rotationRad, width, depth],
+    [traceStroke, planeLocalToWorld],
   )
 
   const calibrationPreviewPoints = useMemo(() => {
@@ -152,7 +141,7 @@ export default function FloorplanOverlay() {
     const end = endPixel ? planeLocalToWorld(endPixel) : null
     if (!start || !end) return null
     return [start, end] as [[number, number, number], [number, number, number]]
-  }, [calibrationA, calibrationB, hoverPixel, overlay.calibrationMode, imageHeight, imageWidth, overlay.position, rotationRad, width, depth])
+  }, [calibrationA, calibrationB, hoverPixel, overlay.calibrationMode, planeLocalToWorld])
 
   const applyMove = (dx: number, dz: number) => {
     updateOverlay({
@@ -313,8 +302,7 @@ export default function FloorplanOverlay() {
 
   const clearTracingResults = () => {
     if (!drawing) return
-    clearUserTracedWalls(drawing.id)
-    clearTraces()
+    clearTracingForDrawing(drawing.id)
     cancelTracing()
   }
 
