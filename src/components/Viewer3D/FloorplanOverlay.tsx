@@ -92,7 +92,6 @@ export default function FloorplanOverlay() {
   const onDragStart = (event: ThreeEvent<PointerEvent>, next: DragState) => {
     if (!canEdit) return
     event.stopPropagation()
-    event.target.setPointerCapture(event.pointerId)
     setDrag(next)
   }
 
@@ -121,7 +120,6 @@ export default function FloorplanOverlay() {
   const onDragEnd = (event: ThreeEvent<PointerEvent>) => {
     if (!drag) return
     event.stopPropagation()
-    event.target.releasePointerCapture(event.pointerId)
     setDrag(null)
   }
 
