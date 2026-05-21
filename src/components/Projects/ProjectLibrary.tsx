@@ -81,14 +81,15 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
         ...m,
         createdAt: typeof m.createdAt === 'number' ? m.createdAt : fallbackStart + idx * 1000,
       }))
+      const nextView = restored.length > 0 ? (p.model.status === 'ready' ? 'model' : 'drawings') : 'model'
       useAppStore.setState({
         drawings: restored,
         layers: p.layers,
         measurements: restoredMeasurements,
         model: p.model,
-        view: restored.length > 0 ? (p.model.status === 'ready' ? 'model' : 'drawings') : 'upload',
+        view: nextView,
       })
-      setView(restored.length > 0 ? (p.model.status === 'ready' ? 'model' : 'drawings') : 'upload')
+      setView(nextView)
       onClose()
     } finally {
       setBusy(false)

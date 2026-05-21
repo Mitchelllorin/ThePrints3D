@@ -292,7 +292,7 @@ function computeFloorLevels(drawings: Drawing[]) {
 
 export const useAppStore = create<AppState>()(
   immer((set, get) => ({
-    view: 'upload',
+    view: 'model',
     drawings: [],
     layers: DEFAULT_LAYERS,
     model: DEFAULT_MODEL,
