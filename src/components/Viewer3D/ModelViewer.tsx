@@ -360,7 +360,7 @@ export default function ModelViewer() {
           position={[0, -0.01, 0]}
         />
 
-        {drawings.length > 0 && <FloorplanOverlay />}
+        <FloorplanOverlay />
 
         {model.status === 'building' && <BuildingProgress />}
         {(model.status === 'building' || model.status === 'ready') && (
@@ -418,11 +418,11 @@ export default function ModelViewer() {
         </div>
       )}
 
-      {model.status === 'idle' && (
+      {model.status === 'idle' && drawings.length === 0 && (
         <div className={styles.overlay}>
           <div className={styles.idleMsg}>
-            <p>No model built yet.</p>
-            <p className={styles.hint}>Upload drawings and click "Build 3D Model"</p>
+            <p>3D workspace ready.</p>
+            <p className={styles.hint}>Upload a print or load a preset in the workspace panel.</p>
           </div>
         </div>
       )}

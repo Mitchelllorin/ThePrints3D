@@ -117,6 +117,8 @@ export type { LineClassificationStats, ClassifiedLine, LineClass } from '../symb
 export interface Drawing {
   id: string
   name: string
+  source?: 'upload' | 'preset'
+  presetDifficulty?: 'easy' | 'medium' | 'hard'
   type: DrawingType
   file: File
   pageCount: number

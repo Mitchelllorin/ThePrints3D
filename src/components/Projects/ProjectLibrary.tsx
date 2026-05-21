@@ -86,9 +86,9 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
         layers: p.layers,
         measurements: restoredMeasurements,
         model: p.model,
-        view: restored.length > 0 ? (p.model.status === 'ready' ? 'model' : 'drawings') : 'upload',
+        view: restored.length > 0 ? 'model' : 'upload',
       })
-      setView(restored.length > 0 ? (p.model.status === 'ready' ? 'model' : 'drawings') : 'upload')
+      setView(restored.length > 0 ? 'model' : 'upload')
       onClose()
     } finally {
       setBusy(false)

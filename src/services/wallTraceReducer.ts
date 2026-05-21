@@ -83,3 +83,42 @@ export function mergeAutoAndUserWalls(
   const filteredAuto = autoWalls.filter((a) => !userWalls.some((u) => areConflicting(a, u)))
   return [...filteredAuto, ...userWalls]
 }
+
+function nearestEndpoint(
+  point: { x: number; y: number },
+  walls: ParsedWall[],
+  tolerancePx: number,
+): { x: number; y: number } | null {
+  let best: { x: number; y: number } | null = null
+  let bestDistance = tolerancePx
+  for (const wall of walls) {
+    const candidates = [
+      { x: wall.x1, y: wall.y1 },
+      { x: wall.x2, y: wall.y2 },
+    ]
+    for (const candidate of candidates) {
+      const distance = Math.hypot(candidate.x - point.x, candidate.y - point.y)
+      if (distance <= bestDistance) {
+        bestDistance = distance
+        best = candidate
+      }
+    }
+  }
+  return best
+}
+
+export function snapTraceWallToExisting(
+  wall: ParsedWall,
+  walls: ParsedWall[],
+  tolerancePx = 18,
+): ParsedWall {
+  const start = nearestEndpoint({ x: wall.x1, y: wall.y1 }, walls, tolerancePx)
+  const end = nearestEndpoint({ x: wall.x2, y: wall.y2 }, walls, tolerancePx)
+  return {
+    ...wall,
+    x1: start?.x ?? wall.x1,
+    y1: start?.y ?? wall.y1,
+    x2: end?.x ?? wall.x2,
+    y2: end?.y ?? wall.y2,
+  }
+}

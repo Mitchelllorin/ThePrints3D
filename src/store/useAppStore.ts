@@ -28,6 +28,16 @@ import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
 import { defaultSmartProcessingState } from './smartProcessingSlice'
+import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
+import {
+  DEFAULT_WIZARD_STATE,
+  completeWizardGroup as completeWizardGroupState,
+  loadWizardState,
+  patchWizardData,
+  saveWizardState,
+  setWizardCurrentGroup,
+  type ProjectContextWizardState,
+} from '../components/ProjectContext/wizardState'
 
 // ─── Camera Presets ────────────────────────────────────────────────────────────
 export interface CameraPreset {
@@ -185,6 +195,9 @@ interface WorkspaceHistorySnapshot {
   measurements: Measurement[]
   userTraces: UserTrace[]
   floorplanOverlay: FloorplanOverlayState
+  wizardState: ProjectContextWizardState
+  wizardInputs: WorkspaceWizardInputs | null
+  model: Model3D
 }
 
 function deepCopy<T>(value: T): T {
@@ -211,6 +224,7 @@ interface AppState {
   productCatalog: ProductCatalogItem[]
   productPlacements: ProductPlacement[]
   wizardInputs: WorkspaceWizardInputs | null
+  wizardState: ProjectContextWizardState
   floorplanOverlay: FloorplanOverlayState
   historyPast: WorkspaceHistorySnapshot[]
   historyFuture: WorkspaceHistorySnapshot[]
@@ -234,6 +248,7 @@ interface AppState {
   setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
   addUserTracedWall: (id: string, wall: ParsedWall) => void
   clearUserTracedWalls: (id: string) => void
+  clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
   processDrawing: (id: string) => Promise<void>
   toggleLayer: (id: LayerId) => void
@@ -243,9 +258,15 @@ interface AppState {
   buildModel: () => void
   update3DModel: (finalInputs: WorkspaceWizardInputs) => void
   setFloorplanOverlayDrawing: (drawingId: string | null) => void
-  updateFloorplanOverlay: (patch: Partial<FloorplanOverlayState>) => void
+  updateFloorplanOverlay: (patch: Partial<FloorplanOverlayState>, recordHistory?: boolean) => void
+  checkpointHistory: () => void
   undo: () => void
   redo: () => void
+  updateWizardData: (partial: Partial<ProjectContextWizardState['data']>) => void
+  jumpToWizardGroup: (groupId: ProjectContextWizardState['currentGroup']) => void
+  completeWizardGroup: (groupId: ProjectContextWizardState['currentGroup']) => void
+  resetWizard: () => void
+  loadPresetDrawing: (difficulty: PresetDifficulty, practiceMode: boolean) => void
   // Measurements
   setMeasureMode: (active: boolean) => void
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
@@ -353,6 +374,9 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     measurements: state.measurements,
     userTraces: state.userTraces,
     floorplanOverlay: state.floorplanOverlay,
+    wizardState: state.wizardState,
+    wizardInputs: state.wizardInputs,
+    model: state.model,
   })
 }
 
@@ -376,7 +400,11 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   state.measurements = deepCopy(snapshot.measurements)
   state.userTraces = deepCopy(snapshot.userTraces)
   state.floorplanOverlay = deepCopy(snapshot.floorplanOverlay)
+  state.wizardState = deepCopy(snapshot.wizardState)
+  state.wizardInputs = deepCopy(snapshot.wizardInputs)
+  state.model = deepCopy(snapshot.model)
   saveAnnotations(state.annotations)
+  saveWizardState(state.wizardState)
 }
 
 export const useAppStore = create<AppState>()(
@@ -406,6 +434,7 @@ export const useAppStore = create<AppState>()(
     productCatalog: [],
     productPlacements: [],
     wizardInputs: null,
+    wizardState: loadWizardState(),
     floorplanOverlay: deepCopy(DEFAULT_FLOORPLAN_OVERLAY),
     historyPast: [],
     historyFuture: [],
@@ -425,12 +454,17 @@ export const useAppStore = create<AppState>()(
         s.view = view
       }),
 
+    checkpointHistory: () => {
+      pushHistory()
+    },
+
     addDrawings: (files) =>
       set((s) => {
         for (const file of files) {
           const drawing: Drawing = {
             id: genId(),
             name: file.name,
+            source: 'upload',
             type: inferDrawingType(file.name),
             file,
             pageCount: 1,
@@ -533,6 +567,18 @@ export const useAppStore = create<AppState>()(
       })
     },
 
+    clearTracingForDrawing: (id) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        d.parsedWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        s.userTraces = []
+        s.seedMode = false
+        s.smartStageLabel = 'Heuristic Detection'
+      })
+    },
+
     selectDrawing: (id) =>
       set((s) => {
         s.selectedDrawingId = id
@@ -631,7 +677,8 @@ export const useAppStore = create<AppState>()(
         })
       }),
 
-    update3DModel: (finalInputs) =>
+    update3DModel: (finalInputs) => {
+      pushHistory()
       set((s) => {
         const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
         s.wizardInputs = finalInputs
@@ -650,15 +697,107 @@ export const useAppStore = create<AppState>()(
           hasSet3Finishing: finalInputs.set3FinishingDetails.length > 0,
           hasSet3Clarifications: finalInputs.set3Clarifications.length > 0,
         })
-      }),
+      })
+    },
+
+    updateWizardData: (partial) => {
+      pushHistory()
+      set((s) => {
+        s.wizardState = patchWizardData(s.wizardState, partial)
+        saveWizardState(s.wizardState)
+      })
+    },
+
+    jumpToWizardGroup: (groupId) => {
+      pushHistory()
+      set((s) => {
+        s.wizardState = setWizardCurrentGroup(s.wizardState, groupId)
+        saveWizardState(s.wizardState)
+      })
+    },
+
+    completeWizardGroup: (groupId) => {
+      pushHistory()
+      set((s) => {
+        const nextWizardState = completeWizardGroupState(s.wizardState, groupId)
+        s.wizardState = nextWizardState
+        saveWizardState(s.wizardState)
+        const finalInputs: WorkspaceWizardInputs = {
+          ...nextWizardState.data,
+          completedGroup: groupId,
+          completedAt: Date.now(),
+        }
+        const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
+        s.wizardInputs = finalInputs
+        s.floorGroupingLog = floorGroupingLog
+        s.model.floorLevels = levels
+        s.model.status = 'building'
+        s.model.generatedAt = Date.now()
+        s.view = 'model'
+      })
+    },
+
+    resetWizard: () => {
+      pushHistory()
+      set((s) => {
+        s.wizardState = deepCopy(DEFAULT_WIZARD_STATE)
+        s.wizardInputs = null
+        saveWizardState(s.wizardState)
+      })
+    },
+
+    loadPresetDrawing: (difficulty, practiceMode) => {
+      pushHistory()
+      const preset = createPresetDrawing(difficulty, practiceMode)
+      set((s) => {
+        const { wizardInputs, overlayScale, ...drawingSeed } = preset
+        const drawing: Drawing = {
+          id: genId(),
+          source: 'preset',
+          presetDifficulty: difficulty,
+          ...drawingSeed,
+        }
+        s.drawings.push(drawing)
+        s.selectedDrawingId = drawing.id
+        s.floorplanOverlay = {
+          ...deepCopy(DEFAULT_FLOORPLAN_OVERLAY),
+          drawingId: drawing.id,
+          scale: overlayScale,
+          calibrationMode: false,
+          locked: !practiceMode,
+        }
+        s.wizardState = {
+          ...DEFAULT_WIZARD_STATE,
+          currentGroup: 'group3',
+          completedGroups: ['group1', 'group2', 'group3'],
+          data: {
+            set1BuildingBasics: wizardInputs.set1BuildingBasics,
+            set1Clarifications: wizardInputs.set1Clarifications,
+            set2StructuralDetails: wizardInputs.set2StructuralDetails,
+            set2Clarifications: wizardInputs.set2Clarifications,
+            set3FinishingDetails: wizardInputs.set3FinishingDetails,
+            set3Clarifications: wizardInputs.set3Clarifications,
+          },
+          savedAt: Date.now(),
+        }
+        saveWizardState(s.wizardState)
+        s.wizardInputs = wizardInputs
+        const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
+        s.floorGroupingLog = floorGroupingLog
+        s.model.floorLevels = levels
+        s.model.status = 'building'
+        s.model.generatedAt = Date.now()
+        s.view = 'model'
+      })
+    },
 
     setFloorplanOverlayDrawing: (drawingId) =>
       set((s) => {
         s.floorplanOverlay.drawingId = drawingId
       }),
 
-    updateFloorplanOverlay: (patch) => {
-      pushHistory()
+    updateFloorplanOverlay: (patch, recordHistory = true) => {
+      if (recordHistory) pushHistory()
       set((s) => {
         s.floorplanOverlay = {
           ...s.floorplanOverlay,
@@ -862,7 +1001,6 @@ export const useAppStore = create<AppState>()(
       }),
 
     addTrace: (trace) => {
-      pushHistory()
       set((s) => {
         s.userTraces.push(trace)
       })

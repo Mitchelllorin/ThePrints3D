@@ -1,8 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType, ScaleConfidence } from '../../types'
-import ScaleCalibrator from './ScaleCalibrator'
-import WallTracer, { WALL_LEGEND_AUTO, WALL_LEGEND_LOW_CONFIDENCE, WALL_COLOR_USER } from './WallTracer'
 import SymbolReferencePanel from './SymbolReferencePanel'
 import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
 import { logEvent } from '../../services/logger'
@@ -42,7 +40,7 @@ const STATUS_ICON: Record<string, string> = {
 const CONFIDENCE_LABEL: Record<ScaleConfidence, string> = {
   parsed: '✓ auto-detected',
   inferred: '~ inferred',
-  fallback: '⚠ needs calibration',
+  fallback: '⚠ needs 3D calibration',
 }
 
 const CONFIDENCE_CSS: Record<ScaleConfidence, string> = {
@@ -67,14 +65,10 @@ export default function DrawingManager() {
   const selectedDrawingId = useAppStore((s) => s.selectedDrawingId)
   const buildModel = useAppStore((s) => s.buildModel)
   const processDrawing = useAppStore((s) => s.processDrawing)
-  const setDrawingScale = useAppStore((s) => s.setDrawingScale)
-  const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
-  const clearUserTracedWalls = useAppStore((s) => s.clearUserTracedWalls)
+  const setView = useAppStore((s) => s.setView)
 
-  const [calibratingId, setCalibratingId] = useState<string | null>(null)
   const [symbolRefOpen, setSymbolRefOpen] = useState(false)
   const selected = drawings.find((d) => d.id === selectedDrawingId) ?? null
-  const calibrating = drawings.find((d) => d.id === calibratingId) ?? null
 
   const processAll = () => {
     for (const d of drawings) {
@@ -94,8 +88,6 @@ export default function DrawingManager() {
   const anyPending = drawings.some((d) => d.status === 'pending')
   const anyProcessing = drawings.some((d) => d.status === 'processing')
   const readyCount = drawings.filter((d) => d.status === 'ready').length
-  const uncalibrated = drawings.filter((d) => d.scaleMmPerPx == null)
-  const firstUncalibrated = uncalibrated[0] ?? null
 
   return (
     <div className={styles.page}>
@@ -114,6 +106,9 @@ export default function DrawingManager() {
             <button className={styles.buildBtn} onClick={buildModel}>
               ⬡ Build 3D
             </button>
+            <button className={styles.processBtn} onClick={() => setView('model')}>
+              ↗ Open 3D Workspace
+            </button>
             <button className={styles.processBtn} onClick={exportPilotMetrics} title="Export pilot metrics CSV">
               ⬇ Export Pilot CSV
             </button>
@@ -127,78 +122,9 @@ export default function DrawingManager() {
           </div>
         </div>
 
-        {firstUncalibrated && (
-          <div
-            style={{
-              margin: '12px 0',
-              padding: '12px 14px',
-              borderRadius: 10,
-              background: 'linear-gradient(90deg, rgba(251,191,36,0.12), rgba(251,191,36,0.04))',
-              border: '1px solid rgba(251,191,36,0.35)',
-              color: '#fde68a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              fontSize: 14,
-            }}
-          >
-            <span>
-              <strong>⚠️ {uncalibrated.length} drawing{uncalibrated.length !== 1 ? 's' : ''} need scale calibration</strong>
-              <span style={{ opacity: 0.8 }}> — measurements & 3D dimensions will be wrong without it.</span>
-            </span>
-            <button
-              onClick={() => {
-                if (firstUncalibrated.id !== selectedDrawingId) selectDrawing(firstUncalibrated.id)
-                setCalibratingId(firstUncalibrated.id)
-              }}
-              style={{
-                background: '#fbbf24',
-                color: '#0b0f1a',
-                border: 'none',
-                padding: '8px 14px',
-                borderRadius: 8,
-                fontWeight: 600,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                fontSize: 13,
-              }}
-            >
-              📏 Calibrate now →
-            </button>
-          </div>
-        )}
-
         {readyCount > 0 && (
           <div className={styles.readySummary}>
-            {readyCount} drawing{readyCount !== 1 ? 's' : ''} analysed — {drawings.reduce((n, d) => n + d.parsedWalls.length, 0)} wall segments detected
-            {(() => {
-              const totals = drawings.reduce(
-                (acc, d) => {
-                  const s = d.lineClassificationStats
-                  if (!s) return acc
-                  acc.dimension += s.dimension
-                  acc.dashed += s.dashed
-                  acc.dotted += s.dotted
-                  acc.leader += s.leader
-                  acc.unknown += s.unknown
-                  return acc
-                },
-                { dimension: 0, dashed: 0, dotted: 0, leader: 0, unknown: 0 },
-              )
-              const filteredTotal = totals.dimension + totals.dashed + totals.dotted + totals.leader + totals.unknown
-              if (filteredTotal === 0) return null
-              return (
-                <span style={{ display: 'block', marginTop: 6, fontSize: 12, opacity: 0.85 }}>
-                  Filtered out:{' '}
-                  {totals.dimension > 0 && <span style={{ marginRight: 8 }}>{totals.dimension} dimension</span>}
-                  {totals.dashed > 0 && <span style={{ marginRight: 8 }}>{totals.dashed} dashed</span>}
-                  {totals.dotted > 0 && <span style={{ marginRight: 8 }}>{totals.dotted} dotted/overhead</span>}
-                  {totals.leader > 0 && <span style={{ marginRight: 8 }}>{totals.leader} leader/short</span>}
-                  {totals.unknown > 0 && <span style={{ marginRight: 8 }}>{totals.unknown} unclassified</span>}
-                </span>
-              )
-            })()}
+            {readyCount} drawing{readyCount !== 1 ? 's' : ''} analysed — calibration and tracing now happen in the 3D workspace overlay.
           </div>
         )}
 
@@ -219,34 +145,14 @@ export default function DrawingManager() {
 
       <div className={styles.preview}>
         {selected ? (
-          <DrawingPreview
-            drawing={selected}
-            onProcess={() => processDrawing(selected.id)}
-            onCalibrate={() => setCalibratingId(selected.id)}
-            onAddUserWall={(wall) => addUserTracedWall(selected.id, wall)}
-            onClearUserWalls={() => clearUserTracedWalls(selected.id)}
-          />
+          <DrawingPreview drawing={selected} onProcess={() => processDrawing(selected.id)} onOpenWorkspace={() => setView('model')} />
         ) : (
           <div className={styles.noSelection}>
             <span>👆</span>
-            <p>Select a drawing to preview it</p>
+            <p>Select a drawing to inspect it</p>
           </div>
         )}
       </div>
-
-      {calibrating && (
-        <ScaleCalibrator
-          imageUrl={calibrating.rasterUrl ?? calibrating.previewUrl ?? ''}
-          imageWidth={calibrating.rasterWidth ?? 800}
-          imageHeight={calibrating.rasterHeight ?? 600}
-          existingMmPerPx={calibrating.scaleMmPerPx}
-          onCalibrate={(mmPerPx, notation) => {
-            setDrawingScale(calibrating.id, mmPerPx, notation)
-            setCalibratingId(null)
-          }}
-          onClose={() => setCalibratingId(null)}
-        />
-      )}
 
       {symbolRefOpen && (
         <SymbolReferencePanel onClose={() => setSymbolRefOpen(false)} />
@@ -314,10 +220,10 @@ function DrawingCard({ drawing, isSelected, onSelect, onRemove, onTypeChange, on
         )}
 
         {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
-          <p className={styles.wallCount}>{drawing.parsedWalls.length} walls · {drawing.scaleNotation ?? 'uncalibrated'}</p>
+          <p className={styles.wallCount}>{drawing.parsedWalls.length} walls · {drawing.scaleNotation ?? '3D calibration pending'}</p>
         )}
         {drawing.status === 'ready' && drawing.scaleConfidence === 'fallback' && (
-          <p className={styles.cardFallbackWarn}>⚠ Scale unknown</p>
+          <p className={styles.cardFallbackWarn}>⚠ Finish scale setup in the 3D workspace</p>
         )}
       </div>
 
@@ -343,104 +249,12 @@ function DrawingCard({ drawing, isSelected, onSelect, onRemove, onTypeChange, on
   )
 }
 
-interface PreviewProps {
-  drawing: Drawing
-  onProcess: () => void
-  onCalibrate: () => void
-  onAddUserWall: (wall: Drawing['parsedWalls'][number]) => void
-  onClearUserWalls: () => void
-}
-
-function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClearUserWalls }: PreviewProps) {
-  const [scale, setScale] = useState(1)
-  const [traceMode, setTraceMode] = useState(false)
+function DrawingPreview({ drawing, onProcess, onOpenWorkspace }: { drawing: Drawing; onProcess: () => void; onOpenWorkspace: () => void }) {
   const previewSrc = drawing.rasterUrl ?? drawing.previewUrl
   const lowConfidenceCount = drawing.parsedWalls.filter((w) => (w.detectionConfidence ?? 1) < 0.75).length
-  const userTraceCount = drawing.parsedWalls.filter((w) => w.source === 'user').length
   const doorCount = drawing.parsedOpenings.filter((o) => o.type === 'door').length
   const windowCount = drawing.parsedOpenings.filter((o) => o.type === 'window').length
   const unknownOpeningCount = drawing.parsedOpenings.filter((o) => o.type === 'unknown').length
-
-  const userTraces = useAppStore((s) => s.userTraces)
-  const startTraceMode = useAppStore((s) => s.startTraceMode)
-  const addTrace = useAppStore((s) => s.addTrace)
-  const clearTraces = useAppStore((s) => s.clearTraces)
-  const processWithSeeds = useAppStore((s) => s.processWithSeeds)
-
-  const [smartTrace, setSmartTrace] = useState(false)
-  const [activeTrace, setActiveTrace] = useState<[number, number][]>([])
-  const [seedsProcessing, setSeedsProcessing] = useState(false)
-  const [imgNatural, setImgNatural] = useState({ w: 800, h: 600 })
-  const imgRef = useRef<HTMLImageElement>(null)
-  const activeTraceRef = useRef<[number, number][]>([])
-  const drawingGuard = useRef(false)
-  const hasUsableSeedTrace = userTraces.some((t) => t.points.length >= 8)
-
-  const getImgCoords = (e: React.PointerEvent<SVGSVGElement>): [number, number] => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    return [
-      ((e.clientX - rect.left) / rect.width) * imgNatural.w,
-      ((e.clientY - rect.top) / rect.height) * imgNatural.h,
-    ]
-  }
-
-  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!e.isPrimary || (e.pointerType === 'mouse' && e.button !== 0)) return
-    e.currentTarget.setPointerCapture(e.pointerId)
-    const pt = getImgCoords(e)
-    activeTraceRef.current = [pt]
-    setActiveTrace([pt])
-    drawingGuard.current = true
-  }
-
-  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
-    if (!drawingGuard.current) return
-    const pt = getImgCoords(e)
-    activeTraceRef.current = [...activeTraceRef.current, pt]
-    setActiveTrace(activeTraceRef.current)
-  }
-
-  const handlePointerUp = () => {
-    if (!drawingGuard.current) return
-    drawingGuard.current = false
-    if (activeTraceRef.current.length >= 2) {
-      addTrace({ points: activeTraceRef.current, timestamp: Date.now() })
-    }
-    activeTraceRef.current = []
-    setActiveTrace([])
-  }
-
-  const disableSmartTrace = () => {
-    clearTraces()
-    setSmartTrace(false)
-    drawingGuard.current = false
-    activeTraceRef.current = []
-    setActiveTrace([])
-  }
-
-  const toggleSmartTrace = () => {
-    if (smartTrace) {
-      disableSmartTrace()
-      return
-    }
-    startTraceMode()
-    setTraceMode(false)
-    setSmartTrace(true)
-  }
-
-  const toggleManualTrace = () => {
-    setTraceMode((v) => {
-      const next = !v
-      if (next && smartTrace) disableSmartTrace()
-      return next
-    })
-  }
-
-  const handleProcessSeeds = async () => {
-    setSeedsProcessing(true)
-    await processWithSeeds(drawing.id)
-    setSeedsProcessing(false)
-  }
 
   return (
     <div className={styles.previewInner}>
@@ -466,139 +280,27 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
               ⚙ Analyse
             </button>
           )}
-          {drawing.status === 'ready' && (
-            <>
-              <button className={styles.actionBtn} onClick={onCalibrate}>
-                📏 Calibrate Scale
-              </button>
-              {drawing.scaleConfidence === 'fallback' && (
-                <span className={`${styles.scaleConfBadge} ${styles.scaleConfFallback}`}>
-                  ⚠ scale needed
-                </span>
-              )}
-              <button
-                className={`${styles.actionBtn} ${traceMode ? styles.actionBtnActive : ''}`}
-                onClick={toggleManualTrace}
-              >
-                ✍️ Trace Walls
-              </button>
-              <button
-                className={`${styles.traceBtn} ${smartTrace ? styles.traceBtnActive : ''}`}
-                onClick={toggleSmartTrace}
-              >
-                👆 SMART Trace
-              </button>
-              {userTraceCount > 0 && (
-                <button className={styles.actionBtn} onClick={onClearUserWalls}>
-                  🧹 Clear Traces ({userTraceCount})
-                </button>
-              )}
-              {smartTrace && (
-                <span className={styles.traceInfo}>{userTraces.length} trace{userTraces.length !== 1 ? 's' : ''}</span>
-              )}
-              {smartTrace && hasUsableSeedTrace && (
-                <button
-                  className={styles.processSeedsBtn}
-                  onClick={handleProcessSeeds}
-                  disabled={seedsProcessing}
-                >
-                  {seedsProcessing ? '⚙ Detecting…' : `🔍 Smart Refine (${userTraces.length})`}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        {smartTrace && (
-          <div style={{ marginTop: 6, fontSize: 12, color: '#cbd5e1' }}>
-            Draw at least one clear trace over a key wall run, then use Smart Refine to re-run seeded detection.
-            {!hasUsableSeedTrace && ' Keep tracing until at least one stroke is long enough.'}
-          </div>
-        )}
-
-        {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
-          <div style={{ display: 'flex', gap: 12, marginTop: 6, fontSize: 12, flexWrap: 'wrap' }}>
-            <span style={{ color: WALL_LEGEND_AUTO, fontWeight: 500 }}>━ Auto-detected wall</span>
-            <span style={{ color: WALL_LEGEND_LOW_CONFIDENCE, fontWeight: 500 }}>╌ Low-confidence wall</span>
-            <span style={{ color: WALL_COLOR_USER, fontWeight: 500 }}>━ User-traced wall</span>
-          </div>
-        )}
-
-        <div className={styles.zoomControls}>
-          <button onClick={() => setScale((s) => Math.max(0.25, s - 0.25))}>−</button>
-          <span>{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale((s) => Math.min(4, s + 0.25))}>+</button>
-          <button onClick={() => setScale(1)}>Reset</button>
+          <button className={styles.actionBtn} onClick={onOpenWorkspace}>
+            ↗ Calibrate / Trace in 3D
+          </button>
         </div>
       </div>
 
-      {drawing.status === 'processing' && (
-        <div className={styles.processingBar}>
-          <div className={styles.processingFill} style={{ width: `${drawing.parseProgress}%` }} />
-          <span className={styles.processingLabel}>Analysing… {drawing.parseProgress}%</span>
-        </div>
-      )}
-
       <div className={styles.previewCanvas}>
-        <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', transition: 'transform 0.15s', position: 'relative' }}>
-          {previewSrc ? (
-            <div className={styles.previewImgWrap}>
-              <img
-                ref={imgRef}
-                src={previewSrc}
-                alt={drawing.name}
-                className={styles.previewImg}
-                draggable={false}
-                onLoad={(e) => setImgNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
-              />
-              {drawing.status === 'ready' && !smartTrace && (
-                <WallTracer
-                  active={traceMode}
-                  imageWidth={drawing.rasterWidth ?? 800}
-                  imageHeight={drawing.rasterHeight ?? 600}
-                  walls={drawing.parsedWalls}
-                  onAddWall={onAddUserWall}
-                />
-              )}
-              {smartTrace && imgNatural.w > 0 && (
-                <svg
-                  viewBox={`0 0 ${imgNatural.w} ${imgNatural.h}`}
-                  className={styles.smartTraceOverlay}
-                  style={{
-                    position: 'absolute', top: 0, left: 0,
-                    width: '100%', height: '100%',
-                    pointerEvents: 'auto', cursor: 'crosshair',
-                    zIndex: 10,
-                  }}
-                  onPointerDown={handlePointerDown}
-                  onPointerMove={handlePointerMove}
-                  onPointerUp={handlePointerUp}
-                  onPointerLeave={handlePointerUp}
-                  onPointerCancel={handlePointerUp}
-                >
-                  {userTraces.map((trace, i) => (
-                    <polyline
-                      key={i}
-                      points={trace.points.map(p => `${p[0]},${p[1]}`).join(' ')}
-                      fill="none" stroke="#ffd700" strokeWidth={3}
-                      strokeLinecap="round" strokeLinejoin="round" opacity={0.8}
-                    />
-                  ))}
-                  {activeTrace.length > 1 && (
-                    <polyline
-                      points={activeTrace.map(p => `${p[0]},${p[1]}`).join(' ')}
-                      fill="none" stroke="#ff6b6b" strokeWidth={3}
-                      strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6 3"
-                    />
-                  )}
-                </svg>
-              )}
-            </div>
-          ) : (
-            <div className={styles.noPreview}>
-              <p>Preview loading…</p>
-            </div>
-          )}
-        </div>
+        {previewSrc ? (
+          <div className={styles.previewImgWrap}>
+            <img
+              src={previewSrc}
+              alt={drawing.name}
+              className={styles.previewImg}
+              draggable={false}
+            />
+          </div>
+        ) : (
+          <div className={styles.noPreview}>
+            <p>Preview loading…</p>
+          </div>
+        )}
       </div>
 
       <div className={styles.scaleInfo}>
@@ -615,9 +317,7 @@ function DrawingPreview({ drawing, onProcess, onCalibrate, onAddUserWall, onClea
           </>
         ) : (
           <span className={styles.hint}>
-            Scale not detected — {drawing.status === 'ready'
-              ? 'click "Calibrate Scale" to set it manually'
-              : 'analyse the drawing first'}
+            Scale not detected — use the 3D workspace calibration tool.
           </span>
         )}
         {drawing.parsedWalls.length > 0 && (
