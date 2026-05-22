@@ -51,7 +51,7 @@ function mergeNearbySeeds(seeds: SeedWall[], proximityPx: number): SeedWall[] {
 
   for (let i = 0; i < seeds.length; i++) {
     if (used.has(i)) continue
-    const group = [seeds[i]]
+    let group = [seeds[i]]
     used.add(i)
 
     for (let j = i + 1; j < seeds.length; j++) {

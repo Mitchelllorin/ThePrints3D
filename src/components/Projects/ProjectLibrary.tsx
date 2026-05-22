@@ -26,15 +26,7 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
     setProjects(await listProjects())
   }
 
-  useEffect(() => {
-    let cancelled = false
-    void listProjects().then((items) => {
-      if (!cancelled) setProjects(items)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  useEffect(() => { refresh() }, [])
 
   const saveCurrent = async () => {
     if (drawings.length === 0) {

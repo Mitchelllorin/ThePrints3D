@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, FloorLevel, Layer, ParsedOpening, ParsedRoom, ParsedWall } from '../../types'
 import { logEvent } from '../../services/logger'
+import { generateModelFromWizardAnswers, generateSingleRoomPreset } from '../../services/modelGenerator'
 
 interface Props {
   layers: Layer[]
@@ -20,6 +21,38 @@ function mat(color: string, opacity: number, extra?: Partial<THREE.MeshStandardM
     opacity,
     ...extra,
   })
+}
+
+let _idCounter = 0
+function uid(): string {
+  return `obj-${Date.now().toString(36)}-${(_idCounter++).toString(36)}`
+}
+
+function applyMeta(
+  mesh: THREE.Mesh,
+  type: string,
+  layer: string,
+  trade: string,
+  material: string,
+  dimensions?: { x: number; y: number; z: number },
+) {
+  const geo = mesh.geometry
+  if (!dimensions && geo) {
+    if ('parameters' in geo && (geo as any).parameters) {
+      const p = (geo as any).parameters as Record<string, number>
+      dimensions = { x: p.width ?? 0, y: p.height ?? 0, z: p.depth ?? 0 }
+    }
+  }
+  mesh.userData.id = uid()
+  mesh.userData.type = type
+  mesh.userData.layer = layer
+  mesh.userData.editable = true
+  mesh.userData.metadata = {
+    dimensions: dimensions ?? { x: 0, y: 0, z: 0 },
+    material,
+    trade,
+    connections: [],
+  }
 }
 
 interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number }
@@ -83,48 +116,13 @@ function buildRealWalls(
     mesh.rotation.y = -angle
     mesh.castShadow = true
     mesh.receiveShadow = true
-    mesh.userData.layer = layerId
+    applyMeta(mesh, 'wall', layerId, 'framing', 'gypsum', { x: len, y: floorHeight - 0.15, z: Math.max(thick, 0.05) })
     group.add(mesh)
   }
 }
 
-// ─── Procedural footprint geometry (fallback) ─────────────────────────────────
-
-function buildProceduralWalls(
-  group: THREE.Group,
-  fp: Footprint,
-  elevation: number,
-  floorHeight: number,
-  wallMat: THREE.MeshStandardMaterial
-) {
-  const W = fp.maxX - fp.minX
-  const D = fp.maxZ - fp.minZ
-  const cx = (fp.minX + fp.maxX) / 2
-  const cz = (fp.minZ + fp.maxZ) / 2
-
-  const configs: Array<[number, number, number, number]> = [
-    [cx, fp.minZ, W, 0.25],
-    [cx, fp.maxZ, W, 0.25],
-    [fp.minX, cz, 0.25, D],
-    [fp.maxX, cz, 0.25, D],
-  ]
-  for (const [wx, wz, ww, wd] of configs) {
-    const geo = new THREE.BoxGeometry(ww, floorHeight - 0.15, wd)
-    const mesh = new THREE.Mesh(geo, wallMat)
-    mesh.position.set(wx, elevation + floorHeight / 2, wz)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    mesh.userData.layer = 'walls'
-    group.add(mesh)
-  }
-
-  // Interior partition
-  const partGeo = new THREE.BoxGeometry(0.2, floorHeight - 0.15, D * 0.55)
-  const part = new THREE.Mesh(partGeo, wallMat)
-  part.position.set(cx - W * 0.15, elevation + floorHeight / 2, cz)
-  part.userData.layer = 'walls'
-  group.add(part)
-}
+// ─── Procedural footprint geometry (fallback) — DEPRECATED, kept for legacy ──
+// Use modelGenerator.ts instead. This function is no longer called.
 
 // ─── Floor slab ───────────────────────────────────────────────────────────────
 
@@ -141,7 +139,7 @@ function buildFloorSlab(
   const mesh = new THREE.Mesh(geo, mat(color, opacity, { roughness: 0.8 }))
   mesh.position.set((fp.minX + fp.maxX) / 2, elevation, (fp.minZ + fp.maxZ) / 2)
   mesh.receiveShadow = true
-  mesh.userData.layer = 'floors'
+  applyMeta(mesh, 'floor', 'floors', 'structure', 'concrete')
   group.add(mesh)
 }
 
@@ -168,48 +166,95 @@ function buildCeiling(
     (fp.minZ + fp.maxZ) / 2
   )
   mesh.userData.layer = 'ceiling'
+  applyMeta(mesh, 'ceiling', 'ceiling', 'structure', 'gypsum')
   group.add(mesh)
 }
 
-// ─── Structure (columns + beams) ─────────────────────────────────────────────
+// ─── MEP from parsed symbols ──────────────────────────────────────────────────
 
-function buildStructure(
+function buildMEPFromSymbols(
   group: THREE.Group,
-  fp: Footprint,
+  drawings: Drawing[],
+  mmPerPx: number,
+  cx: number,
+  cy: number,
   elevation: number,
   floorHeight: number,
-  colMat: THREE.MeshStandardMaterial
+  layers: Layer[]
 ) {
-  const W = fp.maxX - fp.minX
-  const cx = (fp.minX + fp.maxX) / 2
-  const cz = (fp.minZ + fp.maxZ) / 2
+  const s = mmPerPx / 1000
+  const allSymbols = drawings.flatMap((d) => d.parsedSymbols ?? [])
 
-  const cols = [
-    [fp.minX + 0.3, fp.minZ + 0.3],
-    [fp.maxX - 0.3, fp.minZ + 0.3],
-    [fp.minX + 0.3, fp.maxZ - 0.3],
-    [fp.maxX - 0.3, fp.maxZ - 0.3],
-    [cx, fp.minZ + 0.3],
-    [cx, fp.maxZ - 0.3],
-  ]
-  for (const [sx, sz] of cols) {
-    const geo = new THREE.BoxGeometry(0.4, floorHeight, 0.4)
-    const mesh = new THREE.Mesh(geo, colMat)
-    mesh.position.set(sx, elevation + floorHeight / 2, sz)
-    mesh.castShadow = true
-    mesh.userData.layer = 'structure'
-    group.add(mesh)
+  // Electrical symbols
+  const elecSymbols = allSymbols.filter((sym) => sym.category === 'electrical')
+  const elecLayer = layers.find((l) => l.id === 'electrical')
+  if (elecLayer?.visible && elecSymbols.length > 0) {
+    const eMat = mat(elecLayer.color, elecLayer.opacity, {
+      emissive: new THREE.Color(elecLayer.color),
+      emissiveIntensity: 0.3,
+    })
+    for (const sym of elecSymbols) {
+      const ex = (sym.x - cx) * s
+      const ez = (sym.y - cy) * s
+      const isLight = /light|fixture/i.test(sym.label)
+      if (isLight) {
+        const geo = new THREE.SphereGeometry(0.1, 8, 8)
+        const mesh = new THREE.Mesh(geo, eMat)
+        mesh.position.set(ex, elevation + floorHeight - 0.15, ez)
+        mesh.userData.layer = 'electrical'
+        applyMeta(mesh, 'fixture', 'electrical', 'electrical', 'copper', { x: 0.1, y: 0.1, z: 0.1 })
+        group.add(mesh)
+      } else {
+        const geo = new THREE.BoxGeometry(0.08, 0.15, 0.05)
+        const mesh = new THREE.Mesh(geo, eMat)
+        mesh.position.set(ex, elevation + 1.1, ez)
+        mesh.userData.layer = 'electrical'
+        applyMeta(mesh, 'fixture', 'electrical', 'electrical', 'copper', { x: 0.08, y: 0.15, z: 0.05 })
+        group.add(mesh)
+      }
+    }
   }
-  const beamGeo = new THREE.BoxGeometry(W, 0.3, 0.25)
-  const beam = new THREE.Mesh(beamGeo, colMat)
-  beam.position.set(cx, elevation + floorHeight - 0.15, cz)
-  beam.userData.layer = 'structure'
-  group.add(beam)
+
+  // Plumbing / fixture symbols
+  const plumbSymbols = allSymbols.filter(
+    (sym) => sym.category === 'plumbing' || sym.category === 'fixture'
+  )
+  const plumbLayer = layers.find((l) => l.id === 'plumbing')
+  if (plumbLayer?.visible && plumbSymbols.length > 0) {
+    const pMat = mat(plumbLayer.color, plumbLayer.opacity, { metalness: 0.5, roughness: 0.4 })
+    for (const sym of plumbSymbols) {
+      const px = (sym.x - cx) * s
+      const pz = (sym.y - cy) * s
+      const geo = new THREE.CylinderGeometry(0.06, 0.08, 0.5, 8)
+      const mesh = new THREE.Mesh(geo, pMat)
+      mesh.position.set(px, elevation + 0.25, pz)
+      mesh.userData.layer = 'plumbing'
+      applyMeta(mesh, 'pipe', 'plumbing', 'plumbing', 'copper', { x: 0.12, y: 0.5, z: 0.12 })
+      group.add(mesh)
+    }
+  }
+
+  // HVAC symbols
+  const hvacSymbols = allSymbols.filter((sym) => sym.category === 'hvac')
+  const mechLayer = layers.find((l) => l.id === 'mechanical')
+  if (mechLayer?.visible && hvacSymbols.length > 0) {
+    const mMat = mat(mechLayer.color, mechLayer.opacity, { metalness: 0.3 })
+    for (const sym of hvacSymbols) {
+      const mx = (sym.x - cx) * s
+      const mz = (sym.y - cy) * s
+      const geo = new THREE.BoxGeometry(0.3, 0.12, 0.3)
+      const mesh = new THREE.Mesh(geo, mMat)
+      mesh.position.set(mx, elevation + floorHeight - 0.25, mz)
+      mesh.userData.layer = 'mechanical'
+      applyMeta(mesh, 'duct', 'mechanical', 'hvac', 'sheet-metal', { x: 0.3, y: 0.12, z: 0.3 })
+      group.add(mesh)
+    }
+  }
 }
 
-// ─── MEP systems ──────────────────────────────────────────────────────────────
+// ─── Procedural MEP (fallback when no symbols) ────────────────────────────────
 
-function buildMEP(
+function buildMEPProcedural(
   group: THREE.Group,
   fp: Footprint,
   elevation: number,
@@ -224,73 +269,58 @@ function buildMEP(
   const cx = (fp.minX + fp.maxX) / 2
   const cz = (fp.minZ + fp.maxZ) / 2
 
-  // Electrical conduits & panels
   const elecLayer = layers.find((l) => l.id === 'electrical')
-  if (elecLayer && elecLayer.visible && hasElec) {
+  if (elecLayer?.visible && hasElec) {
     const eMat = mat(elecLayer.color, elecLayer.opacity, {
       emissive: new THREE.Color(elecLayer.color),
       emissiveIntensity: 0.25,
     })
-    const pts = [
-      [cx - W * 0.3, cz - D * 0.3],
-      [cx, cz - D * 0.3],
-      [cx + W * 0.3, cz - D * 0.3],
-      [cx - W * 0.3, cz + D * 0.3],
-      [cx + W * 0.3, cz + D * 0.3],
-    ]
-    for (const [ex, ez] of pts) {
-      const cGeo = new THREE.CylinderGeometry(0.04, 0.04, floorHeight, 6)
-      const c = new THREE.Mesh(cGeo, eMat)
+    for (const [ex, ez] of [[cx - W * 0.3, cz - D * 0.3], [cx + W * 0.3, cz + D * 0.3]]) {
+      const geo = new THREE.CylinderGeometry(0.04, 0.04, floorHeight, 6)
+      const c = new THREE.Mesh(geo, eMat)
       c.position.set(ex, elevation + floorHeight / 2, ez)
       c.userData.layer = 'electrical'
+      applyMeta(c, 'conduit', 'electrical', 'electrical', 'copper', { x: 0.08, y: floorHeight, z: 0.08 })
       group.add(c)
-      // Panel
       const pGeo = new THREE.BoxGeometry(0.25, 0.35, 0.08)
       const p = new THREE.Mesh(pGeo, eMat)
       p.position.set(ex, elevation + 1.4, ez + 0.15)
       p.userData.layer = 'electrical'
+      applyMeta(p, 'fixture', 'electrical', 'electrical', 'copper', { x: 0.25, y: 0.35, z: 0.08 })
       group.add(p)
     }
   }
 
-  // Plumbing risers + horizontal run
   const plumbLayer = layers.find((l) => l.id === 'plumbing')
-  if (plumbLayer && plumbLayer.visible && hasPlumb) {
+  if (plumbLayer?.visible && hasPlumb) {
     const pMat = mat(plumbLayer.color, plumbLayer.opacity, { metalness: 0.5, roughness: 0.4 })
-    const riserPts = [
-      [cx - W * 0.25, cz - D * 0.25],
-      [cx + W * 0.25, cz - D * 0.25],
-      [cx, cz + D * 0.25],
-    ]
-    for (const [rx, rz] of riserPts) {
+    const pts = [[cx - W * 0.25, cz - D * 0.25], [cx + W * 0.25, cz + D * 0.25]]
+    for (const [rx, rz] of pts) {
       const rGeo = new THREE.CylinderGeometry(0.07, 0.07, floorHeight, 8)
       const r = new THREE.Mesh(rGeo, pMat)
       r.position.set(rx, elevation + floorHeight / 2, rz)
       r.userData.layer = 'plumbing'
+      applyMeta(r, 'pipe', 'plumbing', 'plumbing', 'copper', { x: 0.14, y: floorHeight, z: 0.14 })
       group.add(r)
     }
-    const hGeo = new THREE.CylinderGeometry(0.05, 0.05, W * 0.7, 8)
+    const hGeo = new THREE.CylinderGeometry(0.05, 0.05, W * 0.5, 8)
     const h = new THREE.Mesh(hGeo, pMat)
     h.rotation.z = Math.PI / 2
-    h.position.set(cx, elevation + 0.35, cz - D * 0.25)
+    h.position.set(cx, elevation + 0.35, cz)
     h.userData.layer = 'plumbing'
+    applyMeta(h, 'pipe', 'plumbing', 'plumbing', 'copper', { x: 0.1, y: W * 0.5, z: 0.1 })
     group.add(h)
   }
 
-  // Mechanical ducts + AHU
   const mechLayer = layers.find((l) => l.id === 'mechanical')
-  if (mechLayer && mechLayer.visible && hasMech) {
+  if (mechLayer?.visible && hasMech) {
     const mMat = mat(mechLayer.color, mechLayer.opacity, { metalness: 0.3 })
-    const dGeo = new THREE.BoxGeometry(W * 0.75, 0.28, 0.45)
+    const dGeo = new THREE.BoxGeometry(W * 0.5, 0.28, 0.45)
     const duct = new THREE.Mesh(dGeo, mMat)
     duct.position.set(cx, elevation + floorHeight - 0.45, cz)
     duct.userData.layer = 'mechanical'
+    applyMeta(duct, 'duct', 'mechanical', 'hvac', 'sheet-metal', { x: W * 0.5, y: 0.28, z: 0.45 })
     group.add(duct)
-    const aGeo = new THREE.BoxGeometry(1.1, 0.75, 0.75)
-    const ahu = new THREE.Mesh(aGeo, mMat)
-    ahu.position.set(fp.minX + 0.8, elevation + floorHeight - 0.6, cz)
-    ahu.userData.layer = 'mechanical'
-    group.add(ahu)
   }
 }
 
@@ -347,6 +377,7 @@ function buildRoomPlates(
     )
     mesh.receiveShadow = true
     mesh.userData.layer = layerId
+    applyMeta(mesh, 'floor-finish', layerId, 'finishes', 'vinyl', { x: rw, y: 0.01, z: rd })
     group.add(mesh)
   })
 }
@@ -395,8 +426,36 @@ function buildOpeningMarkers(
     )
     mesh.position.set(ox, markerY, oz)
     mesh.userData.layer = layerId
+    applyMeta(mesh, isDoor ? 'door' : 'window', layerId, 'framing', 'wood', { x: geoW, y: markerH, z: geoD })
     group.add(mesh)
   }
+}
+
+function addLayerGroup(group: THREE.Group, layers: Layer[]): Map<string, THREE.Group> {
+  const layerGroups = new Map<string, THREE.Group>()
+  const toMove: Array<{ child: THREE.Object3D; layerId: string }> = []
+  for (const child of group.children) {
+    const lid: string | undefined = (child as any).userData?.layer
+    if (lid) toMove.push({ child, layerId: lid })
+  }
+  for (const { child, layerId } of toMove) {
+    let lg = layerGroups.get(layerId)
+    if (!lg) {
+      lg = new THREE.Group()
+      lg.name = `layer-${layerId}`
+      layerGroups.set(layerId, lg)
+    }
+    group.remove(child)
+    lg.add(child)
+  }
+  for (const [, lg] of layerGroups) {
+    group.add(lg)
+  }
+  for (const l of layers) {
+    const lg = layerGroups.get(l.id)
+    if (lg) lg.visible = l.visible
+  }
+  return layerGroups
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -406,14 +465,63 @@ export default function BuildingModel({ layers }: Props) {
   const drawings = useAppStore((s) => s.drawings)
   const model = useAppStore((s) => s.model)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
+  const layerGroupRef = useRef<Map<string, THREE.Group> | null>(null)
+
+  // Runtime visibility sync — no rebuild
+  useEffect(() => {
+    const lg = layerGroupRef.current
+    if (!lg) return
+    for (const l of layers) {
+      const g = lg.get(l.id)
+      if (g) g.visible = l.visible
+    }
+  }, [layers])
 
   useEffect(() => {
     if (!groupRef.current) return
     const group = groupRef.current
     while (group.children.length > 0) group.remove(group.children[0])
+    layerGroupRef.current = null
 
+    try {
     const layerMap = new Map(layers.map((l) => [l.id, l]))
     const floorHeight = 3.2
+
+    // If NO drawing has parsed walls, generate synthetic geometry from wizard answers
+    const wizardAnswers = useAppStore.getState().wizardAnswers
+    const hasRealWalls = drawings.some((d) => d.parsedWalls.length > 0)
+
+    if (!hasRealWalls && drawings.length === 0) {
+      const synth = Object.keys(wizardAnswers).length > 0
+        ? generateModelFromWizardAnswers(wizardAnswers)
+        : generateSingleRoomPreset()
+      synth.walls.forEach((w) => {
+        ;(w as any)._synth = true
+      })
+      const synths: Drawing[] = [{
+        id: '_synthetic',
+        name: 'Generated Model',
+        type: 'floor-plan',
+        file: new File([], '_synthetic'),
+        pageCount: 1, currentPage: 1,
+        previewUrl: null, rasterUrl: null,
+        rasterWidth: null, rasterHeight: null,
+        parsedWalls: synth.walls,
+        parsedRooms: synth.rooms,
+        parsedOpenings: synth.openings,
+        parsedSymbols: synth.symbols,
+        parsedText: [], parsedAnnotationCandidates: [],
+        parseProgress: 100, floorNumber: 0,
+        status: 'ready',
+        scaleMmPerPx: synth.scaleMmPerPx,
+        scaleNotation: null,
+        scaleConfidence: 'fallback',
+        lineClassificationStats: undefined,
+        errorMessage: undefined,
+        uploadedAt: Date.now(),
+      }]
+      drawings.push(...synths)
+    }
 
     // Determine floor levels to render
     const floorLevels: FloorLevel[] =
@@ -474,29 +582,26 @@ export default function BuildingModel({ layers }: Props) {
 
       // ── Floors ────────────────────────────────────────────────────────────
       const floorLayer = layerMap.get('floors')
-      if (floorLayer?.visible) {
+      if (floorLayer) {
         buildFloorSlab(group, fp, elev, floorLayer.color, floorLayer.opacity)
       }
 
       // ── Walls ─────────────────────────────────────────────────────────────
       const wallLayer = layerMap.get('walls')
-      if (wallLayer?.visible) {
+      if (wallLayer) {
         const wMat = mat(wallLayer.color, wallLayer.opacity, { roughness: 0.7 })
         const userWMat = mat('#60a5fa', wallLayer.opacity, { roughness: 0.45, metalness: 0.15 })
         if (wallDrawings.length > 0) {
-          // Real geometry from detected walls
           for (const d of wallDrawings) {
             const mmPx = d.scaleMmPerPx ?? globalMmPerPx
             buildRealWalls(group, d.parsedWalls, mmPx, globalCx, globalCy, elev, fh, wMat, userWMat, 'walls')
           }
-        } else {
-          buildProceduralWalls(group, fp, elev, fh, wMat)
         }
       }
 
       // ── Rooms ─────────────────────────────────────────────────────────────
       const floorLayer2 = layerMap.get('floors')
-      if (floorLayer2?.visible) {
+      if (floorLayer2) {
         for (const d of wallDrawings) {
           if (d.parsedRooms.length > 0) {
             const mmPx = d.scaleMmPerPx ?? globalMmPerPx
@@ -507,20 +612,19 @@ export default function BuildingModel({ layers }: Props) {
 
       // ── Openings (doors & windows) ─────────────────────────────────────────
       const dwLayer = layerMap.get('doors-windows')
-      if (dwLayer?.visible) {
+      if (dwLayer) {
         for (const d of wallDrawings) {
           if (d.parsedOpenings.length > 0) {
-            const mmPx = d.scaleMmPerPx ?? globalMmPerPx
             buildOpeningMarkers(
               group,
               d.parsedOpenings,
-              mmPx,
+              d.scaleMmPerPx ?? globalMmPerPx,
               globalCx,
               globalCy,
               elev,
               fh,
-              '#7dd3fc',  // door color (sky-300)
-              '#a5b4fc',  // window color (indigo-300)
+              '#7dd3fc',
+              '#a5b4fc',
               'doors-windows',
             )
           }
@@ -530,25 +634,31 @@ export default function BuildingModel({ layers }: Props) {
       // ── Ceiling / RCP ─────────────────────────────────────────────────────
       const ceilLayer = layerMap.get('ceiling')
       const hasRCP = floorDrawings.some((d) => d.type === 'rcp')
-      if (ceilLayer?.visible && hasRCP) {
+      if (ceilLayer && hasRCP) {
         buildCeiling(group, fp, elev, fh, ceilLayer.color, ceilLayer.opacity)
       }
 
-      // ── Structure (only from real detected walls) ─────────────────────────
-      const structLayer = layerMap.get('structure')
-      if (structLayer?.visible && wallDrawings.length > 0) {
-        const sMat = mat(structLayer.color, structLayer.opacity, { roughness: 0.5 })
-        buildStructure(group, fp, elev, fh, sMat)
-      }
-
       // ── MEP Systems ────────────────────────────────────────────────────────
-      buildMEP(
-        group, fp, elev, fh, layers,
-        floorDrawings.some((d) => d.type === 'electrical'),
-        floorDrawings.some((d) => d.type === 'plumbing'),
-        floorDrawings.some((d) => d.type === 'mechanical')
+      const hasMepSymbols = floorDrawings.some((d) =>
+        (d.parsedSymbols ?? []).some((s) =>
+          s.category === 'electrical' || s.category === 'plumbing' || s.category === 'fixture' || s.category === 'hvac'
+        )
       )
+      if (hasMepSymbols) {
+        const mmPx = floorDrawings[0]?.scaleMmPerPx ?? globalMmPerPx
+        buildMEPFromSymbols(group, floorDrawings, mmPx, globalCx, globalCy, elev, fh, layers)
+      } else {
+        buildMEPProcedural(
+          group, fp, elev, fh, layers,
+          floorDrawings.some((d) => d.type === 'electrical'),
+          floorDrawings.some((d) => d.type === 'plumbing'),
+          floorDrawings.some((d) => d.type === 'mechanical')
+        )
+      }
     }
+
+    // Organize all meshes into layer-specific groups for runtime toggle
+    layerGroupRef.current = addLayerGroup(group, layers)
 
     const timer = setTimeout(() => {
       setModelStatus('ready')
@@ -558,7 +668,11 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, model.floorLevels, layers, setModelStatus])
+    } catch (err) {
+      logEvent('model.build.error', { error: String(err) }, 'error')
+      setModelStatus('error')
+    }
+  }, [drawings, model.floorLevels, setModelStatus])
 
   return <group ref={groupRef} />
 }

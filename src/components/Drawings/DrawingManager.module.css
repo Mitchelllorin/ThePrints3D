@@ -88,6 +88,12 @@
   opacity: 0.9;
 }
 
+.buildBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, #475569, #64748b);
+}
+
 .readySummary {
   padding: 6px 12px;
   font-size: 11px;
@@ -404,6 +410,18 @@
 .zoomControls button:hover {
   background: #334155;
   color: #f1f5f9;
+}
+
+.undoBtn {
+  padding: 0 8px !important;
+  width: auto !important;
+  font-size: 11px !important;
+  color: #fbbf24 !important;
+}
+
+.undoBtn:hover {
+  background: #422006 !important;
+  color: #fde68a !important;
 }
 
 .processingBar {
