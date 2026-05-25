@@ -22,6 +22,7 @@ import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
 import { clearSelection } from '../../services/editing/selectionSystem'
 import styles from './ModelViewer.module.css'
+import LiveWallsLayer from './LiveWallsLayer'
 
 function SceneBackground() {
   const { scene } = useThree()
@@ -195,6 +196,13 @@ export default function ModelViewer() {
   const setView = useAppStore((s) => s.setView)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
+  const seedMode = useAppStore((s) => s.seedMode)
+  const [showProductPanel, setShowProductPanel] = useState(false)
+
+  useEffect(() => {
+    if (!controlsRef.current) return
+    controlsRef.current.touches.ONE = seedMode ? -1 as any : THREE.TOUCH.ROTATE
+  }, [seedMode])
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm] = useState<FormState | null>(null)
 
@@ -276,7 +284,9 @@ export default function ModelViewer() {
 
       {/* Camera preset HUD */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
-      {model.status === 'ready' && <ProductPlacementPanel />}
+      {model.status === 'ready' && showProductPanel && (
+        <ProductPlacementPanel onClose={() => setShowProductPanel(false)} />
+      )}
 
       {model.status === 'ready' && (
         <aside
@@ -419,6 +429,7 @@ export default function ModelViewer() {
         />
 
         <CameraPresetApplier controlsRef={controlsRef} />
+        <LiveWallsLayer />
 
         <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
           <GizmoViewport
@@ -453,3 +464,5 @@ export default function ModelViewer() {
     </div>
   )
 }
+
+
