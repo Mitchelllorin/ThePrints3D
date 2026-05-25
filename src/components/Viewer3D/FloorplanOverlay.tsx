@@ -86,6 +86,11 @@ export default function FloorplanOverlay() {
     setOverlayDrawing(drawing.id)
   }, [drawing, overlay.drawingId, setOverlayDrawing])
 
+  // Keep store in sync so ModelViewer can disable OrbitControls while tracing
+  useEffect(() => {
+    updateOverlay({ traceModeActive: traceMode }, false)
+  }, [traceMode, updateOverlay])
+
   const estimatedScale = useMemo<[number, number]>(() => {
     if (!drawing) return overlay.scale
     const widthPx = drawing.rasterWidth ?? 1400

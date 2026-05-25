@@ -307,6 +307,7 @@ export interface FloorplanOverlayState {
   locked: boolean
   snapToGrid: boolean
   calibrationMode: boolean
+  traceModeActive: boolean
   guidedStep: number
   position: [number, number]
   scale: [number, number]

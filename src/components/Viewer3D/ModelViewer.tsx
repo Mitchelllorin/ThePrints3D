@@ -35,24 +35,31 @@ function CameraRig() {
 
 /**
  * Listens for camera-preset requests from the store (set by the CameraHud).
- * Applies the requested camera pose to the active camera + OrbitControls.
+ * Applies the requested camera pose inside useFrame so the jump happens in
+ * the same Three.js tick that renders it — no one-frame stutter.
+ * Damping is temporarily disabled when applying the preset so that any
+ * residual OrbitControls velocity is cleared and the camera doesn't drift.
  */
 function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
-  const preset = useAppStore((s) => s.cameraPreset)
-  const consume = useAppStore((s) => s.consumeCameraPreset)
 
-  useEffect(() => {
-    if (!preset) return
-    camera.position.set(preset.position[0], preset.position[1], preset.position[2])
+  useFrame(() => {
+    const { cameraPreset, consumeCameraPreset } = useAppStore.getState()
+    if (!cameraPreset) return
+    camera.position.set(cameraPreset.position[0], cameraPreset.position[1], cameraPreset.position[2])
     if (controlsRef.current) {
-      controlsRef.current.target.set(preset.target[0], preset.target[1], preset.target[2])
-      controlsRef.current.update()
+      const ctrl = controlsRef.current
+      ctrl.target.set(cameraPreset.target[0], cameraPreset.target[1], cameraPreset.target[2])
+      // Disable damping for one update so accumulated velocity is zeroed out
+      const wasDamping = ctrl.enableDamping
+      ctrl.enableDamping = false
+      ctrl.update()
+      ctrl.enableDamping = wasDamping
     } else {
-      camera.lookAt(preset.target[0], preset.target[1], preset.target[2])
+      camera.lookAt(cameraPreset.target[0], cameraPreset.target[1], cameraPreset.target[2])
     }
-    consume()
-  }, [preset, camera, controlsRef, consume])
+    consumeCameraPreset()
+  })
 
   return null
 }
@@ -182,9 +189,13 @@ export default function ModelViewer() {
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
   const measurements = useAppStore((s) => s.measurements)
+  const overlay = useAppStore((s) => s.floorplanOverlay)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm] = useState<FormState | null>(null)
+
+  // Disable orbit while the user is actively tracing or calibrating on the overlay
+  const orbitEnabled = !overlay.traceModeActive && !overlay.calibrationMode
 
   function handlePlaceRequest(position: [number, number, number], screenX: number, screenY: number) {
     setPendingForm({ position3D: position, screenX, screenY })
@@ -377,6 +388,7 @@ export default function ModelViewer() {
         <OrbitControls
           ref={controlsRef}
           makeDefault
+          enabled={orbitEnabled}
           enableDamping
           dampingFactor={0.12}
           rotateSpeed={0.6}
