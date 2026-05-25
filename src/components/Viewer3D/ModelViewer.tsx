@@ -196,24 +196,24 @@ export default function ModelViewer() {
   const setView = useAppStore((s) => s.setView)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
-  const seedMode = useAppStore((s) => s.seedMode)
+  const traceMode = useAppStore((s) => s.traceMode)
   const [showProductPanel, setShowProductPanel] = useState(false)
 
   useEffect(() => {
     if (!controlsRef.current) return
-    controlsRef.current.touches.ONE = seedMode ? -1 as any : THREE.TOUCH.ROTATE
+    controlsRef.current.touches.ONE = traceMode ? -1 as any : THREE.TOUCH.ROTATE
 
   useEffect(() => {
     function onEscape(e: KeyboardEvent) {
       if (e.key !== 'Escape') return
-      useAppStore.setState({ seedMode: false })
+      useAppStore.getState().clearTraces()
       setShowProductPanel(false)
       clearSelection()
     }
     window.addEventListener('keydown', onEscape)
     return () => window.removeEventListener('keydown', onEscape)
   }, [])
-  }, [seedMode])
+  }, [traceMode])
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm] = useState<FormState | null>(null)
 
@@ -421,7 +421,7 @@ export default function ModelViewer() {
 
         <OrbitControls
           ref={controlsRef}
-            enabled={!seedMode}
+            enabled={!traceMode}
           makeDefault
           enableDamping
           dampingFactor={0.12}
@@ -479,6 +479,7 @@ export default function ModelViewer() {
     </div>
   )
 }
+
 
 
 

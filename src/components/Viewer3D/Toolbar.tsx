@@ -12,10 +12,10 @@ const EDIT_TOOLS = [
 export default function Toolbar() {
   const activeTool = useAppStore((s) => s.activeTool)
   const setActiveTool = useAppStore((s) => s.setActiveTool)
-  const seedMode    = useAppStore((s) => s.seedMode)
+  const traceMode    = useAppStore((s) => s.traceMode)
   const measureMode = useAppStore((s) => s.measureMode)
   const annotateMode = useAppStore((s) => s.annotateMode)
-  const anyModeActive = seedMode || measureMode || annotateMode
+  const anyModeActive = traceMode || measureMode || annotateMode
   const [undoCount, setUndoCount] = useState(0)
   const [redoCount, setRedoCount] = useState(0)
 
@@ -35,10 +35,10 @@ export default function Toolbar() {
           <button
             className={styles.toolBtn}
             style={{ color: '#ef4444', fontWeight: 700 }}
-            onClick={() => useAppStore.setState({ seedMode: false, measureMode: false, annotateMode: false })}
+            onClick={() => useAppStore.getState().clearTraces(); useAppStore.getState().setMeasureMode(false); useAppStore.getState().setAnnotateMode(false)}
           >
             <span className={styles.toolIcon}>X</span>
-            <span className={styles.toolLabel}>{seedMode ? "Exit Trace" : measureMode ? "Exit Measure" : "Exit Annotate"}</span>
+            <span className={styles.toolLabel}>{traceMode ? "Exit Trace" : measureMode ? "Exit Measure" : "Exit Annotate"}</span>
           </button>
           <div className={styles.toolbarDivider} />
         </>
@@ -77,3 +77,4 @@ export default function Toolbar() {
     </div>
   )
 }
+
