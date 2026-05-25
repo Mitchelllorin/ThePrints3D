@@ -340,7 +340,7 @@ export default function DrawingManager() {
           imageHeight={calibrating.rasterHeight ?? 900}
           existingMmPerPx={calibrating.scaleMmPerPx}
           onCalibrate={(mmPerPx, notation) => {
-            setDrawingScale(calibrating.id, mmPerPx, notation)
+            setDrawingScale(calibrating.id, mmPerPx, notation, 'parsed')
             setCalibratingId(null)
           }}
           onClose={() => setCalibratingId(null)}
@@ -365,10 +365,6 @@ export default function DrawingManager() {
           onDismiss={handleWallTypeDismiss}
           onContinueDrawing={handleWallTypeContinue}
         />
-      )}
-
-      {symbolRefOpen && selected && (
-        <SymbolReferencePanel drawingId={selected.id} onClose={() => setSymbolRefOpen(false)} />
       )}
 
       {symbolRefOpen && (

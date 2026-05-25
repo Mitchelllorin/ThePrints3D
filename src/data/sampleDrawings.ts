@@ -53,17 +53,6 @@ function wall(x1: number, y1: number, x2: number, y2: number, thick = WALL_W, cl
   return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="${cls}" stroke-width="${thick}" stroke-linecap="square"/>`
 }
 
-/* Double-line wall (thick) ────────────────────────────────────────────────── */
-function wallDouble(x1: number, y1: number, x2: number, y2: number, thick = WALL_W): string {
-  const dx = x2 - x1, dy = y2 - y1
-  const len = Math.sqrt(dx * dx + dy * dy)
-  if (len === 0) return ''
-  const nx = -dy / len * thick / 2, ny = dx / len * thick / 2
-  return `
-<line x1="${x1 + nx}" y1="${y1 + ny}" x2="${x2 + nx}" y2="${y2 + ny}" class="wall" stroke-width="2"/>
-<line x1="${x1 - nx}" y1="${y1 - ny}" x2="${x2 - nx}" y2="${y2 - ny}" class="wall" stroke-width="2"/>`
-}
-
 /* Proper architectural door ─────────────────────────────────────────────────
    Shows: door leaf line + swing arc + gap in wall
    ────⌒──  (plan view: leaf is perpendicular to wall, arc shows swing) */
@@ -144,40 +133,6 @@ function sink(x: number, y: number, w = 50, h = 30): string {
 <ellipse cx="0" cy="0" rx="${w/2 - 6}" ry="${h/2 - 5}" class="fixture" fill="none" stroke-width="1"/>
 <circle cx="0" cy="${-h/2 + 5}" r="3" class="fixture" fill="none" stroke-width="1"/>
 </g>`
-}
-
-/* Bathtub ─────────────────────────────────────────────────────────────────── */
-function bathtub(x: number, y: number, w = 150, h = 70): string {
-  _rec('plumbing', 'Bathtub', x, y)
-  return `<g transform="translate(${x},${y})">
-<rect x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" rx="8" class="fixture" fill="none" stroke-width="1.5"/>
-<ellipse cx="${-w/2 + 35}" cy="0" rx="20" ry="22" class="fixture" fill="none" stroke-width="1"/>
-<circle cx="${w/2 - 12}" cy="0" r="4" class="fixture" fill="none" stroke-width="1"/>
-</g>`
-}
-
-/* Shower ──────────────────────────────────────────────────────────────────── */
-function shower(x: number, y: number, size = 90): string {
-  const h = size / 2
-  return `<g transform="translate(${x},${y})">
-<rect x="${-h}" y="${-h}" width="${size}" height="${size}" rx="2" class="fixture" fill="none" stroke-width="1.5"/>
-<line x1="${-h + 8}" y1="${-h + 8}" x2="${h - 8}" y2="${h - 8}" class="fixture" stroke-width="1" stroke-dasharray="4 3"/>
-<circle cx="0" cy="0" r="10" class="fixture" fill="none" stroke-width="1"/>
-<circle cx="0" cy="0" r="2" class="fixture" fill="currentColor"/>
-</g>`
-}
-
-/* Stairs (straight run) ───────────────────────────────────────────────────── */
-function stairs(x: number, y: number, w: number, h: number, risers = 12, dir: 'up' | 'down' = 'up'): string {
-  let s = `<g transform="translate(${x},${y})">`
-  const stepH = h / risers
-  for (let i = 0; i < risers; i++) {
-    s += `<line x1="0" y1="${i * stepH}" x2="${w}" y2="${i * stepH}" class="stairs" stroke-width="1"/>`
-  }
-  s += `<rect x="0" y="0" width="${w}" height="${h}" class="stairs" fill="none" stroke-width="1.5"/>`
-  s += `<text x="${w + 8}" y="${h / 2}" font-size="9" class="stairs-text" dominant-baseline="middle">${dir === 'up' ? 'UP' : 'DN'}</text>`
-  s += '</g>'
-  return s
 }
 
 /* Kitchen counter ─────────────────────────────────────────────────────────── */
@@ -277,15 +232,6 @@ function titleBlock(x: number, y: number, w: number, h: number, title: string, n
 <text x="${w * 0.45}" y="${h * 0.55}" font-size="8" class="title-block-text">SCALE: ${scale}</text>
 <text x="${w * 0.75}" y="${h * 0.55}" font-size="8" class="title-block-text">DATE: MAY 2026</text>
 </g>`
-}
-
-/* Hatching (cross-hatch for structural) ───────────────────────────────────── */
-function hatchRegion(x: number, y: number, w: number, h: number, spacing = 8): string {
-  let s = ''
-  for (let i = -h; i < w + h; i += spacing) {
-    s += `<line x1="${x + i}" y1="${y}" x2="${x + i - h}" y2="${y + h}" class="hatch" stroke-width="0.3"/>`
-  }
-  return s
 }
 
 /* ─── SVG Wrappers ────────────────────────────────────────────────────────── */
@@ -619,6 +565,270 @@ function officeSVG(w: number, h: number): string {
   return svgWrap(content, w, h)
 }
 
+/* ─── Simple 2: Tiny Studio Apartment ───────────────────────────────────── */
+
+function studioSVG(w: number, h: number): string {
+  const m = 60, bw = w - m * 2, bh = h - m * 2
+  const x0 = m, y0 = m, x1 = m + bw, y1 = m + bh
+  let content = ''
+  content += wall(x0, y0, x1, y0, WALL_W)
+  content += wall(x1, y0, x1, y1, WALL_W)
+  content += wall(x1, y1, x0, y1, WALL_W)
+  content += wall(x0, y1, x0, y0, WALL_W)
+  const bathX = x1 - 180
+  content += wall(bathX, y0, bathX, y0 + 200, WALL_T)
+  content += wall(bathX, y0 + 200, x1, y0 + 200, WALL_T)
+  content += doorAt(bathX, y0, x1, y0, 0.5, 'left', 75)
+  content += windowAt(x0 + 50, y0, x0 + 150, y0)
+  content += windowAt(x1, y1 - 120, x1, y1 - 40)
+  content += toilet(bathX + 40, y0 + 60, 0)
+  content += sink(bathX + 90, y0 + 130, 35, 22)
+  content += stove(m + 80, y0 + 40, 50)
+  content += fridge(m + bw * 0.35, y0 + bh * 0.65, 28, 38)
+  content += outlet(m + 40, y0 + 30)
+  content += outlet(m + bw * 0.5, y1 - 20)
+  content += lightFixture(x0 + bw * 0.3, y0 + bh * 0.4)
+  content += roomLabel(x0 + bw * 0.3, y0 + bh * 0.3, 'STUDIO')
+  content += roomLabel(bathX + 60, y0 + 100, 'BATH')
+  content += dimension(x0, y0 - 50, x1, y0 - 50, '7 200 mm')
+  content += dimension(x0 - 50, y0, x0 - 50, y1, '5 400 mm')
+  content += northArrow(x0 + 35, y0 + 35)
+  content += titleBlock(x1 - 260, y1 - 50, 240, 36, 'STUDIO APARTMENT', 'BP-004', '1:100')
+  return svgWrap(content, w, h)
+}
+
+/* ─── Simple 3: Small Cottage ────────────────────────────────────────────── */
+
+function cottageSVG(w: number, h: number): string {
+  const m = 50, bw = w - m * 2, bh = h - m * 2
+  const x0 = m, y0 = m, x1 = m + bw, y1 = m + bh
+  let content = ''
+  content += wall(x0, y0, x1, y0, WALL_W)
+  content += wall(x1, y0, x1, y1, WALL_W)
+  content += wall(x1, y1, x0, y1, WALL_W)
+  content += wall(x0, y1, x0, y0, WALL_W)
+  const vDiv = x0 + bw * 0.55
+  const hDiv1 = y0 + bh * 0.38
+  const hDiv2 = y0 + bh * 0.70
+  content += wall(vDiv, y0, vDiv, y1, WALL_T)
+  content += wall(x0, hDiv1, vDiv, hDiv1, WALL_T)
+  content += wall(x0, hDiv2, vDiv, hDiv2, WALL_T)
+  content += doorAt(x0, hDiv1, vDiv, hDiv1, 0.45, 'right', 80)
+  content += doorAt(x0, hDiv2, vDiv, hDiv2, 0.45, 'left', 80)
+  content += doorAt(vDiv, hDiv1, x1, hDiv1, 0.5, 'left', 75)
+  content += windowAt(x0 + 30, y0, x0 + 130, y0)
+  content += windowAt(x1 - 130, y0, x1 - 30, y0)
+  content += windowAt(x0 + 30, y1, x0 + 130, y1)
+  content += windowAt(x1, y0 + bh * 0.3, x1, y0 + bh * 0.5)
+  content += toilet(vDiv + 60, y0 + 50, 0)
+  content += sink(vDiv + 110, y0 + 90, 35, 22)
+  content += stove(x0 + 30, hDiv1 + 25, 45)
+  content += outlet(x0 + 50, hDiv1 - 15)
+  content += outlet(vDiv + 20, hDiv1 - 15)
+  content += lightFixture(x0 + bw * 0.25, y0 + bh * 0.15)
+  content += lightFixture(x0 + bw * 0.25, y0 + bh * 0.55)
+  content += roomLabel(x0 + bw * 0.12, y0 + bh * 0.12, 'BEDROOM')
+  content += roomLabel(x0 + bw * 0.12, hDiv1 + bh * 0.12, 'LIVING')
+  content += roomLabel(x0 + bw * 0.12, hDiv2 + bh * 0.12, 'KITCHEN')
+  content += roomLabel(vDiv + bw * 0.12, y0 + bh * 0.12, 'BATH')
+  content += roomLabel(vDiv + bw * 0.12, hDiv1 + bh * 0.12, 'BED 2')
+  content += dimension(x0, y0 - 50, x1, y0 - 50, '8 400 mm')
+  content += dimension(x0 - 50, y0, x0 - 50, y1, '6 000 mm')
+  content += northArrow(x0 + 35, y0 + 35)
+  content += titleBlock(x1 - 260, y1 - 50, 240, 36, 'COTTAGE', 'BP-005', '1:100')
+  return svgWrap(content, w, h)
+}
+
+/* ─── Intermediate 2: Duplex Unit ───────────────────────────────────────── */
+
+function duplexSVG(w: number, h: number): string {
+  const m = 50, bw = w - m * 2, bh = h - m * 2
+  const x0 = m, y0 = m, x1 = m + bw, y1 = m + bh
+  const midX = x0 + bw * 0.5
+  let content = ''
+  content += wall(x0, y0, x1, y0, WALL_W)
+  content += wall(x1, y0, x1, y1, WALL_W)
+  content += wall(x1, y1, x0, y1, WALL_W)
+  content += wall(x0, y1, x0, y0, WALL_W)
+  content += wall(midX, y0, midX, y1, WALL_T)
+  content += doorAt(midX, y0, x1, y0, 0.4, 'right', 80)
+  content += doorAt(x0, y0, midX, y0, 0.4, 'left', 80)
+  const roomsL = [
+    { x: x0 + 30, y: y0 + 30, w: midX - x0 - 60, h: bh * 0.45 },
+    { x: x0 + 30, y: y0 + bh * 0.55, w: midX - x0 - 60, h: bh * 0.45 },
+  ]
+  const roomsR = [
+    { x: midX + 30, y: y0 + 30, w: x1 - midX - 60, h: bh * 0.45 },
+    { x: midX + 30, y: y0 + bh * 0.55, w: x1 - midX - 60, h: bh * 0.45 },
+  ]
+  for (const r of roomsL) {
+    content += wall(r.x, r.y, r.x + r.w, r.y, WALL_T)
+    content += wall(r.x + r.w, r.y, r.x + r.w, r.y + r.h, WALL_T)
+    content += wall(r.x + r.w, r.y + r.h, r.x, r.y + r.h, WALL_T)
+    content += wall(r.x, r.y + r.h, r.x, r.y, WALL_T)
+  }
+  for (const r of roomsR) {
+    content += wall(r.x, r.y, r.x + r.w, r.y, WALL_T)
+    content += wall(r.x + r.w, r.y, r.x + r.w, r.y + r.h, WALL_T)
+    content += wall(r.x + r.w, r.y + r.h, r.x, r.y + r.h, WALL_T)
+    content += wall(r.x, r.y + r.h, r.x, r.y, WALL_T)
+  }
+  content += doorAt(roomsL[0].x + roomsL[0].w, roomsL[0].y, roomsL[0].x + roomsL[0].w, roomsL[0].y + roomsL[0].h, 0.3, 'left', 70)
+  content += doorAt(roomsL[1].x, roomsL[1].y, roomsL[1].x, roomsL[1].y + roomsL[1].h, 0.3, 'right', 70)
+  content += doorAt(roomsR[0].x, roomsR[0].y, roomsR[0].x, roomsR[0].y + roomsR[0].h, 0.3, 'right', 70)
+  content += doorAt(roomsR[1].x + roomsR[1].w, roomsR[1].y, roomsR[1].x + roomsR[1].w, roomsR[1].y + roomsR[1].h, 0.3, 'left', 70)
+  content += windowAt(x0 + 30, y0, x0 + 120, y0)
+  content += windowAt(midX + 50, y0, midX + 140, y0)
+  content += windowAt(x0 + 30, y1, x0 + 120, y1)
+  content += windowAt(midX + 50, y1, midX + 140, y1)
+  content += outlet(x0 + 50, y0 + bh * 0.2)
+  content += outlet(midX + 40, y0 + bh * 0.2)
+  content += lightFixture(x0 + bw * 0.15, y0 + bh * 0.2)
+  content += lightFixture(midX + bw * 0.15, y0 + bh * 0.2)
+  content += roomLabel(x0 + bw * 0.1, y0 + bh * 0.15, 'UNIT A')
+  content += roomLabel(midX + bw * 0.1, y0 + bh * 0.15, 'UNIT B')
+  content += dimension(x0, y0 - 50, x1, y0 - 50, '10 200 mm')
+  content += dimension(x0 - 50, y0, x0 - 50, y1, '7 200 mm')
+  content += northArrow(x0 + 35, y0 + 35)
+  content += titleBlock(x1 - 260, y1 - 50, 240, 36, 'DUPLEX', 'BP-006', '1:100')
+  return svgWrap(content, w, h)
+}
+
+/* ─── Intermediate 3: Townhouse ─────────────────────────────────────────── */
+
+function townhouseSVG(w: number, h: number): string {
+  const m = 50, bw = w - m * 2, bh = h - m * 2
+  const x0 = m, y0 = m, x1 = m + bw, y1 = m + bh
+  let content = ''
+  content += wall(x0, y0, x1, y0, WALL_W)
+  content += wall(x1, y0, x1, y1, WALL_W)
+  content += wall(x1, y1, x0, y1, WALL_W)
+  content += wall(x0, y1, x0, y0, WALL_W)
+  const hDiv = y0 + bh * 0.45
+  const vDiv1 = x0 + bw * 0.48
+  const vDiv2 = x0 + bw * 0.35
+  content += wall(x0, hDiv, x1, hDiv, WALL_T)
+  content += wall(vDiv1, hDiv, vDiv1, y1, WALL_T)
+  content += wall(vDiv2, y0, vDiv2, hDiv, WALL_T)
+  content += doorAt(vDiv2, hDiv, x1, hDiv, 0.35, 'right', 80)
+  content += doorAt(vDiv1, hDiv, x1, hDiv, 0.55, 'left', 80)
+  content += doorAt(x0, y0, vDiv2, y0, 0.35, 'right', 80)
+  content += windowAt(x0 + 25, y0, x0 + 110, y0)
+  content += windowAt(vDiv2 + 25, y0, vDiv2 + 110, y0)
+  content += windowAt(x1 - 110, y0, x1 - 25, y0)
+  content += windowAt(x0 + 25, y1, x0 + 110, y1)
+  content += windowAt(vDiv1 + 25, y1, vDiv1 + 110, y1)
+  content += outlet(x0 + 50, y0 + bh * 0.2)
+  content += outlet(vDiv2 + 40, y0 + bh * 0.2)
+  content += lightFixture(x0 + bw * 0.15, y0 + bh * 0.15)
+  content += lightFixture(vDiv1 + bw * 0.1, hDiv + bh * 0.2)
+  content += toilet(vDiv1 + 40, hDiv + 60, 0)
+  content += sink(vDiv1 + 90, hDiv + 100, 35, 22)
+  content += stove(vDiv2 + 25, y0 + 35, 45)
+  content += roomLabel(x0 + bw * 0.1, y0 + bh * 0.15, 'LIVING')
+  content += roomLabel(vDiv2 + bw * 0.06, y0 + bh * 0.15, 'KITCHEN')
+  content += roomLabel(x0 + bw * 0.1, hDiv + bh * 0.15, 'BEDROOM')
+  content += roomLabel(vDiv1 + bw * 0.06, hDiv + bh * 0.15, 'BATH')
+  content += dimension(x0, y0 - 50, x1, y0 - 50, '9 000 mm')
+  content += dimension(x0 - 50, y0, x0 - 50, y1, '7 800 mm')
+  content += northArrow(x0 + 35, y0 + 35)
+  content += titleBlock(x1 - 260, y1 - 50, 240, 36, 'TOWNHOUSE', 'BP-007', '1:100')
+  return svgWrap(content, w, h)
+}
+
+/* ─── Difficult 2: Medical Suite ─────────────────────────────────────────── */
+
+function medicalSVG(w: number, h: number): string {
+  const m = 50, bw = w - m * 2, bh = h - m * 2
+  const x0 = m, y0 = m, x1 = m + bw, y1 = m + bh
+  let content = ''
+  content += wall(x0, y0, x1, y0, WALL_W)
+  content += wall(x1, y0, x1, y1, WALL_W)
+  content += wall(x1, y1, x0, y1, WALL_W)
+  content += wall(x0, y1, x0, y0, WALL_W)
+  const corridorX = x0 + 320
+  content += wall(corridorX, y0, corridorX, y1, WALL_T)
+  const hDivs = [y0 + bh * 0.25, y0 + bh * 0.50, y0 + bh * 0.75]
+  for (const hd of hDivs) {
+    content += wall(x0, hd, corridorX, hd, WALL_T)
+    content += doorAt(corridorX, hd, x1, hd, 0.15, 'right', 80)
+  }
+  content += doorAt(x0, hDivs[0], corridorX, hDivs[0], 0.7, 'left', 90)
+  content += doorAt(x0, hDivs[1], corridorX, hDivs[1], 0.7, 'left', 90)
+  content += doorAt(x0, hDivs[2], corridorX, hDivs[2], 0.7, 'left', 90)
+  const rooms = [
+    { x: x0 + 20, y: y0 + 20, w: corridorX - x0 - 40, h: hDivs[0] - y0 - 30 },
+    { x: x0 + 20, y: hDivs[0] + 20, w: corridorX - x0 - 40, h: hDivs[1] - hDivs[0] - 30 },
+    { x: x0 + 20, y: hDivs[1] + 20, w: corridorX - x0 - 40, h: hDivs[2] - hDivs[1] - 30 },
+  ]
+  for (const r of rooms) {
+    content += wall(r.x, r.y, r.x + r.w, r.y, WALL_T)
+    content += wall(r.x + r.w, r.y, r.x + r.w, r.y + r.h, WALL_T)
+    content += wall(r.x + r.w, r.y + r.h, r.x, r.y + r.h, WALL_T)
+    content += wall(r.x, r.y + r.h, r.x, r.y, WALL_T)
+  }
+  const examRoomX = corridorX + 30, examRoomW = x1 - corridorX - 40
+  content += wall(examRoomX, y0 + 20, examRoomX + examRoomW, y0 + 20, WALL_T)
+  content += wall(examRoomX + examRoomW, y0 + 20, examRoomX + examRoomW, hDivs[0] - 20, WALL_T)
+  content += sink(examRoomX + examRoomW - 40, y0 + 35, 30, 20)
+  content += windowAt(x0 + 20, y0, x0 + 120, y0)
+  content += windowAt(x1 - 120, y1, x1 - 20, y1)
+  content += outlet(x0 + 50, y0 + 30)
+  content += outlet(corridorX + 40, y0 + 30)
+  content += lightFixture(x0 + bw * 0.15, y0 + bh * 0.12)
+  content += lightFixture(corridorX + bw * 0.08, y0 + bh * 0.12)
+  content += roomLabel(x0 + 40, y0 + bh * 0.1, 'RECEPTION')
+  content += roomLabel(x0 + 40, hDivs[0] + bh * 0.1, 'EXAM 1')
+  content += roomLabel(x0 + 40, hDivs[1] + bh * 0.1, 'EXAM 2')
+  content += roomLabel(corridorX + 30, hDivs[0] + bh * 0.08, 'LAB')
+  content += roomLabel(corridorX + 10, y0 + bh * 0.5, 'CORRIDOR')
+  content += dimension(x0, y0 - 50, x1, y0 - 50, '14 400 mm')
+  content += northArrow(x0 + 35, y0 + 35)
+  content += titleBlock(x1 - 260, y1 - 50, 240, 36, 'MEDICAL SUITE', 'BP-008', '1:100')
+  return svgWrap(content, w, h)
+}
+
+/* ─── Difficult 3: Retail Space ──────────────────────────────────────────── */
+
+function retailSVG(w: number, h: number): string {
+  const m = 50, bw = w - m * 2, bh = h - m * 2
+  const x0 = m, y0 = m, x1 = m + bw, y1 = m + bh
+  let content = ''
+  content += wall(x0, y0, x1, y0, WALL_W)
+  content += wall(x1, y0, x1, y1, WALL_W)
+  content += wall(x1, y1, x0, y1, WALL_W)
+  content += wall(x0, y1, x0, y0, WALL_W)
+  const entry = x0 + bw * 0.3
+  const backWall = y0 + bh * 0.65
+  const stockWallX = x0 + bw * 0.72
+  content += wall(x0, backWall, x1, backWall, WALL_T)
+  content += wall(stockWallX, backWall, stockWallX, y1, WALL_T)
+  content += wall(entry, y0, entry, backWall, WALL_T)
+  content += doorAt(entry, y0, x1, y0, 0.2, 'right', 120)
+  content += doorAt(stockWallX, backWall, x1, backWall, 0.2, 'right', 90)
+  content += doorAt(x0, backWall, stockWallX, backWall, 0.5, 'left', 80)
+  content += windowAt(x0 + 20, y0, entry - 20, y0)
+  content += windowAt(entry + 40, y0, x1 - 20, y0)
+  content += windowAt(x1, y0 + bh * 0.15, x1, y0 + bh * 0.35)
+  content += windowAt(x0 + 20, y1, x0 + 140, y1)
+  content += outlet(x0 + 50, y0 + 30)
+  content += outlet(stockWallX + 30, backWall + 30)
+  content += lightFixture(x0 + bw * 0.15, y0 + bh * 0.15)
+  content += lightFixture(x0 + bw * 0.15, y0 + bh * 0.45)
+  content += lightFixture(stockWallX + bw * 0.05, backWall + bh * 0.1)
+  content += sink(stockWallX + 30, backWall + 50, 35, 22)
+  content += toilet(stockWallX + 90, backWall + 50, 0)
+  content += roomLabel(x0 + 40, y0 + bh * 0.1, 'RETAIL FLOOR')
+  content += roomLabel(x0 + 40, backWall + bh * 0.08, 'FITTING')
+  content += roomLabel(stockWallX + 20, backWall + bh * 0.08, 'STOCK')
+  content += roomLabel(stockWallX + 20, backWall + bh * 0.35, 'STAFF')
+  content += dimension(x0, y0 - 50, x1, y0 - 50, '16 800 mm')
+  content += dimension(x0 - 50, y0, x0 - 50, y1, '9 600 mm')
+  content += northArrow(x0 + 35, y0 + 35)
+  content += titleBlock(x1 - 260, y1 - 50, 240, 36, 'RETAIL SPACE', 'BP-009', '1:100')
+  return svgWrap(content, w, h)
+}
+
 /* ─── Sample definitions ──────────────────────────────────────────────────── */
 
 export const SAMPLE_DRAWINGS: SampleDrawingDef[] = [
@@ -715,6 +925,125 @@ export const SAMPLE_DRAWINGS: SampleDrawingDef[] = [
       'has-plumbing': 'true',
       'has-hvac': 'true',
       'has-structural': 'true',
+    },
+  },
+  {
+    id: 'sample-studio',
+    name: 'Tiny Studio Apartment',
+    difficulty: 'simple',
+    description: 'Compact studio apartment with open living/sleeping area, bathroom and kitchenette.',
+    tags: ['residential', 'studio', 'compact'],
+    generateSvg: studioSVG,
+    width: 1000,
+    height: 800,
+    scaleMmPerPx: 10.0,
+    scaleNotation: '1:100',
+    wizardDefaults: {
+      'has-scale': 'true', 'units': 'metric', 'ceiling-height': '2.5',
+      'door-symbol': 'true', 'window-symbol': 'true',
+      'exterior-thick': 'true', 'interior-thin': 'true',
+      'wall-material': 'timber', 'room-count': 'ai',
+      'has-electrical': 'true', 'has-plumbing': 'true',
+    },
+  },
+  {
+    id: 'sample-cottage',
+    name: 'Small Cottage',
+    difficulty: 'simple',
+    description: 'Cozy cottage with two bedrooms, living room, kitchen, and bathroom.',
+    tags: ['residential', 'cottage', '2-bed'],
+    generateSvg: cottageSVG,
+    width: 1100,
+    height: 850,
+    scaleMmPerPx: 10.25,
+    scaleNotation: '1:100',
+    wizardDefaults: {
+      'has-scale': 'true', 'units': 'metric', 'ceiling-height': '2.7',
+      'door-symbol': 'true', 'window-symbol': 'true',
+      'circle-symbols': 'lights', 'square-symbols': 'switches',
+      'exterior-thick': 'true', 'interior-thin': 'true',
+      'wall-material': 'timber', 'room-count': 'ai',
+      'has-electrical': 'true', 'has-plumbing': 'true',
+    },
+  },
+  {
+    id: 'sample-duplex',
+    name: 'Duplex Unit',
+    difficulty: 'intermediate',
+    description: 'Two-unit duplex floor plan with mirrored layouts and separate entrances.',
+    tags: ['multi-unit', 'duplex', 'residential'],
+    generateSvg: duplexSVG,
+    width: 1400,
+    height: 1000,
+    scaleMmPerPx: 10.0,
+    scaleNotation: '1:100',
+    wizardDefaults: {
+      'has-scale': 'true', 'units': 'metric', 'ceiling-height': '2.7',
+      'door-symbol': 'true', 'window-symbol': 'true',
+      'circle-symbols': 'lights', 'square-symbols': 'switches',
+      'exterior-thick': 'true', 'interior-thin': 'true',
+      'wall-material': 'timber', 'room-count': 'ai',
+      'has-electrical': 'true', 'has-plumbing': 'true',
+    },
+  },
+  {
+    id: 'sample-townhouse',
+    name: 'Townhouse',
+    difficulty: 'intermediate',
+    description: 'Two-story townhouse with living, kitchen, bedroom and bathroom on main level.',
+    tags: ['residential', 'townhouse', 'multi-level'],
+    generateSvg: townhouseSVG,
+    width: 1200,
+    height: 1000,
+    scaleMmPerPx: 10.5,
+    scaleNotation: '1:100',
+    wizardDefaults: {
+      'has-scale': 'true', 'units': 'metric', 'ceiling-height': '2.7',
+      'door-symbol': 'true', 'window-symbol': 'true',
+      'circle-symbols': 'lights', 'square-symbols': 'switches',
+      'exterior-thick': 'true', 'interior-thin': 'true',
+      'wall-material': 'timber', 'room-count': 'ai',
+      'has-electrical': 'true', 'has-plumbing': 'true',
+    },
+  },
+  {
+    id: 'sample-medical',
+    name: 'Medical Suite',
+    difficulty: 'difficult',
+    description: 'Medical office with reception, exam rooms, lab, and staff area.',
+    tags: ['commercial', 'medical', 'office'],
+    generateSvg: medicalSVG,
+    width: 1600,
+    height: 1100,
+    scaleMmPerPx: 10.31,
+    scaleNotation: '1:100',
+    wizardDefaults: {
+      'has-scale': 'true', 'units': 'metric', 'ceiling-height': '2.8',
+      'door-symbol': 'true', 'window-symbol': 'true',
+      'circle-symbols': 'lights',
+      'exterior-thick': 'true', 'interior-thin': 'true',
+      'wall-material': 'steel', 'room-count': 'ai',
+      'has-electrical': 'true', 'has-plumbing': 'true',
+    },
+  },
+  {
+    id: 'sample-retail',
+    name: 'Retail Space',
+    difficulty: 'difficult',
+    description: 'Retail store with sales floor, fitting rooms, stock room, and staff facilities.',
+    tags: ['commercial', 'retail', 'store'],
+    generateSvg: retailSVG,
+    width: 1800,
+    height: 1100,
+    scaleMmPerPx: 10.0,
+    scaleNotation: '1:100',
+    wizardDefaults: {
+      'has-scale': 'true', 'units': 'metric', 'ceiling-height': '3.0',
+      'door-symbol': 'true', 'window-symbol': 'true',
+      'circle-symbols': 'lights', 'square-symbols': 'switches',
+      'exterior-thick': 'true', 'interior-thin': 'true',
+      'wall-material': 'steel', 'room-count': 'ai',
+      'has-electrical': 'true', 'has-plumbing': 'true',
     },
   },
 ]

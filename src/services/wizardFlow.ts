@@ -15,64 +15,118 @@ export interface WizardStep {
 }
 
 export const wizardSteps: WizardStep[] = [
+  // ─── Stage 1: Foundation ────────────────────────────────────────────────
   {
-    id: 'layout',
-    question: 'What is the building layout?',
-    icon: '📐',
+    id: 'foundation-type',
+    question: 'Select foundation type',
+    icon: '🏗️',
     subQuestions: [
       {
-        id: 'room-count',
-        label: 'Single room or multiple rooms?',
+        id: 'foundation-type',
+        label: 'Foundation type',
         type: 'select',
         options: [
-          { label: 'Single room', value: 'single' },
-          { label: 'Multiple rooms', value: 'multiple' },
+          { label: 'Footings + Foundation Walls', value: 'footings-walls' },
+          { label: 'Monolithic Slab (Slab-on-Grade)', value: 'monolithic-slab' },
+          { label: 'Stem Wall + Slab', value: 'stem-wall-slab' },
+          { label: 'Crawlspace', value: 'crawlspace' },
+          { label: 'Pier / Post Foundation', value: 'pier' },
         ],
-        defaultValue: 'single',
-      },
-      {
-        id: 'room-width',
-        label: 'Room width (inches)?',
-        type: 'number',
-        hint: 'Standard room ~120" (10ft)',
-        defaultValue: 120,
-      },
-      {
-        id: 'room-length',
-        label: 'Room length (inches)?',
-        type: 'number',
-        hint: 'Standard room ~120" (10ft)',
-        defaultValue: 120,
-      },
-      {
-        id: 'room-count-value',
-        label: 'How many rooms?',
-        type: 'number',
-        hint: 'Minimum 1',
-        defaultValue: 1,
+        defaultValue: 'monolithic-slab',
       },
     ],
   },
   {
-    id: 'wallStructure',
-    question: 'What type of walls?',
+    id: 'foundation-dims',
+    question: 'Foundation dimensions',
+    icon: '📏',
+    subQuestions: [
+      {
+        id: 'building-length',
+        label: 'Building length (inches)?',
+        type: 'number',
+        hint: 'Standard: 240" (20ft)',
+        defaultValue: 240,
+      },
+      {
+        id: 'building-width',
+        label: 'Building width (inches)?',
+        type: 'number',
+        hint: 'Standard: 180" (15ft)',
+        defaultValue: 180,
+      },
+      {
+        id: 'slab-thickness',
+        label: 'Slab thickness (inches)?',
+        type: 'number',
+        hint: 'Standard: 4"',
+        defaultValue: 4,
+      },
+      {
+        id: 'foundation-wall-height',
+        label: 'Foundation wall height (inches)?',
+        type: 'number',
+        hint: 'Standard: 48" (4ft)',
+        defaultValue: 48,
+      },
+      {
+        id: 'foundation-wall-thickness',
+        label: 'Foundation wall thickness (inches)?',
+        type: 'number',
+        hint: 'Standard: 8"',
+        defaultValue: 8,
+      },
+    ],
+  },
+  {
+    id: 'foundation-calibrate',
+    question: 'Calibrate floorplan',
+    icon: '📐',
+    subQuestions: [
+      {
+        id: 'has-floorplan',
+        label: 'Do you have a floorplan image?',
+        type: 'boolean',
+        defaultValue: false,
+      },
+      {
+        id: 'floorplan-rotation',
+        label: 'Floorplan rotation (degrees)?',
+        type: 'number',
+        hint: 'Adjust to align with grid',
+        defaultValue: 0,
+      },
+      {
+        id: 'floorplan-opacity',
+        label: 'Floorplan opacity (%)?',
+        type: 'number',
+        hint: '0-100',
+        defaultValue: 60,
+      },
+    ],
+  },
+
+  // ─── Stage 2: Framing ──────────────────────────────────────────────────
+  {
+    id: 'wall-structure',
+    question: 'Wall structure type',
     icon: '🧱',
     subQuestions: [
       {
         id: 'wall-material',
-        label: 'What material?',
+        label: 'Wall material',
         type: 'select',
         options: [
           { label: 'Wood stud', value: 'wood' },
           { label: 'Steel stud', value: 'steel' },
-          { label: 'Concrete', value: 'concrete' },
-          { label: 'Masonry', value: 'masonry' },
+          { label: 'Concrete block', value: 'concrete' },
+          { label: 'ICF', value: 'icf' },
         ],
         defaultValue: 'wood',
       },
       {
         id: 'stud-spacing',
-        label: 'Stud spacing?',
+        label: 'Stud spacing',
         type: 'select',
         options: [
           { label: '16" OC (standard)', value: '16' },
@@ -83,7 +137,7 @@ export const wizardSteps: WizardStep[] = [
       },
       {
         id: 'wall-height',
-        label: 'Wall height?',
+        label: 'Wall height',
         type: 'select',
         options: [
           { label: '8 ft (standard)', value: '96' },
@@ -92,11 +146,18 @@ export const wizardSteps: WizardStep[] = [
         ],
         defaultValue: '96',
       },
+      {
+        id: 'wall-thickness',
+        label: 'Wall thickness (inches)?',
+        type: 'number',
+        hint: 'Standard: 4.5" for 2x4, 6.5" for 2x6',
+        defaultValue: 4.5,
+      },
     ],
   },
   {
     id: 'openings',
-    question: 'Add doors and windows?',
+    question: 'Doors and windows',
     icon: '🚪',
     subQuestions: [
       {
@@ -109,7 +170,7 @@ export const wizardSteps: WizardStep[] = [
         id: 'door-width',
         label: 'Door width (inches)?',
         type: 'number',
-        hint: 'Standard interior door: 32", exterior: 36"',
+        hint: 'Standard interior: 32", exterior: 36"',
         defaultValue: 36,
       },
       {
@@ -118,6 +179,16 @@ export const wizardSteps: WizardStep[] = [
         type: 'number',
         hint: 'Standard: 80" (6\'8")',
         defaultValue: 80,
+      },
+      {
+        id: 'door-swing',
+        label: 'Door swing direction?',
+        type: 'select',
+        options: [
+          { label: 'Inward (standard)', value: 'inward' },
+          { label: 'Outward', value: 'outward' },
+        ],
+        defaultValue: 'inward',
       },
       {
         id: 'has-windows',
@@ -139,11 +210,58 @@ export const wizardSteps: WizardStep[] = [
         hint: 'Standard: 36"',
         defaultValue: 36,
       },
+      {
+        id: 'window-sill',
+        label: 'Window sill height (inches)?',
+        type: 'number',
+        hint: 'Standard: 36" from floor',
+        defaultValue: 36,
+      },
     ],
   },
   {
+    id: 'roof',
+    question: 'Roof structure',
+    icon: '🏠',
+    subQuestions: [
+      {
+        id: 'roof-type',
+        label: 'Roof type',
+        type: 'select',
+        options: [
+          { label: 'Flat', value: 'flat' },
+          { label: 'Gable', value: 'gable' },
+          { label: 'Hip', value: 'hip' },
+          { label: 'Shed', value: 'shed' },
+        ],
+        defaultValue: 'flat',
+      },
+      {
+        id: 'roof-pitch',
+        label: 'Roof pitch (rise:12)?',
+        type: 'select',
+        options: [
+          { label: 'Low slope (2:12)', value: '2' },
+          { label: 'Standard (4:12)', value: '4' },
+          { label: 'Steeper (6:12)', value: '6' },
+          { label: 'Steep (8:12)', value: '8' },
+        ],
+        defaultValue: '4',
+      },
+      {
+        id: 'roof-overhang',
+        label: 'Roof overhang (inches)?',
+        type: 'number',
+        hint: 'Standard: 12"',
+        defaultValue: 12,
+      },
+    ],
+  },
+
+  // ─── Stage 3: Rough-ins (MEP) ──────────────────────────────────────────
+  {
     id: 'electrical',
-    question: 'Add electrical devices?',
+    question: 'Electrical rough-in',
     icon: '⚡',
     subQuestions: [
       {
@@ -154,30 +272,30 @@ export const wizardSteps: WizardStep[] = [
       },
       {
         id: 'outlet-count',
-        label: 'How many outlets?',
+        label: 'How many outlets per room?',
         type: 'number',
-        hint: 'Standard: 2 per wall, 4 per room',
+        hint: 'Standard: 4 outlets per room',
         defaultValue: 4,
       },
       {
         id: 'switch-count',
-        label: 'How many switches?',
+        label: 'How many switches per room?',
         type: 'number',
-        hint: 'Standard: 1 per room, 2 near entrance',
+        hint: 'Standard: 1-2',
         defaultValue: 2,
       },
       {
         id: 'light-count',
-        label: 'How many ceiling lights?',
+        label: 'How many ceiling lights per room?',
         type: 'number',
-        hint: 'Standard: 1 per room',
+        hint: 'Standard: 1',
         defaultValue: 1,
       },
     ],
   },
   {
     id: 'plumbing',
-    question: 'Add plumbing fixtures?',
+    question: 'Plumbing rough-in',
     icon: '🔧',
     subQuestions: [
       {
@@ -204,16 +322,51 @@ export const wizardSteps: WizardStep[] = [
         type: 'boolean',
         defaultValue: false,
       },
+      {
+        id: 'has-tub',
+        label: 'Include bathtub?',
+        type: 'boolean',
+        defaultValue: false,
+      },
     ],
   },
   {
+    id: 'hvac',
+    question: 'HVAC rough-in',
+    icon: '🌀',
+    subQuestions: [
+      {
+        id: 'has-hvac',
+        label: 'Include HVAC?',
+        type: 'boolean',
+        defaultValue: false,
+      },
+      {
+        id: 'hvac-vents',
+        label: 'How many supply vents per room?',
+        type: 'number',
+        hint: 'Standard: 2',
+        defaultValue: 2,
+      },
+      {
+        id: 'hvac-returns',
+        label: 'How many return vents per room?',
+        type: 'number',
+        hint: 'Standard: 1',
+        defaultValue: 1,
+      },
+    ],
+  },
+
+  // ─── Stage 4: Insulation ───────────────────────────────────────────────
+  {
     id: 'insulation',
-    question: 'Add insulation?',
+    question: 'Insulation',
     icon: '🛡️',
     subQuestions: [
       {
         id: 'insulation-type',
-        label: 'What type?',
+        label: 'Insulation type',
         type: 'select',
         options: [
           { label: 'Batt (standard)', value: 'batt' },
@@ -222,22 +375,45 @@ export const wizardSteps: WizardStep[] = [
         ],
         defaultValue: 'batt',
       },
+      {
+        id: 'insulation-rvalue',
+        label: 'R-value?',
+        type: 'select',
+        options: [
+          { label: 'Standard (R-13)', value: 'r13' },
+          { label: 'Enhanced (R-19)', value: 'r19' },
+          { label: 'Custom', value: 'custom' },
+        ],
+        defaultValue: 'r13',
+      },
     ],
   },
+
+  // ─── Stage 5: Drywall ──────────────────────────────────────────────────
   {
     id: 'drywall',
-    question: 'Add drywall?',
+    question: 'Drywall',
     icon: '🧱',
     subQuestions: [
       {
         id: 'drywall-thickness',
-        label: 'Drywall thickness?',
+        label: 'Drywall thickness',
         type: 'select',
         options: [
           { label: '½" (standard)', value: '0.5' },
           { label: '⅝" (fire-rated)', value: '0.625' },
         ],
         defaultValue: '0.5',
+      },
+      {
+        id: 'drywall-layers',
+        label: 'Layers?',
+        type: 'select',
+        options: [
+          { label: 'Single layer (standard)', value: 'single' },
+          { label: 'Double layer (sound-rated)', value: 'double' },
+        ],
+        defaultValue: 'single',
       },
       {
         id: 'drywall-moisture',
@@ -247,9 +423,11 @@ export const wizardSteps: WizardStep[] = [
       },
     ],
   },
+
+  // ─── Stage 6: Finishes ─────────────────────────────────────────────────
   {
     id: 'finishes',
-    question: 'Add finishes?',
+    question: 'Interior finishes',
     icon: '🎨',
     subQuestions: [
       {
@@ -259,6 +437,18 @@ export const wizardSteps: WizardStep[] = [
         defaultValue: true,
       },
       {
+        id: 'paint-color',
+        label: 'Wall paint color preference?',
+        type: 'select',
+        options: [
+          { label: 'White/Off-white', value: 'white' },
+          { label: 'Warm tone', value: 'warm' },
+          { label: 'Cool tone', value: 'cool' },
+          { label: 'Bold accent', value: 'bold' },
+        ],
+        defaultValue: 'white',
+      },
+      {
         id: 'has-flooring',
         label: 'Include flooring?',
         type: 'boolean',
@@ -266,15 +456,28 @@ export const wizardSteps: WizardStep[] = [
       },
       {
         id: 'flooring-type',
-        label: 'Flooring material?',
+        label: 'Flooring material',
         type: 'select',
         options: [
           { label: 'Vinyl (standard)', value: 'vinyl' },
           { label: 'Hardwood', value: 'hardwood' },
           { label: 'Tile', value: 'tile' },
           { label: 'Carpet', value: 'carpet' },
+          { label: 'Polished concrete', value: 'concrete' },
         ],
         defaultValue: 'vinyl',
+      },
+      {
+        id: 'has-trim',
+        label: 'Include trim/baseboards?',
+        type: 'boolean',
+        defaultValue: true,
+      },
+      {
+        id: 'has-appliances',
+        label: 'Include appliances?',
+        type: 'boolean',
+        defaultValue: false,
       },
     ],
   },

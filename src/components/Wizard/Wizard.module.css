@@ -62,6 +62,23 @@
   background: #422006;
 }
 
+.buildNowBtn {
+  padding: 4px 10px;
+  border: none;
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.buildNowBtn:hover {
+  opacity: 0.85;
+}
+
 .closeBtn {
   width: 28px;
   height: 28px;
@@ -184,6 +201,17 @@
 
 .qStepLabel {
   color: #475569;
+}
+
+.qLiveBadge {
+  font-size: 8px;
+  color: #4ade80;
+  background: #14532d;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* ── Question card ─────────────────────────────────────────────────────────── */

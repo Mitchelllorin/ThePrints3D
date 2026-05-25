@@ -1,186 +1,36 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type {
-  AppView,
-  Annotation,
-  DetectedWallType,
-  Drawing,
-  DrawingType,
-  FloorLevel,
-  Layer,
-  LayerId,
-  Measurement,
-  Model3D,
-  UserTrace,
-  WallType,
+  Annotation, Wall3D, WallOpening, Tool3D, FloorplanProjection, TradeLayer, CameraPreset,
+  Drawing, Layer, Model3D, Measurement, AppView, WallType, UserTrace, PlacedComponent,
 } from '../types'
-import { processDrawing as runProcessor } from '../services/drawingProcessor'
-import {
-  groupByFloorWithLog,
-  floorToElevation,
-  FLOOR_HEIGHT_M,
-  type FloorGroupingLogEntry,
-} from '../services/sheetParser'
-import { logError, logEvent } from '../services/logger'
-import type { ParsedWall } from '../types'
-import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
-import { generateModelFromWizardAnswers } from '../services/modelGenerator'
-import { defaultSmartProcessingState } from './smartProcessingSlice'
+import type { ProductCatalogItem, ProductPlacement } from '../types/products'
+import { buildModelFromWizard, applyDefaultsForMissing } from '../services/wizardModelBuilder'
 
-// ─── Camera Presets ────────────────────────────────────────────────────────────
-export interface CameraPreset {
-  position: [number, number, number]
-  target: [number, number, number]
-}
+// ─── Default Trade Layers ──────────────────────────────────────────────────
 
-// ─── Annotation persistence ────────────────────────────────────────────────────
-
-const ANNOTATIONS_KEY = 'blueprint3d-annotations'
-
-function loadPersistedAnnotations(): Annotation[] {
-  try {
-    const raw = localStorage.getItem(ANNOTATIONS_KEY)
-    if (raw) return JSON.parse(raw) as Annotation[]
-  } catch { /* ignore */ }
-  return []
-}
-
-function saveAnnotations(annotations: Annotation[]) {
-  try {
-    localStorage.setItem(ANNOTATIONS_KEY, JSON.stringify(annotations))
-  } catch { /* ignore */ }
-}
-
-// ─── Default Layers ────────────────────────────────────────────────────────────
-
-const DEFAULT_LAYERS: Layer[] = [
-  {
-    id: 'structure',
-    label: 'Structure',
-    color: '#94a3b8',
-    visible: true,
-    opacity: 1,
-    sourceTypes: ['structural', 'architectural'],
-    icon: '🏗️',
-  },
-  {
-    id: 'walls',
-    label: 'Walls',
-    color: '#e2e8f0',
-    visible: true,
-    opacity: 1,
-    sourceTypes: ['floor-plan', 'architectural'],
-    icon: '🧱',
-  },
-  {
-    id: 'floors',
-    label: 'Floors',
-    color: '#d4a574',
-    visible: true,
-    opacity: 0.8,
-    sourceTypes: ['floor-plan', 'architectural'],
-    icon: '▭',
-  },
-  {
-    id: 'ceiling',
-    label: 'Ceiling / RCP',
-    color: '#f1f5f9',
-    visible: true,
-    opacity: 0.6,
-    sourceTypes: ['rcp'],
-    icon: '⬜',
-  },
-  {
-    id: 'doors-windows',
-    label: 'Doors & Windows',
-    color: '#7dd3fc',
-    visible: true,
-    opacity: 1,
-    sourceTypes: ['floor-plan', 'architectural'],
-    icon: '🚪',
-  },
-  {
-    id: 'electrical',
-    label: 'Electrical',
-    color: '#fbbf24',
-    visible: false,
-    opacity: 1,
-    sourceTypes: ['electrical'],
-    icon: '⚡',
-  },
-  {
-    id: 'plumbing',
-    label: 'Plumbing',
-    color: '#38bdf8',
-    visible: false,
-    opacity: 1,
-    sourceTypes: ['plumbing'],
-    icon: '💧',
-  },
-  {
-    id: 'mechanical',
-    label: 'Mechanical / HVAC',
-    color: '#a78bfa',
-    visible: false,
-    opacity: 1,
-    sourceTypes: ['mechanical'],
-    icon: '🌀',
-  },
-  {
-    id: 'furniture',
-    label: 'Furniture',
-    color: '#86efac',
-    visible: false,
-    opacity: 0.8,
-    sourceTypes: ['floor-plan', 'architectural'],
-    icon: '🪑',
-  },
-  {
-    id: 'annotations',
-    label: 'Annotations',
-    color: '#f87171',
-    visible: true,
-    opacity: 1,
-    sourceTypes: ['floor-plan', 'rcp', 'architectural', 'structural', 'electrical', 'plumbing', 'mechanical'],
-    icon: '📐',
-  },
-  {
-    id: 'framing',
-    label: 'Framing',
-    color: '#d97706',
-    visible: false,
-    opacity: 1,
-    sourceTypes: ['floor-plan', 'architectural'],
-    icon: '🪵',
-  },
-  {
-    id: 'drywall',
-    label: 'Drywall',
-    color: '#e2e8f0',
-    visible: false,
-    opacity: 0.9,
-    sourceTypes: ['floor-plan', 'architectural'],
-    icon: '🧱',
-  },
-  {
-    id: 'insulation',
-    label: 'Insulation',
-    color: '#fde68a',
-    visible: false,
-    opacity: 0.8,
-    sourceTypes: ['floor-plan', 'architectural'],
-    icon: '🛡️',
-  },
-  {
-    id: 'finishes',
-    label: 'Finishes',
-    color: '#f9a8d4',
-    visible: false,
-    opacity: 0.8,
-    sourceTypes: ['floor-plan', 'architectural'],
-    icon: '🎨',
-  },
+const DEFAULT_TRADE_LAYERS: TradeLayer[] = [
+  { id: 'drywall', label: 'Drywall', visible: true, locked: false, opacity: 1, color: '#e2e8f0', icon: '🧱' },
+  { id: 'studs', label: 'Studs', visible: false, locked: false, opacity: 1, color: '#d97706', icon: '🪵' },
+  { id: 'electrical', label: 'Electrical', visible: false, locked: false, opacity: 1, color: '#fbbf24', icon: '⚡' },
+  { id: 'plumbing', label: 'Plumbing', visible: false, locked: false, opacity: 1, color: '#38bdf8', icon: '💧' },
+  { id: 'hvac', label: 'HVAC', visible: false, locked: false, opacity: 1, color: '#a78bfa', icon: '🌀' },
+  { id: 'insulation', label: 'Insulation', visible: false, locked: false, opacity: 1, color: '#fde68a', icon: '🛡️' },
+  { id: 'flooring', label: 'Flooring', visible: false, locked: false, opacity: 1, color: '#d4a574', icon: '▭' },
+  { id: 'ceiling', label: 'Ceiling', visible: false, locked: false, opacity: 1, color: '#f1f5f9', icon: '⬜' },
+  { id: 'furniture', label: 'Furniture', visible: false, locked: false, opacity: 1, color: '#86efac', icon: '🪑' },
 ]
+
+const DEFAULT_FLOORPLAN: FloorplanProjection = {
+  imageUrl: null,
+  visible: true,
+  scale: 1,
+  rotation: 0,
+  position: [0, 0, 0],
+  offsetX: 0,
+  offsetZ: 0,
+  opacity: 0.6,
+}
 
 const DEFAULT_MODEL: Model3D = {
   status: 'idle',
@@ -190,705 +40,630 @@ const DEFAULT_MODEL: Model3D = {
   generatedAt: null,
 }
 
-// ─── Store Interface ───────────────────────────────────────────────────────────
+// ─── Interface ─────────────────────────────────────────────────────────────
 
 interface AppState {
+  // UI state
   view: AppView
-  drawings: Drawing[]
-  layers: Layer[]
-  model: Model3D
-  floorGroupingLog: FloorGroupingLogEntry[]
-  selectedDrawingId: string | null
+  activeTool: Tool3D
+  currentMode: string
+  previousMode: string | null
+  modalOpen: string | null
+  activePanel: string | null
   sidebarOpen: boolean
+  settingsOpen: boolean
+  watermarkOpacity: number
+  wizardOpen: boolean
+  wizardAnswers: Record<string, string>
+
+  // 3D data
+  walls: Wall3D[]
+  selectedWallId: string | null
+  wallTypePromptWallId: string | null
+  undoStack: Wall3D[][]
+  redoStack: Wall3D[][]
+  tradeLayers: TradeLayer[]
+  model: Model3D
+  layers: Layer[]
   measurements: Measurement[]
   measureMode: boolean
   annotateMode: boolean
+
+  // Floorplan
+  floorplan: FloorplanProjection
+
+  // Annotations
   annotations: Annotation[]
   selectedAnnotationId: string | null
+
+  // Camera
   cameraPreset: CameraPreset | null
+
+  // Drawing state
+  drawStart: [number, number, number] | null
+  drawings: Drawing[]
+  selectedDrawingId: string | null
+  calibrationPendingDrawingId: string | null
+  calibrationPtA: [number, number, number] | null
+  calibrationPtB: [number, number, number] | null
+
+  // Smart processing
+  userTraces: UserTrace[]
+  traceMode: boolean
+
+  // Wall types
+  projectWallTypes: WallType[]
+  detectedWallTypes: { wallId: string; wallType: WallType; confidence: number }[]
+
+  // Components (doors, windows, furniture, fixtures)
+  components: PlacedComponent[]
+
+  // Product catalog
   productCatalog: ProductCatalogItem[]
   productPlacements: ProductPlacement[]
 
-  // Smart Processing
-  smartProcessor: 'heuristic' | 'ai' | 'seed-guided'
-  userTraces: UserTrace[]
-  seedMode: boolean
-  wallTypes: WallType[]
-  projectWallTypes: WallType[]
-  smartStageLabel: string
-  correctionCount: number
-  detectedWallTypes: DetectedWallType[]
+  // Actions
+  setView: (v: AppView) => void
+  setActiveTool: (tool: Tool3D) => void
+  setCurrentMode: (mode: string) => void
+  setPreviousMode: (mode: string | null) => void
+  setModalOpen: (modal: string | null) => void
+  setActivePanel: (panel: string | null) => void
+  setSidebarOpen: (open: boolean) => void
+  setSettingsOpen: (open: boolean) => void
+  setWatermarkOpacity: (opacity: number) => void
 
   // Wizard
-  wizardOpen: boolean
-  wizardAnswers: Record<string, string | boolean>
+  setWizardOpen: (open: boolean) => void
+  setWizardAnswer: (key: string, value: string) => void
+  setWizardAnswers: (answers: Record<string, string>) => void
+  updateModelFromWizard: () => void
 
-  // Actions
-  setView: (view: AppView) => void
+  // Wall actions
+  addWall: (wall: Omit<Wall3D, 'id'>) => void
+  updateWall: (id: string, patch: Partial<Wall3D>) => void
+  removeWall: (id: string) => void
+  setSelectedWallId: (id: string | null) => void
+  setWallTypePromptWallId: (id: string | null) => void
+  clearWalls: () => void
+  setDrawStart: (p: [number, number, number] | null) => void
+
+  // Undo / Redo
+  pushUndo: () => void
+  undo: () => void
+  redo: () => void
+
+  // Trade layers
+  toggleTradeLayer: (id: string) => void
+
+  // Layers
+  toggleLayer: (id: string) => void
+  setLayerOpacity: (id: string, opacity: number) => void
+  setLayerLock: (id: string, locked: boolean) => void
+  toggleTradeLayerLock: (id: string) => void
+  setTradeLayerOpacity: (id: string, opacity: number) => void
+
+  // Floorplan
+  setFloorplanImage: (url: string | null) => void
+  setFloorplanVisible: (v: boolean) => void
+  setFloorplanScale: (s: number) => void
+  setFloorplanRotation: (r: number) => void
+  setFloorplanOffset: (x: number, z: number) => void
+  setFloorplanOpacity: (opacity: number) => void
+
+  // Annotations
+  addAnnotation: (ann: Omit<Annotation, 'id' | 'createdAt'>) => void
+  removeAnnotation: (id: string) => void
+  setSelectedAnnotationId: (id: string | null) => void
+  clearAnnotations: () => void
+  updateAnnotation: (id: string, patch: Partial<Annotation>) => void
+  importAnnotations: (anns: Annotation[]) => void
+
+  // Camera
+  setCameraPreset: (p: CameraPreset) => void
+  consumeCameraPreset: () => CameraPreset | null
+
+  // Drawings
   addDrawings: (files: File[]) => void
   removeDrawing: (id: string) => void
   updateDrawing: (id: string, patch: Partial<Drawing>) => void
-  setDrawingType: (id: string, type: DrawingType) => void
-  setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
-  addUserTracedWall: (id: string, wall: ParsedWall) => void
-  removeLastUserTracedWall: (id: string) => void
-  clearUserTracedWalls: (id: string) => void
-  undoScaleCalibration: (id: string) => void
+  setDrawingType: (id: string, type: Drawing['type']) => void
   selectDrawing: (id: string | null) => void
-  processDrawing: (id: string) => Promise<void>
-  toggleLayer: (id: LayerId) => void
-  setLayerOpacity: (id: LayerId, opacity: number) => void
-  setSidebarOpen: (open: boolean) => void
-  setModelStatus: (status: Model3D['status']) => void
+  processDrawing: (id: string) => void
   buildModel: () => void
+  setCalibrationPendingDrawingId: (id: string | null) => void
+  setCalibrationPtA: (pt: [number, number, number] | null) => void
+  setCalibrationPtB: (pt: [number, number, number] | null) => void
+  clearCalibrationPoints: () => void
+  setDrawingScale: (id: string, scaleMmPerPx: number, notation: string | null, confidence: Drawing['scaleConfidence']) => void
+  undoScaleCalibration: (id: string) => void
+  addUserTracedWall: (drawingId: string, wall: { x1: number; y1: number; x2: number; y2: number; thickness: number; framingMm?: number; finishedMm?: number; wallType?: unknown; isLoadBearing?: boolean; isInternal?: boolean }) => void
+  removeLastUserTracedWall: (drawingId: string) => void
+  clearUserTracedWalls: (drawingId: string) => void
+
   // Measurements
-  setMeasureMode: (active: boolean) => void
+  setMeasureMode: (on: boolean) => void
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
   removeMeasurement: (id: string) => void
   clearMeasurements: () => void
-  // Annotations
-  setAnnotateMode: (active: boolean) => void
-  setSelectedAnnotationId: (id: string | null) => void
-  addAnnotation: (ann: Omit<Annotation, 'id' | 'createdAt'>) => void
-  removeAnnotation: (id: string) => void
-  clearAnnotations: () => void
-  updateAnnotation: (id: string, patch: Partial<Pick<Annotation, 'text' | 'icon' | 'color'>>) => void
-  importAnnotations: (json: string) => void
-  // Camera
-  setCameraPreset: (p: CameraPreset) => void
-  consumeCameraPreset: () => void
-  setProductCatalog: (items: ProductCatalogItem[]) => void
-  addProductPlacement: (placement: Omit<ProductPlacement, 'id' | 'placedAt'>) => void
-  removeProductPlacement: (id: string) => void
-  clearProductPlacements: () => void
-  // Smart processing actions
+
+  // Annotate mode
+  setAnnotateMode: (on: boolean) => void
+
+  // Model
+  setModelStatus: (status: Model3D['status']) => void
+
+  // Smart processing / seed-guided detection
   startTraceMode: () => void
   addTrace: (trace: UserTrace) => void
   clearTraces: () => void
-  processWithSeeds: (drawingId: string) => Promise<void>
-  correctElement: (wallId: string, wallTypeId: string) => void
+  processWithSeeds: (drawingId: string) => void
+
+  // Wall types
   setProjectWallTypes: (types: WallType[]) => void
-  exportCorrectionDataset: () => string
-  // Wizard
-  setWizardOpen: (open: boolean) => void
-  setWizardAnswer: (questionId: string, value: string | boolean) => void
-  clearWizardAnswers: () => void
-  updateModelFromWizard: () => void
+
+  // Components
+  addComponent: (c: Omit<PlacedComponent, 'id'>) => void
+  removeComponent: (id: string) => void
+  updateComponent: (id: string, patch: Partial<PlacedComponent>) => void
+  clearComponents: () => void
+
+  // Wall openings
+  addOpening: (wallId: string, opening: Omit<WallOpening, 'id' | 'wallId'>) => void
+  removeOpening: (wallId: string, openingId: string) => void
+
+  // Product catalog
+  setProductCatalog: (catalog: ProductCatalogItem[]) => void
+  addProductPlacement: (placement: Omit<ProductPlacement, 'id' | 'placedAt'>) => void
+  removeProductPlacement: (id: string) => void
+  clearProductPlacements: () => void
 }
 
-// ─── Store ─────────────────────────────────────────────────────────────────────
-
-let _nextId = 1
-function genId() {
-  return `drawing-${Date.now()}-${_nextId++}`
-}
-
-/** Infer drawing type from filename heuristics */
-function inferDrawingType(name: string): DrawingType {
-  const lower = name.toLowerCase()
-  if (lower.includes('rcp') || lower.includes('ceiling')) return 'rcp'
-  if (lower.includes('elec') || lower.includes('e-')) return 'electrical'
-  if (lower.includes('plumb') || lower.includes('p-')) return 'plumbing'
-  if (lower.includes('mech') || lower.includes('hvac') || lower.includes('m-')) return 'mechanical'
-  if (lower.includes('struct') || lower.includes('s-')) return 'structural'
-  if (lower.includes('civil') || lower.includes('c-')) return 'civil'
-  if (lower.includes('arch') || lower.includes('a-') || lower.includes('floor')) return 'architectural'
-  return 'floor-plan'
-}
+// ─── Store ─────────────────────────────────────────────────────────────────
 
 export const useAppStore = create<AppState>()(
   immer((set, get) => ({
-    view: 'upload',
-    drawings: [],
-    layers: DEFAULT_LAYERS,
-    model: DEFAULT_MODEL,
-    floorGroupingLog: [],
-    selectedDrawingId: null,
+    view: 'workspace',
+    activeTool: 'select',
+    currentMode: 'idle',
+    previousMode: null,
+    modalOpen: null,
+    activePanel: null,
     sidebarOpen: true,
-    measurements: [],
-    measureMode: false,
-    annotateMode: false,
-    annotations: [],
-    selectedAnnotationId: null,
-    cameraPreset: null,
-    productCatalog: [],
-    productPlacements: [],
-
-    // Smart processing defaults
-    smartProcessor: defaultSmartProcessingState.processor,
-    userTraces: defaultSmartProcessingState.userTraces,
-    seedMode: defaultSmartProcessingState.seedMode,
-    wallTypes: defaultSmartProcessingState.wallTypes,
-    projectWallTypes: defaultSmartProcessingState.projectWallTypes,
-    smartStageLabel: defaultSmartProcessingState.stageLabel,
-    correctionCount: defaultSmartProcessingState.correctionCount,
-    detectedWallTypes: [],
-
-    // Wizard defaults
+    settingsOpen: false,
+    watermarkOpacity: 0.08,
     wizardOpen: false,
     wizardAnswers: {},
 
-    setView: (view) =>
-      set((s) => {
-        s.view = view
-      }),
+  walls: [],
+  selectedWallId: null,
+  wallTypePromptWallId: null,
+  undoStack: [],
+  redoStack: [],
+  tradeLayers: DEFAULT_TRADE_LAYERS,
+    model: DEFAULT_MODEL,
+    layers: [],
+    measurements: [],
+    measureMode: false,
+    annotateMode: false,
 
-    addDrawings: (files) =>
-      set((s) => {
-        for (const file of files) {
-          const drawing: Drawing = {
-            id: genId(),
-            name: file.name,
-            type: inferDrawingType(file.name),
-            file,
-            pageCount: 1,
-            currentPage: 1,
-            previewUrl: URL.createObjectURL(file),
-            rasterUrl: null,
-            rasterWidth: null,
-            rasterHeight: null,
-            parsedWalls: [],
-            parsedRooms: [],
-            parsedOpenings: [],
-            parsedText: [],
-            parsedSymbols: [],
-            parsedAnnotationCandidates: [],
-            parseProgress: 0,
-            floorNumber: null,
-            status: 'pending',
-            scaleMmPerPx: null,
-            scaleNotation: null,
-            scaleConfidence: null,
-            uploadedAt: Date.now(),
-          }
-          s.drawings.push(drawing)
-          logEvent('drawing.uploaded', {
-            drawingId: drawing.id,
-            name: drawing.name,
-            type: drawing.type,
-            fileType: drawing.file.type,
-            size: drawing.file.size,
-          })
-        }
-        if (s.view === 'upload') s.view = 'drawings'
-      }),
+    floorplan: DEFAULT_FLOORPLAN,
 
-    removeDrawing: (id) =>
-      set((s) => {
-        const idx = s.drawings.findIndex((d) => d.id === id)
-        if (idx !== -1) {
-          const previewUrl = s.drawings[idx].previewUrl
-          const rasterUrl = s.drawings[idx].rasterUrl
-          if (previewUrl) URL.revokeObjectURL(previewUrl)
-          if (rasterUrl && rasterUrl !== previewUrl) URL.revokeObjectURL(rasterUrl)
-          s.drawings.splice(idx, 1)
-        }
-        if (s.selectedDrawingId === id) s.selectedDrawingId = null
-      }),
+    annotations: [],
+    selectedAnnotationId: null,
+    cameraPreset: null,
+    drawStart: null,
+    drawings: [],
+    selectedDrawingId: null,
+    calibrationPendingDrawingId: null,
+    calibrationPtA: null,
+    calibrationPtB: null,
 
-    updateDrawing: (id, patch) =>
-      set((s) => {
-        const d = s.drawings.find((d) => d.id === id)
-        if (d) Object.assign(d, patch)
-      }),
+    userTraces: [],
+    traceMode: false,
 
-    setDrawingType: (id, type) =>
-      set((s) => {
-        const d = s.drawings.find((d) => d.id === id)
-        if (d) d.type = type
-      }),
+    projectWallTypes: [],
+    detectedWallTypes: [],
 
-    setDrawingScale: (id, mmPerPx, notation) =>
-      set((s) => {
-        const d = s.drawings.find((d) => d.id === id)
-        if (d) {
-          d._prevScaleMmPerPx = d.scaleMmPerPx
-          d._prevScaleNotation = d.scaleNotation
-          d._prevScaleConfidence = d.scaleConfidence
-          d.scaleMmPerPx = mmPerPx
-          d.scaleNotation = notation
-          d.scaleConfidence = 'parsed'
-        }
-      }),
+    components: [],
+    productCatalog: [],
+    productPlacements: [],
 
-    undoScaleCalibration: (id) =>
-      set((s) => {
-        const d = s.drawings.find((d) => d.id === id)
-        if (d && d._prevScaleMmPerPx !== undefined) {
-          d.scaleMmPerPx = d._prevScaleMmPerPx
-          d.scaleNotation = d._prevScaleNotation ?? null
-          d.scaleConfidence = d._prevScaleConfidence ?? 'fallback'
-          d._prevScaleMmPerPx = undefined
-          d._prevScaleNotation = undefined
-          d._prevScaleConfidence = undefined
-        }
-      }),
+    // ─── UI Actions ───────────────────────────────────────────
 
-    addUserTracedWall: (id, wall) =>
-      set((s) => {
-        const d = s.drawings.find((dr) => dr.id === id)
-        if (!d) return
-        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
-        const userWalls = [
-          ...d.parsedWalls.filter((w) => w.source === 'user'),
-          { ...wall, source: 'user' as const, detectionConfidence: 1 },
-        ]
-        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
-      }),
+    setView: (v) => set((s) => { s.view = v }),
+    setActiveTool: (tool) => set((s) => {
+      s.previousMode = s.currentMode
+      s.activeTool = tool
+      s.currentMode = tool !== 'select' ? `tool-${tool}` : 'idle'
+    }),
+    setCurrentMode: (mode) => set((s) => { s.currentMode = mode }),
+    setPreviousMode: (mode) => set((s) => { s.previousMode = mode }),
+    setModalOpen: (modal) => set((s) => {
+      s.previousMode = s.currentMode
+      s.modalOpen = modal
+      s.currentMode = modal ? 'modal' : (s.previousMode || 'idle')
+    }),
+    setActivePanel: (panel) => set((s) => {
+      s.activePanel = panel
+      s.sidebarOpen = !!panel
+    }),
+    setSidebarOpen: (open) => set((s) => { s.sidebarOpen = open }),
+    setSettingsOpen: (open) => set((s) => { s.settingsOpen = open }),
+    setWatermarkOpacity: (opacity) => set((s) => { s.watermarkOpacity = opacity }),
 
-    removeLastUserTracedWall: (id) =>
-      set((s) => {
-        const d = s.drawings.find((dr) => dr.id === id)
-        if (!d) return
-        const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
-        if (userWalls.length === 0) return
-        userWalls.pop()
-        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
-        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
-      }),
+    // ─── Wizard ───────────────────────────────────────────────
 
-    clearUserTracedWalls: (id) =>
-      set((s) => {
-        const d = s.drawings.find((dr) => dr.id === id)
-        if (!d) return
-        d.parsedWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
-      }),
-
-    selectDrawing: (id) =>
-      set((s) => {
-        s.selectedDrawingId = id
-      }),
-
-    processDrawing: async (id) => {
-      const drawing = get().drawings.find((d) => d.id === id)
-      if (!drawing || drawing.status === 'processing') return
-
-      logEvent('drawing.processing.started', { drawingId: id, name: drawing?.name })
-      set((s) => {
-        const d = s.drawings.find((d) => d.id === id)
-        if (d) { d.status = 'processing'; d.parseProgress = 0 }
-      })
-
-      const patch = await runProcessor(drawing, (pct) => {
-        set((s) => {
-          const d = s.drawings.find((d) => d.id === id)
-          if (d) d.parseProgress = pct
-        })
-      })
-
-      set((s) => {
-        const d = s.drawings.find((d) => d.id === id)
-        if (d) {
-          if (patch.rasterUrl && d.rasterUrl && patch.rasterUrl !== d.rasterUrl) {
-            URL.revokeObjectURL(d.rasterUrl)
-          }
-          if (patch.parsedWalls) {
-            const preservedUser = d.parsedWalls.filter((w) => w.source === 'user')
-            patch.parsedWalls = mergeAutoAndUserWalls(
-              patch.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user'),
-              preservedUser,
-            )
-          }
-          Object.assign(d, patch)
-        }
-      })
-
-      if (patch.status === 'ready') {
-        logEvent('drawing.processing.completed', {
-          drawingId: id,
-          wallCount: patch.parsedWalls?.length ?? 0,
-          roomCount: patch.parsedRooms?.length ?? 0,
-          openingCount: patch.parsedOpenings?.length ?? 0,
-          floorNumber: patch.floorNumber,
-          scaleNotation: patch.scaleNotation,
-        })
-      } else if (patch.status === 'error') {
-        logError('drawing.processing.failed', patch.errorMessage ?? 'Unknown processing error', {
-          drawingId: id,
-        })
+    setWizardOpen: (open) => set((s) => { s.wizardOpen = open }),
+    setWizardAnswer: (key, value) => set((s) => { s.wizardAnswers[key] = value }),
+    setWizardAnswers: (answers) => set((s) => {
+      for (const [k, v] of Object.entries(answers)) {
+        s.wizardAnswers[k] = v
       }
-    },
-
-    toggleLayer: (id) =>
-      set((s) => {
-        const layer = s.layers.find((l) => l.id === id)
-        if (layer) layer.visible = !layer.visible
-      }),
-
-    setLayerOpacity: (id, opacity) =>
-      set((s) => {
-        const layer = s.layers.find((l) => l.id === id)
-        if (layer) layer.opacity = opacity
-      }),
-
-    setSidebarOpen: (open) =>
-      set((s) => {
-        s.sidebarOpen = open
-      }),
-
-    setModelStatus: (status) =>
-      set((s) => {
-        s.model.status = status
-      }),
-
-    buildModel: () =>
-      set((s) => {
-        s.model.status = 'building'
-        s.model.generatedAt = null
-        s.view = 'model'
-
-        // Build floor levels from sheet numbers
-        const { groups: floorGroups, floorGroupingLog } = groupByFloorWithLog(
-          s.drawings.map((d) => ({
-            id: d.id,
-            name: d.name,
-            floorNumber: d.floorNumber,
-          }))
-        )
-        s.floorGroupingLog = floorGroupingLog
-        const levels: FloorLevel[] = []
-        const numericEntries = Array.from(floorGroups.entries())
-          .filter((entry): entry is [number, string[]] => entry[0] !== 'unknown')
-          .sort(([a], [b]) => a - b)
-
-        for (const [floorNum, ids] of numericEntries) {
-          levels.push({
-            id: `floor-${floorNum}`,
-            label: floorNum === 0 ? 'Ground Floor' : floorNum < 0 ? 'Basement' : `Level ${floorNum}`,
-            elevation: floorToElevation(floorNum),
-            height: FLOOR_HEIGHT_M,
-            drawingIds: ids,
-          })
-        }
-
-        const unknownIds = floorGroups.get('unknown')
-        if (unknownIds && unknownIds.length > 0) {
-          const topKnownFloor = numericEntries[numericEntries.length - 1]?.[0] ?? 0
-          levels.push({
-            id: 'floor-unknown',
-            label: 'Unknown',
-            elevation: floorToElevation(topKnownFloor + 1),
-            height: FLOOR_HEIGHT_M,
-            drawingIds: unknownIds,
-          })
-        }
-        s.model.floorLevels = levels
-        logEvent('model.build.started', {
-          drawingCount: s.drawings.length,
-          floorCount: levels.length,
-          uncalibratedCount: s.drawings.filter((d) => !d.scaleMmPerPx).length,
-        })
-      }),
-
-    setMeasureMode: (active) =>
-      set((s) => {
-        s.measureMode = active
-        if (active) s.annotateMode = false  // mutually exclusive with annotate
-      }),
-
-    addMeasurement: (m) =>
-      set((s) => {
-        s.measurements.push({
-          ...m,
-          id: `meas-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          createdAt: Date.now(),
-        })
-      }),
-
-    removeMeasurement: (id) =>
-      set((s) => {
-        const idx = s.measurements.findIndex((m) => m.id === id)
-        if (idx !== -1) s.measurements.splice(idx, 1)
-      }),
-
-    clearMeasurements: () =>
-      set((s) => {
-        s.measurements = []
-      }),
-
-    // ─── Annotations ────────────────────────────────────────────────────────────
-
-    setAnnotateMode: (active) =>
-      set((s) => {
-        s.annotateMode = active
-        if (active) s.measureMode = false
-      }),
-
-    setSelectedAnnotationId: (id) =>
-      set((s) => { s.selectedAnnotationId = id }),
-
-    addAnnotation: (ann) =>
-      set((s) => {
-        s.annotations.push({
-          ...ann,
-          id: `ann-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          createdAt: Date.now(),
-        })
-      }),
-
-    removeAnnotation: (id) =>
-      set((s) => {
-        const idx = s.annotations.findIndex((a) => a.id === id)
-        if (idx !== -1) s.annotations.splice(idx, 1)
-      }),
-
-    clearAnnotations: () =>
-      set((s) => { s.annotations = []; s.selectedAnnotationId = null }),
-
-    updateAnnotation: (id, patch) =>
-      set((s) => {
-        const ann = s.annotations.find((a) => a.id === id)
-        if (ann) Object.assign(ann, patch)
-      }),
-
-    importAnnotations: (json) =>
-      set((s) => {
-        try {
-          const parsed = JSON.parse(json)
-          if (Array.isArray(parsed)) s.annotations = parsed
-        } catch { /* ignore */ }
-      }),
-
-    setCameraPreset: (p) =>
-      set((s) => {
-        s.cameraPreset = p
-      }),
-
-    consumeCameraPreset: () =>
-      set((s) => {
-        s.cameraPreset = null
-      }),
-
-    setProductCatalog: (items) =>
-      set((s) => {
-        s.productCatalog = items
-      }),
-
-    addProductPlacement: (placement) =>
-      set((s) => {
-        s.productPlacements.push({
-          ...placement,
-          id: `placement-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-          placedAt: Date.now(),
-        })
-      }),
-
-    removeProductPlacement: (id) =>
-      set((s) => {
-        const idx = s.productPlacements.findIndex((p) => p.id === id)
-        if (idx !== -1) s.productPlacements.splice(idx, 1)
-      }),
-
-    clearProductPlacements: () =>
-      set((s) => {
-        s.productPlacements = []
-      }),
-
-    // ─── Smart Processing Actions ──────────────────────────────────────────────
-
-    startTraceMode: () =>
-      set((s) => {
-        s.seedMode = true
-        s.smartStageLabel = 'Trace Mode: Draw on walls'
-      }),
-
-    addTrace: (trace) =>
-      set((s) => {
-        s.userTraces.push(trace)
-      }),
-
-    clearTraces: () =>
-      set((s) => {
-        s.userTraces = []
-        s.seedMode = false
-        s.smartStageLabel = 'Heuristic Detection'
-      }),
-
-    processWithSeeds: async (drawingId) => {
-      const drawing = get().drawings.find((d) => d.id === drawingId)
-      if (!drawing) return
-      const traces = get().userTraces
-      const types = get().projectWallTypes
-
-      set((s) => {
-        s.smartProcessor = 'seed-guided'
-        s.smartStageLabel = 'Seed-guided Detection'
-      })
-
-      const { rasterizeFile } = await import('../services/pdfRasterizer')
-      const { detectWalls } = await import('../services/enhancedWallDetector')
-      const { extractSeedFromTraces } = await import('../services/seedDetector')
-
-      try {
-        const raster = await rasterizeFile(drawing.file, () => {})
-        const seeds = extractSeedFromTraces(traces)
-        const result = detectWalls(raster.imageData, seeds, types, drawing.scaleMmPerPx, {
-          edgeThreshold: 20,
-          minWallLengthPx: 40,
-          minWallThicknessPx: 2,
-          maxWallThicknessPx: 120,
-          mergeGapPx: 4,
-        })
-
-        set((s) => {
-          const d = s.drawings.find((dr) => dr.id === drawingId)
-          if (d) {
-            const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
-            const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
-            const merged = mergeAutoAndUserWalls(autoWalls, userWalls)
-            d.parsedWalls = merged
-          }
-          s.detectedWallTypes = result
-            .filter((w) => w.wallTypeId && w.wallTypeId !== 'unknown')
-            .map((w) => ({
-              wallId: `${w.x1},${w.y1}`,
-              wallType: types.find((t) => t.id === w.wallTypeId)!,
-              confidence: w.confidence,
-              fromSeed: true,
-            }))
-            .filter((dwt) => dwt.wallType != null)
-          s.smartStageLabel = 'Complete'
-        })
-      } catch {
-        set((s) => { s.smartStageLabel = 'Error' })
-      }
-    },
-
-    correctElement: (wallId, wallTypeId) =>
-      set((s) => {
-        s.correctionCount += 1
-        const idx = s.detectedWallTypes.findIndex((d) => d.wallId === wallId)
-        if (idx !== -1) {
-          const newType = s.projectWallTypes.find((t) => t.id === wallTypeId)
-          if (newType) s.detectedWallTypes[idx] = { ...s.detectedWallTypes[idx], wallType: newType }
-        }
-      }),
-
-    setProjectWallTypes: (types) =>
-      set((s) => {
-        s.projectWallTypes = types
-      }),
-
-    exportCorrectionDataset: () => {
-      const state = get()
-      return JSON.stringify({
-        corrections: state.detectedWallTypes.map((d) => ({
-          wallId: d.wallId,
-          typeId: d.wallType.id,
-          confidence: d.confidence,
-          fromSeed: d.fromSeed,
+    }),
+    updateModelFromWizard: () => set((s) => {
+      const filled = applyDefaultsForMissing(s.wizardAnswers)
+      s.wizardAnswers = filled
+      const result = buildModelFromWizard(filled)
+      s.undoStack.push(JSON.parse(JSON.stringify(s.walls)))
+      s.redoStack = []
+      s.walls = result.walls.map((w) => ({
+        ...w,
+        id: `wiz-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        openings: (w.openings || []).map((o) => ({
+          ...o,
+          id: `wiz-open-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         })),
-        correctionCount: state.correctionCount,
-      }, null, 2)
+      }))
+      s.components = result.components.map((c) => ({
+        ...c,
+        id: `wiz-comp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      }))
+      for (const upd of result.tradeLayerUpdates) {
+        const tl = s.tradeLayers.find((l) => l.id === upd.id)
+        if (tl) {
+          tl.visible = upd.visible
+          tl.opacity = upd.opacity
+        }
+      }
+      s.model.status = 'ready'
+      s.model.boundingBox = result.boundingBox
+      s.model.generatedAt = Date.now()
+    }),
+
+    // ─── Wall Actions ─────────────────────────────────────────
+
+    addWall: (wall) => set((s) => {
+      s.undoStack.push(JSON.parse(JSON.stringify(s.walls)))
+      s.redoStack = []
+      const id = `wall-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      s.walls.push({ ...wall, id, type: wall.type ?? 'stud' })
+      s.wallTypePromptWallId = id
+    }),
+    updateWall: (id, patch) => set((s) => {
+      s.undoStack.push(JSON.parse(JSON.stringify(s.walls)))
+      s.redoStack = []
+      const w = s.walls.find((w) => w.id === id)
+      if (w) Object.assign(w, patch)
+    }),
+    removeWall: (id) => set((s) => {
+      s.undoStack.push(JSON.parse(JSON.stringify(s.walls)))
+      s.redoStack = []
+      s.walls = s.walls.filter((w) => w.id !== id)
+      if (s.selectedWallId === id) s.selectedWallId = null
+    }),
+    setSelectedWallId: (id) => set((s) => { s.selectedWallId = id }),
+    setWallTypePromptWallId: (id) => set((s) => { s.wallTypePromptWallId = id }),
+    clearWalls: () => set((s) => {
+      s.undoStack.push(JSON.parse(JSON.stringify(s.walls)))
+      s.redoStack = []
+      s.walls = []; s.selectedWallId = null
+    }),
+    setDrawStart: (p) => set((s) => { s.drawStart = p }),
+    pushUndo: () => set((s) => {
+      s.undoStack.push(JSON.parse(JSON.stringify(s.walls)))
+      s.redoStack = []
+    }),
+    undo: () => set((s) => {
+      const prev = s.undoStack.pop()
+      if (prev) {
+        s.redoStack.push(JSON.parse(JSON.stringify(s.walls)))
+        s.walls = prev
+      }
+    }),
+    redo: () => set((s) => {
+      const next = s.redoStack.pop()
+      if (next) {
+        s.undoStack.push(JSON.parse(JSON.stringify(s.walls)))
+        s.walls = next
+      }
+    }),
+
+    // ─── Trade Layers ─────────────────────────────────────────
+
+    toggleTradeLayer: (id) => set((s) => {
+      const layer = s.tradeLayers.find((l) => l.id === id)
+      if (layer && !layer.locked) layer.visible = !layer.visible
+    }),
+    toggleTradeLayerLock: (id) => set((s) => {
+      const layer = s.tradeLayers.find((l) => l.id === id)
+      if (layer) layer.locked = !layer.locked
+    }),
+    setTradeLayerOpacity: (id, opacity) => set((s) => {
+      const layer = s.tradeLayers.find((l) => l.id === id)
+      if (layer) layer.opacity = Math.max(0, Math.min(1, opacity))
+    }),
+
+    // ─── Layers ───────────────────────────────────────────────
+
+    toggleLayer: (id) => set((s) => {
+      const layer = s.layers.find((l) => l.id === id)
+      if (layer) layer.visible = !layer.visible
+    }),
+    setLayerOpacity: (id, opacity) => set((s) => {
+      const layer = s.layers.find((l) => l.id === id)
+      if (layer) layer.opacity = opacity
+    }),
+    setLayerLock: (id, locked) => set((s) => {
+      const layer = s.layers.find((l) => l.id === id)
+      if (layer) layer.locked = locked
+    }),
+
+    // ─── Floorplan ────────────────────────────────────────────
+
+    setFloorplanImage: (url) => set((s) => { s.floorplan.imageUrl = url }),
+    setFloorplanVisible: (v) => set((s) => { s.floorplan.visible = v }),
+    setFloorplanScale: (scl) => set((s) => { s.floorplan.scale = scl }),
+    setFloorplanRotation: (r) => set((s) => { s.floorplan.rotation = r }),
+    setFloorplanOffset: (x, z) => set((s) => {
+      s.floorplan.offsetX = x
+      s.floorplan.offsetZ = z
+    }),
+    setFloorplanOpacity: (opacity) => set((s) => { s.floorplan.opacity = opacity }),
+
+    // ─── Annotations ──────────────────────────────────────────
+
+    addAnnotation: (ann) => set((s) => {
+      s.annotations.push({
+        ...ann,
+        id: `ann-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: Date.now(),
+      })
+    }),
+    removeAnnotation: (id) => set((s) => {
+      s.annotations = s.annotations.filter((a) => a.id !== id)
+      if (s.selectedAnnotationId === id) s.selectedAnnotationId = null
+    }),
+    setSelectedAnnotationId: (id) => set((s) => { s.selectedAnnotationId = id }),
+    clearAnnotations: () => set((s) => { s.annotations = []; s.selectedAnnotationId = null }),
+    updateAnnotation: (id, patch) => set((s) => {
+      const a = s.annotations.find((a) => a.id === id)
+      if (a) Object.assign(a, patch)
+    }),
+    importAnnotations: (anns) => set((s) => {
+      s.annotations = anns
+    }),
+
+    // ─── Camera ───────────────────────────────────────────────
+
+    setCameraPreset: (p) => set((s) => { s.cameraPreset = p }),
+    consumeCameraPreset: () => {
+      const preset = get().cameraPreset
+      if (preset) set((s) => { s.cameraPreset = null })
+      return preset
     },
 
-    // ─── Wizard Actions ──────────────────────────────────────────────────────
+    // ─── Drawings ─────────────────────────────────────────────
 
-    setWizardOpen: (open) =>
+    addDrawings: (files) => set((s) => {
+      for (const file of files) {
+        s.drawings.push({
+          id: `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: file.name,
+          type: 'floor-plan',
+          file,
+          pageCount: 1,
+          currentPage: 1,
+          previewUrl: null,
+          rasterUrl: null,
+          rasterWidth: null,
+          rasterHeight: null,
+          parsedWalls: [],
+          parsedRooms: [],
+          parsedOpenings: [],
+          parsedText: [],
+          parsedSymbols: [],
+          parsedAnnotationCandidates: [],
+          parseProgress: 0,
+          status: 'pending',
+          floorNumber: null,
+          scaleMmPerPx: null,
+          scaleNotation: null,
+          scaleConfidence: null,
+          uploadedAt: Date.now(),
+        })
+      }
+    }),
+    removeDrawing: (id) => set((s) => {
+      s.drawings = s.drawings.filter((d) => d.id !== id)
+      if (s.selectedDrawingId === id) s.selectedDrawingId = null
+    }),
+    updateDrawing: (id, patch) => set((s) => {
+      const d = s.drawings.find((d) => d.id === id)
+      if (d) Object.assign(d, patch)
+    }),
+    setDrawingType: (id, type) => set((s) => {
+      const d = s.drawings.find((d) => d.id === id)
+      if (d) d.type = type
+    }),
+    selectDrawing: (id) => set((s) => { s.selectedDrawingId = id }),
+    setCalibrationPendingDrawingId: (id) => set((s) => { s.calibrationPendingDrawingId = id; if (!id) { s.calibrationPtA = null; s.calibrationPtB = null } }),
+    setCalibrationPtA: (pt) => set((s) => { s.calibrationPtA = pt }),
+    setCalibrationPtB: (pt) => set((s) => { s.calibrationPtB = pt }),
+    clearCalibrationPoints: () => set((s) => { s.calibrationPtA = null; s.calibrationPtB = null }),
+    processDrawing: (id) => {
       set((s) => {
-        s.wizardOpen = open
-      }),
-
-    setWizardAnswer: (questionId, value) =>
-      set((s) => {
-        if (value === '' || value === undefined || value === null) {
-          delete s.wizardAnswers[questionId]
-        } else {
-          s.wizardAnswers[questionId] = value
-        }
-      }),
-
-    clearWizardAnswers: () =>
-      set((s) => {
-        s.wizardAnswers = {}
-      }),
-
-    updateModelFromWizard: () =>
-      set((s) => {
-        s.model.status = 'building'
-        s.model.generatedAt = null
-
-        // Remove previous synthetic drawing
-        const synIdx = s.drawings.findIndex((d) => d.id === '_synthetic')
-        if (synIdx !== -1) {
-          const prev = s.drawings[synIdx]
-          if (prev.previewUrl) URL.revokeObjectURL(prev.previewUrl)
-          if (prev.rasterUrl) URL.revokeObjectURL(prev.rasterUrl)
-          s.drawings.splice(synIdx, 1)
-        }
-
-        // Generate new model from current wizard answers
-        const hasAnswers = Object.keys(s.wizardAnswers).length > 0
-        if (hasAnswers) {
-          const synth = generateModelFromWizardAnswers(s.wizardAnswers)
-          synth.walls.forEach((w) => {
-            ;(w as any)._synth = true
+        const d = s.drawings.find((d) => d.id === id)
+        if (d) d.status = 'processing'
+      })
+      const drawing = get().drawings.find((d) => d.id === id)
+      if (!drawing) return
+      import('../services/drawingProcessor').then(({ processDrawing }) => {
+        processDrawing(drawing, (pct) => {
+          set((s) => {
+            const d = s.drawings.find((d) => d.id === id)
+            if (d) d.parseProgress = pct
           })
-          const syntheticDrawing: Drawing = {
-            id: '_synthetic',
-            name: 'Generated Model',
-            type: 'floor-plan',
-            file: new File([], '_synthetic'),
-            pageCount: 1,
-            currentPage: 1,
-            previewUrl: null,
-            rasterUrl: null,
-            rasterWidth: null,
-            rasterHeight: null,
-            parsedWalls: synth.walls,
-            parsedRooms: synth.rooms,
-            parsedOpenings: synth.openings,
-            parsedSymbols: synth.symbols,
-            parsedText: [],
-            parsedAnnotationCandidates: [],
-            parseProgress: 100,
-            floorNumber: 0,
-            status: 'ready',
-            scaleMmPerPx: synth.scaleMmPerPx,
-            scaleNotation: null,
-            scaleConfidence: 'fallback',
-            uploadedAt: Date.now(),
-          }
-          s.drawings.push(syntheticDrawing)
-        }
-
-        // Build floor levels
-        const { groups: floorGroups, floorGroupingLog } = groupByFloorWithLog(
-          s.drawings.map((d) => ({
-            id: d.id,
-            name: d.name,
-            floorNumber: d.floorNumber,
-          }))
-        )
-        s.floorGroupingLog = floorGroupingLog
-        const levels: FloorLevel[] = []
-        const numericEntries = Array.from(floorGroups.entries())
-          .filter((entry): entry is [number, string[]] => entry[0] !== 'unknown')
-          .sort(([a], [b]) => a - b)
-
-        for (const [floorNum, ids] of numericEntries) {
-          levels.push({
-            id: `floor-${floorNum}`,
-            label: floorNum === 0 ? 'Ground Floor' : floorNum < 0 ? 'Basement' : `Level ${floorNum}`,
-            elevation: floorToElevation(floorNum),
-            height: FLOOR_HEIGHT_M,
-            drawingIds: ids,
+        }).then((patch) => {
+          set((s) => {
+            const d = s.drawings.find((d) => d.id === id)
+            if (d) Object.assign(d, patch)
           })
-        }
-
-        const unknownIds = floorGroups.get('unknown')
-        if (unknownIds && unknownIds.length > 0) {
-          const topKnownFloor = numericEntries[numericEntries.length - 1]?.[0] ?? 0
-          levels.push({
-            id: 'floor-unknown',
-            label: 'Unknown',
-            elevation: floorToElevation(topKnownFloor + 1),
-            height: FLOOR_HEIGHT_M,
-            drawingIds: unknownIds,
+        }).catch(() => {
+          set((s) => {
+            const d = s.drawings.find((d) => d.id === id)
+            if (d) { d.status = 'error'; d.errorMessage = 'Processing failed' }
           })
+        })
+      })
+    },
+    buildModel: () => set((s) => { s.model.status = 'building' }),
+    setDrawingScale: (id, scaleMmPerPx, notation, confidence) => set((s) => {
+      const d = s.drawings.find((d) => d.id === id)
+      if (d) {
+        d._prevScaleMmPerPx = d.scaleMmPerPx
+        d._prevScaleNotation = d.scaleNotation
+        d._prevScaleConfidence = d.scaleConfidence
+        d.scaleMmPerPx = scaleMmPerPx
+        d.scaleNotation = notation
+        d.scaleConfidence = confidence
+      }
+    }),
+    undoScaleCalibration: (id) => set((s) => {
+      const d = s.drawings.find((d) => d.id === id)
+      if (d && d._prevScaleMmPerPx !== undefined) {
+        d.scaleMmPerPx = d._prevScaleMmPerPx
+        d.scaleNotation = d._prevScaleNotation ?? null
+        d.scaleConfidence = d._prevScaleConfidence ?? null
+        d._prevScaleMmPerPx = undefined
+        d._prevScaleNotation = undefined
+        d._prevScaleConfidence = undefined
+      }
+    }),
+    addUserTracedWall: (drawingId, wall) => set((s) => {
+      const d = s.drawings.find((d) => d.id === drawingId)
+      if (d) {
+        const { framingMm, finishedMm, wallType: wt, isLoadBearing, isInternal, ...rest } = wall
+        d.parsedWalls.push({
+          ...rest,
+          framingMm, finishedMm, wallType: wt as any, isLoadBearing, isInternal,
+          source: 'user', detectionConfidence: 1,
+        })
+      }
+    }),
+    removeLastUserTracedWall: (drawingId) => set((s) => {
+      const d = s.drawings.find((d) => d.id === drawingId)
+      if (d) {
+        const lastUserIdx = [...d.parsedWalls].reverse().findIndex((w) => w.source === 'user')
+        if (lastUserIdx !== -1) {
+          d.parsedWalls.splice(d.parsedWalls.length - 1 - lastUserIdx, 1)
         }
-        s.model.floorLevels = levels
-        s.view = 'model'
-      }),
+      }
+    }),
+    clearUserTracedWalls: (drawingId) => set((s) => {
+      const d = s.drawings.find((d) => d.id === drawingId)
+      if (d) {
+        d.parsedWalls = d.parsedWalls.filter((w) => w.source !== 'user')
+      }
+    }),
+
+    // ─── Measurements ─────────────────────────────────────────
+
+    setMeasureMode: (on) => set((s) => { s.measureMode = on }),
+    addMeasurement: (m) => set((s) => {
+      s.measurements.push({
+        ...m,
+        id: `meas-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: Date.now(),
+      })
+    }),
+    removeMeasurement: (id) => set((s) => {
+      s.measurements = s.measurements.filter((m) => m.id !== id)
+    }),
+    clearMeasurements: () => set((s) => { s.measurements = [] }),
+
+    // ─── Annotate Mode ────────────────────────────────────────
+
+    setAnnotateMode: (on) => set((s) => { s.annotateMode = on }),
+
+    // ─── Model ────────────────────────────────────────────────
+
+    setModelStatus: (status) => set((s) => { s.model.status = status }),
+
+    // ─── Smart Processing ─────────────────────────────────────
+
+    startTraceMode: () => set((s) => { s.traceMode = true }),
+    addTrace: (trace) => set((s) => { s.userTraces.push(trace) }),
+    clearTraces: () => set((s) => { s.userTraces = []; s.traceMode = false }),
+    processWithSeeds: (drawingId) => set((s) => {
+      const d = s.drawings.find((d) => d.id === drawingId)
+      if (d) d.status = 'processing'
+    }),
+
+    // ─── Wall Types ───────────────────────────────────────────
+
+    setProjectWallTypes: (types) => set((s) => { s.projectWallTypes = types }),
+
+    // ─── Components ───────────────────────────────────────────
+
+    addComponent: (c) => set((s) => {
+      s.components.push({
+        ...c,
+        id: `comp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      })
+    }),
+    removeComponent: (id) => set((s) => {
+      s.components = s.components.filter((c) => c.id !== id)
+    }),
+    updateComponent: (id, patch) => set((s) => {
+      const c = s.components.find((c) => c.id === id)
+      if (c) Object.assign(c, patch)
+    }),
+    clearComponents: () => set((s) => { s.components = [] }),
+
+    // ─── Wall Openings ────────────────────────────────────────
+
+    addOpening: (wallId, opening) => set((s) => {
+      const w = s.walls.find((w) => w.id === wallId)
+      if (w) {
+        if (!w.openings) w.openings = []
+        w.openings.push({
+          ...opening,
+          id: `open-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          wallId,
+        })
+      }
+    }),
+    removeOpening: (wallId, openingId) => set((s) => {
+      const w = s.walls.find((w) => w.id === wallId)
+      if (w && w.openings) {
+        w.openings = w.openings.filter((o) => o.id !== openingId)
+      }
+    }),
+
+    // ─── Product Catalog ──────────────────────────────────────
+
+    setProductCatalog: (catalog) => set((s) => { s.productCatalog = catalog }),
+    addProductPlacement: (placement) => set((s) => {
+      s.productPlacements.push({
+        ...placement,
+        id: `prod-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        placedAt: Date.now(),
+      })
+    }),
+    removeProductPlacement: (id) => set((s) => {
+      s.productPlacements = s.productPlacements.filter((p) => p.id !== id)
+    }),
+    clearProductPlacements: () => set((s) => { s.productPlacements = [] }),
   }))
 )

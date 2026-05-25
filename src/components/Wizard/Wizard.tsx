@@ -15,6 +15,7 @@ import {
   goNext,
   goBack,
 } from '../../wizard/wizardState'
+import { applyDefaultsForMissing } from '../../services/wizardModelBuilder'
 import type { WizardStep } from '../../services/wizardFlow'
 import styles from './Wizard.module.css'
 
@@ -22,16 +23,38 @@ export default function Wizard() {
   const wizardOpen = useAppStore((s) => s.wizardOpen)
   const wizardAnswers = useAppStore((s) => s.wizardAnswers)
   const setWizardAnswer = useAppStore((s) => s.setWizardAnswer)
+  const setWizardAnswers = useAppStore((s) => s.setWizardAnswers)
   const setWizardOpen = useAppStore((s) => s.setWizardOpen)
   const updateModelFromWizard = useAppStore((s) => s.updateModelFromWizard)
 
   const [nav, setNav] = useState(createInitialWizardState)
-  const [validationErrors, setValidationErrors] = useState<string[]>([])
 
   const currentStep = getCurrentStep(nav)
   const group = wizardGroups[nav.currentGroupIndex]
   const groupSteps = getStepsInGroup(group)
   const overallProgress = getOverallProgress(wizardAnswers)
+
+  // Auto-apply defaults on first mount + build initial model
+  const defaultsApplied = useRef(false)
+  useEffect(() => {
+    if (!defaultsApplied.current) {
+      defaultsApplied.current = true
+      const filled = applyDefaultsForMissing(wizardAnswers)
+      setWizardAnswers(filled)
+      // Trigger initial 3D build
+      setTimeout(() => updateModelFromWizard(), 50)
+    }
+  }, [wizardAnswers, setWizardAnswers, updateModelFromWizard])
+
+  // Instant model update after each answer change
+  const prevLen = useRef(Object.keys(wizardAnswers).length)
+  useEffect(() => {
+    const curLen = Object.keys(wizardAnswers).length
+    if (defaultsApplied.current && curLen !== prevLen.current) {
+      prevLen.current = curLen
+      updateModelFromWizard()
+    }
+  }, [wizardAnswers, updateModelFromWizard])
 
   // ─── Dragging ───
   const [position, setPosition] = useState(() => {
@@ -91,54 +114,27 @@ export default function Wizard() {
 
   // ─── Handlers ───
   const handleAnswer = (qId: string, value: string | boolean) => {
-    setWizardAnswer(qId, value)
-    setValidationErrors([])
+    setWizardAnswer(qId, String(value))
   }
 
   const handleNext = () => {
-    if (!currentStep) return
-    const missing = currentStep.subQuestions
-      .filter((sq) => wizardAnswers[sq.id] === undefined)
-      .map((sq) => sq.label)
-    if (missing.length > 0) {
-      setValidationErrors(missing)
-      return
-    }
-    setValidationErrors([])
-
-    const wasLastInGroup = isLastStepInGroup(nav)
     setNav(goNext(nav))
-
-    if (wasLastInGroup) {
-      updateModelFromWizard()
-    }
   }
 
   const handleBack = () => {
-    setValidationErrors([])
     setNav(goBack(nav))
   }
 
-  const handleFinish = () => {
-    if (!currentStep) return
-    const missing = currentStep.subQuestions
-      .filter((sq) => wizardAnswers[sq.id] === undefined)
-      .map((sq) => sq.label)
-    if (missing.length > 0) {
-      setValidationErrors(missing)
-      return
-    }
+  const handleBuildNow = () => {
     updateModelFromWizard()
   }
 
   const handleJumpToStep = (stepIdx: number) => {
     setNav((prev) => ({ ...prev, currentStepIndexInGroup: stepIdx }))
-    setValidationErrors([])
   }
 
   const handleJumpToGroup = (groupIdx: number) => {
     setNav({ currentGroupIndex: groupIdx, currentStepIndexInGroup: 0 })
-    setValidationErrors([])
   }
 
   const getStepState = (step: WizardStep) => {
@@ -165,6 +161,7 @@ export default function Wizard() {
           <span>{group.title}</span>
         </span>
         <div className={styles.titleActions}>
+          <button className={styles.buildNowBtn} onClick={handleBuildNow} title="Update 3D model now">Update 3D</button>
           <button className={styles.closeBtn} onClick={() => setWizardOpen(false)} title="Close wizard">✕</button>
         </div>
       </div>
@@ -219,10 +216,11 @@ export default function Wizard() {
       {/* Question area */}
       <div className={styles.body}>
         <div className={styles.qMeta}>
-          Group {nav.currentGroupIndex + 1}/{wizardGroups.length}
+          Stage {nav.currentGroupIndex + 1}/{wizardGroups.length}
           <span className={styles.qStepLabel}>
             {' '}· Step {nav.currentStepIndexInGroup + 1}/{groupSteps.length}
           </span>
+          <span className={styles.qLiveBadge}>Live 3D</span>
         </div>
 
         {currentStep && currentStep.subQuestions.map((sq) => (
@@ -242,9 +240,6 @@ export default function Wizard() {
                     className={`${styles.toggleBtn} ${wizardAnswers[sq.id] === 'false' ? styles.toggleOff : ''}`}
                     onClick={() => handleAnswer(sq.id, 'false')}
                   >No</button>
-                  {wizardAnswers[sq.id] !== undefined && (
-                    <button className={styles.clearBtn} onClick={() => setWizardAnswer(sq.id, '')}>Clear</button>
-                  )}
                 </div>
               )}
               {sq.type === 'select' && sq.options && (
@@ -279,17 +274,6 @@ export default function Wizard() {
             </div>
           </div>
         ))}
-
-        {validationErrors.length > 0 && (
-          <div className={styles.validationError}>
-            Please answer the following before continuing:
-            <ul>
-              {validationErrors.map((label) => (
-                <li key={label}>{label}</li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
 
       {/* Footer */}
@@ -299,8 +283,8 @@ export default function Wizard() {
         </button>
         <div className={styles.footerRight}>
           {isLastGroup(nav) && isLastStepInGroup(nav) ? (
-            <button className={styles.buildBtn} onClick={handleFinish}>
-              Finish & Build 3D Model
+            <button className={styles.buildBtn} onClick={handleBuildNow}>
+              Update 3D Model
             </button>
           ) : (
             <button className={styles.nextBtn} onClick={handleNext}>

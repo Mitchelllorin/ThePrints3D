@@ -10,25 +10,46 @@ export interface WizardGroup {
 
 export const wizardGroups: WizardGroup[] = [
   {
-    id: 'structure',
-    title: 'Structure & Layout',
-    icon: '📐',
-    description: 'Define the building dimensions, layout, and wall construction',
-    stepIds: ['layout', 'wallStructure'],
+    id: 'foundation',
+    title: 'Foundation',
+    icon: '🏗️',
+    description: 'Footings, slabs, walls, and floorplan calibration',
+    stepIds: ['foundation-type', 'foundation-dims', 'foundation-calibrate'],
   },
   {
-    id: 'systems',
-    title: 'Systems & Openings',
+    id: 'framing',
+    title: 'Framing',
+    icon: '🧱',
+    description: 'Walls, studs, openings, and roof structure',
+    stepIds: ['wall-structure', 'openings', 'roof'],
+  },
+  {
+    id: 'mep',
+    title: 'Rough-ins (MEP)',
     icon: '⚡',
-    description: 'Add doors, windows, electrical, and plumbing fixtures',
-    stepIds: ['openings', 'electrical', 'plumbing'],
+    description: 'Electrical, plumbing, and HVAC rough-in',
+    stepIds: ['electrical', 'plumbing', 'hvac'],
+  },
+  {
+    id: 'insulation',
+    title: 'Insulation',
+    icon: '🛡️',
+    description: 'Insulation type and R-value',
+    stepIds: ['insulation'],
+  },
+  {
+    id: 'drywall',
+    title: 'Drywall',
+    icon: '🧱',
+    description: 'Drywall thickness and layers',
+    stepIds: ['drywall'],
   },
   {
     id: 'finishes',
-    title: 'Finishes & Details',
+    title: 'Finishes',
     icon: '🎨',
-    description: 'Configure insulation, drywall, and finishing materials',
-    stepIds: ['insulation', 'drywall', 'finishes'],
+    description: 'Paint, flooring, trim, appliances',
+    stepIds: ['finishes'],
   },
 ]
 

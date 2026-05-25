@@ -30,7 +30,7 @@ export default function WallTracer({ active, imageWidth, imageHeight, walls, onA
   const [phase, setPhase] = useState<Phase>('idle')
   const [anchor, setAnchor] = useState<StrokePoint | null>(null)
   const [cursor, setCursor] = useState<StrokePoint | null>(null)
-  const [cadFirstPoint, setCadFirstPoint] = useState<StrokePoint | null>(null)
+  const [, setCadFirstPoint] = useState<StrokePoint | null>(null)
 
   const anchorRef = useRef<StrokePoint | null>(null)
   const cadRef = useRef<StrokePoint | null>(null)

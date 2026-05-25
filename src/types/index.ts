@@ -199,6 +199,7 @@ export interface Layer {
   label: string
   color: string
   visible: boolean
+  locked: boolean
   opacity: number
   /** Which drawing types feed this layer */
   sourceTypes: DrawingType[]
@@ -229,7 +230,7 @@ export interface Model3D {
 
 // ─── App State ─────────────────────────────────────────────────────────────────
 
-export type AppView = 'upload' | 'drawings' | 'model' | 'tools' | 'wizard' | 'create'
+export type AppView = 'upload' | 'workspace' | 'drawings' | 'model' | 'tools' | 'wizard' | 'create'
 
 export interface ScaleCalibration {
   /** px distance measured on canvas */
@@ -305,4 +306,77 @@ export interface Annotation {
   /** Hex colour string e.g. "#f87171" */
   color: string
   createdAt: number
+}
+
+// ─── Unified 3D Workspace ──────────────────────────────────────────────────
+
+export type Tool3D = 'select' | 'draw-wall' | 'place-door' | 'place-window' | 'place-component' | 'move' | 'resize' | 'annotate' | 'measure'
+
+export interface UIMode {
+  current: string
+  previous: string | null
+  modalOpen: string | null
+  activePanel: string | null
+  activeTool: Tool3D
+}
+
+export interface Wall3D {
+  id: string
+  start: [number, number, number]
+  end: [number, number, number]
+  height: number
+  thickness: number
+  color: string
+  layer: 'structure' | 'drywall' | 'framing'
+  type: 'stud' | 'drywall' | 'block' | 'custom'
+  openings?: WallOpening[]
+}
+
+export interface WallOpening {
+  id: string
+  wallId: string
+  type: 'door' | 'window'
+  /** Position along the wall from start (0..1) */
+  pos: number
+  width: number
+  height: number
+  sillHeight?: number
+}
+
+export interface PlacedComponent {
+  id: string
+  type: 'door' | 'window' | 'furniture' | 'fixture' | 'appliance'
+  label: string
+  position: [number, number, number]
+  rotation: number
+  scale: [number, number, number]
+  wallId?: string
+  color: string
+}
+
+export interface FloorplanProjection {
+  imageUrl: string | null
+  visible: boolean
+  scale: number
+  rotation: number
+  position: [number, number, number]
+  offsetX: number
+  offsetZ: number
+  opacity: number
+}
+
+export interface TradeLayer {
+  id: string
+  label: string
+  visible: boolean
+  locked: boolean
+  opacity: number
+  color: string
+  icon: string
+}
+
+export interface CameraPreset {
+  position: [number, number, number]
+  target: [number, number, number]
+  label?: string
 }

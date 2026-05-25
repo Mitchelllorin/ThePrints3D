@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
-import { SAMPLE_DRAWINGS, renderSvgToPng, clearMEPSymbols, flushMEPSymbols } from '../../data/sampleDrawings'
-import type { SampleDrawingDef, SampleMEPSymbol } from '../../data/sampleDrawings'
+import { SAMPLE_DRAWINGS, renderSvgToPng } from '../../data/sampleDrawings'
+import type { SampleDrawingDef } from '../../data/sampleDrawings'
 import styles from './SampleDrawingGallery.module.css'
 
 function difficultyLabel(d: SampleDrawingDef['difficulty']): { label: string; className: string } {
@@ -28,58 +28,32 @@ export default function SampleDrawingGallery() {
   const handleSelect = async (sample: SampleDrawingDef) => {
     setLoading(sample.id)
     try {
-      // Capture MEP symbol positions from the SVG helper functions
-      clearMEPSymbols()
       const svg = sample.generateSvg(sample.width, sample.height)
-      const mepSymbols: SampleMEPSymbol[] = flushMEPSymbols()
       const blob = await renderSvgToPng(svg, sample.width, sample.height)
+      const imageUrl = URL.createObjectURL(blob)
       const file = new File([blob], `${sample.id}.png`, { type: 'image/png' })
       addDrawings([file])
 
       // Pre-set wizard answers so the model builds with full detail
       const store = useAppStore.getState()
       for (const [key, val] of Object.entries(sample.wizardDefaults)) {
-        store.setWizardAnswer(key, val)
+        store.setWizardAnswer(key, String(val))
       }
+
+      // Show the floorplan image on the 3D ground plane, sized to real-world meters
+      const worldWidthM = (sample.width * sample.scaleMmPerPx) / 1000
+      store.setFloorplanImage(imageUrl)
+      store.setFloorplanScale(worldWidthM / 10)
+      store.setFloorplanVisible(true)
 
       // Pre-set drawing scale from known preset dimensions
       const pending = store.drawings.filter((d) => d.status === 'pending')
       for (const d of pending) {
-        store.setDrawingScale(d.id, sample.scaleMmPerPx, sample.scaleNotation)
+        store.setDrawingScale(d.id, sample.scaleMmPerPx, sample.scaleNotation, 'inferred')
+        store.setCalibrationPendingDrawingId(d.id)
         store.processDrawing(d.id)
       }
       setOpen(false)
-
-      // Auto-build once processing completes, then inject MEP symbols
-      const checkReady = setInterval(() => {
-        const s = useAppStore.getState()
-        if (s.drawings.every((d) => d.status === 'ready' || d.status === 'error')) {
-          clearInterval(checkReady)
-          // Inject MEP symbols into the processed drawing
-          for (const d of s.drawings) {
-            if (d.status === 'ready' && mepSymbols.length > 0) {
-              const existingIds = new Set(d.parsedSymbols.map((ps) => ps.id))
-              const newSyms = mepSymbols
-                .filter((ms) => !existingIds.has(`mep-${ms.category}-${ms.x}-${ms.y}`))
-                .map((ms) => ({
-                  id: `mep-${ms.category}-${ms.x}-${ms.y}`,
-                  symbolId: `${ms.category}-${ms.label.toLowerCase().replace(/\s+/g, '-')}`,
-                  category: ms.category,
-                  label: ms.label,
-                  x: ms.x,
-                  y: ms.y,
-                  confidence: 1.0,
-                  source: 'line_classifier' as const,
-                }))
-              s.updateDrawing(d.id, {
-                parsedSymbols: [...d.parsedSymbols, ...newSyms],
-              })
-            }
-          }
-          s.buildModel()
-        }
-      }, 500)
-      setTimeout(() => clearInterval(checkReady), 30000)
     } catch (err) {
       console.error('Failed to load sample drawing:', err)
       alert('Could not load sample drawing. Try again.')
