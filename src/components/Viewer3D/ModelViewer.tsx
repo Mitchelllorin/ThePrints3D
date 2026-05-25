@@ -1,4 +1,4 @@
-import { useRef, useEffect, Suspense, useState } from 'react'
+﻿import { useRef, useEffect, Suspense, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import {
   OrbitControls,
@@ -82,12 +82,12 @@ function BuildingProgress() {
   )
 }
 
-// ─── Preset colours/icons used in the creation form ──────────────────────────
+// â”€â”€â”€ Preset colours/icons used in the creation form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const FORM_COLORS = ['#f87171','#fb923c','#facc15','#4ade80','#38bdf8','#818cf8','#e879f9','#f1f5f9']
-const FORM_ICONS  = ['📌','⚠️','💡','❓','✅','🔧','📏','🔴','⭐','🏷️','💬','🚩']
+const FORM_ICONS  = ['ðŸ“Œ','âš ï¸','ðŸ’¡','â“','âœ…','ðŸ”§','ðŸ“','ðŸ”´','â­','ðŸ·ï¸','ðŸ’¬','ðŸš©']
 
-// ─── Annotation creation form ─────────────────────────────────────────────────
+// â”€â”€â”€ Annotation creation form â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface FormState {
   position3D: [number, number, number]
@@ -103,7 +103,7 @@ interface AnnotationFormProps {
 
 function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
   const [text, setText]   = useState('')
-  const [icon, setIcon]   = useState('📌')
+  const [icon, setIcon]   = useState('ðŸ“Œ')
   const [color, setColor] = useState('#38bdf8')
 
   // keep the popover inside the viewport
@@ -130,7 +130,7 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
           className={styles.formTextarea}
           value={text}
           autoFocus
-          placeholder="Add a note…"
+          placeholder="Add a noteâ€¦"
           rows={2}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
@@ -170,7 +170,7 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 
         <div className={styles.formButtons}>
           <button type="submit" className={styles.formSubmit} disabled={!text.trim()}>
-            📌 Add Pin
+            ðŸ“Œ Add Pin
           </button>
           <button type="button" className={styles.formCancel} onClick={onCancel}>
             Cancel
@@ -237,7 +237,7 @@ export default function ModelViewer() {
             onClick={() => setMeasureMode(!measureMode)}
             title="Measure distances (click two points)"
           >
-            📏 {measureMode ? 'Measuring…' : 'Measure'}
+            ðŸ“ {measureMode ? 'Measuringâ€¦' : 'Measure'}
           </button>
           {measurements.length > 0 && (
             <button
@@ -245,15 +245,15 @@ export default function ModelViewer() {
               onClick={clearMeasurements}
               title="Clear all measurements"
             >
-              🗑 Clear ({measurements.length})
+              ðŸ—‘ Clear ({measurements.length})
             </button>
           )}
           <button
             className={`${styles.toolBtn} ${annotateMode ? styles.toolBtnActive : ''}`}
             onClick={() => { setAnnotateMode(!annotateMode); setPendingForm(null) }}
-            title={annotateMode ? 'Exit annotation mode' : 'Annotate — click the model to place pins'}
+            title={annotateMode ? 'Exit annotation mode' : 'Annotate â€” click the model to place pins'}
           >
-            📌 {annotateMode ? 'Annotating…' : 'Annotate'}
+            ðŸ“Œ {annotateMode ? 'Annotatingâ€¦' : 'Annotate'}
             {annotations.length > 0 && !annotateMode && (
               <span className={styles.toolBadge}>{annotations.length}</span>
             )}
@@ -271,18 +271,21 @@ export default function ModelViewer() {
                 a.click()
               } catch (err) {
                 console.error('Snapshot failed:', err)
-                alert('Snapshot failed — try again after orbiting the view once.')
+                alert('Snapshot failed â€” try again after orbiting the view once.')
               }
             }}
             title="Save the current 3D view as a PNG image you can share"
             data-testid="share-png-btn"
           >
-            📤 Share PNG
+            ðŸ“¤ Share PNG
           </button>
           {(measureMode || annotateMode) && (
+            <>
             <span className={styles.toolHint}>
               {measureMode ? 'Click a surface to place point A, then point B' : 'Click a surface to place an annotation pin'}
             </span>
+            <button style={{ marginLeft: 8, padding: '4px 10px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }} onClick={() => useAppStore.setState({ measureMode: false, annotateMode: false })}>X Exit</button>
+            </>
           )}
         </div>
       )}
@@ -313,7 +316,7 @@ export default function ModelViewer() {
               title={measurementsPanelCollapsed ? 'Expand measurements panel' : 'Collapse measurements panel'}
               aria-label={measurementsPanelCollapsed ? 'Expand measurements panel' : 'Collapse measurements panel'}
             >
-              {measurementsPanelCollapsed ? '◀' : '▶'}
+              {measurementsPanelCollapsed ? 'â—€' : 'â–¶'}
             </button>
           </div>
           {!measurementsPanelCollapsed && (
@@ -342,7 +345,7 @@ export default function ModelViewer() {
                         aria-label="Delete measurement"
                         title="Delete measurement"
                       >
-                        ✕
+                        âœ•
                       </button>
                     </div>
                   )
@@ -385,7 +388,7 @@ export default function ModelViewer() {
           <Environment preset="city" background={false} />
         </Suspense>
 
-        {/* Ground plane — always visible, gives spatial reference */}
+        {/* Ground plane â€” always visible, gives spatial reference */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
           <planeGeometry args={[60, 60]} />
           <meshStandardMaterial color="#1e293b" roughness={0.9} />
@@ -456,7 +459,7 @@ export default function ModelViewer() {
       {model.status === 'error' && (
         <div className={styles.overlay}>
           <div className={styles.errorMsg}>
-            <p>⚠️ Could not build 3D model</p>
+            <p>âš ï¸ Could not build 3D model</p>
             <p className={styles.hint}>Try analysing the drawings first, then click Build 3D again</p>
             <button className={styles.dismissBtn} onClick={() => { setView('drawings'); setModelStatus('idle') }}>
               Back to Drawings

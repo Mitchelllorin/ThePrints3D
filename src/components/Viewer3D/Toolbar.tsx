@@ -1,56 +1,54 @@
-import { useState, useEffect } from 'react'
-import {
-  TOOLS,
-  getActiveTool,
-  setActiveTool,
-  type ToolId,
-} from '../../services/editing/toolSystem'
+﻿import { useAppStore } from '../../store/useAppStore'
 import { canUndo, canRedo, undo, redo, getUndoCount, getRedoCount } from '../../services/editing/undoRedo'
+import { useState, useEffect } from 'react'
 import styles from './ModelViewer.module.css'
 
+const EDIT_TOOLS = [
+  { id: 'select' as const, label: 'Select', icon: 'â¬†' },
+  { id: 'move' as const, label: 'Move', icon: 'âœ›' },
+  { id: 'resize' as const, label: 'Scale', icon: 'â¬›' },
+] as const
+
 export default function Toolbar() {
-  const [activeTool, setActiveToolState] = useState<ToolId>(() => getActiveTool())
+  const activeTool = useAppStore((s) => s.activeTool)
+  const setActiveTool = useAppStore((s) => s.setActiveTool)
+  const seedMode    = useAppStore((s) => s.seedMode)
+  const measureMode = useAppStore((s) => s.measureMode)
+  const annotateMode = useAppStore((s) => s.annotateMode)
+  const anyModeActive = seedMode || measureMode || annotateMode
   const [undoCount, setUndoCount] = useState(0)
   const [redoCount, setRedoCount] = useState(0)
 
   useEffect(() => {
-    const check = () => {
-      setActiveToolState(getActiveTool())
+    const update = () => {
       setUndoCount(getUndoCount())
       setRedoCount(getRedoCount())
     }
-    window.addEventListener('tool-changed', check)
-    const interval = setInterval(check, 500)
-    return () => {
-      window.removeEventListener('tool-changed', check)
-      clearInterval(interval)
-    }
+    const interval = setInterval(update, 500)
+    return () => clearInterval(interval)
   }, [])
-
-  const handleTool = (toolId: ToolId) => {
-    if (toolId === 'delete') {
-      setActiveTool(toolId)
-      window.dispatchEvent(new CustomEvent('tool-changed'))
-      // Reset to select after a brief delay so user can tap to delete
-      setTimeout(() => {
-        setActiveTool('select')
-        window.dispatchEvent(new CustomEvent('tool-changed'))
-      }, 3000)
-      return
-    }
-    setActiveTool(activeTool === toolId ? 'select' : toolId)
-    window.dispatchEvent(new CustomEvent('tool-changed'))
-  }
 
   return (
     <div className={styles.toolbarLeft}>
+      {anyModeActive && (
+        <>
+          <button
+            className={styles.toolBtn}
+            style={{ color: '#ef4444', fontWeight: 700 }}
+            onClick={() => useAppStore.setState({ seedMode: false, measureMode: false, annotateMode: false })}
+          >
+            <span className={styles.toolIcon}>X</span>
+            <span className={styles.toolLabel}>{seedMode ? "Exit Trace" : measureMode ? "Exit Measure" : "Exit Annotate"}</span>
+          </button>
+          <div className={styles.toolbarDivider} />
+        </>
+      )}
       <div className={styles.toolbarGroupLabel}>Edit</div>
-      {TOOLS.map((t) => (
+      {EDIT_TOOLS.map((t) => (
         <button
           key={t.id}
           className={`${styles.toolBtn} ${activeTool === t.id ? styles.toolBtnActive : ''}`}
-          onClick={() => handleTool(t.id)}
-          data-tooltip={`${t.label}`}
+          onClick={() => setActiveTool(activeTool === t.id ? 'select' : t.id)}
         >
           <span className={styles.toolIcon}>{t.icon}</span>
           <span className={styles.toolLabel}>{t.label}</span>
@@ -64,18 +62,16 @@ export default function Toolbar() {
         className={`${styles.toolBtn} ${!canUndo() ? styles.toolBtnDisabled : ''}`}
         onClick={undo}
         disabled={!canUndo()}
-        data-tooltip={`Undo${undoCount > 0 ? ` (${undoCount})` : ''}`}
       >
-        <span className={styles.toolIcon}>↩</span>
+        <span className={styles.toolIcon}>â†©</span>
         <span className={styles.toolLabel}>Undo{undoCount > 0 ? ` ${undoCount}` : ''}</span>
       </button>
       <button
         className={`${styles.toolBtn} ${!canRedo() ? styles.toolBtnDisabled : ''}`}
         onClick={redo}
         disabled={!canRedo()}
-        data-tooltip={`Redo${redoCount > 0 ? ` (${redoCount})` : ''}`}
       >
-        <span className={styles.toolIcon}>↪</span>
+        <span className={styles.toolIcon}>â†ª</span>
         <span className={styles.toolLabel}>Redo{redoCount > 0 ? ` ${redoCount}` : ''}</span>
       </button>
     </div>
