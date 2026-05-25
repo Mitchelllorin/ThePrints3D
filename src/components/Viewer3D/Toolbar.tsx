@@ -35,7 +35,7 @@ export default function Toolbar() {
           <button
             className={styles.toolBtn}
             style={{ color: '#ef4444', fontWeight: 700 }}
-            onClick={() => useAppStore.getState().clearTraces(); useAppStore.getState().setMeasureMode(false); useAppStore.getState().setAnnotateMode(false)}
+            onClick={() => { useAppStore.getState().clearTraces(); useAppStore.getState().setMeasureMode(false); useAppStore.getState().setAnnotateMode(false) }}
           >
             <span className={styles.toolIcon}>X</span>
             <span className={styles.toolLabel}>{traceMode ? "Exit Trace" : measureMode ? "Exit Measure" : "Exit Annotate"}</span>
@@ -77,4 +77,5 @@ export default function Toolbar() {
     </div>
   )
 }
+
 
