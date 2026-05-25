@@ -28,6 +28,7 @@ import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
 import { defaultSmartProcessingState } from './smartProcessingSlice'
+import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
 import {
   DEFAULT_WIZARD_STATE,
@@ -238,6 +239,7 @@ interface AppState {
   smartStageLabel: string
   correctionCount: number
   detectedWallTypes: DetectedWallType[]
+  wallDetectionConfig: WallDetectionConfig
 
   // Actions
   setView: (view: AppView) => void
@@ -295,6 +297,7 @@ interface AppState {
   correctElement: (wallId: string, wallTypeId: string) => void
   setProjectWallTypes: (types: WallType[]) => void
   exportCorrectionDataset: () => string
+  setWallDetectionConfig: (patch: Partial<WallDetectionConfig>) => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -448,6 +451,7 @@ export const useAppStore = create<AppState>()(
     smartStageLabel: defaultSmartProcessingState.stageLabel,
     correctionCount: defaultSmartProcessingState.correctionCount,
     detectedWallTypes: [],
+    wallDetectionConfig: { ...DEFAULT_WALL_DETECTION_CONFIG },
 
     setView: (view) =>
       set((s) => {
@@ -1081,6 +1085,12 @@ export const useAppStore = create<AppState>()(
       pushHistory()
       set((s) => {
         s.projectWallTypes = types
+      })
+    },
+
+    setWallDetectionConfig: (patch) => {
+      set((s) => {
+        Object.assign(s.wallDetectionConfig, patch)
       })
     },
 

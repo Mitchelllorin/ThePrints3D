@@ -1,4 +1,3 @@
-import * as THREE from 'three'
 import { useMemo } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { ParsedWall } from '../../types'
@@ -14,7 +13,7 @@ function WallMesh({ wall }: { wall: ParsedWall }) {
     const x2 = wall.x2 * scale
     const z2 = wall.y2 * scale
     const length = Math.hypot(x2 - x1, z2 - z1)
-    const thickness = wall.thicknessPx ? wall.thicknessPx * scale : DEFAULT_THICKNESS
+    const thickness = wall.thickness ? wall.thickness * scale : DEFAULT_THICKNESS
     return { x1, z1, x2, z2, length, thickness }
   }, [wall])
 
@@ -58,7 +57,7 @@ export default function LiveWallsLayer() {
   return (
     <group name="live-walls">
       {userWalls.map((wall, i) => (
-        <WallMesh key={wall.id ?? i} wall={wall} />
+        <WallMesh key={i} wall={wall} />
       ))}
     </group>
   )

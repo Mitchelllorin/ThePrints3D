@@ -1,6 +1,5 @@
 import { useAppStore } from '../../store/useAppStore'
 import { DEFAULT_WALL_DETECTION_CONFIG } from '../../store/wallDetectionConfig'
-import type { WallDetectionConfig } from '../../store/wallDetectionConfig'
 import styles from './WallCalibrationPanel.module.css'
 
 interface SliderRowProps {
