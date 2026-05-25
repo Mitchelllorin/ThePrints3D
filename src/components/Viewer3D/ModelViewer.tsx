@@ -202,6 +202,17 @@ export default function ModelViewer() {
   useEffect(() => {
     if (!controlsRef.current) return
     controlsRef.current.touches.ONE = seedMode ? -1 as any : THREE.TOUCH.ROTATE
+
+  useEffect(() => {
+    function onEscape(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      useAppStore.setState({ seedMode: false })
+      setShowProductPanel(false)
+      clearSelection()
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [])
   }, [seedMode])
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm] = useState<FormState | null>(null)
@@ -407,6 +418,7 @@ export default function ModelViewer() {
 
         <OrbitControls
           ref={controlsRef}
+            enabled={!seedMode}
           makeDefault
           enableDamping
           dampingFactor={0.12}
@@ -464,5 +476,7 @@ export default function ModelViewer() {
     </div>
   )
 }
+
+
 
 
