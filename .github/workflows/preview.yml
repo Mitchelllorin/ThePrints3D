@@ -59,42 +59,7 @@ jobs:
           cat "$response_file"
 
           preview_url="$(
-            python - "$response_file" <<'PY'
-import json
-import re
-import sys
-
-raw = open(sys.argv[1], encoding="utf-8").read().strip()
-
-def find_url(value):
-    if isinstance(value, str):
-        match = re.search(r"https?://\S+", value)
-        if match:
-            return match.group(0).rstrip('",]}')
-        return None
-    if isinstance(value, dict):
-        for key in ("preview_url", "previewUrl", "deployment_url", "deploy_url", "url"):
-            result = find_url(value.get(key))
-            if result:
-                return result
-        for nested in value.values():
-            result = find_url(nested)
-            if result:
-                return result
-    if isinstance(value, list):
-        for item in value:
-            result = find_url(item)
-            if result:
-                return result
-    return None
-
-try:
-    payload = json.loads(raw)
-except json.JSONDecodeError:
-    payload = raw
-
-print(find_url(payload) or "")
-PY
+            python -c 'import re, sys; raw=open(sys.argv[1], encoding="utf-8").read(); match=re.search(r"https?://\S+", raw); print(match.group(0).rstrip("\",]}") if match else "")' "$response_file"
           )"
 
           echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
