@@ -187,6 +187,17 @@ function drawSvg(definition: PresetDefinition): string {
   </svg>`
 }
 
+function createPresetFile(svg: string, difficulty: PresetDifficulty): File {
+  try {
+    return new File([svg], `${difficulty}-preset.svg`, { type: 'image/svg+xml' })
+  } catch {
+    const fallback = new Blob([svg], { type: 'image/svg+xml' }) as Blob & { name?: string; lastModified?: number }
+    fallback.name = `${difficulty}-preset.svg`
+    fallback.lastModified = Date.now()
+    return fallback as File
+  }
+}
+
 export function listPresetDefinitions() {
   return (Object.keys(PRESET_DEFINITIONS) as PresetDifficulty[]).map((id) => ({
     id,
@@ -197,7 +208,7 @@ export function listPresetDefinitions() {
 export function createPresetDrawing(difficulty: PresetDifficulty, practiceMode: boolean): Pick<Drawing, 'name' | 'file' | 'pageCount' | 'currentPage' | 'previewUrl' | 'rasterUrl' | 'rasterWidth' | 'rasterHeight' | 'parsedWalls' | 'parsedRooms' | 'parsedOpenings' | 'parsedText' | 'parsedSymbols' | 'parsedAnnotationCandidates' | 'parseProgress' | 'floorNumber' | 'status' | 'scaleMmPerPx' | 'scaleNotation' | 'scaleConfidence' | 'uploadedAt' | 'type'> & { wizardInputs: WorkspaceWizardInputs; overlayScale: [number, number] } {
   const definition = PRESET_DEFINITIONS[difficulty]
   const svg = drawSvg(definition)
-  const file = new File([svg], `${difficulty}-preset.svg`, { type: 'image/svg+xml' })
+  const file = createPresetFile(svg, difficulty)
   const url = URL.createObjectURL(file)
   const worldWidthM = (definition.widthPx * definition.mmPerPx) / 1000
   const worldDepthM = (definition.heightPx * definition.mmPerPx) / 1000

@@ -241,7 +241,9 @@
   position: absolute;
   left: 12px;
   bottom: 12px;
-  width: 320px;
+  width: min(360px, calc(100vw - 24px));
+  max-height: calc(100dvh - 92px);
+  overflow: auto;
   z-index: 12;
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid #1e293b;
@@ -269,6 +271,8 @@
 .floorplanActionRow {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .floorplanActionGrid {
@@ -356,6 +360,8 @@
 
 .floorplanModal {
   width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
   background: rgba(15, 23, 42, 0.98);
   border: 1px solid #1e293b;
   border-radius: 14px;
@@ -385,4 +391,41 @@
 .floorplanPresetCard:hover {
   border-color: #38bdf8;
   background: rgba(14, 165, 233, 0.12);
+}
+
+@media (max-width: 768px) {
+  .floorplanPanel {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: calc(100dvh - 76px);
+  }
+
+  .floorplanActionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .floorplanChecks {
+    grid-template-columns: 1fr;
+  }
+
+  .floorplanCalibrationRow {
+    grid-template-columns: 1fr;
+  }
+
+  .floorplanGuideBtns {
+    flex-wrap: wrap;
+  }
+
+  .floorplanModalBackdrop {
+    align-items: flex-end;
+    padding: 8px;
+  }
+
+  .floorplanModal {
+    width: 100%;
+    border-radius: 12px 12px 0 0;
+    max-height: calc(100dvh - 8px);
+  }
 }

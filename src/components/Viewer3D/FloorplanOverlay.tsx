@@ -80,6 +80,7 @@ export default function FloorplanOverlay() {
   const [presetOpen, setPresetOpen] = useState(false)
   const [practiceMode, setPracticeMode] = useState(true)
   const [seedProcessing, setSeedProcessing] = useState(false)
+  const [panelCollapsed, setPanelCollapsed] = useState(false)
 
   useEffect(() => {
     if (!drawing || overlay.drawingId) return
@@ -206,19 +207,19 @@ export default function FloorplanOverlay() {
     updateOverlay({ calibrationMode: true, guidedStep: 1, locked: false }, false)
   }
 
-  const cancelCalibration = () => {
+  const cancelCalibration = useCallback(() => {
     setCalibrationA(null)
     setCalibrationB(null)
     setHoverPixel(null)
     setDistanceInput('')
     updateOverlay({ calibrationMode: false }, false)
-  }
+  }, [updateOverlay])
 
-  const cancelTracing = () => {
+  const cancelTracing = useCallback(() => {
     setTraceMode(false)
     setTraceStroke([])
     setHoverPixel(null)
-  }
+  }, [])
 
   const finalizeCalibration = () => {
     if (!drawing || !calibrationA || !calibrationB) return
@@ -305,6 +306,25 @@ export default function FloorplanOverlay() {
     clearTracingForDrawing(drawing.id)
     cancelTracing()
   }
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      if (presetOpen) {
+        setPresetOpen(false)
+        return
+      }
+      if (traceMode) {
+        cancelTracing()
+        return
+      }
+      if (overlay.calibrationMode) {
+        cancelCalibration()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [cancelCalibration, cancelTracing, overlay.calibrationMode, presetOpen, traceMode])
 
   return (
     <>
@@ -423,142 +443,153 @@ export default function FloorplanOverlay() {
           <div className={styles.floorplanPanelHeader}>
             <strong>3D Workspace Print Overlay</strong>
             <div className={styles.floorplanActionRow}>
-              <button className={styles.floorplanBtn} onClick={() => fileInputRef.current?.click()}>
-                Upload print
-              </button>
-              <button className={styles.floorplanBtn} onClick={() => setPresetOpen(true)}>
-                Presets
+              {!panelCollapsed && (
+                <>
+                  <button className={styles.floorplanBtn} onClick={() => fileInputRef.current?.click()}>
+                    Upload print
+                  </button>
+                  <button className={styles.floorplanBtn} onClick={() => setPresetOpen(true)}>
+                    Presets
+                  </button>
+                </>
+              )}
+              <button className={styles.floorplanBtn} onClick={() => setPanelCollapsed((current) => !current)}>
+                {panelCollapsed ? 'Show' : 'Hide'}
               </button>
             </div>
           </div>
 
-          {!drawing ? (
-            <div className={styles.floorplanGuide}>
-              <div>Start in 3D by uploading a print or loading an Easy / Medium / Hard preset directly onto the grid.</div>
-              <div className={styles.floorplanGuideBtns}>
-                <button className={styles.floorplanBtn} onClick={() => fileInputRef.current?.click()}>Upload</button>
-                <button className={styles.floorplanBtn} onClick={() => setPresetOpen(true)}>Load preset</button>
-              </div>
-            </div>
-          ) : (
+          {!panelCollapsed && (
             <>
-              <div className={styles.floorplanRow}>
-                <label>Print</label>
-                <select
-                  className={styles.floorplanSelect}
-                  value={drawing.id}
-                  onChange={(e) => setOverlayDrawing(e.target.value)}
-                >
-                  {drawings.map((item) => (
-                    <option key={item.id} value={item.id}>{item.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className={styles.floorplanActionGrid}>
-                <button className={styles.floorplanBtn} onClick={() => processDrawing(drawing.id)} disabled={drawing.status === 'processing'}>
-                  {drawing.status === 'processing' ? 'Analysing…' : 'Analyse'}
-                </button>
-                <button className={styles.floorplanBtn} onClick={buildModel}>
-                  Build 3D
-                </button>
-                {!traceMode ? (
-                  <button className={styles.floorplanBtn} onClick={() => { cancelCalibration(); setTraceMode(true) }}>
-                    Start trace
-                  </button>
-                ) : (
-                  <button className={styles.floorplanBtn} onClick={cancelTracing}>
-                    Cancel trace
-                  </button>
-                )}
-                {!overlay.calibrationMode ? (
-                  <button className={styles.floorplanBtn} onClick={startCalibration}>
-                    Calibrate in 3D
-                  </button>
-                ) : (
-                  <button className={styles.floorplanBtn} onClick={cancelCalibration}>
-                    Cancel calibration
-                  </button>
-                )}
-              </div>
-
-              <div className={styles.floorplanRow}>
-                <label>Opacity</label>
-                <input
-                  type="range"
-                  min={0.1}
-                  max={1}
-                  step={0.05}
-                  value={overlay.opacity}
-                  onChange={(e) => updateOverlay({ opacity: Number(e.target.value) })}
-                />
-              </div>
-
-              <div className={styles.floorplanChecks}>
-                <label><input type="checkbox" checked={overlay.visible} onChange={(e) => updateOverlay({ visible: e.target.checked })} /> Visible</label>
-                <label><input type="checkbox" checked={overlay.snapToGrid} onChange={(e) => updateOverlay({ snapToGrid: e.target.checked })} /> Snap to grid</label>
-                <label><input type="checkbox" checked={overlay.locked} onChange={(e) => updateOverlay({ locked: e.target.checked })} /> Lock alignment</label>
-              </div>
-
-              <div className={styles.floorplanMeta}>
-                <span>Position {overlay.position[0].toFixed(2)}, {overlay.position[1].toFixed(2)}</span>
-                <span>Scale {overlay.scale[0].toFixed(1)}m × {overlay.scale[1].toFixed(1)}m</span>
-                <span>Rotation {overlay.rotationDeg.toFixed(1)}°</span>
-              </div>
-
-              {traceMode && (
+              {!drawing ? (
                 <div className={styles.floorplanGuide}>
-                  <div>Trace directly on the 3D grid with your finger or mouse. Each stroke snaps to nearby wall endpoints and extrudes into a wall.</div>
+                  <div>Start in 3D by uploading a print or loading an Easy / Medium / Hard preset directly onto the grid.</div>
                   <div className={styles.floorplanGuideBtns}>
-                    <button className={styles.floorplanBtn} onClick={cancelTracing}>Cancel trace</button>
-                    <button className={styles.floorplanBtn} onClick={clearTracingResults} disabled={userWallCount === 0 && userTraces.length === 0}>Clear traced walls</button>
-                    <button className={styles.floorplanBtn} onClick={handleSmartRefine} disabled={!hasUsableSeedTrace || seedProcessing}>
-                      {seedProcessing ? 'Refining…' : 'Smart refine'}
-                    </button>
+                    <button className={styles.floorplanBtn} onClick={() => fileInputRef.current?.click()}>Upload</button>
+                    <button className={styles.floorplanBtn} onClick={() => setPresetOpen(true)}>Load preset</button>
                   </div>
-                  <div>{userWallCount} traced wall{userWallCount !== 1 ? 's' : ''} · {userTraces.length} seed stroke{userTraces.length !== 1 ? 's' : ''}</div>
                 </div>
-              )}
-
-              {overlay.calibrationMode && (
-                <div className={styles.floorplanGuide}>
-                  <div>
-                    Step {overlay.guidedStep}/4:{' '}
-                    {overlay.guidedStep === 1 && 'Unlock and position the print over the grid.'}
-                    {overlay.guidedStep === 2 && 'Tap the first and second calibration points on the print.'}
-                    {overlay.guidedStep === 3 && 'Enter the real-world distance to solve scale.'}
-                    {overlay.guidedStep === 4 && 'Lock the aligned print and start tracing.'}
-                  </div>
-                  <div className={styles.floorplanGuideBtns}>
-                    <button className={styles.floorplanBtn} onClick={() => updateOverlay({ guidedStep: Math.max(1, overlay.guidedStep - 1) }, false)}>Back</button>
-                    <button className={styles.floorplanBtn} onClick={() => updateOverlay({ guidedStep: Math.min(4, overlay.guidedStep + 1) }, false)}>Next</button>
-                    <button className={styles.floorplanBtn} onClick={cancelCalibration}>Cancel</button>
-                  </div>
-                  <div className={styles.floorplanCalibrationRow}>
-                    <input
-                      className={styles.floorplanInput}
-                      type="number"
-                      min="0.001"
-                      step="any"
-                      placeholder="Known distance"
-                      value={distanceInput}
-                      onChange={(e) => setDistanceInput(e.target.value)}
-                    />
+              ) : (
+                <>
+                  <div className={styles.floorplanRow}>
+                    <label>Print</label>
                     <select
                       className={styles.floorplanSelect}
-                      value={distanceUnit}
-                      onChange={(e) => setDistanceUnit(e.target.value as CalibrationUnit)}
+                      value={drawing.id}
+                      onChange={(e) => setOverlayDrawing(e.target.value)}
                     >
-                      <option value="mm">mm</option>
-                      <option value="m">m</option>
-                      <option value="ft">ft</option>
-                      <option value="in">in</option>
+                      {drawings.map((item) => (
+                        <option key={item.id} value={item.id}>{item.name}</option>
+                      ))}
                     </select>
-                    <button className={styles.floorplanBtn} onClick={finalizeCalibration} disabled={!calibrationA || !calibrationB || !distanceInput.trim()}>
-                      Apply
-                    </button>
                   </div>
-                </div>
+
+                  <div className={styles.floorplanActionGrid}>
+                    <button className={styles.floorplanBtn} onClick={() => processDrawing(drawing.id)} disabled={drawing.status === 'processing'}>
+                      {drawing.status === 'processing' ? 'Analysing…' : 'Analyse'}
+                    </button>
+                    <button className={styles.floorplanBtn} onClick={buildModel}>
+                      Build 3D
+                    </button>
+                    {!traceMode ? (
+                      <button className={styles.floorplanBtn} onClick={() => { cancelCalibration(); setTraceMode(true) }}>
+                        Start trace
+                      </button>
+                    ) : (
+                      <button className={styles.floorplanBtn} onClick={cancelTracing}>
+                        Cancel trace
+                      </button>
+                    )}
+                    {!overlay.calibrationMode ? (
+                      <button className={styles.floorplanBtn} onClick={startCalibration}>
+                        Calibrate in 3D
+                      </button>
+                    ) : (
+                      <button className={styles.floorplanBtn} onClick={cancelCalibration}>
+                        Cancel calibration
+                      </button>
+                    )}
+                  </div>
+
+                  <div className={styles.floorplanRow}>
+                    <label>Opacity</label>
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={1}
+                      step={0.05}
+                      value={overlay.opacity}
+                      onChange={(e) => updateOverlay({ opacity: Number(e.target.value) })}
+                    />
+                  </div>
+
+                  <div className={styles.floorplanChecks}>
+                    <label><input type="checkbox" checked={overlay.visible} onChange={(e) => updateOverlay({ visible: e.target.checked })} /> Visible</label>
+                    <label><input type="checkbox" checked={overlay.snapToGrid} onChange={(e) => updateOverlay({ snapToGrid: e.target.checked })} /> Snap to grid</label>
+                    <label><input type="checkbox" checked={overlay.locked} onChange={(e) => updateOverlay({ locked: e.target.checked })} /> Lock alignment</label>
+                  </div>
+
+                  <div className={styles.floorplanMeta}>
+                    <span>Position {overlay.position[0].toFixed(2)}, {overlay.position[1].toFixed(2)}</span>
+                    <span>Scale {overlay.scale[0].toFixed(1)}m × {overlay.scale[1].toFixed(1)}m</span>
+                    <span>Rotation {overlay.rotationDeg.toFixed(1)}°</span>
+                  </div>
+
+                  {traceMode && (
+                    <div className={styles.floorplanGuide}>
+                      <div>Trace directly on the 3D grid with your finger or mouse. Each stroke snaps to nearby wall endpoints and extrudes into a wall.</div>
+                      <div className={styles.floorplanGuideBtns}>
+                        <button className={styles.floorplanBtn} onClick={cancelTracing}>Cancel trace</button>
+                        <button className={styles.floorplanBtn} onClick={clearTracingResults} disabled={userWallCount === 0 && userTraces.length === 0}>Clear traced walls</button>
+                        <button className={styles.floorplanBtn} onClick={handleSmartRefine} disabled={!hasUsableSeedTrace || seedProcessing}>
+                          {seedProcessing ? 'Refining…' : 'Smart refine'}
+                        </button>
+                      </div>
+                      <div>{userWallCount} traced wall{userWallCount !== 1 ? 's' : ''} · {userTraces.length} seed stroke{userTraces.length !== 1 ? 's' : ''}</div>
+                    </div>
+                  )}
+
+                  {overlay.calibrationMode && (
+                    <div className={styles.floorplanGuide}>
+                      <div>
+                        Step {overlay.guidedStep}/4:{' '}
+                        {overlay.guidedStep === 1 && 'Unlock and position the print over the grid.'}
+                        {overlay.guidedStep === 2 && 'Tap the first and second calibration points on the print.'}
+                        {overlay.guidedStep === 3 && 'Enter the real-world distance to solve scale.'}
+                        {overlay.guidedStep === 4 && 'Lock the aligned print and start tracing.'}
+                      </div>
+                      <div className={styles.floorplanGuideBtns}>
+                        <button className={styles.floorplanBtn} onClick={() => updateOverlay({ guidedStep: Math.max(1, overlay.guidedStep - 1) }, false)}>Back</button>
+                        <button className={styles.floorplanBtn} onClick={() => updateOverlay({ guidedStep: Math.min(4, overlay.guidedStep + 1) }, false)}>Next</button>
+                        <button className={styles.floorplanBtn} onClick={cancelCalibration}>Cancel</button>
+                      </div>
+                      <div className={styles.floorplanCalibrationRow}>
+                        <input
+                          className={styles.floorplanInput}
+                          type="number"
+                          min="0.001"
+                          step="any"
+                          placeholder="Known distance"
+                          value={distanceInput}
+                          onChange={(e) => setDistanceInput(e.target.value)}
+                        />
+                        <select
+                          className={styles.floorplanSelect}
+                          value={distanceUnit}
+                          onChange={(e) => setDistanceUnit(e.target.value as CalibrationUnit)}
+                        >
+                          <option value="mm">mm</option>
+                          <option value="m">m</option>
+                          <option value="ft">ft</option>
+                          <option value="in">in</option>
+                        </select>
+                        <button className={styles.floorplanBtn} onClick={finalizeCalibration} disabled={!calibrationA || !calibrationB || !distanceInput.trim()}>
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
