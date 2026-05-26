@@ -4,16 +4,25 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag, or SHA to deploy
+        required: false
+        type: string
 
 jobs:
   preview:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      PREVIEW_REF: ${{ inputs.ref || github.event.pull_request.head.ref || github.ref_name }}
 
     steps:
-      - name: Checkout PR branch
+      - name: Checkout preview ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          ref: ${{ env.PREVIEW_REF }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -30,11 +39,84 @@ jobs:
         run: zip -r dist.zip dist
 
       - name: Upload to Emergent Preview
+        id: deploy
         run: |
-          curl -X POST \
-            -H "Content-Type: application/zip" \
-            --data-binary @dist.zip \
-            "https://quick-build-185.preview.emergentagent.com/api/preview"
+          response_file="$(mktemp)"
+          http_code="$(
+            curl -sS -o "$response_file" -w "%{http_code}" \
+              -X POST \
+              -H "Content-Type: application/zip" \
+              --data-binary @dist.zip \
+              "https://quick-build-185.preview.emergentagent.com/api/preview"
+          )"
 
-      - name: Output preview link
-        run: echo "Preview ready for PR #${{ github.event.pull_request.number }}"
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Preview upload failed with HTTP $http_code"
+            cat "$response_file"
+            exit 1
+          fi
+
+          cat "$response_file"
+
+          preview_url="$(
+            python - "$response_file" <<'PY'
+import json
+import re
+import sys
+
+raw = open(sys.argv[1], encoding="utf-8").read().strip()
+
+def find_url(value):
+    if isinstance(value, str):
+        match = re.search(r"https?://\S+", value)
+        if match:
+            return match.group(0).rstrip('",]}')
+        return None
+    if isinstance(value, dict):
+        for key in ("preview_url", "previewUrl", "deployment_url", "deploy_url", "url"):
+            result = find_url(value.get(key))
+            if result:
+                return result
+        for nested in value.values():
+            result = find_url(nested)
+            if result:
+                return result
+    if isinstance(value, list):
+        for item in value:
+            result = find_url(item)
+            if result:
+                return result
+    return None
+
+try:
+    payload = json.loads(raw)
+except json.JSONDecodeError:
+    payload = raw
+
+print(find_url(payload) or "")
+PY
+          )"
+
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+
+      - name: Output preview status
+        run: echo "Preview deployment finished for ${{ env.PREVIEW_REF }}"
+      - name: Publish preview summary
+        run: |
+          if [ -n "${{ steps.deploy.outputs.preview_url }}" ]; then
+            echo "Preview URL: ${{ steps.deploy.outputs.preview_url }}"
+            {
+              echo "## Preview deployment"
+              echo
+              echo "- Ref: \`${{ env.PREVIEW_REF }}\`"
+              echo "- URL: ${{ steps.deploy.outputs.preview_url }}"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Preview deploy completed, but no preview URL was returned by the API."
+            {
+              echo "## Preview deployment"
+              echo
+              echo "- Ref: \`${{ env.PREVIEW_REF }}\`"
+              echo "- URL: _Not returned by preview API_"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
