@@ -7,6 +7,10 @@
   padding: 12px 0;
 }
 
+.mobileCloseBtn {
+  display: none;
+}
+
 /* ── Mobile: sidebar becomes a slide-up bottom sheet ──────────────────────── */
 @media (max-width: 768px) {
   .sidebar {
@@ -21,25 +25,24 @@
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
-    padding: 16px 0 calc(var(--safe-bottom) + 16px);
+    padding: 12px 0 calc(var(--safe-bottom) + 16px);
     z-index: 50;
-    transform: translateY(calc(100% - 56px)); /* peek the handle */
-    transition: transform 0.25s ease;
+    max-height: calc(100dvh - 64px - var(--safe-top));
   }
-  .sidebar::before {
-    content: "";
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 40px;
-    height: 4px;
-    border-radius: 2px;
-    background: #475569;
-  }
-  .sidebar:focus-within,
-  .sidebar:hover {
-    transform: translateY(0);
+
+  .mobileCloseBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 16px 10px;
+    padding: 6px 10px;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    background: #1e293b;
+    color: #cbd5e1;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
   }
 }
 

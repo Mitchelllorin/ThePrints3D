@@ -411,6 +411,11 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   saveWizardState(state.wizardState)
 }
 
+function initialSidebarOpen() {
+  if (typeof window === 'undefined') return true
+  return window.innerWidth > 768
+}
+
 export const useAppStore = create<AppState>()(
   immer((set, get) => {
     const pushHistory = () => {
@@ -428,7 +433,7 @@ export const useAppStore = create<AppState>()(
     model: DEFAULT_MODEL,
     floorGroupingLog: [],
     selectedDrawingId: null,
-    sidebarOpen: true,
+    sidebarOpen: initialSidebarOpen(),
     measurements: [],
     measureMode: false,
     annotations: loadPersistedAnnotations(),

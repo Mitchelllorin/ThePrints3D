@@ -8,6 +8,7 @@ import styles from './Sidebar.module.css'
 export default function Sidebar() {
   const view = useAppStore((s) => s.view)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+  const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
   const projectWallTypes = useAppStore((s) => s.projectWallTypes)
   const detectedWallTypes = useAppStore((s) => s.detectedWallTypes)
   const setProjectWallTypes = useAppStore((s) => s.setProjectWallTypes)
@@ -16,6 +17,14 @@ export default function Sidebar() {
 
   return (
     <aside className={styles.sidebar}>
+      <button
+        className={styles.mobileCloseBtn}
+        onClick={() => setSidebarOpen(false)}
+        aria-label="Close sidebar"
+        title="Close sidebar"
+      >
+        ✕ Close
+      </button>
       {view === 'model' && (
         <>
           <section className={styles.section}>
