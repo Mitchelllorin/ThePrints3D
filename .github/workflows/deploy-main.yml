@@ -52,7 +52,7 @@ jobs:
           VITE_BASE_PATH: ${{ steps.base-path.outputs.value }}
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: dist
 
