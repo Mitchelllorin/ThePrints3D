@@ -5,6 +5,8 @@ import ModelViewer from './components/Viewer3D/ModelViewer'
 import ProjectLibrary from './components/Projects/ProjectLibrary'
 import PrivacyPolicy from './components/Legal/PrivacyPolicy'
 import Toolbox from './components/Tools/Toolbox'
+import OnboardingWizard from './onboarding/OnboardingWizard'
+import { loadWizardState } from './onboarding/storage'
 import { useAppStore } from './store/useAppStore'
 import { useState } from 'react'
 
@@ -12,14 +14,25 @@ function App() {
   const view = useAppStore((s) => s.view)
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  // The wizard renders ONLY on the upload view and ONLY when not skipped/done.
+  // On every other view the existing app UI takes over unchanged.
+  const [wizardActive] = useState(() => {
+    const w = loadWizardState()
+    return !w.skipped && w.step !== 'done'
+  })
+
+  const showWizard = wizardActive && view === 'upload'
 
   return (
     <>
       <AppShell>
-        {view === 'upload' && <DrawingUploader />}
-        {view === 'drawings' && <DrawingManager />}
-        {view === 'model' && <ModelViewer />}
-        {view === 'tools' && <Toolbox />}
+        {showWizard
+          ? <OnboardingWizard />
+          : view === 'upload'   ? <DrawingUploader />
+          : view === 'drawings' ? <DrawingManager />
+          : view === 'model'    ? <ModelViewer />
+          : view === 'tools'    ? <Toolbox />
+          : null}
       </AppShell>
       <button
         onClick={() => setLibraryOpen(true)}

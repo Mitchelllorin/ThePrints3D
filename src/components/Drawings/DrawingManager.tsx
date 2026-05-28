@@ -66,6 +66,8 @@ export default function DrawingManager() {
   const buildModel = useAppStore((s) => s.buildModel)
   const processDrawing = useAppStore((s) => s.processDrawing)
   const setView = useAppStore((s) => s.setView)
+  const setOverlayDrawing = useAppStore((s) => s.setFloorplanOverlayDrawing)
+  const updateFloorplanOverlay = useAppStore((s) => s.updateFloorplanOverlay)
 
   const [symbolRefOpen, setSymbolRefOpen] = useState(false)
   const selected = drawings.find((d) => d.id === selectedDrawingId) ?? null
@@ -106,7 +108,20 @@ export default function DrawingManager() {
             <button className={styles.buildBtn} onClick={buildModel}>
               ⬡ Build 3D
             </button>
-            <button className={styles.processBtn} onClick={() => setView('model')}>
+            <button
+              className={styles.processBtn}
+              onClick={() => {
+                // Same defensive setup as the per-drawing button so the user
+                // doesn't land on a blank grid when nothing is wired up yet.
+                const target = selected ?? drawings.find((d) => d.status === 'ready') ?? drawings[0]
+                if (target) {
+                  setOverlayDrawing(target.id)
+                  updateFloorplanOverlay({ visible: true }, false)
+                  if (target.status === 'pending') processDrawing(target.id)
+                }
+                setView('model')
+              }}
+            >
               ↗ Open 3D Workspace
             </button>
             <button className={styles.processBtn} onClick={exportPilotMetrics} title="Export pilot metrics CSV">
@@ -145,7 +160,23 @@ export default function DrawingManager() {
 
       <div className={styles.preview}>
         {selected ? (
-          <DrawingPreview drawing={selected} onProcess={() => processDrawing(selected.id)} onOpenWorkspace={() => setView('model')} />
+          <DrawingPreview
+            drawing={selected}
+            onProcess={() => processDrawing(selected.id)}
+            onOpenWorkspace={() => {
+              // Make sure the 3D workspace actually has something to render:
+              //   1. point the floorplan overlay at this drawing
+              //   2. ensure the overlay is visible (could've been toggled off)
+              //   3. if the drawing was never analysed, kick that off so the
+              //      rasterized preview becomes available for the texture map
+              setOverlayDrawing(selected.id)
+              updateFloorplanOverlay({ visible: true }, false)
+              if (selected.status === 'pending') {
+                processDrawing(selected.id)
+              }
+              setView('model')
+            }}
+          />
         ) : (
           <div className={styles.noSelection}>
             <span>👆</span>
