@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ThreeEvent } from '@react-three/fiber'
-import { Html, Line } from '@react-three/drei'
+import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { reduceStrokeToWall, snapTraceWallToExisting } from '../../services/wallTraceReducer'
@@ -37,7 +38,7 @@ function toMm(value: number, unit: CalibrationUnit): number {
   }
 }
 
-export default function FloorplanOverlay() {
+export default function FloorplanOverlay({ panelEl }: { panelEl: HTMLDivElement | null }) {
   const drawings = useAppStore((s) => s.drawings)
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const setOverlayDrawing = useAppStore((s) => s.setFloorplanOverlayDrawing)
@@ -414,8 +415,15 @@ export default function FloorplanOverlay() {
         <Line points={calibrationPreviewPoints} color="#f59e0b" lineWidth={4} dashed={Boolean(calibrationB)} dashScale={1.2} dashSize={0.28} gapSize={0.18} />
       )}
 
-      <Html fullscreen>
-        <div className={styles.floorplanPanel}>
+      {/*
+        Blueprint panel UI — rendered via a React DOM portal into a div that
+        sits OUTSIDE the Three.js <Canvas> in the regular DOM tree.
+        This fully decouples the panel from any camera/scene transforms and
+        ensures touch gestures on the panel never propagate into the WebGL
+        renderer or cause the workspace to appear to move.
+      */}
+      {panelEl && createPortal(
+        <>
           <input
             ref={fileInputRef}
             type="file"
@@ -424,8 +432,9 @@ export default function FloorplanOverlay() {
             style={{ display: 'none' }}
             onChange={handleUpload}
           />
+          <div className={styles.floorplanPanel}>
 
-          <div className={styles.floorplanPanelHeader}>
+            <div className={styles.floorplanPanelHeader}>
             <strong>3D Workspace Print Overlay</strong>
             <div className={styles.floorplanActionRow}>
               <button className={styles.floorplanBtn} onClick={() => fileInputRef.current?.click()}>
@@ -599,7 +608,9 @@ export default function FloorplanOverlay() {
             </div>
           </div>
         )}
-      </Html>
+        </>,
+        panelEl
+      )}
     </>
   )
 }
