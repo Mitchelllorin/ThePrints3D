@@ -88,6 +88,8 @@ src/
 │   ├── wallDetector.ts         # Heuristic edge-based wall detector
 │   ├── enhancedWallDetector.ts # Post-processing & refinement
 │   ├── lineClassifier.ts       # Line-segment wall/non-wall classifier
+│   ├── noisyPrintFilter.ts     # Context-aware filtering for noisy architectural prints
+│   ├── openSourceDrawingContext.ts # Open drawing priors used by the noise filter
 │   ├── wallTraceReducer.ts     # Wall-trace simplification
 │   ├── wallTypeClassifier.ts   # Interior / exterior / partition labelling
 │   ├── openingDetector.ts      # Door & window gap detection
@@ -165,7 +167,7 @@ A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smo
 
 ## ⚠️ Known limitations
 
-- Wall detection is heuristic and may over/under-detect on noisy scans or text-heavy plans.
+- Wall detection includes adaptive noisy-print filtering, but extreme low-contrast scans can still require manual tracing.
 - 3D geometry falls back to procedural generation when parsed wall fidelity is low.
 - Scale inference is best-effort; manual calibration may be needed for non-standard title blocks.
 - No server-side persistence — all state lives in browser memory / IndexedDB.

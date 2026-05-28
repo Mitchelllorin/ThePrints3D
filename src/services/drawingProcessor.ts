@@ -10,6 +10,7 @@ import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
 import { inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
+import { filterWallsForNoisyPrint } from './noisyPrintFilter'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -107,6 +108,14 @@ export async function processDrawing(
         mergeGapPx: 8,
       })
     }
+    const filtered = filterWallsForNoisyPrint({
+      walls: result.walls,
+      classified: result.classified,
+      stats: result.stats,
+      imageWidth: raster.imageData.width,
+      imageHeight: raster.imageData.height,
+      minWallLengthPx: isRasterPhoto ? 40 : 55,
+    })
     const classificationStats = result.stats
     setProgress(92)
 
@@ -129,7 +138,7 @@ export async function processDrawing(
 
     // 5. Classify each detected wall into a structural type (2x4 / 2x6 / etc.)
     //    Only meaningful once scale is known — otherwise leave as 'unknown'.
-    const walls: ParsedWall[] = result.walls.map((w) => {
+    const walls: ParsedWall[] = filtered.walls.map((w) => {
       const finishedMm = pxToMm(w.thickness, effectiveScale)
       if (finishedMm === null) {
         return {
