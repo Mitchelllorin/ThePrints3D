@@ -3,6 +3,21 @@
   width: 100%;
   height: 100%;
   background: #060d1a;
+  /* Prevent any two-finger pan/scroll gesture from propagating out of the
+     3D workspace to a scrolling ancestor — only JavaScript (OrbitControls)
+     should handle touch input inside this area. */
+  touch-action: none;
+}
+
+/* Portal target for the FloorplanOverlay UI panel.
+   Lives OUTSIDE the <Canvas> so it never inherits Three.js / camera transforms.
+   pointer-events: none on the root so the transparent area stays click-through;
+   the panel itself opts back in with pointer-events: all. */
+.floorplanPanelRoot {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
 }
 
 /* ── Measure toolbar ──────────────────────────────────────────────────────────── */
