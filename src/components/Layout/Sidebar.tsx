@@ -12,10 +12,8 @@ export default function Sidebar() {
   const detectedWallTypes = useAppStore((s) => s.detectedWallTypes)
   const setProjectWallTypes = useAppStore((s) => s.setProjectWallTypes)
 
-  if (!sidebarOpen) return null
-
   return (
-    <aside className={styles.sidebar}>
+    <aside className={`${styles.sidebar} ${!sidebarOpen ? styles.sidebarCollapsed : ''}`}>
       {view === 'model' && (
         <>
           <section className={styles.section}>
