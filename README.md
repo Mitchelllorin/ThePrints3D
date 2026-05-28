@@ -205,6 +205,7 @@ A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smo
 2. Make your changes and add tests where applicable
 3. Ensure all quality gates pass: `npm run lint && npm run test && npm run build`
 4. Open a pull request — the CI workflow and a preview deployment will run automatically
+5. If you need a preview before opening a PR, run the **PR Preview** workflow manually and optionally provide the branch/SHA in the `ref` input; the workflow summary will include the preview URL
 
 ---
 
@@ -212,4 +213,4 @@ A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smo
 
 The CI workflow (`.github/workflows/ci.yml`) runs **lint → test → build** on every push and pull request.
 
-The preview workflow (`.github/workflows/preview.yml`) builds and deploys a preview environment for every pull request.
+The preview workflow (`.github/workflows/preview.yml`) builds and deploys a preview environment for every pull request. You can also run it manually for any branch/SHA, and the workflow summary will include the preview URL when the deploy API returns one.
