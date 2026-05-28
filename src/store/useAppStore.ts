@@ -173,6 +173,7 @@ const DEFAULT_FLOORPLAN_OVERLAY: FloorplanOverlayState = {
   locked: false,
   snapToGrid: true,
   calibrationMode: false,
+  traceModeActive: false,
   guidedStep: 1,
   position: [0, 0],
   scale: [12, 8],
