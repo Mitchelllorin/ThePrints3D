@@ -35,7 +35,10 @@ export default function OnboardingWizard() {
   )
 
   useEffect(() => {
-    if (state.step === 'upload' && drawings.length > 0) {
+    if (state.step !== 'upload' || drawings.length === 0) return
+    // Defer the state update one tick so we don't synchronously update React
+    // state inside the effect body (eslint react-hooks/no-sync-in-effect).
+    const handle = setTimeout(() => {
       const inference = inferProjectMeta(drawings)
       setState((s) => ({
         ...s,
@@ -43,7 +46,8 @@ export default function OnboardingWizard() {
         meta: mergeMeta(s.meta, inference.detected),
         step: 'confirm',
       }))
-    }
+    }, 0)
+    return () => clearTimeout(handle)
   }, [drawings, state.step, setState])
 
   const handleSkip = useCallback(() => {
