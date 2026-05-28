@@ -6,6 +6,7 @@ import ProjectLibrary from './components/Projects/ProjectLibrary'
 import PrivacyPolicy from './components/Legal/PrivacyPolicy'
 import Toolbox from './components/Tools/Toolbox'
 import OnboardingWizard from './onboarding/OnboardingWizard'
+import FeedbackButton from './components/Feedback/FeedbackButton'
 import { loadWizardState } from './onboarding/storage'
 import { useAppStore } from './store/useAppStore'
 import { useState } from 'react'
@@ -81,6 +82,7 @@ function App() {
       </button>
       {libraryOpen && <ProjectLibrary onClose={() => setLibraryOpen(false)} />}
       {privacyOpen && <PrivacyPolicy onClose={() => setPrivacyOpen(false)} />}
+      <FeedbackButton />
     </>
   )
 }
