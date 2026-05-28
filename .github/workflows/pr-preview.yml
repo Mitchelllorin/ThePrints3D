@@ -1,1 +1,85 @@
+name: Deploy PR Preview
 
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      preview_segment: ${{ steps.preview-path.outputs.preview_segment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Compute preview paths
+        id: preview-path
+        shell: bash
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          preview_segment="preview/pr-${PR_NUMBER}"
+          if [ -n "$BASE_PATH" ]; then
+            echo "vite_base=${BASE_PATH%/}/${preview_segment}/" >> "$GITHUB_OUTPUT"
+          else
+            echo "vite_base=/${preview_segment}/" >> "$GITHUB_OUTPUT"
+          fi
+          echo "preview_segment=${preview_segment}" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build preview
+        run: npm run build
+        env:
+          VITE_BASE_PATH: ${{ steps.preview-path.outputs.vite_base }}
+
+      - name: Stage preview artifact
+        shell: bash
+        env:
+          PREVIEW_SEGMENT: ${{ steps.preview-path.outputs.preview_segment }}
+        run: |
+          mkdir -p ".pages/${PREVIEW_SEGMENT}"
+          cp -R dist/. ".pages/${PREVIEW_SEGMENT}/"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pages-preview
+      url: ${{ format('{0}{1}/', steps.deployment.outputs.page_url, needs.build.outputs.preview_segment) }}
+    steps:
+      - name: Deploy PR preview
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          preview: true
