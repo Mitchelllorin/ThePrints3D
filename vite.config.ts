@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import { VitePWA } from 'vite-plugin-pwa'
+console.log("THIS IS A REAL CHANGE", Math.random());
 
 // https://vite.dev/config/
 export default defineConfig({
