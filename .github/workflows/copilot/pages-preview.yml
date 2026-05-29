@@ -54,3 +54,5 @@ jobs:
           message: |
             🚀 **PR Preview Ready**
             https://mitchelllorin.github.io/BluePrint3D/pr-${{ github.event.pull_request.number }}/
+            # trigger
+
