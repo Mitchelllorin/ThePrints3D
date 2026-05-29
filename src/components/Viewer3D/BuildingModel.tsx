@@ -56,12 +56,16 @@ function buildRealWalls(
   floorHeight: number,
   wallMat: THREE.MeshStandardMaterial,
   userWallMat: THREE.MeshStandardMaterial,
+  selectedWallMat: THREE.MeshStandardMaterial,
    layerId: string,
    defaultThicknessM: number,
+   drawingId: string,
+   selectedWallKey: string | null,
 ) {
   const s = mmPerPx / 1000  // px → metres
 
-  for (const w of walls) {
+  for (let i = 0; i < walls.length; i++) {
+    const w = walls[i]
     const wx1 = (w.x1 - cx) * s
     const wz1 = (w.y1 - cy) * s
     const wx2 = (w.x2 - cx) * s
@@ -73,8 +77,19 @@ function buildRealWalls(
     const thick = w.thickness > 1 ? w.thickness * s : defaultThicknessM
     const angle = Math.atan2(wz2 - wz1, wx2 - wx1)
 
+    const wallKey = `${drawingId}:${i}`
+    const isSelected = selectedWallKey === wallKey
+    let mat: THREE.MeshStandardMaterial
+    if (isSelected) {
+      mat = selectedWallMat
+    } else if (w.source === 'user') {
+      mat = userWallMat
+    } else {
+      mat = wallMat
+    }
+
     const geo = new THREE.BoxGeometry(len, floorHeight - 0.15, Math.max(thick, 0.05))
-    const mesh = new THREE.Mesh(geo, w.source === 'user' ? userWallMat : wallMat)
+    const mesh = new THREE.Mesh(geo, mat)
 
     mesh.position.set(
       (wx1 + wx2) / 2,
@@ -85,6 +100,9 @@ function buildRealWalls(
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.userData.layer = layerId
+    mesh.userData.wallKey = wallKey
+    mesh.userData.wallDrawingId = drawingId
+    mesh.userData.wallIndex = i
     group.add(mesh)
   }
 }
@@ -473,6 +491,7 @@ export default function BuildingModel({ layers }: Props) {
   const model = useAppStore((s) => s.model)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
+  const selectedWallKey = useAppStore((s) => s.selectedWallKey)
 
   useEffect(() => {
     if (!groupRef.current) return
@@ -578,6 +597,12 @@ export default function BuildingModel({ layers }: Props) {
             if (!wallLayer?.visible) break
             const wMat = mat(wallLayer.color, wallLayer.opacity, { roughness: 0.7 })
             const userWMat = mat('#60a5fa', wallLayer.opacity, { roughness: 0.45, metalness: 0.15 })
+            const selWMat = mat('#f59e0b', wallLayer.opacity, {
+              roughness: 0.3,
+              metalness: 0.2,
+              emissive: new THREE.Color('#f59e0b'),
+              emissiveIntensity: 0.35,
+            })
             if (wallDrawings.length > 0) {
               for (const d of wallDrawings) {
                 const mmPx = d.scaleMmPerPx ?? globalMmPerPx
@@ -591,8 +616,11 @@ export default function BuildingModel({ layers }: Props) {
                   fh,
                   wMat,
                   userWMat,
+                  selWMat,
                   'walls',
                   sceneConfig.defaultWallThicknessM,
+                  d.id,
+                  selectedWallKey,
                 )
               }
             } else {
@@ -676,7 +704,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, selectedWallKey])
 
   return <group ref={groupRef} />
 }

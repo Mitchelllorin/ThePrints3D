@@ -242,6 +242,10 @@ interface AppState {
   detectedWallTypes: DetectedWallType[]
   wallDetectionConfig: WallDetectionConfig
 
+  // Post-3D Editor
+  editMode: boolean
+  selectedWallKey: string | null  // "drawingId:wallIndex"
+
   // Actions
   setView: (view: AppView) => void
   addDrawings: (files: File[]) => void
@@ -299,6 +303,11 @@ interface AppState {
   setProjectWallTypes: (types: WallType[]) => void
   exportCorrectionDataset: () => string
   setWallDetectionConfig: (patch: Partial<WallDetectionConfig>) => void
+  // Post-3D Editor actions
+  setEditMode: (active: boolean) => void
+  setSelectedWallKey: (key: string | null) => void
+  updateParsedWall: (drawingId: string, wallIndex: number, patch: Partial<ParsedWall>) => void
+  deleteParsedWall: (drawingId: string, wallIndex: number) => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -453,6 +462,10 @@ export const useAppStore = create<AppState>()(
     correctionCount: defaultSmartProcessingState.correctionCount,
     detectedWallTypes: [],
     wallDetectionConfig: { ...DEFAULT_WALL_DETECTION_CONFIG },
+
+    // Post-3D Editor defaults
+    editMode: false,
+    selectedWallKey: null,
 
     setView: (view) =>
       set((s) => {
@@ -1106,6 +1119,44 @@ export const useAppStore = create<AppState>()(
         })),
         correctionCount: state.correctionCount,
       }, null, 2)
+    },
+
+    // ─── Post-3D Editor Actions ────────────────────────────────────────────────
+
+    setEditMode: (active) =>
+      set((s) => {
+        s.editMode = active
+        if (active) {
+          s.measureMode = false
+          s.annotateMode = false
+        }
+        if (!active) {
+          s.selectedWallKey = null
+        }
+      }),
+
+    setSelectedWallKey: (key) =>
+      set((s) => {
+        s.selectedWallKey = key
+      }),
+
+    updateParsedWall: (drawingId, wallIndex, patch) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === drawingId)
+        if (!d || wallIndex < 0 || wallIndex >= d.parsedWalls.length) return
+        Object.assign(d.parsedWalls[wallIndex], patch)
+      })
+    },
+
+    deleteParsedWall: (drawingId, wallIndex) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === drawingId)
+        if (!d || wallIndex < 0 || wallIndex >= d.parsedWalls.length) return
+        d.parsedWalls.splice(wallIndex, 1)
+        s.selectedWallKey = null
+      })
     },
     }
   })
