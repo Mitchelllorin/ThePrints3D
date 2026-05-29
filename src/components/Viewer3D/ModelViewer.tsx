@@ -18,6 +18,8 @@ import CameraHud from './CameraHud'
 import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
 import FloorplanOverlay from './FloorplanOverlay'
+import WallEditorController from './WallEditorController'
+import ElementEditorPanel from './ElementEditorPanel'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -190,6 +192,8 @@ export default function ModelViewer() {
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
   const measurements = useAppStore((s) => s.measurements)
   const overlay = useAppStore((s) => s.floorplanOverlay)
+  const editMode = useAppStore((s) => s.editMode)
+  const setEditMode = useAppStore((s) => s.setEditMode)
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm] = useState<FormState | null>(null)
@@ -247,6 +251,13 @@ export default function ModelViewer() {
             )}
           </button>
           <button
+            className={`${styles.toolBtn} ${editMode ? styles.toolBtnActive : ''}`}
+            onClick={() => setEditMode(!editMode)}
+            title={editMode ? 'Exit edit mode' : 'Edit mode — click a wall to select, drag to move, modify in the panel'}
+          >
+            ✏️ {editMode ? 'Editing…' : 'Edit'}
+          </button>
+          <button
             className={styles.toolBtn}
             onClick={() => {
               const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
@@ -267,9 +278,13 @@ export default function ModelViewer() {
           >
             📤 Share PNG
           </button>
-          {(measureMode || annotateMode) && (
+          {(measureMode || annotateMode || editMode) && (
             <span className={styles.toolHint}>
-              {measureMode ? 'Click a surface to place point A, then point B' : 'Click a surface to place an annotation pin'}
+              {measureMode
+                ? 'Click a surface to place point A, then point B'
+                : annotateMode
+                ? 'Click a surface to place an annotation pin'
+                : 'Click a wall to select · Drag to move · Right-drag to pan'}
             </span>
           )}
         </div>
@@ -278,6 +293,9 @@ export default function ModelViewer() {
       {/* Camera preset HUD — visible whenever the model exists */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
       {model.status === 'ready' && <ProductPlacementPanel />}
+
+      {/* Element Editor Panel — outside Canvas so it's a normal DOM element */}
+      {model.status === 'ready' && <ElementEditorPanel />}
 
       {model.status === 'ready' && (
         <aside
@@ -394,6 +412,7 @@ export default function ModelViewer() {
             {model.status === 'ready' && (
               <AnnotationTool onPlaceRequest={handlePlaceRequest} />
             )}
+            {model.status === 'ready' && editMode && <WallEditorController />}
           </>
         )}
 
