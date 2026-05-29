@@ -37,3 +37,12 @@ jobs:
         uses: actions/deploy-pages@v4
         with:
           preview: true
+      - name: Comment PR with preview URL
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: pr-preview
+          message: |
+            🚀 **PR Preview is ready!**
+
+            **URL:** https://mitchelllorin.github.io/BluePrint3D/pr-${{ github.event.pull_request.number }}/
