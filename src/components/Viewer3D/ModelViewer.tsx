@@ -18,6 +18,7 @@ import CameraHud from './CameraHud'
 import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
 import FloorplanOverlay from './FloorplanOverlay'
+import FloorplanPanel from './FloorplanPanel'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -193,9 +194,7 @@ export default function ModelViewer() {
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm] = useState<FormState | null>(null)
-  // Portal target for FloorplanOverlay's UI panel — rendered OUTSIDE the Canvas
-  // so it is never subject to Three.js / camera transforms.
-  const [floorplanPanelEl, setFloorplanPanelEl] = useState<HTMLDivElement | null>(null)
+
 
   // Disable orbit while the user is actively tracing or calibrating on the overlay
   const orbitEnabled = !overlay.traceModeActive && !overlay.calibrationMode
@@ -342,14 +341,11 @@ export default function ModelViewer() {
         />
       )}
 
-      {/*
-        Portal target for the FloorplanOverlay blueprint panel.
-        This div lives OUTSIDE the <Canvas> so the panel is never a child of the
-        Three.js/WebGL container and can never inherit camera or scene transforms.
-        Using a callback ref (setState) ensures FloorplanOverlay re-renders once
-        the element is available and createPortal can mount into it.
-      */}
-      <div ref={setFloorplanPanelEl} className={styles.floorplanPanelRoot} />
+      {/* FloorplanPanel renders DOM controls (inputs, buttons) outside the
+         Canvas so they stay in the react-dom reconciler. */}
+      <div className={styles.floorplanPanelRoot}>
+        <FloorplanPanel />
+      </div>
 
       <Canvas
         shadows
@@ -383,7 +379,7 @@ export default function ModelViewer() {
           position={[0, -0.01, 0]}
         />
 
-        <FloorplanOverlay panelEl={floorplanPanelEl} />
+        <FloorplanOverlay />
 
         {model.status === 'building' && <BuildingProgress />}
         {(model.status === 'building' || model.status === 'ready') && (
