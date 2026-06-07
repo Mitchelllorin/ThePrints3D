@@ -1,3 +1,14 @@
+// ─── Construction Engine ────────────────────────────────────────────────────────
+
+export type {
+  ConstructionLayer,
+  Decision,
+  DecisionOption,
+  BuildResult,
+  PlacedComponent,
+  FramingComponentType,
+} from '../services/decisions'
+
 // ─── Drawing Set ───────────────────────────────────────────────────────────────
 
 import type { LineClassificationStats as _LineClassificationStats } from '../symbols/types'
