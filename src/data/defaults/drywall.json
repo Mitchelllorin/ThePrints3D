@@ -1,0 +1,94 @@
+{
+  "boardTypes": {
+    "regular": {
+      "thicknessMm": 12.7,
+      "label": "1/2\" regular gypsum",
+      "fireRating": "none"
+    },
+    "type-x": {
+      "thicknessMm": 15.9,
+      "label": "5/8\" Type X (fire-rated)",
+      "fireRating": "1-hour"
+    },
+    "type-c": {
+      "thicknessMm": 15.9,
+      "label": "5/8\" Type C (enhanced fire)",
+      "fireRating": "2-hour"
+    },
+    "moisture-resistant": {
+      "thicknessMm": 12.7,
+      "label": "1/2\" moisture-resistant (green board)",
+      "fireRating": "none"
+    },
+    "cement-board": {
+      "thicknessMm": 12.7,
+      "label": "1/2\" cement board (wet areas)",
+      "fireRating": "none"
+    }
+  },
+  "configurations": {
+    "single-layer": {
+      "layers": 1,
+      "boardType": "regular",
+      "label": "Single layer — standard interior"
+    },
+    "single-fire": {
+      "layers": 1,
+      "boardType": "type-x",
+      "label": "Single layer Type X — garage/utility"
+    },
+    "double-layer": {
+      "layers": 2,
+      "boardType": "type-x",
+      "label": "Double layer Type X — demising/party wall"
+    },
+    "wet-area": {
+      "layers": 1,
+      "boardType": "cement-board",
+      "label": "Cement board — shower/tub surround"
+    }
+  },
+  "fastening": {
+    "screwSpacingMm": 305,
+    "edgeSpacingMm": 203,
+    "label": "Screws at 12\" OC field, 8\" OC edges"
+  },
+  "buildingTypeDefaults": {
+    "residential-single": {
+      "interior": "single-layer",
+      "exterior": "single-fire",
+      "demising": "single-layer",
+      "wet": "wet-area"
+    },
+    "residential-multi": {
+      "interior": "single-layer",
+      "exterior": "single-fire",
+      "demising": "double-layer",
+      "wet": "wet-area"
+    },
+    "commercial": {
+      "interior": "single-fire",
+      "exterior": "single-fire",
+      "demising": "double-layer",
+      "wet": "wet-area"
+    },
+    "industrial": {
+      "interior": "single-layer",
+      "exterior": "single-fire",
+      "demising": "double-layer",
+      "wet": "cement-board"
+    },
+    "institutional": {
+      "interior": "single-fire",
+      "exterior": "double-layer",
+      "demising": "double-layer",
+      "wet": "wet-area"
+    },
+    "unknown": {
+      "interior": "single-layer",
+      "exterior": "single-fire",
+      "demising": "single-layer",
+      "wet": "wet-area"
+    }
+  }
+}

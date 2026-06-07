@@ -1,0 +1,78 @@
+{
+  "foundationTypes": {
+    "slab-on-grade": {
+      "depthM": 0.35,
+      "label": "Slab-on-grade",
+      "note": "Shallow excavation, standard for warm climates"
+    },
+    "crawl-space": {
+      "depthM": 0.6,
+      "label": "Crawl space",
+      "note": "Shallow perimeter footings with ventilated crawl"
+    },
+    "full-basement": {
+      "depthM": 2.4,
+      "label": "Full basement",
+      "note": "Deep excavation for habitable below-grade space"
+    },
+    "pier-and-beam": {
+      "depthM": 0.9,
+      "label": "Pier and beam",
+      "note": "Point footings, minimal site disturbance"
+    },
+    "strip-footing": {
+      "depthM": 0.8,
+      "label": "Strip footing",
+      "note": "Continuous footing under load-bearing walls"
+    }
+  },
+  "frostLineDepths": {
+    "warm": { "depthM": 0.3, "label": "Warm climate (no freeze)" },
+    "moderate": { "depthM": 0.6, "label": "Moderate climate" },
+    "cold": { "depthM": 1.2, "label": "Cold climate (deep frost)" },
+    "severe": { "depthM": 1.8, "label": "Severe climate (permafrost region)" }
+  },
+  "backfillMaterial": {
+    "native-soil": { "label": "Native soil (re-use excavated)" },
+    "granular": { "label": "Granular fill (gravel/sand)" },
+    "compacted-fill": { "label": "Compacted engineered fill" }
+  },
+  "buildingTypeDefaults": {
+    "residential-single": {
+      "foundationType": "slab-on-grade",
+      "frostLine": "moderate",
+      "backfill": "native-soil",
+      "overDigM": 0.3
+    },
+    "residential-multi": {
+      "foundationType": "full-basement",
+      "frostLine": "moderate",
+      "backfill": "granular",
+      "overDigM": 0.6
+    },
+    "commercial": {
+      "foundationType": "strip-footing",
+      "frostLine": "moderate",
+      "backfill": "compacted-fill",
+      "overDigM": 0.6
+    },
+    "industrial": {
+      "foundationType": "slab-on-grade",
+      "frostLine": "moderate",
+      "backfill": "compacted-fill",
+      "overDigM": 0.3
+    },
+    "institutional": {
+      "foundationType": "strip-footing",
+      "frostLine": "moderate",
+      "backfill": "compacted-fill",
+      "overDigM": 0.6
+    },
+    "unknown": {
+      "foundationType": "slab-on-grade",
+      "frostLine": "moderate",
+      "backfill": "native-soil",
+      "overDigM": 0.3
+    }
+  }
+}

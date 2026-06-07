@@ -1,0 +1,69 @@
+{
+  "wallFinishes": {
+    "paint-flat": { "thicknessMm": 0.1, "label": "Flat paint" },
+    "paint-eggshell": { "thicknessMm": 0.1, "label": "Eggshell paint" },
+    "paint-semigloss": { "thicknessMm": 0.1, "label": "Semi-gloss paint (wet areas)" },
+    "ceramic-tile": { "thicknessMm": 10, "label": "Ceramic tile + thinset" },
+    "porcelain-tile": { "thicknessMm": 12, "label": "Porcelain tile + thinset" },
+    "stone-veneer": { "thicknessMm": 20, "label": "Stone veneer" },
+    "wood-panel": { "thicknessMm": 12, "label": "Wood paneling" }
+  },
+  "floorFinishes": {
+    "hardwood": { "thicknessMm": 19, "label": "3/4\" hardwood" },
+    "engineered": { "thicknessMm": 12, "label": "Engineered wood" },
+    "lvp": { "thicknessMm": 5, "label": "Luxury vinyl plank" },
+    "ceramic-tile": { "thicknessMm": 12, "label": "Ceramic tile + thinset" },
+    "carpet": { "thicknessMm": 12, "label": "Carpet + pad" },
+    "polished-concrete": { "thicknessMm": 0, "label": "Polished concrete (existing slab)" },
+    "epoxy": { "thicknessMm": 2, "label": "Epoxy coating" }
+  },
+  "ceilingFinishes": {
+    "paint": { "thicknessMm": 0.1, "label": "Painted drywall ceiling" },
+    "suspended-tile": { "thicknessMm": 15, "dropMm": 100, "label": "Suspended acoustic tile" },
+    "exposed": { "thicknessMm": 0, "label": "Exposed structure" }
+  },
+  "buildingTypeDefaults": {
+    "residential-single": {
+      "wallFinish": "paint-eggshell",
+      "floorFinish": "hardwood",
+      "ceilingFinish": "paint",
+      "wetWallFinish": "ceramic-tile",
+      "wetFloorFinish": "ceramic-tile"
+    },
+    "residential-multi": {
+      "wallFinish": "paint-eggshell",
+      "floorFinish": "engineered",
+      "ceilingFinish": "paint",
+      "wetWallFinish": "ceramic-tile",
+      "wetFloorFinish": "porcelain-tile"
+    },
+    "commercial": {
+      "wallFinish": "paint-flat",
+      "floorFinish": "lvp",
+      "ceilingFinish": "suspended-tile",
+      "wetWallFinish": "ceramic-tile",
+      "wetFloorFinish": "ceramic-tile"
+    },
+    "industrial": {
+      "wallFinish": "paint-flat",
+      "floorFinish": "epoxy",
+      "ceilingFinish": "exposed",
+      "wetWallFinish": "paint-semigloss",
+      "wetFloorFinish": "epoxy"
+    },
+    "institutional": {
+      "wallFinish": "paint-eggshell",
+      "floorFinish": "lvp",
+      "ceilingFinish": "suspended-tile",
+      "wetWallFinish": "porcelain-tile",
+      "wetFloorFinish": "porcelain-tile"
+    },
+    "unknown": {
+      "wallFinish": "paint-eggshell",
+      "floorFinish": "hardwood",
+      "ceilingFinish": "paint",
+      "wetWallFinish": "ceramic-tile",
+      "wetFloorFinish": "ceramic-tile"
+    }
+  }
+}
