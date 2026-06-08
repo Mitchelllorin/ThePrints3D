@@ -1,9 +1,5 @@
-import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, DrawingType, ScaleConfidence } from '../../types'
-import SymbolReferencePanel from './SymbolReferencePanel'
-import { buildPilotSnapshot, downloadPilotMetricsCsv } from '../../services/pilotMetrics'
-import { logEvent } from '../../services/logger'
 import styles from './DrawingManager.module.css'
 
 const DRAWING_TYPES: { value: DrawingType; label: string }[] = [
@@ -63,83 +59,56 @@ export default function DrawingManager() {
   const setDrawingType = useAppStore((s) => s.setDrawingType)
   const selectDrawing = useAppStore((s) => s.selectDrawing)
   const selectedDrawingId = useAppStore((s) => s.selectedDrawingId)
-  const buildModel = useAppStore((s) => s.buildModel)
   const processDrawing = useAppStore((s) => s.processDrawing)
   const setView = useAppStore((s) => s.setView)
   const setOverlayDrawing = useAppStore((s) => s.setFloorplanOverlayDrawing)
   const updateFloorplanOverlay = useAppStore((s) => s.updateFloorplanOverlay)
 
-  const [symbolRefOpen, setSymbolRefOpen] = useState(false)
   const selected = drawings.find((d) => d.id === selectedDrawingId) ?? null
 
-  const processAll = () => {
-    for (const d of drawings) {
-      if (d.status === 'pending') processDrawing(d.id)
-    }
-  }
-
-  const exportPilotMetrics = () => {
-    const snapshot = buildPilotSnapshot(drawings)
-    downloadPilotMetricsCsv([snapshot])
-    logEvent('pilot.metrics.exported', {
-      drawingCount: drawings.length,
-      readyCount: drawings.filter((d) => d.status === 'ready').length,
-    })
-  }
-
-  const anyPending = drawings.some((d) => d.status === 'pending')
   const anyProcessing = drawings.some((d) => d.status === 'processing')
   const readyCount = drawings.filter((d) => d.status === 'ready').length
+  const errorCount = drawings.filter((d) => d.status === 'error').length
+
+  const openWorkspace = (drawing?: Drawing) => {
+    const target = drawing ?? selected ?? drawings.find((d) => d.status === 'ready') ?? drawings[0]
+    if (target) {
+      setOverlayDrawing(target.id)
+      updateFloorplanOverlay({ visible: true }, false)
+      if (target.status === 'pending') processDrawing(target.id)
+    }
+    setView('model')
+  }
 
   return (
     <div className={styles.page}>
       <div className={styles.list}>
         <div className={styles.listHeader}>
-          <h2 className={styles.listTitle}>Drawing Set ({drawings.length})</h2>
+          <h2 className={styles.listTitle}>
+            Drawings
+            <span className={styles.listCount}>{drawings.length}</span>
+          </h2>
           <div className={styles.listActions}>
-            {anyPending && !anyProcessing && (
-              <button className={styles.processBtn} onClick={processAll} title="Process all unprocessed drawings">
-                ⚙ Analyse All
-              </button>
-            )}
             {anyProcessing && (
               <span className={styles.processingBadge}>⚙ Analysing…</span>
             )}
-            <button className={styles.buildBtn} onClick={buildModel}>
-              ⬡ Build 3D
-            </button>
-            <button
-              className={styles.processBtn}
-              onClick={() => {
-                // Same defensive setup as the per-drawing button so the user
-                // doesn't land on a blank grid when nothing is wired up yet.
-                const target = selected ?? drawings.find((d) => d.status === 'ready') ?? drawings[0]
-                if (target) {
-                  setOverlayDrawing(target.id)
-                  updateFloorplanOverlay({ visible: true }, false)
-                  if (target.status === 'pending') processDrawing(target.id)
-                }
-                setView('model')
-              }}
-            >
-              ↗ Open 3D Workspace
-            </button>
-            <button className={styles.processBtn} onClick={exportPilotMetrics} title="Export pilot metrics CSV">
-              ⬇ Export Pilot CSV
-            </button>
-            <button
-              className={styles.processBtn}
-              onClick={() => setSymbolRefOpen(true)}
-              title="View floor plan symbol reference"
-            >
-              📐 Symbols
-            </button>
+            {readyCount > 0 && !anyProcessing && (
+              <button className={styles.buildBtn} onClick={() => openWorkspace()}>
+                Open in 3D →
+              </button>
+            )}
           </div>
         </div>
 
-        {readyCount > 0 && (
+        {errorCount > 0 && (
+          <div className={styles.errorBanner}>
+            ⚠ {errorCount} drawing{errorCount !== 1 ? 's' : ''} failed to process — check the file format and try re-uploading.
+          </div>
+        )}
+
+        {readyCount > 0 && !anyProcessing && (
           <div className={styles.readySummary}>
-            {readyCount} drawing{readyCount !== 1 ? 's' : ''} analysed — calibration and tracing now happen in the 3D workspace overlay.
+            {readyCount} of {drawings.length} ready — open in 3D to calibrate scale and trace walls.
           </div>
         )}
 
@@ -163,19 +132,7 @@ export default function DrawingManager() {
           <DrawingPreview
             drawing={selected}
             onProcess={() => processDrawing(selected.id)}
-            onOpenWorkspace={() => {
-              // Make sure the 3D workspace actually has something to render:
-              //   1. point the floorplan overlay at this drawing
-              //   2. ensure the overlay is visible (could've been toggled off)
-              //   3. if the drawing was never analysed, kick that off so the
-              //      rasterized preview becomes available for the texture map
-              setOverlayDrawing(selected.id)
-              updateFloorplanOverlay({ visible: true }, false)
-              if (selected.status === 'pending') {
-                processDrawing(selected.id)
-              }
-              setView('model')
-            }}
+            onOpenWorkspace={() => openWorkspace(selected)}
           />
         ) : (
           <div className={styles.noSelection}>
@@ -184,10 +141,6 @@ export default function DrawingManager() {
           </div>
         )}
       </div>
-
-      {symbolRefOpen && (
-        <SymbolReferencePanel onClose={() => setSymbolRefOpen(false)} />
-      )}
     </div>
   )
 }
@@ -251,10 +204,21 @@ function DrawingCard({ drawing, isSelected, onSelect, onRemove, onTypeChange, on
         )}
 
         {drawing.status === 'ready' && drawing.parsedWalls.length > 0 && (
-          <p className={styles.wallCount}>{drawing.parsedWalls.length} walls · {drawing.scaleNotation ?? '3D calibration pending'}</p>
+          <p className={styles.wallCount}>{drawing.parsedWalls.length} walls · {drawing.scaleNotation ?? 'calibrate in 3D'}</p>
         )}
         {drawing.status === 'ready' && drawing.scaleConfidence === 'fallback' && (
-          <p className={styles.cardFallbackWarn}>⚠ Finish scale setup in the 3D workspace</p>
+          <p className={styles.cardFallbackWarn}>⚠ Set scale in 3D workspace</p>
+        )}
+        {drawing.status === 'error' && (
+          <p className={styles.cardError}>
+            ✗ Failed to process
+            <button
+              className={styles.retryBtn}
+              onClick={(e) => { e.stopPropagation(); onProcess() }}
+            >
+              Retry
+            </button>
+          </p>
         )}
       </div>
 
@@ -306,15 +270,22 @@ function DrawingPreview({ drawing, onProcess, onOpenWorkspace }: { drawing: Draw
         </div>
 
         <div className={styles.previewActions}>
-          {drawing.status === 'pending' && (
+          {(drawing.status === 'pending' || drawing.status === 'error') && (
             <button className={styles.actionBtn} onClick={onProcess}>
-              ⚙ Analyse
+              {drawing.status === 'error' ? '↺ Retry analysis' : '⚙ Analyse'}
             </button>
           )}
-          <button className={styles.actionBtn} onClick={onOpenWorkspace}>
-            ↗ Calibrate / Trace in 3D
-          </button>
+          {drawing.status === 'ready' && (
+            <button className={styles.actionBtn} onClick={onOpenWorkspace}>
+              Open in 3D →
+            </button>
+          )}
         </div>
+        {drawing.status === 'error' && drawing.errorMessage && (
+          <div className={styles.previewError}>
+            <strong>Error:</strong> {drawing.errorMessage}
+          </div>
+        )}
       </div>
 
       <div className={styles.previewCanvas}>

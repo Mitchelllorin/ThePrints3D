@@ -2,155 +2,94 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
-  padding: 0 16px;
-  background: #0f172a;
-  border-bottom: 1px solid #1e293b;
+  height: 48px;
+  padding: 0 20px;
+  background: rgba(15, 23, 42, var(--bp-topbar-opacity, 0.95));
+  border-bottom: 1px solid rgba(30, 41, 59, 0.6);
   flex-shrink: 0;
   z-index: 10;
-}
-
-@media (max-width: 768px) {
-  .topbar {
-    padding: 0 12px;
-  }
+  backdrop-filter: blur(8px);
 }
 
 .left {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 200px;
+  gap: 10px;
 }
 
 .menuBtn {
   background: none;
   border: none;
-  color: #94a3b8;
-  font-size: 18px;
+  color: #475569;
+  font-size: 16px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 5px 7px;
   border-radius: 6px;
   transition: background 0.15s, color 0.15s;
+  line-height: 1;
 }
 
 .menuBtn:hover {
   background: #1e293b;
-  color: #f1f5f9;
+  color: #94a3b8;
 }
 
 .brand {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.brandIcon {
-  font-size: 22px;
+  align-items: baseline;
+  gap: 10px;
+  opacity: var(--bp-logo-opacity, 1);
+  transform: scale(var(--bp-logo-scale, 1));
+  transform-origin: left center;
+  transition: opacity 0.2s, transform 0.2s;
 }
 
 .brandName {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.3px;
   color: #f1f5f9;
 }
 
 .brandBlue {
-  color: #60a5fa;
+  color: var(--bp-accent, #60a5fa);
   text-shadow:
-    0 0 10px rgba(96, 165, 250, 0.55),
-    0 0 2px rgba(96, 165, 250, 0.9);
+    0 0 10px rgba(96, 165, 250, 0.45),
+    0 0 2px rgba(96, 165, 250, 0.8);
 }
 
-.nav {
-  display: flex;
-  gap: 4px;
-}
-
-.navBtn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 14px;
+.brandSub {
+  font-size: 10px;
   font-weight: 500;
-  cursor: pointer;
-  padding: 6px 16px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.navBtn:hover:not(.disabled) {
-  background: #1e293b;
-  color: #f1f5f9;
-}
-
-.navBtn.active {
-  background: #1e3a5f;
-  color: #38bdf8;
-}
-
-.navBtn.disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.badge {
-  background: #38bdf8;
-  color: #0f172a;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 1px 6px;
-  border-radius: 10px;
+  color: #475569;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
 
 .right {
-  min-width: 200px;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
 }
 
-.undoBtn {
-  background: #0f172a;
-  color: #cbd5e1;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.undoBtn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.undoBtn:hover:not(:disabled) {
-  background: #1e293b;
-}
-
-.buildBtn {
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  color: #fff;
+.settingsBtn {
+  background: none;
   border: none;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 8px 18px;
-  border-radius: 8px;
+  color: #475569;
+  font-size: 16px;
   cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
 }
 
-.buildBtn:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
+.settingsBtn:hover {
+  background: #1e293b;
+  color: #94a3b8;
 }
 
-.buildBtn:active {
-  transform: translateY(0);
+.settingsBtnActive {
+  background: #1e293b;
+  color: #f1f5f9;
 }

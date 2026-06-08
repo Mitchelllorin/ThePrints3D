@@ -463,11 +463,14 @@ export const useAppStore = create<AppState>()(
       pushHistory()
     },
 
-    addDrawings: (files) =>
+    addDrawings: (files) => {
+      const newIds: string[] = []
       set((s) => {
         for (const file of files) {
+          const id = genId()
+          newIds.push(id)
           const drawing: Drawing = {
-            id: genId(),
+            id,
             name: file.name,
             source: 'upload',
             type: inferDrawingType(file.name),
@@ -504,8 +507,14 @@ export const useAppStore = create<AppState>()(
             size: drawing.file.size,
           })
         }
-        if (s.view === 'upload') s.view = 'drawings'
-      }),
+        // Stay on upload view — the wizard or uploader will navigate after
+        // processing begins so the user sees progress rather than a blank list.
+      })
+      // Auto-analyse in the background; don't await so the UI stays responsive.
+      for (const id of newIds) {
+        get().processDrawing(id)
+      }
+    },
 
     removeDrawing: (id) => {
       pushHistory()

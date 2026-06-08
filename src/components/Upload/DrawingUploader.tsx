@@ -3,6 +3,14 @@ import { useDropzone } from 'react-dropzone'
 import { useAppStore } from '../../store/useAppStore'
 import styles from './DrawingUploader.module.css'
 
+/** Navigate to drawings once files have been queued (for use outside the wizard). */
+function useNavigateAfterDrop() {
+  const setView = useAppStore((s) => s.setView)
+  return useCallback(() => {
+    setTimeout(() => setView('drawings'), 100)
+  }, [setView])
+}
+
 const ACCEPTED_TYPES = {
   'application/pdf': ['.pdf'],
   'image/png': ['.png'],
@@ -11,24 +19,31 @@ const ACCEPTED_TYPES = {
   'image/webp': ['.webp'],
 }
 
-export default function DrawingUploader() {
+export default function DrawingUploader({ autoNavigate = true }: { autoNavigate?: boolean }) {
   const addDrawings = useAppStore((s) => s.addDrawings)
+  const navigateAfterDrop = useNavigateAfterDrop()
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const onDrop = useCallback(
     (accepted: File[]) => {
-      if (accepted.length > 0) addDrawings(accepted)
+      if (accepted.length > 0) {
+        addDrawings(accepted)
+        if (autoNavigate) navigateAfterDrop()
+      }
     },
-    [addDrawings]
+    [addDrawings, autoNavigate, navigateAfterDrop]
   )
 
   const onCameraCapture = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files ?? [])
-      if (files.length > 0) addDrawings(files)
+      if (files.length > 0) {
+        addDrawings(files)
+        if (autoNavigate) navigateAfterDrop()
+      }
       e.target.value = ''
     },
-    [addDrawings]
+    [addDrawings, autoNavigate, navigateAfterDrop]
   )
 
   const openCameraCapture = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {

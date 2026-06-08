@@ -2,72 +2,32 @@ import { useAppStore } from '../../store/useAppStore'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
-import ProjectContextPanel from '../ProjectContext/ProjectContextPanel'
 import styles from './Sidebar.module.css'
 
 export default function Sidebar() {
-  const view = useAppStore((s) => s.view)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
-  const projectWallTypes = useAppStore((s) => s.projectWallTypes)
+  const sidebarOpen       = useAppStore((s) => s.sidebarOpen)
+  const projectWallTypes  = useAppStore((s) => s.projectWallTypes)
   const detectedWallTypes = useAppStore((s) => s.detectedWallTypes)
   const setProjectWallTypes = useAppStore((s) => s.setProjectWallTypes)
 
   return (
     <aside className={`${styles.sidebar} ${!sidebarOpen ? styles.sidebarCollapsed : ''}`}>
-      {view === 'model' && (
-        <>
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Layers</h2>
-            <LayerPanel />
-          </section>
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Annotations</h2>
-            <AnnotationPanel />
-          </section>
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Wall Types</h2>
-            <WallTypeLegend
-              types={projectWallTypes}
-              onUpdateTypes={setProjectWallTypes}
-              detectedIds={detectedWallTypes.map((d) => d.wallType.id)}
-            />
-          </section>
-          <section className={styles.section}>
-            <ProjectContextPanel phase="post3d" />
-          </section>
-        </>
-      )}
-
-      {view === 'drawings' && (
-        <>
-          <section className={styles.section}>
-            <h2 className={styles.sectionTitle}>Drawing Library</h2>
-            <p className={styles.hint}>Preview sheets here, then return to the 3D workspace for calibration and tracing.</p>
-          </section>
-          <section className={styles.section}>
-            <ProjectContextPanel phase="pre3d" />
-          </section>
-        </>
-      )}
-
-      {view === 'upload' && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>3D-first workflow</h2>
-          <ol className={styles.steps}>
-            <li>Upload or scan a print</li>
-            <li>Open the 3D workspace overlay</li>
-            <li>Calibrate, align, and trace on the grid</li>
-            <li>Build and review the 3D structure</li>
-          </ol>
-        </section>
-      )}
-
-      {view === 'tools' && (
-        <section className={styles.section}>
-          <h2 className={styles.sectionTitle}>Toolbox</h2>
-          <p className={styles.hint}>Convert units and run quick construction calculators.</p>
-        </section>
-      )}
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Layers</h2>
+        <LayerPanel />
+      </section>
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Annotations</h2>
+        <AnnotationPanel />
+      </section>
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Wall Types</h2>
+        <WallTypeLegend
+          types={projectWallTypes}
+          onUpdateTypes={setProjectWallTypes}
+          detectedIds={detectedWallTypes.map((d) => d.wallType.id)}
+        />
+      </section>
     </aside>
   )
 }

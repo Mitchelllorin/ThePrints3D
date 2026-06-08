@@ -132,10 +132,10 @@ function StepIndicator({ step }: { step: WizardStep }) {
 function UploadStep({ onSkip }: { onSkip: () => void }) {
   return (
     <div className={styles.step}>
-      <DrawingUploader />
+      <DrawingUploader autoNavigate={false} />
       <div className={styles.skipRow}>
         <button className={styles.skipLink} onClick={onSkip} data-testid="wizard-skip-btn">
-          Skip wizard, I'll set things manually →
+          Skip setup, I'll configure manually →
         </button>
       </div>
     </div>
