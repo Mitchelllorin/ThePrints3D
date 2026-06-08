@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import type { Drawing, FloorLevel, Layer, ParsedOpening, ParsedRoom, ParsedWall } from '../../types'
+import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 
@@ -465,12 +466,57 @@ function buildOpeningMarkers(
   }
 }
 
+// ─── Framing from Construction Engine ─────────────────────────────────────────
+
+const FRAMING_COLORS: Record<string, string> = {
+  'stud': '#c9a56c',
+  'top-plate': '#b8944f',
+  'bottom-plate': '#b8944f',
+  'king-stud': '#d4a574',
+  'jack-stud': '#d4a574',
+  'header': '#a67b3d',
+  'cripple-stud': '#dbb98a',
+  'corner-assembly': '#c9a56c',
+}
+
+function buildFramingGeometry(
+  group: THREE.Group,
+  components: PlacedComponent[],
+  opacity: number,
+) {
+  for (const comp of components) {
+    const [w, h, d] = comp.dimensions
+    if (w < 0.001 || h < 0.001 || d < 0.001) continue
+
+    const geo = new THREE.BoxGeometry(w, h, d)
+    const color = FRAMING_COLORS[comp.componentType] ?? '#c9a56c'
+    const material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(color),
+      transparent: opacity < 1,
+      opacity,
+      roughness: 0.75,
+      metalness: 0.05,
+    })
+
+    const mesh = new THREE.Mesh(geo, material)
+    mesh.position.set(comp.position[0], comp.position[1], comp.position[2])
+    mesh.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.userData.layer = 'framing'
+    mesh.userData.componentType = comp.componentType
+    mesh.userData.label = comp.label
+    group.add(mesh)
+  }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function BuildingModel({ layers }: Props) {
   const groupRef = useRef<THREE.Group>(null)
   const drawings = useAppStore((s) => s.drawings)
   const model = useAppStore((s) => s.model)
+  const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
 
@@ -669,6 +715,12 @@ export default function BuildingModel({ layers }: Props) {
       }
     }
 
+    // Framing from construction engine
+    const framingLayer = layerMap.get('framing')
+    if (framingLayer?.visible && buildResult && buildResult.components.length > 0) {
+      buildFramingGeometry(group, buildResult.components, framingLayer.opacity)
+    }
+
     const timer = setTimeout(() => {
       setModelStatus('ready')
       logEvent('model.build.completed', {
@@ -677,7 +729,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult])
 
   return <group ref={groupRef} />
 }

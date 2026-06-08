@@ -1,0 +1,61 @@
+{
+  "pipeSizes": {
+    "half-inch": { "diameterMm": 12.7, "label": "1/2\" supply" },
+    "three-quarter": { "diameterMm": 19.1, "label": "3/4\" supply" },
+    "one-inch": { "diameterMm": 25.4, "label": "1\" supply" },
+    "one-half-drain": { "diameterMm": 38.1, "label": "1-1/2\" drain" },
+    "two-inch-drain": { "diameterMm": 50.8, "label": "2\" drain" },
+    "three-inch-drain": { "diameterMm": 76.2, "label": "3\" drain" },
+    "four-inch-drain": { "diameterMm": 101.6, "label": "4\" drain/main" }
+  },
+  "fixtureRoughIn": {
+    "toilet": {
+      "supplySize": "half-inch",
+      "drainSize": "three-inch-drain",
+      "roughInHeightM": 0.18,
+      "centerFromWallM": 0.305,
+      "label": "Toilet (12\" rough-in)"
+    },
+    "lavatory": {
+      "supplySize": "half-inch",
+      "drainSize": "one-half-drain",
+      "roughInHeightM": 0.55,
+      "centerFromWallM": 0.2,
+      "label": "Lavatory sink"
+    },
+    "kitchenSink": {
+      "supplySize": "half-inch",
+      "drainSize": "two-inch-drain",
+      "roughInHeightM": 0.5,
+      "centerFromWallM": 0.2,
+      "label": "Kitchen sink"
+    },
+    "shower": {
+      "supplySize": "half-inch",
+      "drainSize": "two-inch-drain",
+      "roughInHeightM": 2.0,
+      "centerFromWallM": 0.15,
+      "label": "Shower valve"
+    },
+    "bathtub": {
+      "supplySize": "half-inch",
+      "drainSize": "one-half-drain",
+      "roughInHeightM": 0.35,
+      "centerFromWallM": 0.15,
+      "label": "Bathtub"
+    }
+  },
+  "ventStack": {
+    "diameterMm": 76.2,
+    "minHeightAboveRoofM": 0.3,
+    "label": "3\" vent stack through roof"
+  },
+  "buildingTypeDefaults": {
+    "residential-single": { "mainSupply": "three-quarter", "mainDrain": "four-inch-drain" },
+    "residential-multi": { "mainSupply": "one-inch", "mainDrain": "four-inch-drain" },
+    "commercial": { "mainSupply": "one-inch", "mainDrain": "four-inch-drain" },
+    "industrial": { "mainSupply": "one-inch", "mainDrain": "four-inch-drain" },
+    "institutional": { "mainSupply": "one-inch", "mainDrain": "four-inch-drain" },
+    "unknown": { "mainSupply": "three-quarter", "mainDrain": "four-inch-drain" }
+  }
+}

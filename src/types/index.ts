@@ -178,6 +178,7 @@ export type LayerId =
   | 'floors'
   | 'ceiling'
   | 'doors-windows'
+  | 'framing'
   | 'electrical'
   | 'plumbing'
   | 'mechanical'

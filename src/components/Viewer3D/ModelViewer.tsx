@@ -13,6 +13,7 @@ import CameraHud from './CameraHud'
 import ProductPlacements from './ProductPlacements'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
+import ConstructionWizard from '../ConstructionWizard/ConstructionWizard'
 import LiveWallsLayer from './LiveWallsLayer'
 import FloatingLogo3D from './FloatingLogo3D'
 import styles from './ModelViewer.module.css'
@@ -192,10 +193,14 @@ export default function ModelViewer() {
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
   const measurements   = useAppStore((s) => s.measurements)
   const overlay        = useAppStore((s) => s.floorplanOverlay)
+  const buildForMe = useAppStore((s) => s.buildForMe)
+  const buildResult = useAppStore((s) => s.buildResult)
+  const [showWizard, setShowWizard] = useState(false)
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
   const [isDragOver, setIsDragOver]     = useState(false)
+  const hasWalls = drawings.some((d) => d.parsedWalls.length > 0)
 
 
   // Disable orbit while the user is actively tracing or calibrating on the overlay
@@ -287,6 +292,29 @@ export default function ModelViewer() {
           >
             📤 Share PNG
           </button>
+          {hasWalls && (
+            <>
+              <button
+                className={styles.toolBtn}
+                onClick={() => { buildForMe(); setShowWizard(false) }}
+                title="Auto-build framing from detected walls — takes all defaults"
+                data-testid="build-for-me-btn"
+              >
+                {buildResult ? 'Rebuild' : 'Build for me'}
+              </button>
+              <button
+                className={`${styles.toolBtn} ${showWizard ? styles.toolBtnActive : ''}`}
+                onClick={() => {
+                  if (!buildResult) buildForMe()
+                  setShowWizard(!showWizard)
+                }}
+                title="Walk construction decisions step by step"
+                data-testid="wizard-btn"
+              >
+                Wizard
+              </button>
+            </>
+          )}
           {(measureMode || annotateMode) && (
             <span className={styles.toolHint}>
               {measureMode ? 'Click a surface to place point A, then point B' : 'Click a surface to place an annotation pin'}
@@ -361,6 +389,9 @@ export default function ModelViewer() {
           onCancel={() => setPendingForm(null)}
         />
       )}
+
+      {/* Construction Wizard — step-through decisions panel */}
+      {showWizard && <ConstructionWizard />}
 
       {/* FloorplanPanel renders DOM controls (inputs, buttons) outside the
          Canvas so they stay in the react-dom reconciler. */}
