@@ -1,0 +1,252 @@
+/* ── Root — fills the entire viewport ────────────────────────────────────── */
+.root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #060d1a;
+}
+
+/* ── 3D Viewport — always full screen ────────────────────────────────────── */
+.viewport {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Logo watermark ───────────────────────────────────────────────────────── */
+.logo {
+  position: absolute;
+  top: 14px;
+  left: 58px; /* clear the tab strip */
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.logoBlue {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--bp-accent, #60a5fa);
+  text-shadow: 0 0 10px rgba(96, 165, 250, 0.4);
+  letter-spacing: -0.2px;
+}
+
+.logo > span:first-child + span {
+  /* "Print3D" */
+}
+
+.logo {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.logoSub {
+  font-size: 9px;
+  font-weight: 500;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* ── Tab strip — thin vertical bar on the left ────────────────────────────── */
+.tabStrip {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 44px;
+  padding: 10px 0;
+  background: rgba(15, 23, 42, var(--bp-panel-opacity, 0.88));
+  border: 1px solid rgba(30, 41, 59, 0.6);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  backdrop-filter: blur(8px);
+}
+
+.tab:hover {
+  background: rgba(30, 41, 59, 0.95);
+  color: #94a3b8;
+}
+
+.tabActive {
+  background: rgba(30, 41, 59, 0.98);
+  color: var(--bp-accent, #38bdf8);
+  border-color: var(--bp-accent, #38bdf8);
+}
+
+.tabIcon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tabLabel {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+/* ── Slide-out panel ─────────────────────────────────────────────────────── */
+.panel {
+  position: absolute;
+  left: 44px; /* right of tab strip */
+  top: 0;
+  bottom: 0;
+  width: 280px;
+  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.92));
+  backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(30, 41, 59, 0.5);
+  display: flex;
+  flex-direction: column;
+  z-index: 29;
+  transform: translateX(-100%) translateX(-44px);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.panelOpen {
+  transform: translateX(0);
+  pointer-events: all;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+  flex-shrink: 0;
+}
+
+.panelTitle {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.panelClose {
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.panelClose:hover { color: #94a3b8; }
+
+.panelScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 24px;
+}
+
+/* ── Section labels inside panel ─────────────────────────────────────────── */
+.sectionTitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  padding: 12px 16px 4px;
+  margin: 0;
+}
+
+/* ── Settings content ────────────────────────────────────────────────────── */
+.settingsBody {
+  padding: 4px 0 16px;
+}
+
+.settingGroup {
+  font-size: 10px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  padding: 12px 16px 4px;
+  margin: 0;
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 16px;
+  cursor: default;
+}
+
+.settingLabel {
+  font-size: 11px;
+  color: #64748b;
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.settingSlider {
+  flex: 1;
+  accent-color: var(--bp-accent, #38bdf8);
+  height: 3px;
+  cursor: pointer;
+}
+
+.settingVal {
+  font-size: 10px;
+  color: #475569;
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.settingColor {
+  flex: 1;
+  height: 24px;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  padding: 1px;
+}
+
+.resetBtn {
+  margin: 16px 16px 0;
+  width: calc(100% - 32px);
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  color: #475569;
+  font-size: 11px;
+  padding: 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.resetBtn:hover {
+  color: #94a3b8;
+  border-color: #334155;
+}

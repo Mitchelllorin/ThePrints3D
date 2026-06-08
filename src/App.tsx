@@ -1,14 +1,11 @@
-import AppShell from './components/Layout/AppShell'
-import ModelViewer from './components/Viewer3D/ModelViewer'
 import CSSVarInjector from './components/Settings/CSSVarInjector'
+import WorkspaceLayout from './components/Layout/WorkspaceLayout'
 
 function App() {
   return (
     <>
       <CSSVarInjector />
-      <AppShell>
-        <ModelViewer />
-      </AppShell>
+      <WorkspaceLayout />
     </>
   )
 }
