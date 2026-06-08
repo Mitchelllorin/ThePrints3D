@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { listPresetDefinitions } from '../../services/presetDrawings'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
@@ -27,6 +28,16 @@ function SettingsContent() {
     )
   }
 
+  function Toggle({ label, val, onChange }: { label: string; val: boolean; onChange: (v: boolean) => void }) {
+    return (
+      <label className={styles.settingRow} style={{ cursor: 'pointer' }}>
+        <span className={styles.settingLabel}>{label}</span>
+        <input type="checkbox" checked={val} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--bp-accent, #38bdf8)', width: 16, height: 16 }} />
+        <span className={styles.settingVal}>{val ? 'On' : 'Off'}</span>
+      </label>
+    )
+  }
+
   function ColorRow({ label, val, onChange }: { label: string; val: string; onChange: (v: string) => void }) {
     return (
       <label className={styles.settingRow}>
@@ -44,15 +55,20 @@ function SettingsContent() {
       <Slider label="Side panel" val={Math.round(s.sidebarOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => set({ sidebarOpacity: v / 100 })} />
       <Slider label="Floaters" val={Math.round(s.panelOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => set({ panelOpacity: v / 100 })} />
 
-      <p className={styles.settingGroup}>Logo</p>
-      <Slider label="Opacity" val={Math.round(s.logoOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ logoOpacity: v / 100 })} />
-      <Slider label="Size" val={Math.round(s.logoSize * 100)} min={50} max={200} step={5} unit="%" onChange={(v) => set({ logoSize: v / 100 })} />
+      <p className={styles.settingGroup}>3D Logo</p>
+      <Toggle label="Visible" val={s.logo3DVisible} onChange={(v) => set({ logo3DVisible: v })} />
+      <Slider label="Opacity" val={Math.round(s.logo3DOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ logo3DOpacity: v / 100 })} />
+      <Slider label="Float speed" val={s.logo3DFloatSpeed} min={0} max={3} step={0.1} onChange={(v) => set({ logo3DFloatSpeed: v })} />
+      <Slider label="Bounce" val={s.logo3DFloatHeight} min={0} max={1} step={0.05} unit="m" onChange={(v) => set({ logo3DFloatHeight: v })} />
 
       <p className={styles.settingGroup}>3D Grid</p>
-      <Slider label="Opacity" val={Math.round(s.gridOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ gridOpacity: v / 100 })} />
+      <Toggle label="Visible" val={s.gridVisible} onChange={(v) => set({ gridVisible: v })} />
       <ColorRow label="Color" val={s.gridColor} onChange={(v) => set({ gridColor: v })} />
       <Slider label="Cell size" val={s.gridCellSize} min={0.5} max={10} step={0.5} unit="m" onChange={(v) => set({ gridCellSize: v })} />
-      <Slider label="Divisions" val={s.gridDivisions} min={2} max={40} step={1} onChange={(v) => set({ gridDivisions: v })} />
+
+      <p className={styles.settingGroup}>Top bar logo</p>
+      <Slider label="Opacity" val={Math.round(s.logoOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ logoOpacity: v / 100 })} />
+      <Slider label="Size" val={Math.round(s.logoSize * 100)} min={50} max={200} step={5} unit="%" onChange={(v) => set({ logoSize: v / 100 })} />
 
       <p className={styles.settingGroup}>Accent</p>
       <ColorRow label="Color" val={s.accentColor} onChange={(v) => set({ accentColor: v })} />
@@ -76,8 +92,9 @@ export default function WorkspaceLayout() {
   const [uploadDismissed, setUploadDismissed] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const drawings           = useAppStore((s) => s.drawings)
-  const addDrawings        = useAppStore((s) => s.addDrawings)
+  const drawings            = useAppStore((s) => s.drawings)
+  const addDrawings         = useAppStore((s) => s.addDrawings)
+  const loadPresetDrawing   = useAppStore((s) => s.loadPresetDrawing)
   const projectWallTypes   = useAppStore((s) => s.projectWallTypes)
   const detectedWallTypes  = useAppStore((s) => s.detectedWallTypes)
   const setProjectWallTypes = useAppStore((s) => s.setProjectWallTypes)
@@ -179,6 +196,18 @@ export default function WorkspaceLayout() {
             <button className={styles.uploadHintBtnSecondary} onClick={() => fileInputRef.current?.click()}>
               📷 Scan with camera
             </button>
+          </div>
+          <div className={styles.uploadHintDivider}>or try a preset</div>
+          <div className={styles.presetRow}>
+            {listPresetDefinitions().map((p) => (
+              <button
+                key={p.id}
+                className={styles.presetBtn}
+                onClick={() => { loadPresetDrawing(p.id, true); setUploadDismissed(true) }}
+              >
+                {p.name}
+              </button>
+            ))}
           </div>
         </div>
       )}

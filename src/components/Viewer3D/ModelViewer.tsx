@@ -15,6 +15,7 @@ import ProductPlacements from './ProductPlacements'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
+import FloatingLogo3D from './FloatingLogo3D'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -175,10 +176,9 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 
 export default function ModelViewer() {
   const gridSettings = useUISettingsStore(useShallow((s) => ({
-    opacity: s.gridOpacity,
+    visible: s.gridVisible,
     color: s.gridColor,
     cellSize: s.gridCellSize,
-    divisions: s.gridDivisions,
   })))
   const model      = useAppStore((s) => s.model)
   const drawings   = useAppStore((s) => s.drawings)
@@ -382,18 +382,22 @@ export default function ModelViewer() {
         <ambientLight intensity={0.6} />
         <directionalLight position={[10, 20, 10]} intensity={1.0} />
 
-        <Grid
-          cellSize={gridSettings.cellSize}
-          cellThickness={0.5}
-          cellColor={gridSettings.color}
-          sectionSize={gridSettings.cellSize * 5}
-          sectionThickness={1}
-          sectionColor={gridSettings.color}
-          fadeDistance={80}
-          fadeStrength={2}
-          position={[0, -0.01, 0]}
-        />
+        {gridSettings.visible && (
+          <Grid
+            args={[200, 200]}
+            cellSize={gridSettings.cellSize}
+            cellThickness={0.5}
+            cellColor={gridSettings.color}
+            sectionSize={gridSettings.cellSize * 5}
+            sectionThickness={1.2}
+            sectionColor={gridSettings.color}
+            fadeDistance={120}
+            fadeStrength={1.5}
+            position={[0, -0.01, 0]}
+          />
+        )}
 
+        <FloatingLogo3D />
         <FloorplanOverlay />
         <LiveWallsLayer />
 
