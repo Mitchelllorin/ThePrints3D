@@ -26,7 +26,7 @@ import {
 } from '../services/sheetParser'
 import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
-import { mergeAutoAndUserWalls } from '../services/wallTraceReducer'
+import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReducer'
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
@@ -564,10 +564,10 @@ export const useAppStore = create<AppState>()(
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
-        const userWalls = [
+        const userWalls = inferCorners([
           ...d.parsedWalls.filter((w) => w.source === 'user'),
           { ...wall, source: 'user' as const, detectionConfidence: 1 },
-        ]
+        ])
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
       })
     },

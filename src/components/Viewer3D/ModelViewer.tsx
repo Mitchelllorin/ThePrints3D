@@ -20,6 +20,7 @@ import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
+import LiveWallsLayer from './LiveWallsLayer'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -411,6 +412,7 @@ export default function ModelViewer() {
         />
 
         <FloorplanOverlay />
+        <LiveWallsLayer />
 
         {model.status === 'building' && <BuildingProgress />}
         {(model.status === 'building' || model.status === 'ready') && (
