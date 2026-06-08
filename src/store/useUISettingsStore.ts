@@ -1,21 +1,16 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 
 export interface UISettings {
-  // Panels
-  topbarOpacity: number      // 0.2 – 1
-  sidebarOpacity: number     // 0.2 – 1
-  panelOpacity: number       // 0.2 – 1 (floating panels / overlays)
-  // Logo
-  logoOpacity: number        // 0 – 1
-  logoSize: number           // 0.5 – 2 (scale multiplier)
-  // Grid
-  gridOpacity: number        // 0 – 1
-  gridColor: string          // hex
-  gridCellSize: number       // 0.5 – 10 (Three.js units / meters)
-  gridDivisions: number      // 2 – 40
-  // Accent
-  accentColor: string        // hex — used for highlights, badges, active states
+  topbarOpacity: number
+  sidebarOpacity: number
+  panelOpacity: number
+  logoOpacity: number
+  logoSize: number
+  gridOpacity: number
+  gridColor: string
+  gridCellSize: number
+  gridDivisions: number
+  accentColor: string
 }
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
@@ -31,18 +26,34 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   accentColor: '#38bdf8',
 }
 
+const STORAGE_KEY = 'bp3d-ui-settings'
+
+function load(): UISettings {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return { ...DEFAULT_UI_SETTINGS, ...JSON.parse(raw) }
+  } catch { /* ignore */ }
+  return { ...DEFAULT_UI_SETTINGS }
+}
+
+function save(s: UISettings) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)) } catch { /* ignore */ }
+}
+
 interface UISettingsStore extends UISettings {
   set: (patch: Partial<UISettings>) => void
   reset: () => void
 }
 
-export const useUISettingsStore = create<UISettingsStore>()(
-  persist(
-    (set) => ({
-      ...DEFAULT_UI_SETTINGS,
-      set: (patch) => set((s) => ({ ...s, ...patch })),
-      reset: () => set(() => ({ ...DEFAULT_UI_SETTINGS })),
-    }),
-    { name: 'bp3d-ui-settings' }
-  )
-)
+export const useUISettingsStore = create<UISettingsStore>((setState) => ({
+  ...load(),
+  set: (patch) => setState((s) => {
+    const next = { ...s, ...patch }
+    save(next)
+    return next
+  }),
+  reset: () => setState(() => {
+    save(DEFAULT_UI_SETTINGS)
+    return { ...DEFAULT_UI_SETTINGS }
+  }),
+}))
