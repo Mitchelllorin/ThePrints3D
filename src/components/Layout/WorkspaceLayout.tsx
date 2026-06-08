@@ -130,7 +130,7 @@ export default function WorkspaceLayout() {
           className={styles.logo}
           style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center' }}
         >
-          <span className={styles.logoBlue}>Blue</span>Print3D
+          <span className={styles.logoBlue}>Blue</span><span className={styles.logoPrint}>Print</span><span className={styles.logo3D}>3D</span>
           <span className={styles.logoSub}>by LearnIt3D</span>
         </div>
 

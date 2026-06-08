@@ -1,57 +1,101 @@
+/**
+ * FloatingLogo3D — screensaver-style wordmark bouncing around the 3D workspace.
+ * "Blue" blue · "Print" orange italic · "3D" green
+ */
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 
+const BOUNDS = {
+  x: 7,
+  yMin: 1.2,
+  yMax: 5.5,
+  z: 3.5,
+}
+
+// Initial velocity — randomise direction slightly so it doesn't repeat immediately
+const initVel = () => new THREE.Vector3(
+  1.4 + Math.random() * 0.4,
+  0.7 + Math.random() * 0.3,
+  0.5 + Math.random() * 0.3,
+)
+
 export default function FloatingLogo3D() {
-  const groupRef  = useRef<THREE.Group>(null)
-  const innerRef  = useRef<THREE.Group>(null)
-  const t         = useRef(0)
+  const groupRef   = useRef<THREE.Group>(null)
+  const velocity   = useRef(initVel())
 
   const visible    = useUISettingsStore((s) => s.logo3DVisible)
   const opacity    = useUISettingsStore((s) => s.logo3DOpacity)
   const floatSpeed = useUISettingsStore((s) => s.logo3DFloatSpeed)
-  const floatAmp   = useUISettingsStore((s) => s.logo3DFloatHeight)
 
   useFrame((_, delta) => {
     if (!groupRef.current || !visible) return
-    t.current += delta * floatSpeed
-    groupRef.current.position.y = 4 + Math.sin(t.current) * floatAmp
-    if (innerRef.current) {
-      innerRef.current.rotation.y += delta * 0.4
-    }
+    const p = groupRef.current.position
+    const v = velocity.current
+    const dt = delta * floatSpeed
+
+    p.x += v.x * dt
+    p.y += v.y * dt
+    p.z += v.z * dt
+
+    if (p.x >  BOUNDS.x)    { v.x = -Math.abs(v.x) }
+    if (p.x < -BOUNDS.x)    { v.x =  Math.abs(v.x) }
+    if (p.y >  BOUNDS.yMax) { v.y = -Math.abs(v.y) }
+    if (p.y <  BOUNDS.yMin) { v.y =  Math.abs(v.y) }
+    if (p.z >  BOUNDS.z)    { v.z = -Math.abs(v.z) }
+    if (p.z < -BOUNDS.z)    { v.z =  Math.abs(v.z) }
+
+    // Gentle billboard-like tilt towards camera origin
+    groupRef.current.lookAt(0, p.y, 20)
   })
 
   if (!visible) return null
 
-  const col = new THREE.Color('#38bdf8')
+  const fs = 0.55 // font size
 
   return (
-    <group ref={groupRef} position={[0, 4, 0]}>
-      {/* Rotating wireframe octahedron — the "3D" icon */}
-      <group ref={innerRef}>
-        <mesh>
-          <octahedronGeometry args={[0.7, 0]} />
-          <meshBasicMaterial color={col} wireframe transparent opacity={opacity} />
-        </mesh>
-        {/* Inner solid for depth */}
-        <mesh>
-          <octahedronGeometry args={[0.5, 0]} />
-          <meshBasicMaterial color={col} transparent opacity={opacity * 0.08} />
-        </mesh>
-      </group>
+    <group ref={groupRef} position={[0, 3, 0]}>
+      {/* "Blue" — sky blue */}
+      <Text
+        fontSize={fs}
+        color="#60a5fa"
+        anchorX="right"
+        anchorY="middle"
+        position={[-0.02, 0, 0]}
+        fillOpacity={opacity}
+        letterSpacing={-0.02}
+      >
+        Blue
+      </Text>
 
-      {/* Ring below the icon */}
-      <mesh position={[0, -1.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.55, 0.025, 8, 32]} />
-        <meshBasicMaterial color={col} transparent opacity={opacity * 0.4} />
-      </mesh>
+      {/* "Print" — orange, italic */}
+      <Text
+        fontSize={fs}
+        color="#f97316"
+        fontStyle="italic"
+        anchorX="left"
+        anchorY="middle"
+        position={[0.02, 0, 0]}
+        fillOpacity={opacity}
+        letterSpacing={-0.01}
+      >
+        Print
+      </Text>
 
-      {/* Vertical drop line */}
-      <mesh position={[0, -0.55, 0]}>
-        <cylinderGeometry args={[0.01, 0.01, 1.0, 6]} />
-        <meshBasicMaterial color={col} transparent opacity={opacity * 0.25} />
-      </mesh>
+      {/* "3D" — green, offset right of Print */}
+      <Text
+        fontSize={fs * 0.75}
+        color="#4ade80"
+        anchorX="left"
+        anchorY="top"
+        position={[1.62, 0.22, 0]}
+        fillOpacity={opacity}
+        letterSpacing={0.01}
+      >
+        3D
+      </Text>
     </group>
   )
 }
