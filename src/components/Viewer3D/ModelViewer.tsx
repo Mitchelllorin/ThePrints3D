@@ -5,6 +5,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useShallow } from 'zustand/react/shallow'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
 import AnnotationTool from './AnnotationTool'
@@ -173,12 +174,12 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 }
 
 export default function ModelViewer() {
-  const gridSettings = useUISettingsStore((s) => ({
+  const gridSettings = useUISettingsStore(useShallow((s) => ({
     opacity: s.gridOpacity,
     color: s.gridColor,
     cellSize: s.gridCellSize,
     divisions: s.gridDivisions,
-  }))
+  })))
   const model      = useAppStore((s) => s.model)
   const drawings   = useAppStore((s) => s.drawings)
   const addDrawings = useAppStore((s) => s.addDrawings)
