@@ -57,42 +57,42 @@ export default function FloatingLogo3D() {
 
   return (
     <group ref={groupRef} position={[0, 3, 0]}>
-      {/* "Blue" — sky blue */}
+      {/* "Blue" — sky blue, right-anchored so it ends at x=0 */}
       <Text
         fontSize={fs}
         color="#60a5fa"
         anchorX="right"
         anchorY="middle"
-        position={[-0.02, 0, 0]}
+        position={[0, 0, 0]}
         fillOpacity={opacity}
-        letterSpacing={-0.02}
+        letterSpacing={-0.03}
       >
         Blue
       </Text>
 
-      {/* "Print" — orange, italic */}
+      {/* "Print" — orange italic, left-anchored starting at x=0 */}
       <Text
         fontSize={fs}
         color="#f97316"
         fontStyle="italic"
         anchorX="left"
         anchorY="middle"
-        position={[0.02, 0, 0]}
+        position={[0, 0, 0]}
         fillOpacity={opacity}
-        letterSpacing={-0.01}
+        letterSpacing={-0.03}
       >
         Print
       </Text>
 
-      {/* "3D" — green, offset right of Print */}
+      {/* "3D" — green superscript, right after Print (~1.45 units wide at fs=0.55) */}
       <Text
-        fontSize={fs * 0.75}
+        fontSize={fs * 0.68}
         color="#4ade80"
         anchorX="left"
         anchorY="top"
-        position={[1.62, 0.22, 0]}
+        position={[1.44, 0.24, 0]}
         fillOpacity={opacity}
-        letterSpacing={0.01}
+        letterSpacing={0}
       >
         3D
       </Text>

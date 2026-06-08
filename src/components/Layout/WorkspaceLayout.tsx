@@ -55,20 +55,20 @@ function SettingsContent() {
       <Slider label="Side panel" val={Math.round(s.sidebarOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => set({ sidebarOpacity: v / 100 })} />
       <Slider label="Floaters" val={Math.round(s.panelOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => set({ panelOpacity: v / 100 })} />
 
-      <p className={styles.settingGroup}>3D Logo</p>
+      <p className={styles.settingGroup}>3D Wordmark</p>
       <Toggle label="Visible" val={s.logo3DVisible} onChange={(v) => set({ logo3DVisible: v })} />
       <Slider label="Opacity" val={Math.round(s.logo3DOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ logo3DOpacity: v / 100 })} />
-      <Slider label="Float speed" val={s.logo3DFloatSpeed} min={0} max={3} step={0.1} onChange={(v) => set({ logo3DFloatSpeed: v })} />
-      <Slider label="Bounce" val={s.logo3DFloatHeight} min={0} max={1} step={0.05} unit="m" onChange={(v) => set({ logo3DFloatHeight: v })} />
+      <Slider label="Speed" val={s.logo3DFloatSpeed} min={0} max={5} step={0.1} onChange={(v) => set({ logo3DFloatSpeed: v })} />
+      <Slider label="Bounce" val={s.logo3DFloatHeight} min={0} max={2} step={0.05} unit="m" onChange={(v) => set({ logo3DFloatHeight: v })} />
+
+      <p className={styles.settingGroup}>Top bar logo</p>
+      <Slider label="Opacity" val={Math.round(s.logoOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ logoOpacity: v / 100 })} />
+      <Slider label="Size" val={Math.round(s.logoSize * 100)} min={50} max={200} step={5} unit="%" onChange={(v) => set({ logoSize: v / 100 })} />
 
       <p className={styles.settingGroup}>3D Grid</p>
       <Toggle label="Visible" val={s.gridVisible} onChange={(v) => set({ gridVisible: v })} />
       <ColorRow label="Color" val={s.gridColor} onChange={(v) => set({ gridColor: v })} />
       <Slider label="Cell size" val={s.gridCellSize} min={0.5} max={10} step={0.5} unit="m" onChange={(v) => set({ gridCellSize: v })} />
-
-      <p className={styles.settingGroup}>Top bar logo</p>
-      <Slider label="Opacity" val={Math.round(s.logoOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ logoOpacity: v / 100 })} />
-      <Slider label="Size" val={Math.round(s.logoSize * 100)} min={50} max={200} step={5} unit="%" onChange={(v) => set({ logoSize: v / 100 })} />
 
       <p className={styles.settingGroup}>Accent</p>
       <ColorRow label="Color" val={s.accentColor} onChange={(v) => set({ accentColor: v })} />
