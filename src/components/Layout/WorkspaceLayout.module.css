@@ -29,35 +29,36 @@
 
 /* ── Logo ────────────────────────────────────────────────────────────────── */
 .logo {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
   gap: 8px;
   transition: opacity 0.3s, transform 0.3s;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 900;
-  letter-spacing: -0.5px;
+  letter-spacing: -1px;
+  line-height: 1;
 }
 
 .logoBlue {
   color: #60a5fa;
-  text-shadow: 1px 1px 0 #1a3a6a, 2px 2px 0 #0f2248, 3px 3px 0 rgba(0,0,0,0.3);
+  text-shadow: 1px 1px 0 #1a3a6a, 2px 2px 0 #0f2248, 3px 3px 0 rgba(0,0,0,0.35);
 }
 
 .logoPrint {
   font-style: italic;
   color: #f97316;
-  margin-left: -2px;
-  text-shadow: 1px 1px 0 #7c3010, 2px 2px 0 #4a1d08, 3px 3px 0 rgba(0,0,0,0.3);
+  margin-left: -3px;
+  text-shadow: 1px 1px 0 #7c3010, 2px 2px 0 #4a1d08, 3px 3px 0 rgba(0,0,0,0.35);
 }
 
 .logo3D {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 900;
   color: #4ade80;
   vertical-align: super;
-  margin-left: 0px;
-  letter-spacing: -0.3px;
-  text-shadow: 1px 1px 0 #166534, 2px 2px 0 #0d3d1e, 3px 3px 0 rgba(0,0,0,0.3);
+  margin-left: 1px;
+  letter-spacing: 0;
+  text-shadow: 1px 1px 0 #166534, 2px 2px 0 #0d3d1e, 3px 3px 0 rgba(0,0,0,0.35);
 }
 
 .logoSub {

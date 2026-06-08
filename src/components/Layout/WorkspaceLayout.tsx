@@ -128,9 +128,10 @@ export default function WorkspaceLayout() {
       {/* Top bar — thin, semi-transparent, sits above viewport */}
       <div className={styles.topbar} style={{ background: `rgba(10,16,30,${topbarOpacity})` }}>
         <div
-          style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center', display: 'flex', alignItems: 'center', gap: 8 }}
+          className={styles.logo}
+          style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center' }}
         >
-          <LogoBadge3D />
+          <span className={styles.logoBlue}>Blue</span><span className={styles.logoPrint}>Print</span><span className={styles.logo3D}>3D</span>
           <span className={styles.logoSub}>by LearnIt3D</span>
         </div>
 
