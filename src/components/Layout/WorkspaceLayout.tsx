@@ -9,45 +9,46 @@ import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import styles from './WorkspaceLayout.module.css'
 
+// ── Settings helper components (declared outside render to avoid state reset) ─
+function Slider({ label, val, min, max, step, unit = '', onChange }: {
+  label: string; val: number; min: number; max: number; step: number; unit?: string
+  onChange: (v: number) => void
+}) {
+  return (
+    <label className={styles.settingRow}>
+      <span className={styles.settingLabel}>{label}</span>
+      <input type="range" min={min} max={max} step={step} value={val}
+        onChange={(e) => onChange(Number(e.target.value))} className={styles.settingSlider} />
+      <span className={styles.settingVal}>{val}{unit}</span>
+    </label>
+  )
+}
+
+function Toggle({ label, val, onChange }: { label: string; val: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className={styles.settingRow} style={{ cursor: 'pointer' }}>
+      <span className={styles.settingLabel}>{label}</span>
+      <input type="checkbox" checked={val} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--bp-accent, #38bdf8)', width: 16, height: 16 }} />
+      <span className={styles.settingVal}>{val ? 'On' : 'Off'}</span>
+    </label>
+  )
+}
+
+function ColorRow({ label, val, onChange }: { label: string; val: string; onChange: (v: string) => void }) {
+  return (
+    <label className={styles.settingRow}>
+      <span className={styles.settingLabel}>{label}</span>
+      <input type="color" value={val} onChange={(e) => onChange(e.target.value)} className={styles.settingColor} />
+      <span className={styles.settingVal}>{val}</span>
+    </label>
+  )
+}
+
 // ── Settings panel content ───────────────────────────────────────────────────
 function SettingsContent() {
   const s = useUISettingsStore()
   const set = useUISettingsStore((x) => x.set)
   const reset = useUISettingsStore((x) => x.reset)
-
-  function Slider({ label, val, min, max, step, unit = '', onChange }: {
-    label: string; val: number; min: number; max: number; step: number; unit?: string
-    onChange: (v: number) => void
-  }) {
-    return (
-      <label className={styles.settingRow}>
-        <span className={styles.settingLabel}>{label}</span>
-        <input type="range" min={min} max={max} step={step} value={val}
-          onChange={(e) => onChange(Number(e.target.value))} className={styles.settingSlider} />
-        <span className={styles.settingVal}>{val}{unit}</span>
-      </label>
-    )
-  }
-
-  function Toggle({ label, val, onChange }: { label: string; val: boolean; onChange: (v: boolean) => void }) {
-    return (
-      <label className={styles.settingRow} style={{ cursor: 'pointer' }}>
-        <span className={styles.settingLabel}>{label}</span>
-        <input type="checkbox" checked={val} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--bp-accent, #38bdf8)', width: 16, height: 16 }} />
-        <span className={styles.settingVal}>{val ? 'On' : 'Off'}</span>
-      </label>
-    )
-  }
-
-  function ColorRow({ label, val, onChange }: { label: string; val: string; onChange: (v: string) => void }) {
-    return (
-      <label className={styles.settingRow}>
-        <span className={styles.settingLabel}>{label}</span>
-        <input type="color" value={val} onChange={(e) => onChange(e.target.value)} className={styles.settingColor} />
-        <span className={styles.settingVal}>{val}</span>
-      </label>
-    )
-  }
 
   return (
     <div className={styles.settingsBody}>
@@ -200,7 +201,7 @@ export default function WorkspaceLayout() {
               <button
                 key={p.id}
                 className={styles.presetBtn}
-                onClick={() => { loadPresetDrawing(p.id, true); setUploadDismissed(true) }}
+                onClick={() => { loadPresetDrawing(p.id, false); setUploadDismissed(true) }}
               >
                 {p.name}
               </button>

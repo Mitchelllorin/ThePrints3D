@@ -643,7 +643,8 @@ export default function BuildingModel({ layers }: Props) {
           }
           case 'structure': {
             const structLayer = layerMap.get('structure')
-            if (structLayer?.visible && (wallDrawings.length > 0 || sceneConfig.hasLoadBearingWalls)) {
+            // Only render procedural columns/beam when NO real walls exist (fallback mode)
+            if (structLayer?.visible && wallDrawings.length === 0 && sceneConfig.hasLoadBearingWalls) {
               const sMat = mat(structLayer.color, structLayer.opacity, { roughness: 0.5 })
               buildStructure(group, fp, elev, fh, sMat)
             }
