@@ -6,7 +6,6 @@
   background: #060d1a;
 }
 
-/* ── Viewport — fills everything, sits behind all UI ─────────────────────── */
 .viewport {
   position: absolute;
   inset: 0;
@@ -22,42 +21,33 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px 0 52px; /* left clears tab strip */
-  z-index: 40;
+  padding: 0 16px;
+  z-index: 50;
   backdrop-filter: blur(8px);
   border-bottom: 1px solid rgba(30, 41, 59, 0.4);
 }
 
-/* ── Logo ─────────────────────────────────────────────────────────────────── */
+/* ── Logo ────────────────────────────────────────────────────────────────── */
 .logo {
   display: flex;
   align-items: baseline;
   gap: 8px;
   transition: opacity 0.3s, transform 0.3s;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.5px;
 }
 
 .logoBlue {
-  font-size: 15px;
-  font-weight: 900;
-  letter-spacing: -0.4px;
   color: #60a5fa;
-  text-shadow:
-    1px 1px 0 #1a3a6a,
-    2px 2px 0 #0f2248,
-    3px 3px 0 rgba(0,0,0,0.3);
+  text-shadow: 1px 1px 0 #1a3a6a, 2px 2px 0 #0f2248, 3px 3px 0 rgba(0,0,0,0.3);
 }
 
 .logoPrint {
-  font-size: 15px;
-  font-weight: 900;
   font-style: italic;
-  letter-spacing: -0.4px;
-  margin-left: -1px;
   color: #f97316;
-  text-shadow:
-    1px 1px 0 #7c3010,
-    2px 2px 0 #4a1d08,
-    3px 3px 0 rgba(0,0,0,0.3);
+  margin-left: -2px;
+  text-shadow: 1px 1px 0 #7c3010, 2px 2px 0 #4a1d08, 3px 3px 0 rgba(0,0,0,0.3);
 }
 
 .logo3D {
@@ -65,19 +55,9 @@
   font-weight: 900;
   color: #4ade80;
   vertical-align: super;
-  margin-left: 1px;
-  letter-spacing: -0.2px;
-  text-shadow:
-    1px 1px 0 #166534,
-    2px 2px 0 #0d3d1e,
-    3px 3px 0 rgba(0,0,0,0.3);
-}
-
-.logo {
-  font-size: 15px;
-  font-weight: 900;
-  color: #f1f5f9;
+  margin-left: 0px;
   letter-spacing: -0.3px;
+  text-shadow: 1px 1px 0 #166534, 2px 2px 0 #0d3d1e, 3px 3px 0 rgba(0,0,0,0.3);
 }
 
 .logoSub {
@@ -94,102 +74,37 @@
   gap: 8px;
 }
 
-.topbarBtn {
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
+/* ── Panel wrapper — slides as ONE unit, tab always visible ──────────────── */
+/* Panel is 300px. Tab is 42px. Total = 342px.
+   When closed: translateX(-300px) → only 42px tab visible on left edge.
+   When open:   translateX(0)      → full 342px panel+tab visible. */
 
-.topbarBtn:hover {
-  background: #1e293b;
-  color: #f1f5f9;
-}
-
-/* ── Tab strip — left edge, below top bar ─────────────────────────────────── */
-.tabStrip {
+.panelWrapper {
   position: absolute;
   left: 0;
-  top: 44px; /* below top bar */
+  top: 44px;
   bottom: 0;
-  width: 44px;
+  width: 342px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
   z-index: 40;
+  transform: translateX(-300px);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
-  width: 40px;
-  padding: 10px 0;
-  background: rgba(10, 16, 30, 0.82);
-  border: 1px solid rgba(30, 41, 59, 0.5);
-  border-left: none;
-  border-radius: 0 8px 8px 0;
-  color: #475569;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-  backdrop-filter: blur(8px);
+.panelWrapperOpen {
+  transform: translateX(0);
 }
 
-.tab:hover {
-  background: rgba(30, 41, 59, 0.95);
-  color: #94a3b8;
-}
-
-.tabActive {
-  background: rgba(15, 30, 55, 0.98);
-  color: var(--bp-accent, #38bdf8);
-  border-color: rgba(56, 189, 248, 0.4);
-}
-
-.tabIcon {
-  font-size: 16px;
-  line-height: 1;
-}
-
-.tabLabel {
-  font-size: 8px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  transform: rotate(180deg);
-}
-
-/* ── Slide-out panel ─────────────────────────────────────────────────────── */
+/* ── Panel content ───────────────────────────────────────────────────────── */
 .panel {
-  position: absolute;
-  left: 44px;
-  top: 44px; /* below top bar */
-  bottom: 0;
-  width: 280px;
-  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.92));
-  backdrop-filter: blur(12px);
+  width: 300px;
+  flex-shrink: 0;
+  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.94));
+  backdrop-filter: blur(14px);
   border-right: 1px solid rgba(30, 41, 59, 0.4);
   display: flex;
   flex-direction: column;
-  z-index: 39;
-  transform: translateX(calc(-100% - 44px));
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
-}
-
-.panelOpen {
-  transform: translateX(0);
-  pointer-events: all;
+  overflow: hidden;
 }
 
 .panelHeader {
@@ -217,14 +132,13 @@
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
-  line-height: 1;
 }
-
 .panelClose:hover { color: #94a3b8; }
 
 .panelScroll {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 4px 0 32px;
 }
 
@@ -238,7 +152,57 @@
   margin: 0;
 }
 
-/* ── Upload hint card ─────────────────────────────────────────────────────── */
+/* ── Tab strip — attached to right edge of panel ─────────────────────────── */
+.tabStrip {
+  width: 42px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 0;
+  background: rgba(8, 13, 24, 0.85);
+  border-right: 1px solid rgba(30, 41, 59, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 38px;
+  padding: 10px 0;
+  background: transparent;
+  border: 1px solid rgba(30, 41, 59, 0.4);
+  border-radius: 0 8px 8px 0;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tab:hover { background: rgba(30, 41, 59, 0.7); color: #94a3b8; }
+
+.tabActive {
+  color: var(--bp-accent, #38bdf8);
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(15, 30, 55, 0.8);
+}
+
+.tabIcon { font-size: 16px; line-height: 1; }
+
+.tabLabel {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+/* ── Upload hint card ────────────────────────────────────────────────────── */
 .uploadHint {
   position: absolute;
   top: 56px;
@@ -294,7 +258,6 @@
   text-align: left;
   transition: opacity 0.15s;
 }
-
 .uploadHintBtn:hover { opacity: 0.85; }
 
 .uploadHintBtnSecondary {
@@ -310,7 +273,6 @@
   text-align: left;
   transition: background 0.15s, color 0.15s;
 }
-
 .uploadHintBtnSecondary:hover { background: #1e293b; color: #f1f5f9; }
 
 .uploadHintDismiss {
@@ -323,7 +285,6 @@
   border-radius: 4px;
   line-height: 1;
 }
-
 .uploadHintDismiss:hover { color: #94a3b8; }
 
 .uploadHintDivider {
@@ -334,10 +295,7 @@
   letter-spacing: 0.5px;
 }
 
-.presetRow {
-  display: flex;
-  gap: 6px;
-}
+.presetRow { display: flex; gap: 6px; }
 
 .presetBtn {
   flex: 1;
@@ -349,15 +307,10 @@
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
   text-align: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-
-.presetBtn:hover {
-  background: #1e293b;
-  color: #94a3b8;
-  border-color: rgba(56, 189, 248, 0.3);
-}
+.presetBtn:hover { background: #1e293b; color: #94a3b8; border-color: rgba(56,189,248,0.3); }
 
 /* ── Settings content ────────────────────────────────────────────────────── */
 .settingsBody { padding: 4px 0 16px; }
@@ -383,7 +336,7 @@
 .settingLabel {
   font-size: 11px;
   color: #64748b;
-  width: 80px;
+  width: 90px;
   flex-shrink: 0;
 }
 
@@ -392,12 +345,13 @@
   accent-color: var(--bp-accent, #38bdf8);
   height: 3px;
   cursor: pointer;
+  min-width: 0;
 }
 
 .settingVal {
   font-size: 10px;
   color: #475569;
-  width: 36px;
+  width: 40px;
   text-align: right;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
@@ -411,6 +365,7 @@
   background: none;
   cursor: pointer;
   padding: 1px;
+  min-width: 0;
 }
 
 .resetBtn {
@@ -425,5 +380,4 @@
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
-
 .resetBtn:hover { color: #94a3b8; border-color: #334155; }

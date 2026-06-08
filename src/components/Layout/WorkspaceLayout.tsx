@@ -137,43 +137,46 @@ export default function WorkspaceLayout() {
         <div className={styles.topbarActions} />
       </div>
 
-      {/* Left tab strip */}
-      <div className={styles.tabStrip}>
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`${styles.tab} ${open === t.id ? styles.tabActive : ''}`}
-            onClick={() => toggle(t.id)}
-            title={t.label}
-          >
-            <span className={styles.tabIcon}>{t.icon}</span>
-            <span className={styles.tabLabel}>{t.label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Slide-out panel */}
-      <div className={`${styles.panel} ${open ? styles.panelOpen : ''}`}>
-        <div className={styles.panelHeader}>
-          <span className={styles.panelTitle}>{TABS.find((t) => t.id === open)?.label}</span>
-          <button className={styles.panelClose} onClick={() => setOpen(null)}>✕</button>
+      {/* Panel + tab — one unit that slides together.
+          Only the 42px tab strip peeks out when retracted. */}
+      <div className={`${styles.panelWrapper} ${open ? styles.panelWrapperOpen : ''}`}>
+        <div className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <span className={styles.panelTitle}>{TABS.find((t) => t.id === open)?.label ?? ''}</span>
+            <button className={styles.panelClose} onClick={() => setOpen(null)}>✕</button>
+          </div>
+          <div className={styles.panelScroll}>
+            {open === 'layers' && (
+              <>
+                <p className={styles.sectionTitle}>Layers</p>
+                <LayerPanel />
+                <p className={styles.sectionTitle}>Annotations</p>
+                <AnnotationPanel />
+                <p className={styles.sectionTitle}>Wall Types</p>
+                <WallTypeLegend
+                  types={projectWallTypes}
+                  onUpdateTypes={setProjectWallTypes}
+                  detectedIds={detectedWallTypes.map((d) => d.wallType.id)}
+                />
+              </>
+            )}
+            {open === 'settings' && <SettingsContent />}
+          </div>
         </div>
-        <div className={styles.panelScroll}>
-          {open === 'layers' && (
-            <>
-              <p className={styles.sectionTitle}>Layers</p>
-              <LayerPanel />
-              <p className={styles.sectionTitle}>Annotations</p>
-              <AnnotationPanel />
-              <p className={styles.sectionTitle}>Wall Types</p>
-              <WallTypeLegend
-                types={projectWallTypes}
-                onUpdateTypes={setProjectWallTypes}
-                detectedIds={detectedWallTypes.map((d) => d.wallType.id)}
-              />
-            </>
-          )}
-          {open === 'settings' && <SettingsContent />}
+
+        {/* Tabs on the right edge of the panel */}
+        <div className={styles.tabStrip}>
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`${styles.tab} ${open === t.id ? styles.tabActive : ''}`}
+              onClick={() => toggle(t.id)}
+              title={t.label}
+            >
+              <span className={styles.tabIcon}>{t.icon}</span>
+              <span className={styles.tabLabel}>{t.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
