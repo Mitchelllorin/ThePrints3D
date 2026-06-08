@@ -10,7 +10,6 @@ import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
 import AnnotationTool from './AnnotationTool'
 import CameraHud from './CameraHud'
-import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
@@ -181,7 +180,6 @@ export default function ModelViewer() {
     cellSize: s.gridCellSize,
   })))
   const model      = useAppStore((s) => s.model)
-  const drawings   = useAppStore((s) => s.drawings)
   const addDrawings = useAppStore((s) => s.addDrawings)
   const layers     = useAppStore((s) => s.layers)
   const measureMode    = useAppStore((s) => s.measureMode)
@@ -199,7 +197,6 @@ export default function ModelViewer() {
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
   const [isDragOver, setIsDragOver]     = useState(false)
 
-  const hasDrawings = drawings.length > 0
 
   // Disable orbit while the user is actively tracing or calibrating on the overlay
   const orbitEnabled = !overlay.traceModeActive && !overlay.calibrationMode
@@ -300,7 +297,7 @@ export default function ModelViewer() {
 
       {/* Camera preset HUD — visible whenever the model exists */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
-      {model.status === 'ready' && <ProductPlacementPanel />}
+      {/* ProductPlacementPanel hidden by default — access via Layers panel */}
 
       {model.status === 'ready' && (
         <aside

@@ -203,7 +203,7 @@ interface WorkspaceHistorySnapshot {
 }
 
 function deepCopy<T>(value: T): T {
-  if (typeof structuredClone === 'function') return structuredClone(value)
+  // Always use JSON round-trip: structuredClone fails on Immer draft Proxies
   return JSON.parse(JSON.stringify(value)) as T
 }
 
