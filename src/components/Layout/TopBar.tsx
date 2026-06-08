@@ -1,19 +1,9 @@
 import { useAppStore } from '../../store/useAppStore'
 import styles from './TopBar.module.css'
 
-export default function TopBar() {
-  const view = useAppStore((s) => s.view)
-  const setView = useAppStore((s) => s.setView)
-  const drawings = useAppStore((s) => s.drawings)
-  const buildModel = useAppStore((s) => s.buildModel)
-  const undo = useAppStore((s) => s.undo)
-  const redo = useAppStore((s) => s.redo)
-  const canUndo = useAppStore((s) => s.historyPast.length > 0)
-  const canRedo = useAppStore((s) => s.historyFuture.length > 0)
-  const sidebarOpen = useAppStore((s) => s.sidebarOpen)
+export default function TopBar({ onSettingsOpen, settingsOpen }: { onSettingsOpen: () => void; settingsOpen: boolean }) {
+  const sidebarOpen  = useAppStore((s) => s.sidebarOpen)
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
-
-  const hasDrawings = drawings.length > 0
 
   return (
     <header className={styles.topbar}>
@@ -21,70 +11,27 @@ export default function TopBar() {
         <button
           className={styles.menuBtn}
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          title="Toggle sidebar"
+          title="Toggle layers panel"
         >
           ☰
         </button>
         <div className={styles.brand}>
-          <span className={styles.brandIcon}>📐</span>
           <span className={styles.brandName}>
             <span className={styles.brandBlue}>Blue</span>
             <span>Print3D</span>
           </span>
+          <span className={styles.brandSub}>by LearnIt3D</span>
         </div>
       </div>
 
-      <nav className={styles.nav}>
-        <button
-          className={`${styles.navBtn} ${view === 'model' ? styles.active : ''}`}
-          onClick={() => setView('model')}
-        >
-          3D Workspace
-        </button>
-        <button
-          className={`${styles.navBtn} ${view === 'upload' ? styles.active : ''}`}
-          onClick={() => setView('upload')}
-        >
-          Upload
-        </button>
-        <button
-          className={`${styles.navBtn} ${view === 'drawings' ? styles.active : ''} ${!hasDrawings ? styles.disabled : ''}`}
-          onClick={() => hasDrawings && setView('drawings')}
-          disabled={!hasDrawings}
-        >
-          Sheets
-          {hasDrawings && <span className={styles.badge}>{drawings.length}</span>}
-        </button>
-        <button
-          className={`${styles.navBtn} ${view === 'tools' ? styles.active : ''}`}
-          onClick={() => setView('tools')}
-        >
-          Toolbox
-        </button>
-      </nav>
-
       <div className={styles.right}>
         <button
-          className={styles.undoBtn}
-          onClick={undo}
-          disabled={!canUndo}
-          title="Undo"
+          className={`${styles.settingsBtn} ${settingsOpen ? styles.settingsBtnActive : ''}`}
+          onClick={onSettingsOpen}
+          title="Display settings"
         >
-          ↶ Undo
+          ⚙
         </button>
-        <button
-          className={styles.undoBtn}
-          onClick={redo}
-          disabled={!canRedo}
-          title="Redo"
-        >
-          ↷ Redo
-        </button>
-        {hasDrawings && view !== 'model' && (
-          <button className={styles.buildBtn} onClick={buildModel}>
-            ⬡ Build 3D Model
-          </button>
-        )}
       </div>
     </header>
   )

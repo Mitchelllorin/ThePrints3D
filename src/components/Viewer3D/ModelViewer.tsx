@@ -11,6 +11,7 @@ import {
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
 import AnnotationTool from './AnnotationTool'
@@ -179,30 +180,53 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 }
 
 export default function ModelViewer() {
-  const model = useAppStore((s) => s.model)
-  const drawings = useAppStore((s) => s.drawings)
-  const layers = useAppStore((s) => s.layers)
-  const measureMode = useAppStore((s) => s.measureMode)
+  const gridSettings = useUISettingsStore((s) => ({
+    opacity: s.gridOpacity,
+    color: s.gridColor,
+    cellSize: s.gridCellSize,
+    divisions: s.gridDivisions,
+  }))
+  const model      = useAppStore((s) => s.model)
+  const drawings   = useAppStore((s) => s.drawings)
+  const addDrawings = useAppStore((s) => s.addDrawings)
+  const layers     = useAppStore((s) => s.layers)
+  const measureMode    = useAppStore((s) => s.measureMode)
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
-  const annotateMode = useAppStore((s) => s.annotateMode)
+  const annotateMode    = useAppStore((s) => s.annotateMode)
   const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
-  const annotations = useAppStore((s) => s.annotations)
-  const addAnnotation = useAppStore((s) => s.addAnnotation)
+  const annotations    = useAppStore((s) => s.annotations)
+  const addAnnotation  = useAppStore((s) => s.addAnnotation)
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
-  const measurements = useAppStore((s) => s.measurements)
-  const overlay = useAppStore((s) => s.floorplanOverlay)
+  const measurements   = useAppStore((s) => s.measurements)
+  const overlay        = useAppStore((s) => s.floorplanOverlay)
   const buildForMe = useAppStore((s) => s.buildForMe)
   const buildResult = useAppStore((s) => s.buildResult)
   const [showWizard, setShowWizard] = useState(false)
-  const controlsRef = useRef<OrbitControlsImpl | null>(null)
+  const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
-  const [pendingForm, setPendingForm] = useState<FormState | null>(null)
+  const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
+  const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls = drawings.some((d) => d.parsedWalls.length > 0)
 
+  const hasDrawings = drawings.length > 0
 
   // Disable orbit while the user is actively tracing or calibrating on the overlay
   const orbitEnabled = !overlay.traceModeActive && !overlay.calibrationMode
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+  function handleDragLeave() { setIsDragOver(false) }
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragOver(false)
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      /\.(pdf|png|jpe?g|tiff?|webp)$/i.test(f.name)
+    )
+    if (files.length > 0) addDrawings(files)
+  }
 
   function handlePlaceRequest(position: [number, number, number], screenX: number, screenY: number) {
     setPendingForm({ position3D: position, screenX, screenY })
@@ -220,7 +244,12 @@ export default function ModelViewer() {
   }
 
   return (
-    <div className={styles.viewer}>
+    <div
+      className={styles.viewer}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Toolbar overlay */}
       {model.status === 'ready' && (
         <div className={styles.toolbar}>
@@ -399,15 +428,17 @@ export default function ModelViewer() {
         </Suspense>
 
         <Grid
-          args={[50, 50]}
-          cellSize={1}
+          args={[gridSettings.cellSize * gridSettings.divisions * 2, gridSettings.cellSize * gridSettings.divisions * 2]}
+          cellSize={gridSettings.cellSize}
           cellThickness={0.4}
-          cellColor="#1e3a5f"
-          sectionSize={5}
+          cellColor={gridSettings.color}
+          sectionSize={gridSettings.cellSize * 5}
           sectionThickness={0.8}
-          sectionColor="#1e4080"
-          fadeDistance={60}
+          sectionColor={gridSettings.color}
+          fadeDistance={gridSettings.cellSize * gridSettings.divisions * 4}
           position={[0, -0.01, 0]}
+          opacity={gridSettings.opacity}
+          transparent
         />
 
         <FloorplanOverlay />
@@ -469,11 +500,38 @@ export default function ModelViewer() {
         </div>
       )}
 
-      {model.status === 'idle' && drawings.length === 0 && (
-        <div className={styles.overlay}>
-          <div className={styles.idleMsg}>
-            <p>3D workspace ready.</p>
-            <p className={styles.hint}>Upload a print or load a preset in the workspace panel.</p>
+      {/* Drop zone — shown when no drawings and not actively building */}
+      {!hasDrawings && (
+        <div className={`${styles.dropZone} ${isDragOver ? styles.dropZoneActive : ''}`}>
+          <div className={styles.dropZoneInner}>
+            <div className={styles.dropZoneIcon}>📐</div>
+            <p className={styles.dropZoneTitle}>
+              {isDragOver ? 'Drop to load' : 'Drop a floor plan here'}
+            </p>
+            <p className={styles.dropZoneHint}>PDF, PNG, JPG, TIFF · drag in or click below</p>
+            <label className={styles.dropZoneBtn}>
+              Browse files
+              <input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? [])
+                  if (files.length) addDrawings(files)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+
+      {isDragOver && hasDrawings && (
+        <div className={`${styles.dropZone} ${styles.dropZoneActive}`}>
+          <div className={styles.dropZoneInner}>
+            <div className={styles.dropZoneIcon}>📐</div>
+            <p className={styles.dropZoneTitle}>Drop to add print</p>
           </div>
         </div>
       )}

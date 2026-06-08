@@ -1,7 +1,8 @@
 .sidebar {
   width: 260px;
   flex-shrink: 0;
-  background: #0f172a;
+  background: rgba(15, 23, 42, var(--bp-sidebar-opacity, 0.95));
+  backdrop-filter: blur(8px);
   border-right: 1px solid #1e293b;
   overflow-y: auto;
   overflow-x: hidden;

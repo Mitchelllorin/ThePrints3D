@@ -1,3 +1,12 @@
+:root {
+  --bp-topbar-opacity: 0.95;
+  --bp-sidebar-opacity: 0.95;
+  --bp-panel-opacity: 0.92;
+  --bp-logo-opacity: 1;
+  --bp-logo-scale: 1;
+  --bp-accent: #38bdf8;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
