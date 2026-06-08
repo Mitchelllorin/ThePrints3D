@@ -434,40 +434,9 @@ export default function ModelViewer() {
         </div>
       )}
 
-      {/* Drop zone — shown when no drawings and not actively building */}
-      {!hasDrawings && (
-        <div className={`${styles.dropZone} ${isDragOver ? styles.dropZoneActive : ''}`}>
-          <div className={styles.dropZoneInner}>
-            <div className={styles.dropZoneIcon}>📐</div>
-            <p className={styles.dropZoneTitle}>
-              {isDragOver ? 'Drop to load' : 'Drop a floor plan here'}
-            </p>
-            <p className={styles.dropZoneHint}>PDF, PNG, JPG, TIFF · drag in or click below</p>
-            <label className={styles.dropZoneBtn}>
-              Browse files
-              <input
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
-                multiple
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? [])
-                  if (files.length) addDrawings(files)
-                  e.target.value = ''
-                }}
-              />
-            </label>
-          </div>
-        </div>
-      )}
-
-      {isDragOver && hasDrawings && (
-        <div className={`${styles.dropZone} ${styles.dropZoneActive}`}>
-          <div className={styles.dropZoneInner}>
-            <div className={styles.dropZoneIcon}>📐</div>
-            <p className={styles.dropZoneTitle}>Drop to add print</p>
-          </div>
-        </div>
+      {/* Drag-over border — only a thin ring, never blocks the workspace */}
+      {isDragOver && (
+        <div className={styles.dragRing} />
       )}
     </div>
   )

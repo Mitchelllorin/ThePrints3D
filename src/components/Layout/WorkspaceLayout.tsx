@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
@@ -7,9 +7,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import styles from './WorkspaceLayout.module.css'
 
-// ── Settings panel content (inline — no separate component needed) ──────────
-import { DEFAULT_UI_SETTINGS } from '../../store/useUISettingsStore'
-
+// ── Settings panel content ───────────────────────────────────────────────────
 function SettingsContent() {
   const s = useUISettingsStore()
   const set = useUISettingsStore((x) => x.set)
@@ -64,8 +62,7 @@ function SettingsContent() {
   )
 }
 
-// ── Panel definitions ────────────────────────────────────────────────────────
-
+// ── Panel tabs ───────────────────────────────────────────────────────────────
 type PanelId = 'layers' | 'settings'
 
 const TABS: Array<{ id: PanelId; icon: string; label: string }> = [
@@ -74,34 +71,60 @@ const TABS: Array<{ id: PanelId; icon: string; label: string }> = [
 ]
 
 // ── Layout ───────────────────────────────────────────────────────────────────
-
 export default function WorkspaceLayout() {
   const [open, setOpen] = useState<PanelId | null>(null)
-  const projectWallTypes  = useAppStore((s) => s.projectWallTypes)
-  const detectedWallTypes = useAppStore((s) => s.detectedWallTypes)
+  const [uploadDismissed, setUploadDismissed] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const drawings           = useAppStore((s) => s.drawings)
+  const addDrawings        = useAppStore((s) => s.addDrawings)
+  const projectWallTypes   = useAppStore((s) => s.projectWallTypes)
+  const detectedWallTypes  = useAppStore((s) => s.detectedWallTypes)
   const setProjectWallTypes = useAppStore((s) => s.setProjectWallTypes)
   const logoOpacity = useUISettingsStore((s) => s.logoOpacity)
   const logoSize    = useUISettingsStore((s) => s.logoSize)
+  const topbarOpacity = useUISettingsStore((s) => s.topbarOpacity)
+
+  const hasDrawings = drawings.length > 0
+  const showUploadHint = !hasDrawings && !uploadDismissed
 
   const toggle = (id: PanelId) => setOpen((prev) => (prev === id ? null : id))
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? [])
+    if (files.length) { addDrawings(files); setUploadDismissed(true) }
+    e.target.value = ''
+  }
+
   return (
     <div className={styles.root}>
-      {/* 3D viewport — full screen, always behind */}
+      {/* Hidden file input */}
+      <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
+        multiple style={{ display: 'none' }} onChange={handleFileChange} />
+
+      {/* 3D Viewport — fills everything below the top bar */}
       <div className={styles.viewport}>
         <ModelViewer />
       </div>
 
-      {/* Logo — top-left watermark, adjustable via settings */}
-      <div
-        className={styles.logo}
-        style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'top left' }}
-      >
-        <span className={styles.logoBlue}>Blue</span>Print3D
-        <span className={styles.logoSub}>by LearnIt3D</span>
+      {/* Top bar — thin, semi-transparent, sits above viewport */}
+      <div className={styles.topbar} style={{ background: `rgba(10,16,30,${topbarOpacity})` }}>
+        <div
+          className={styles.logo}
+          style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center' }}
+        >
+          <span className={styles.logoBlue}>Blue</span>Print3D
+          <span className={styles.logoSub}>by LearnIt3D</span>
+        </div>
+
+        <div className={styles.topbarActions}>
+          <button className={styles.topbarBtn} onClick={() => fileInputRef.current?.click()} title="Upload a floor plan">
+            + Upload
+          </button>
+        </div>
       </div>
 
-      {/* Tab strip — left edge */}
+      {/* Left tab strip */}
       <div className={styles.tabStrip}>
         {TABS.map((t) => (
           <button
@@ -119,9 +142,7 @@ export default function WorkspaceLayout() {
       {/* Slide-out panel */}
       <div className={`${styles.panel} ${open ? styles.panelOpen : ''}`}>
         <div className={styles.panelHeader}>
-          <span className={styles.panelTitle}>
-            {TABS.find((t) => t.id === open)?.label ?? ''}
-          </span>
+          <span className={styles.panelTitle}>{TABS.find((t) => t.id === open)?.label}</span>
           <button className={styles.panelClose} onClick={() => setOpen(null)}>✕</button>
         </div>
         <div className={styles.panelScroll}>
@@ -142,6 +163,27 @@ export default function WorkspaceLayout() {
           {open === 'settings' && <SettingsContent />}
         </div>
       </div>
+
+      {/* Upload hint — small dismissable card, top-right, only when no drawings */}
+      {showUploadHint && (
+        <div className={styles.uploadHint}>
+          <div className={styles.uploadHintText}>
+            <span className={styles.uploadHintIcon}>📐</span>
+            <div>
+              <div className={styles.uploadHintTitle}>Drop a floor plan</div>
+              <div className={styles.uploadHintSub}>PDF · PNG · JPG · TIFF</div>
+            </div>
+          </div>
+          <div className={styles.uploadHintActions}>
+            <button className={styles.uploadHintBtn} onClick={() => fileInputRef.current?.click()}>
+              Browse files
+            </button>
+            <button className={styles.uploadHintDismiss} onClick={() => setUploadDismissed(true)} title="Dismiss">
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
