@@ -6,7 +6,6 @@ import {
   Environment,
   GizmoHelper,
   GizmoViewport,
-  Stats,
 } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
@@ -437,8 +436,9 @@ export default function ModelViewer() {
           sectionThickness={0.8}
           sectionColor={gridSettings.color}
           fadeDistance={gridSettings.cellSize * gridSettings.divisions * 4}
+          fadeStrength={1 + (1 - gridSettings.opacity) * 8}
           position={[0, -0.01, 0]}
-          {...{ opacity: gridSettings.opacity, transparent: true } as Record<string, unknown>}
+
         />
 
         <FloorplanOverlay />
@@ -489,7 +489,7 @@ export default function ModelViewer() {
           />
         </GizmoHelper>
 
-        <Stats className={styles.stats} />
+
       </Canvas>
 
       {model.status === 'building' && (
