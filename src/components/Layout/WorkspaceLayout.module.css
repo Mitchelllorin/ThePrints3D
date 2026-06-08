@@ -1,0 +1,398 @@
+/* ── Root ─────────────────────────────────────────────────────────────────── */
+.root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #060d1a;
+}
+
+/* ── Viewport — fills everything, sits behind all UI ─────────────────────── */
+.viewport {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 0 52px; /* left clears tab strip */
+  z-index: 40;
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(30, 41, 59, 0.4);
+}
+
+/* ── Logo ─────────────────────────────────────────────────────────────────── */
+.logo {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.logoBlue {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--bp-accent, #60a5fa);
+  text-shadow: 0 0 8px rgba(96, 165, 250, 0.35);
+}
+
+.logo {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.logoSub {
+  font-size: 9px;
+  font-weight: 500;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.topbarBtn {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.topbarBtn:hover {
+  background: #1e293b;
+  color: #f1f5f9;
+}
+
+/* ── Tab strip — left edge, below top bar ─────────────────────────────────── */
+.tabStrip {
+  position: absolute;
+  left: 0;
+  top: 44px; /* below top bar */
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  z-index: 40;
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 40px;
+  padding: 10px 0;
+  background: rgba(10, 16, 30, 0.82);
+  border: 1px solid rgba(30, 41, 59, 0.5);
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  backdrop-filter: blur(8px);
+}
+
+.tab:hover {
+  background: rgba(30, 41, 59, 0.95);
+  color: #94a3b8;
+}
+
+.tabActive {
+  background: rgba(15, 30, 55, 0.98);
+  color: var(--bp-accent, #38bdf8);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.tabIcon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tabLabel {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+/* ── Slide-out panel ─────────────────────────────────────────────────────── */
+.panel {
+  position: absolute;
+  left: 44px;
+  top: 44px; /* below top bar */
+  bottom: 0;
+  width: 280px;
+  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.92));
+  backdrop-filter: blur(12px);
+  border-right: 1px solid rgba(30, 41, 59, 0.4);
+  display: flex;
+  flex-direction: column;
+  z-index: 39;
+  transform: translateX(calc(-100% - 44px));
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+}
+
+.panelOpen {
+  transform: translateX(0);
+  pointer-events: all;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+  flex-shrink: 0;
+}
+
+.panelTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.panelClose {
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.panelClose:hover { color: #94a3b8; }
+
+.panelScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0 32px;
+}
+
+.sectionTitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  padding: 12px 16px 4px;
+  margin: 0;
+}
+
+/* ── Upload hint card ─────────────────────────────────────────────────────── */
+.uploadHint {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.94));
+  border: 1px solid rgba(30, 41, 59, 0.7);
+  border-radius: 14px;
+  backdrop-filter: blur(14px);
+  padding: 16px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 240px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+}
+
+.uploadHintHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.uploadHintTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.uploadHintSub {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.uploadHintActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.uploadHintBtn {
+  width: 100%;
+  background: var(--bp-accent, #38bdf8);
+  color: #0f172a;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: opacity 0.15s;
+}
+
+.uploadHintBtn:hover { opacity: 0.85; }
+
+.uploadHintBtnSecondary {
+  width: 100%;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.uploadHintBtnSecondary:hover { background: #1e293b; color: #f1f5f9; }
+
+.uploadHintDismiss {
+  background: transparent;
+  border: none;
+  color: #475569;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.uploadHintDismiss:hover { color: #94a3b8; }
+
+.uploadHintDivider {
+  font-size: 10px;
+  color: #334155;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.presetRow {
+  display: flex;
+  gap: 6px;
+}
+
+.presetBtn {
+  flex: 1;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(30, 41, 59, 0.7);
+  color: #64748b;
+  border-radius: 7px;
+  padding: 6px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-align: center;
+}
+
+.presetBtn:hover {
+  background: #1e293b;
+  color: #94a3b8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+/* ── Settings content ────────────────────────────────────────────────────── */
+.settingsBody { padding: 4px 0 16px; }
+
+.settingGroup {
+  font-size: 10px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  padding: 12px 16px 4px;
+  margin: 0;
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 16px;
+  cursor: default;
+}
+
+.settingLabel {
+  font-size: 11px;
+  color: #64748b;
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.settingSlider {
+  flex: 1;
+  accent-color: var(--bp-accent, #38bdf8);
+  height: 3px;
+  cursor: pointer;
+}
+
+.settingVal {
+  font-size: 10px;
+  color: #475569;
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.settingColor {
+  flex: 1;
+  height: 24px;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  padding: 1px;
+}
+
+.resetBtn {
+  margin: 16px 16px 0;
+  width: calc(100% - 32px);
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  color: #475569;
+  font-size: 11px;
+  padding: 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.resetBtn:hover { color: #94a3b8; border-color: #334155; }

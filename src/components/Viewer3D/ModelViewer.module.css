@@ -29,6 +29,22 @@
   border: 2px dashed var(--bp-accent, #38bdf8);
 }
 
+/* Thin ring shown on drag-over — doesn't block the workspace */
+.dragRing {
+  position: absolute;
+  inset: 4px;
+  border: 2px dashed var(--bp-accent, #38bdf8);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 50;
+  animation: ringPulse 1s ease-in-out infinite;
+}
+
+@keyframes ringPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .dropZoneInner {
   display: flex;
   flex-direction: column;

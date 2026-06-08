@@ -1,16 +1,11 @@
-import { useRef, useEffect, Suspense, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import {
-  OrbitControls,
-  Grid,
-  Environment,
-  GizmoHelper,
-  GizmoViewport,
-} from '@react-three/drei'
+import { OrbitControls, Grid } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useShallow } from 'zustand/react/shallow'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
 import AnnotationTool from './AnnotationTool'
@@ -21,6 +16,7 @@ import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import ConstructionWizard from '../ConstructionWizard/ConstructionWizard'
 import LiveWallsLayer from './LiveWallsLayer'
+import FloatingLogo3D from './FloatingLogo3D'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -180,12 +176,11 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 }
 
 export default function ModelViewer() {
-  const gridSettings = useUISettingsStore((s) => ({
-    opacity: s.gridOpacity,
+  const gridSettings = useUISettingsStore(useShallow((s) => ({
+    visible: s.gridVisible,
     color: s.gridColor,
     cellSize: s.gridCellSize,
-    divisions: s.gridDivisions,
-  }))
+  })))
   const model      = useAppStore((s) => s.model)
   const drawings   = useAppStore((s) => s.drawings)
   const addDrawings = useAppStore((s) => s.addDrawings)
@@ -209,7 +204,6 @@ export default function ModelViewer() {
   const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls = drawings.some((d) => d.parsedWalls.length > 0)
 
-  const hasDrawings = drawings.length > 0
 
   // Disable orbit while the user is actively tracing or calibrating on the overlay
   const orbitEnabled = !overlay.traceModeActive && !overlay.calibrationMode
@@ -412,35 +406,28 @@ export default function ModelViewer() {
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
         style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
+        onCreated={({ gl }) => { gl.setClearColor('#060d1a') }}
       >
         <CameraRig />
-        <ambientLight intensity={0.4} />
-        <directionalLight
-          position={[20, 30, 20]}
-          intensity={1.2}
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-        />
-        <directionalLight position={[-15, 20, -10]} intensity={0.4} />
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[10, 20, 10]} intensity={1.0} />
 
-        <Suspense fallback={null}>
-          <Environment preset="city" />
-        </Suspense>
+        {gridSettings.visible && (
+          <Grid
+            args={[200, 200]}
+            cellSize={gridSettings.cellSize}
+            cellThickness={0.5}
+            cellColor={gridSettings.color}
+            sectionSize={gridSettings.cellSize * 5}
+            sectionThickness={1.2}
+            sectionColor={gridSettings.color}
+            fadeDistance={120}
+            fadeStrength={1.5}
+            position={[0, -0.01, 0]}
+          />
+        )}
 
-        <Grid
-          args={[gridSettings.cellSize * gridSettings.divisions * 2, gridSettings.cellSize * gridSettings.divisions * 2]}
-          cellSize={gridSettings.cellSize}
-          cellThickness={0.4}
-          cellColor={gridSettings.color}
-          sectionSize={gridSettings.cellSize * 5}
-          sectionThickness={0.8}
-          sectionColor={gridSettings.color}
-          fadeDistance={gridSettings.cellSize * gridSettings.divisions * 4}
-          fadeStrength={1 + (1 - gridSettings.opacity) * 8}
-          position={[0, -0.01, 0]}
-
-        />
-
+        <FloatingLogo3D />
         <FloorplanOverlay />
         <LiveWallsLayer />
 
@@ -450,9 +437,7 @@ export default function ModelViewer() {
             <BuildingModel layers={layers} />
             <ProductPlacements />
             {model.status === 'ready' && <MeasureTool key={measureMode ? 'measure-on' : 'measure-off'} />}
-            {model.status === 'ready' && (
-              <AnnotationTool onPlaceRequest={handlePlaceRequest} />
-            )}
+            {model.status === 'ready' && <AnnotationTool onPlaceRequest={handlePlaceRequest} />}
           </>
         )}
 
@@ -469,25 +454,8 @@ export default function ModelViewer() {
           maxDistance={200}
           enablePan
           screenSpacePanning
-          mouseButtons={{
-            LEFT: THREE.MOUSE.ROTATE,
-            MIDDLE: THREE.MOUSE.DOLLY,
-            RIGHT: THREE.MOUSE.PAN,
-          }}
-          touches={{
-            ONE: THREE.TOUCH.ROTATE,
-            TWO: THREE.TOUCH.DOLLY_PAN,
-          }}
         />
-
         <CameraPresetApplier controlsRef={controlsRef} />
-
-        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-          <GizmoViewport
-            axisColors={['#f87171', '#4ade80', '#60a5fa']}
-            labelColor="#f1f5f9"
-          />
-        </GizmoHelper>
 
 
       </Canvas>
@@ -501,40 +469,9 @@ export default function ModelViewer() {
         </div>
       )}
 
-      {/* Drop zone — shown when no drawings and not actively building */}
-      {!hasDrawings && (
-        <div className={`${styles.dropZone} ${isDragOver ? styles.dropZoneActive : ''}`}>
-          <div className={styles.dropZoneInner}>
-            <div className={styles.dropZoneIcon}>📐</div>
-            <p className={styles.dropZoneTitle}>
-              {isDragOver ? 'Drop to load' : 'Drop a floor plan here'}
-            </p>
-            <p className={styles.dropZoneHint}>PDF, PNG, JPG, TIFF · drag in or click below</p>
-            <label className={styles.dropZoneBtn}>
-              Browse files
-              <input
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
-                multiple
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? [])
-                  if (files.length) addDrawings(files)
-                  e.target.value = ''
-                }}
-              />
-            </label>
-          </div>
-        </div>
-      )}
-
-      {isDragOver && hasDrawings && (
-        <div className={`${styles.dropZone} ${styles.dropZoneActive}`}>
-          <div className={styles.dropZoneInner}>
-            <div className={styles.dropZoneIcon}>📐</div>
-            <p className={styles.dropZoneTitle}>Drop to add print</p>
-          </div>
-        </div>
+      {/* Drag-over border — only a thin ring, never blocks the workspace */}
+      {isDragOver && (
+        <div className={styles.dragRing} />
       )}
     </div>
   )
