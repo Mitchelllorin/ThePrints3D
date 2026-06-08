@@ -134,11 +134,7 @@ export default function WorkspaceLayout() {
           <span className={styles.logoSub}>by LearnIt3D</span>
         </div>
 
-        <div className={styles.topbarActions}>
-          <button className={styles.topbarBtn} onClick={() => fileInputRef.current?.click()} title="Upload a floor plan">
-            + Upload
-          </button>
-        </div>
+        <div className={styles.topbarActions} />
       </div>
 
       {/* Left tab strip */}
