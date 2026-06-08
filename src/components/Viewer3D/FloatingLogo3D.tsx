@@ -27,25 +27,25 @@ function WordmarkMesh({ opacity }: { opacity: number }) {
   return (
     // Wrap in a group so all three words move as one unit when the group bounces
     <group>
-      {/* "Blue" */}
-      <group position={[-2.6, 0, 0]}>
+      {/* Blue */}
+      <group position={[-2.56, 0, 0]}>
         <Text3D font={FONT_URL} size={size} height={height} {...bevel}>
           Blue
           <meshStandardMaterial color="#60a5fa" roughness={0.3} metalness={0.2} transparent opacity={opacity} />
         </Text3D>
       </group>
 
-      {/* "Print" — italic skew via rotation */}
-      <group position={[-0.82, 0, 0]} rotation={[0, 0, 0]}>
+      {/* Print — tight against Blue */}
+      <group position={[-0.82, 0, 0]}>
         <Text3D font={FONT_URL} size={size} height={height} {...bevel}>
           Print
           <meshStandardMaterial color="#f97316" roughness={0.3} metalness={0.2} transparent opacity={opacity} />
         </Text3D>
       </group>
 
-      {/* "3D" — same size, slightly elevated */}
-      <group position={[1.62, 0.22, 0]}>
-        <Text3D font={FONT_URL} size={size * 0.72} height={height * 0.8} {...bevel}>
+      {/* 3D — superscript, tight against Print */}
+      <group position={[1.52, 0.22, 0]}>
+        <Text3D font={FONT_URL} size={size * 0.68} height={height * 0.75} {...bevel}>
           3D
           <meshStandardMaterial color="#4ade80" roughness={0.3} metalness={0.3} transparent opacity={opacity} />
         </Text3D>

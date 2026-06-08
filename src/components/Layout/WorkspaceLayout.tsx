@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { listPresetDefinitions } from '../../services/presetDrawings'
 import ModelViewer from '../Viewer3D/ModelViewer'
+import LogoBadge3D from './LogoBadge3D'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
@@ -127,10 +128,9 @@ export default function WorkspaceLayout() {
       {/* Top bar — thin, semi-transparent, sits above viewport */}
       <div className={styles.topbar} style={{ background: `rgba(10,16,30,${topbarOpacity})` }}>
         <div
-          className={styles.logo}
-          style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center' }}
+          style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center', display: 'flex', alignItems: 'center', gap: 8 }}
         >
-          <span className={styles.logoBlue}>Blue</span><span className={styles.logoPrint}>Print</span><span className={styles.logo3D}>3D</span>
+          <LogoBadge3D />
           <span className={styles.logoSub}>by LearnIt3D</span>
         </div>
 
