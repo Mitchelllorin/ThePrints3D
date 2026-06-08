@@ -383,13 +383,14 @@ export default function ModelViewer() {
         <directionalLight position={[10, 20, 10]} intensity={1.0} />
 
         <Grid
-          cellSize={1}
-          cellThickness={0.4}
-          cellColor="#1e3a5f"
-          sectionSize={5}
-          sectionThickness={0.8}
-          sectionColor="#1e4080"
-          fadeDistance={60}
+          cellSize={gridSettings.cellSize}
+          cellThickness={0.5}
+          cellColor={gridSettings.color}
+          sectionSize={gridSettings.cellSize * 5}
+          sectionThickness={1}
+          sectionColor={gridSettings.color}
+          fadeDistance={80}
+          fadeStrength={2}
           position={[0, -0.01, 0]}
         />
 

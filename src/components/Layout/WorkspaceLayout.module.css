@@ -212,69 +212,85 @@
   position: absolute;
   top: 56px;
   right: 16px;
-  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.92));
-  border: 1px solid rgba(30, 41, 59, 0.6);
-  border-radius: 12px;
-  backdrop-filter: blur(12px);
-  padding: 14px 16px;
+  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.94));
+  border: 1px solid rgba(30, 41, 59, 0.7);
+  border-radius: 14px;
+  backdrop-filter: blur(14px);
+  padding: 16px;
   z-index: 50;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-width: 220px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  width: 240px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
 }
 
-.uploadHintText {
+.uploadHintHeader {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
 }
-
-.uploadHintIcon { font-size: 22px; }
 
 .uploadHintTitle {
   font-size: 13px;
-  font-weight: 600;
-  color: #e2e8f0;
+  font-weight: 700;
+  color: #f1f5f9;
 }
 
 .uploadHintSub {
   font-size: 11px;
-  color: #475569;
-  margin-top: 2px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .uploadHintActions {
   display: flex;
-  gap: 8px;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .uploadHintBtn {
-  flex: 1;
+  width: 100%;
   background: var(--bp-accent, #38bdf8);
   color: #0f172a;
   border: none;
-  border-radius: 7px;
-  padding: 7px 12px;
+  border-radius: 8px;
+  padding: 8px 14px;
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  text-align: left;
   transition: opacity 0.15s;
 }
 
 .uploadHintBtn:hover { opacity: 0.85; }
 
+.uploadHintBtnSecondary {
+  width: 100%;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.uploadHintBtnSecondary:hover { background: #1e293b; color: #f1f5f9; }
+
 .uploadHintDismiss {
   background: transparent;
-  border: 1px solid rgba(30, 41, 59, 0.6);
+  border: none;
   color: #475569;
-  border-radius: 6px;
-  padding: 6px 9px;
-  font-size: 12px;
+  font-size: 14px;
   cursor: pointer;
-  transition: color 0.15s;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
 }
 
 .uploadHintDismiss:hover { color: #94a3b8; }

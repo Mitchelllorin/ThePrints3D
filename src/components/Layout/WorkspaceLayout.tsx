@@ -164,22 +164,20 @@ export default function WorkspaceLayout() {
         </div>
       </div>
 
-      {/* Upload hint — small dismissable card, top-right, only when no drawings */}
+      {/* Onboarding card — dismissable, top-right, only when no drawings loaded */}
       {showUploadHint && (
         <div className={styles.uploadHint}>
-          <div className={styles.uploadHintText}>
-            <span className={styles.uploadHintIcon}>📐</span>
-            <div>
-              <div className={styles.uploadHintTitle}>Drop a floor plan</div>
-              <div className={styles.uploadHintSub}>PDF · PNG · JPG · TIFF</div>
-            </div>
+          <div className={styles.uploadHintHeader}>
+            <span className={styles.uploadHintTitle}>Get started</span>
+            <button className={styles.uploadHintDismiss} onClick={() => setUploadDismissed(true)} title="Dismiss">✕</button>
           </div>
+          <p className={styles.uploadHintSub}>Import a floor plan to begin — drag it anywhere onto the grid, or choose an option below.</p>
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintBtn} onClick={() => fileInputRef.current?.click()}>
-              Browse files
+              📄 Browse files
             </button>
-            <button className={styles.uploadHintDismiss} onClick={() => setUploadDismissed(true)} title="Dismiss">
-              ✕
+            <button className={styles.uploadHintBtnSecondary} onClick={() => fileInputRef.current?.click()}>
+              📷 Scan with camera
             </button>
           </div>
         </div>
