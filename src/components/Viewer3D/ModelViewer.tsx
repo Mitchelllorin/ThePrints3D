@@ -1,11 +1,8 @@
-import { useRef, useEffect, Suspense, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import {
   OrbitControls,
   Grid,
-  Environment,
-  GizmoHelper,
-  GizmoViewport,
 } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
@@ -392,10 +389,6 @@ export default function ModelViewer() {
         />
         <directionalLight position={[-15, 20, -10]} intensity={0.4} />
 
-        <Suspense fallback={null}>
-          <Environment preset="city" />
-        </Suspense>
-
         <Grid
           args={[gridSettings.cellSize * gridSettings.divisions * 2, gridSettings.cellSize * gridSettings.divisions * 2]}
           cellSize={gridSettings.cellSize}
@@ -449,13 +442,6 @@ export default function ModelViewer() {
         />
 
         <CameraPresetApplier controlsRef={controlsRef} />
-
-        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-          <GizmoViewport
-            axisColors={['#f87171', '#4ade80', '#60a5fa']}
-            labelColor="#f1f5f9"
-          />
-        </GizmoHelper>
 
 
       </Canvas>
