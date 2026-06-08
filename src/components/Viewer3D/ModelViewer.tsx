@@ -437,8 +437,7 @@ export default function ModelViewer() {
           sectionColor={gridSettings.color}
           fadeDistance={gridSettings.cellSize * gridSettings.divisions * 4}
           position={[0, -0.01, 0]}
-          opacity={gridSettings.opacity}
-          transparent
+          {...{ opacity: gridSettings.opacity, transparent: true } as Record<string, unknown>}
         />
 
         <FloorplanOverlay />
