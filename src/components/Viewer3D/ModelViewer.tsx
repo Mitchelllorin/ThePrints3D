@@ -1,9 +1,6 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import {
-  OrbitControls,
-  Grid,
-} from '@react-three/drei'
+import { OrbitControls, Grid } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
@@ -378,27 +375,20 @@ export default function ModelViewer() {
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
         style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
+        onCreated={({ gl }) => { gl.setClearColor('#060d1a') }}
       >
         <CameraRig />
-        <ambientLight intensity={0.4} />
-        <directionalLight
-          position={[20, 30, 20]}
-          intensity={1.2}
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-        />
-        <directionalLight position={[-15, 20, -10]} intensity={0.4} />
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[10, 20, 10]} intensity={1.0} />
 
         <Grid
-          args={[gridSettings.cellSize * gridSettings.divisions * 2, gridSettings.cellSize * gridSettings.divisions * 2]}
-          cellSize={gridSettings.cellSize}
+          cellSize={1}
           cellThickness={0.4}
-          cellColor={gridSettings.color}
-          sectionSize={gridSettings.cellSize * 5}
+          cellColor="#1e3a5f"
+          sectionSize={5}
           sectionThickness={0.8}
-          sectionColor={gridSettings.color}
-          fadeDistance={gridSettings.cellSize * gridSettings.divisions * 4}
-          fadeStrength={1 + (1 - gridSettings.opacity) * 8}
+          sectionColor="#1e4080"
+          fadeDistance={60}
           position={[0, -0.01, 0]}
         />
 
@@ -411,9 +401,7 @@ export default function ModelViewer() {
             <BuildingModel layers={layers} />
             <ProductPlacements />
             {model.status === 'ready' && <MeasureTool key={measureMode ? 'measure-on' : 'measure-off'} />}
-            {model.status === 'ready' && (
-              <AnnotationTool onPlaceRequest={handlePlaceRequest} />
-            )}
+            {model.status === 'ready' && <AnnotationTool onPlaceRequest={handlePlaceRequest} />}
           </>
         )}
 
@@ -430,17 +418,7 @@ export default function ModelViewer() {
           maxDistance={200}
           enablePan
           screenSpacePanning
-          mouseButtons={{
-            LEFT: THREE.MOUSE.ROTATE,
-            MIDDLE: THREE.MOUSE.DOLLY,
-            RIGHT: THREE.MOUSE.PAN,
-          }}
-          touches={{
-            ONE: THREE.TOUCH.ROTATE,
-            TWO: THREE.TOUCH.DOLLY_PAN,
-          }}
         />
-
         <CameraPresetApplier controlsRef={controlsRef} />
 
 
