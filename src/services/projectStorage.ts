@@ -79,7 +79,8 @@ export async function serializeDrawing(drawing: Drawing): Promise<SerializableDr
       // blob URL may have been revoked — ignore, restore will be visual-only
     }
   }
-  const { file, rasterUrl, ...rest } = drawing
+  const { file, rasterUrl: unusedRasterUrl, ...rest } = drawing
+  void unusedRasterUrl
   return {
     ...rest,
     fileBlob: file ?? null,

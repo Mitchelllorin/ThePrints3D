@@ -1,7 +1,13 @@
-import Workspace3D from './components/Workspace3D/Workspace3D'
+import CSSVarInjector from './components/Settings/CSSVarInjector'
+import WorkspaceLayout from './components/Layout/WorkspaceLayout'
 
 function App() {
-  return <Workspace3D />
+  return (
+    <>
+      <CSSVarInjector />
+      <WorkspaceLayout />
+    </>
+  )
 }
 
 export default App

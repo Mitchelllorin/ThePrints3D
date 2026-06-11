@@ -12,8 +12,8 @@ const CATEGORY_COLORS: Record<string, string> = {
 }
 
 export default function ProductPlacements() {
-  const placements = useAppStore((s) => s.productPlacements) ?? []
-  const productCatalog = useAppStore((s) => s.productCatalog) ?? []
+  const placements = useAppStore((s) => s.productPlacements)
+  const productCatalog = useAppStore((s) => s.productCatalog)
 
   const items = useMemo(() => {
     return placements

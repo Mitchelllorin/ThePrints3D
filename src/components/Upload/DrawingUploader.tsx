@@ -1,9 +1,15 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useAppStore } from '../../store/useAppStore'
-import { SAMPLE_DRAWINGS, renderSvgToPng } from '../../data/sampleDrawings'
-import CameraCaptureModal from '../CameraCaptureModal/CameraCaptureModal'
 import styles from './DrawingUploader.module.css'
+
+/** Navigate to drawings once files have been queued (for use outside the wizard). */
+function useNavigateAfterDrop() {
+  const setView = useAppStore((s) => s.setView)
+  return useCallback(() => {
+    setTimeout(() => setView('drawings'), 100)
+  }, [setView])
+}
 
 const ACCEPTED_TYPES = {
   'application/pdf': ['.pdf'],
@@ -13,70 +19,43 @@ const ACCEPTED_TYPES = {
   'image/webp': ['.webp'],
 }
 
-export default function DrawingUploader() {
+export default function DrawingUploader({ autoNavigate = true }: { autoNavigate?: boolean }) {
   const addDrawings = useAppStore((s) => s.addDrawings)
-  const [loadingSample, setLoadingSample] = useState<string | null>(null)
-  const [showCamera, setShowCamera] = useState(false)
-
-  const handleSample = async (sample: typeof SAMPLE_DRAWINGS[0]) => {
-    setLoadingSample(sample.id)
-    try {
-      const svg = sample.generateSvg(sample.width, sample.height)
-      const blob = await renderSvgToPng(svg, sample.width, sample.height)
-      const file = new File([blob], `${sample.id}.png`, { type: 'image/png' })
-      addDrawings([file])
-      const store = useAppStore.getState()
-      for (const d of store.drawings.filter(d => d.status === 'pending')) store.processDrawing(d.id)
-    } catch (err) {
-      console.error('Sample failed:', err)
-    } finally {
-      setLoadingSample(null)
-    }
-  }
+  const navigateAfterDrop = useNavigateAfterDrop()
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const onDrop = useCallback(
     (accepted: File[]) => {
-      if (accepted.length > 0) addDrawings(accepted)
+      if (accepted.length > 0) {
+        addDrawings(accepted)
+        if (autoNavigate) navigateAfterDrop()
+      }
     },
-    [addDrawings]
+    [addDrawings, autoNavigate, navigateAfterDrop]
+  )
+
+  const onCameraCapture = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files ?? [])
+      if (files.length > 0) {
+        addDrawings(files)
+        if (autoNavigate) navigateAfterDrop()
+      }
+      e.target.value = ''
+    },
+    [addDrawings, autoNavigate, navigateAfterDrop]
   )
 
   const openCameraCapture = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {
     e?.stopPropagation()
-    setShowCamera(true)
+    cameraInputRef.current?.click()
   }, [])
-
-  const handleCameraCapture = useCallback((blob: Blob) => {
-    const file = new File([blob], `camera-capture-${Date.now()}.jpg`, { type: 'image/jpeg' })
-    addDrawings([file])
-    setShowCamera(false)
-    const store = useAppStore.getState()
-    for (const d of store.drawings.filter(d => d.status === 'pending')) store.processDrawing(d.id)
-  }, [addDrawings])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: ACCEPTED_TYPES,
     multiple: true,
   })
-
-  const difficultyIcon = (d: string) => {
-    switch (d) {
-      case 'simple': return '🟢'
-      case 'intermediate': return '🟡'
-      case 'difficult': return '🔴'
-      default: return ''
-    }
-  }
-
-  const difficultyLabel = (d: string) => {
-    switch (d) {
-      case 'simple': return 'Simple'
-      case 'intermediate': return 'Medium'
-      case 'difficult': return 'Hard'
-      default: return d
-    }
-  }
 
   return (
     <div className={styles.page}>
@@ -92,6 +71,19 @@ export default function DrawingUploader() {
         </p>
       </div>
 
+      {/* Hidden input — opens the rear camera on mobile, falls back to file picker on desktop. */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple={false}
+        onChange={onCameraCapture}
+        style={{ display: 'none' }}
+        data-testid="camera-capture-input"
+      />
+
+      {/* Primary CTA — phones default to the camera flow. */}
       <button
         type="button"
         onClick={openCameraCapture}
@@ -102,30 +94,6 @@ export default function DrawingUploader() {
         <span className={styles.cameraLabel}>Scan a print with your camera</span>
         <span className={styles.cameraSub}>Best for on-site work — uses the rear camera on phones</span>
       </button>
-
-      <div className={styles.samplesSection}>
-        <div className={styles.orDivider}><span>or try a sample drawing</span></div>
-        <div className={styles.sampleRow}>
-          {SAMPLE_DRAWINGS.map((s) => {
-            const busy = loadingSample === s.id
-            return (
-              <button key={s.id} className={styles.sampleCard} onClick={() => handleSample(s)} disabled={busy}>
-                <div className={styles.sampleBadgeRow}>
-                  <span className={styles.sampleBadge}>{difficultyIcon(s.difficulty)} {difficultyLabel(s.difficulty)}</span>
-                </div>
-                <div className={styles.sampleCardBody}>
-                  <div className={styles.sampleName}>{s.name}</div>
-                  <div className={styles.sampleDesc}>{s.description}</div>
-                  <div className={styles.sampleTags}>
-                    {s.tags.map(t => <span key={t} className={styles.sampleTag}>{t}</span>)}
-                  </div>
-                </div>
-                <div className={styles.sampleCTA}>{busy ? 'Loading…' : 'Load →'}</div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
 
       <div className={styles.orDivider}><span>or upload existing files</span></div>
 
@@ -165,13 +133,6 @@ export default function DrawingUploader() {
           </div>
         ))}
       </div>
-
-      {showCamera && (
-        <CameraCaptureModal
-          onImageCaptured={handleCameraCapture}
-          onClose={() => setShowCamera(false)}
-        />
-      )}
     </div>
   )
 }

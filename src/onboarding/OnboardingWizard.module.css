@@ -1,0 +1,218 @@
+.wrap {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.indicator {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #0d1f35;
+  border: 1px solid #1e3a5f;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #64748b;
+  overflow-x: auto;
+}
+.indicatorItem {
+  flex: 1;
+  text-align: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.indicatorActive {
+  background: #1e3a8a;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  background: #0d1f35;
+  border: 1px solid #1e3a5f;
+  border-radius: 12px;
+  padding: 28px;
+}
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: -0.5px;
+}
+.subtitle {
+  margin: -10px 0 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+.subtitle strong { color: #60a5fa; }
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #0b1a2e;
+  border-radius: 8px;
+  padding: 14px 16px;
+  border: 1px solid #1e3a5f;
+}
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+.summaryRow strong { color: #f1f5f9; }
+
+.tapRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tapLabel {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+}
+.tapButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tapBtn {
+  background: #0b1a2e;
+  border: 1px solid #1e3a5f;
+  color: #cbd5e1;
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 44px;
+}
+.tapBtn:hover { border-color: #3b82f6; color: #f1f5f9; }
+.tapBtnActive {
+  background: #1e3a8a;
+  border-color: #60a5fa;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+
+.cardRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.card {
+  background: #0b1a2e;
+  border: 2px solid #1e3a5f;
+  color: #cbd5e1;
+  padding: 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s;
+  min-height: 80px;
+}
+.card:hover { border-color: #3b82f6; color: #f1f5f9; }
+.cardActive {
+  background: #1e3a8a;
+  border-color: #60a5fa;
+  color: #f1f5f9;
+}
+.cardTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.cardSub {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.cardActive .cardSub { color: #cbd5e1; }
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.primaryBtn {
+  background: #2563eb;
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.primaryBtn:hover { background: #1d4ed8; }
+.secondaryBtn {
+  background: transparent;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.secondaryBtn:hover { border-color: #60a5fa; color: #f1f5f9; }
+
+.skipRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+.skipLink {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: center;
+  align-self: center;
+  padding: 8px;
+}
+.skipLink:hover { color: #94a3b8; text-decoration: underline; }
+
+.startOver {
+  background: #1e3a8a;
+  color: #f1f5f9;
+  border: 1px solid #60a5fa;
+  padding: 10px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  align-self: center;
+  font-size: 14px;
+}
+
+.reasons {
+  background: #0b1a2e;
+  border: 1px solid #1e3a5f;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+.reasons summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: #cbd5e1;
+}
+.reasons ul { margin: 8px 0 0; padding-left: 20px; }
+.reasons li { margin-bottom: 4px; }

@@ -1,0 +1,390 @@
+/* ── Root ─────────────────────────────────────────────────────────────────── */
+.root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #060d1a;
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+.topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 50;
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(30, 41, 59, 0.4);
+}
+
+/* ── Logo ────────────────────────────────────────────────────────────────── */
+.logo {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  transition: opacity 0.3s, transform 0.3s;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -2px;
+  line-height: 1;
+}
+
+.logoBlue {
+  color: #60a5fa;
+  text-shadow: 1px 1px 0 #1a3a6a, 2px 2px 0 #0f2248, 3px 3px 0 rgba(0,0,0,0.35);
+}
+
+.logoPrint {
+  font-style: italic;
+  color: #f97316;
+  margin-left: -5px;
+  text-shadow: 1px 1px 0 #7c3010, 2px 2px 0 #4a1d08, 3px 3px 0 rgba(0,0,0,0.35);
+}
+
+.logo3D {
+  font-size: 16px;
+  font-weight: 900;
+  color: #4ade80;
+  vertical-align: baseline;
+  margin-left: -3px;
+  letter-spacing: -2px;
+  text-shadow: 1px 1px 0 #166534, 2px 2px 0 #0d3d1e, 3px 3px 0 rgba(0,0,0,0.35);
+}
+
+.logoSub {
+  font-size: 9px;
+  font-weight: 500;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Panel wrapper — slides as ONE unit, tab always visible ──────────────── */
+/* Panel is 300px. Tab is 42px. Total = 342px.
+   When closed: translateX(-300px) → only 42px tab visible on left edge.
+   When open:   translateX(0)      → full 342px panel+tab visible. */
+
+.panelWrapper {
+  position: absolute;
+  left: 0;
+  top: 44px;
+  bottom: 0;
+  width: 342px;
+  display: flex;
+  z-index: 40;
+  transform: translateX(-300px);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.panelWrapperOpen {
+  transform: translateX(0);
+}
+
+/* ── Panel content ───────────────────────────────────────────────────────── */
+.panel {
+  width: 300px;
+  flex-shrink: 0;
+  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.94));
+  backdrop-filter: blur(14px);
+  border-right: 1px solid rgba(30, 41, 59, 0.4);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(30, 41, 59, 0.5);
+  flex-shrink: 0;
+}
+
+.panelTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.panelClose {
+  background: none;
+  border: none;
+  color: #475569;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.panelClose:hover { color: #94a3b8; }
+
+.panelScroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 0 32px;
+}
+
+.sectionTitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  padding: 12px 16px 4px;
+  margin: 0;
+}
+
+/* ── Tab strip — attached to right edge of panel ─────────────────────────── */
+.tabStrip {
+  width: 42px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 0;
+  background: rgba(8, 13, 24, 0.85);
+  border-right: 1px solid rgba(30, 41, 59, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 38px;
+  padding: 10px 0;
+  background: transparent;
+  border: 1px solid rgba(30, 41, 59, 0.4);
+  border-radius: 0 8px 8px 0;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.tab:hover { background: rgba(30, 41, 59, 0.7); color: #94a3b8; }
+
+.tabActive {
+  color: var(--bp-accent, #38bdf8);
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(15, 30, 55, 0.8);
+}
+
+.tabIcon { font-size: 16px; line-height: 1; }
+
+.tabLabel {
+  font-size: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  transform: rotate(180deg);
+}
+
+/* ── Upload hint card ────────────────────────────────────────────────────── */
+.uploadHint {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.94));
+  border: 1px solid rgba(30, 41, 59, 0.7);
+  border-radius: 14px;
+  backdrop-filter: blur(14px);
+  padding: 16px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 240px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+}
+
+.uploadHintHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.uploadHintTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.uploadHintSub {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.uploadHintActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.uploadHintBtn {
+  width: 100%;
+  background: var(--bp-accent, #38bdf8);
+  color: #0f172a;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+  transition: opacity 0.15s;
+}
+.uploadHintBtn:hover { opacity: 0.85; }
+
+.uploadHintBtnSecondary {
+  width: 100%;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  color: #94a3b8;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+.uploadHintBtnSecondary:hover { background: #1e293b; color: #f1f5f9; }
+
+.uploadHintDismiss {
+  background: transparent;
+  border: none;
+  color: #475569;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.uploadHintDismiss:hover { color: #94a3b8; }
+
+.uploadHintDivider {
+  font-size: 10px;
+  color: #334155;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.presetList {
+  display: grid;
+  gap: 10px;
+  padding: 8px 16px 20px;
+}
+
+.presetRow { display: flex; gap: 6px; }
+
+.presetBtn {
+  flex: 1;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(30, 41, 59, 0.7);
+  color: #64748b;
+  border-radius: 7px;
+  padding: 6px 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.presetBtn:hover { background: #1e293b; color: #94a3b8; border-color: rgba(56,189,248,0.3); }
+
+/* ── Settings content ────────────────────────────────────────────────────── */
+.settingsBody { padding: 4px 0 16px; }
+
+.settingGroup {
+  font-size: 10px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  padding: 12px 16px 4px;
+  margin: 0;
+}
+
+.settingRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 16px;
+  cursor: default;
+}
+
+.settingLabel {
+  font-size: 11px;
+  color: #64748b;
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.settingSlider {
+  flex: 1;
+  accent-color: var(--bp-accent, #38bdf8);
+  height: 3px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.settingVal {
+  font-size: 10px;
+  color: #475569;
+  width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.settingColor {
+  flex: 1;
+  height: 24px;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  padding: 1px;
+  min-width: 0;
+}
+
+.resetBtn {
+  margin: 16px 16px 0;
+  width: calc(100% - 32px);
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  color: #475569;
+  font-size: 11px;
+  padding: 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.resetBtn:hover { color: #94a3b8; border-color: #334155; }

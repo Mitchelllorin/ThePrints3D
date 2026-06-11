@@ -1,3 +1,14 @@
+// ─── Construction Engine ────────────────────────────────────────────────────────
+
+export type {
+  ConstructionLayer,
+  Decision,
+  DecisionOption,
+  BuildResult,
+  PlacedComponent,
+  FramingComponentType,
+} from '../services/decisions'
+
 // ─── Drawing Set ───────────────────────────────────────────────────────────────
 
 import type { LineClassificationStats as _LineClassificationStats } from '../symbols/types'
@@ -43,21 +54,6 @@ export interface ParsedWall {
   finishedMm?: number
   /** 0..1 — how cleanly this wall fits its assigned bucket */
   typeConfidence?: number
-  /** User-assigned: whether this wall is load-bearing */
-  isLoadBearing?: boolean
-  /** User-assigned: whether this wall is internal (vs exterior) */
-  isInternal?: boolean
-}
-
-export interface WallTypePreset {
-  id: string
-  label: string
-  description: string
-  thicknessMm: number
-  category: 'stud' | 'steel' | 'block' | 'other'
-  defaultLoadBearing: boolean
-  defaultInternal: boolean
-  color: string
 }
 
 /** A room (enclosed region) detected by flood-filling the rasterized image. */
@@ -132,6 +128,8 @@ export type { LineClassificationStats, ClassifiedLine, LineClass } from '../symb
 export interface Drawing {
   id: string
   name: string
+  source?: 'upload' | 'preset'
+  presetDifficulty?: 'easy' | 'medium' | 'hard'
   type: DrawingType
   file: File
   pageCount: number
@@ -169,10 +167,6 @@ export interface Drawing {
   scaleNotation: string | null
   /** How the scale value was determined */
   scaleConfidence: ScaleConfidence | null
-  /** Previous scale values for undo support */
-  _prevScaleMmPerPx?: number | null
-  _prevScaleNotation?: string | null
-  _prevScaleConfidence?: ScaleConfidence | null
   uploadedAt: number
 }
 
@@ -189,17 +183,12 @@ export type LayerId =
   | 'mechanical'
   | 'furniture'
   | 'annotations'
-  | 'framing'
-  | 'drywall'
-  | 'insulation'
-  | 'finishes'
 
 export interface Layer {
   id: LayerId
   label: string
   color: string
   visible: boolean
-  locked: boolean
   opacity: number
   /** Which drawing types feed this layer */
   sourceTypes: DrawingType[]
@@ -230,7 +219,7 @@ export interface Model3D {
 
 // ─── App State ─────────────────────────────────────────────────────────────────
 
-export type AppView = 'upload' | 'workspace' | 'drawings' | 'model' | 'tools' | 'wizard' | 'create'
+export type AppView = 'upload' | 'drawings' | 'model' | 'tools'
 
 export interface ScaleCalibration {
   /** px distance measured on canvas */
@@ -308,75 +297,31 @@ export interface Annotation {
   createdAt: number
 }
 
-// ─── Unified 3D Workspace ──────────────────────────────────────────────────
+// ─── Unified 2D→3D Wizard Context ─────────────────────────────────────────────
 
-export type Tool3D = 'select' | 'draw-wall' | 'place-door' | 'place-window' | 'place-component' | 'move' | 'resize' | 'annotate' | 'measure'
+export type WizardGroupId = 'group1' | 'group2' | 'group3'
 
-export interface UIMode {
-  current: string
-  previous: string | null
-  modalOpen: string | null
-  activePanel: string | null
-  activeTool: Tool3D
+export interface WorkspaceWizardInputs {
+  set1BuildingBasics: string
+  set1Clarifications: string
+  set2StructuralDetails: string
+  set2Clarifications: string
+  set3FinishingDetails: string
+  set3Clarifications: string
+  completedGroup: WizardGroupId
+  completedAt: number
 }
 
-export interface Wall3D {
-  id: string
-  start: [number, number, number]
-  end: [number, number, number]
-  height: number
-  thickness: number
-  color: string
-  layer: 'structure' | 'drywall' | 'framing'
-  type: 'stud' | 'drywall' | 'block' | 'custom'
-  openings?: WallOpening[]
-}
-
-export interface WallOpening {
-  id: string
-  wallId: string
-  type: 'door' | 'window'
-  /** Position along the wall from start (0..1) */
-  pos: number
-  width: number
-  height: number
-  sillHeight?: number
-}
-
-export interface PlacedComponent {
-  id: string
-  type: 'door' | 'window' | 'furniture' | 'fixture' | 'appliance'
-  label: string
-  position: [number, number, number]
-  rotation: number
-  scale: [number, number, number]
-  wallId?: string
-  color: string
-}
-
-export interface FloorplanProjection {
-  imageUrl: string | null
-  visible: boolean
-  scale: number
-  rotation: number
-  position: [number, number, number]
-  offsetX: number
-  offsetZ: number
-  opacity: number
-}
-
-export interface TradeLayer {
-  id: string
-  label: string
+export interface FloorplanOverlayState {
+  drawingId: string | null
   visible: boolean
   locked: boolean
+  snapToGrid: boolean
+  calibrationMode: boolean
+  traceModeActive: boolean
+  guidedStep: number
+  position: [number, number]
+  scale: [number, number]
+  rotationDeg: number
   opacity: number
-  color: string
-  icon: string
-}
-
-export interface CameraPreset {
-  position: [number, number, number]
-  target: [number, number, number]
-  label?: string
 }

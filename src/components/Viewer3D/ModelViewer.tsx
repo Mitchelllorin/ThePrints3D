@@ -1,35 +1,22 @@
-import { useRef, useEffect, Suspense, useState } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import {
-  OrbitControls,
-  Grid,
-  Environment,
-  GizmoHelper,
-  GizmoViewport,
-  Stats,
-} from '@react-three/drei'
+import { OrbitControls, Grid } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useShallow } from 'zustand/react/shallow'
 import BuildingModel from './BuildingModel'
-import SelectionManager from './SelectionManager'
-import Toolbar from './Toolbar'
-import PropertiesPanel from './PropertiesPanel'
 import MeasureTool from './MeasureTool'
 import AnnotationTool from './AnnotationTool'
 import CameraHud from './CameraHud'
 import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
-import { clearSelection } from '../../services/editing/selectionSystem'
+import FloorplanOverlay from './FloorplanOverlay'
+import FloorplanPanel from './FloorplanPanel'
+import LiveWallsLayer from './LiveWallsLayer'
+import FloatingLogo3D from './FloatingLogo3D'
 import styles from './ModelViewer.module.css'
-
-function SceneBackground() {
-  const { scene } = useThree()
-  useEffect(() => {
-    scene.background = new THREE.Color('#1e293b')
-  }, [scene])
-  return null
-}
 
 function CameraRig() {
   const { camera } = useThree()
@@ -46,24 +33,31 @@ function CameraRig() {
 
 /**
  * Listens for camera-preset requests from the store (set by the CameraHud).
- * Applies the requested camera pose to the active camera + OrbitControls.
+ * Applies the requested camera pose inside useFrame so the jump happens in
+ * the same Three.js tick that renders it — no one-frame stutter.
+ * Damping is temporarily disabled when applying the preset so that any
+ * residual OrbitControls velocity is cleared and the camera doesn't drift.
  */
-function CameraPresetApplier({ controlsRef }: { controlsRef: React.RefObject<OrbitControlsImpl | null> }) {
+function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
   const { camera } = useThree()
-  const preset = useAppStore((s) => s.cameraPreset)
-  const consume = useAppStore((s) => s.consumeCameraPreset)
 
-  useEffect(() => {
-    if (!preset) return
-    camera.position.set(preset.position[0], preset.position[1], preset.position[2])
+  useFrame(() => {
+    const { cameraPreset, consumeCameraPreset } = useAppStore.getState()
+    if (!cameraPreset) return
+    camera.position.set(cameraPreset.position[0], cameraPreset.position[1], cameraPreset.position[2])
     if (controlsRef.current) {
-      controlsRef.current.target.set(preset.target[0], preset.target[1], preset.target[2])
-      controlsRef.current.update()
+      const ctrl = controlsRef.current
+      ctrl.target.set(cameraPreset.target[0], cameraPreset.target[1], cameraPreset.target[2])
+      // Disable damping for one update so accumulated velocity is zeroed out
+      const wasDamping = ctrl.enableDamping
+      ctrl.enableDamping = false
+      ctrl.update()
+      ctrl.enableDamping = wasDamping
     } else {
-      camera.lookAt(preset.target[0], preset.target[1], preset.target[2])
+      camera.lookAt(cameraPreset.target[0], cameraPreset.target[1], cameraPreset.target[2])
     }
-    consume()
-  }, [preset, camera, controlsRef, consume])
+    consumeCameraPreset()
+  })
 
   return null
 }
@@ -181,35 +175,69 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 }
 
 export default function ModelViewer() {
-  const model = useAppStore((s) => s.model)
-  const layers = useAppStore((s) => s.layers)
-  const measureMode = useAppStore((s) => s.measureMode)
+  const gridSettings = useUISettingsStore(useShallow((s) => ({
+    visible: s.gridVisible,
+    color: s.gridColor,
+    cellSize: s.gridCellSize,
+  })))
+  const model      = useAppStore((s) => s.model)
+  const drawings   = useAppStore((s) => s.drawings)
+  const addDrawings = useAppStore((s) => s.addDrawings)
+  const layers     = useAppStore((s) => s.layers)
+  const measureMode    = useAppStore((s) => s.measureMode)
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
+  const annotateMode    = useAppStore((s) => s.annotateMode)
+  const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
+  const annotations    = useAppStore((s) => s.annotations)
+  const addAnnotation  = useAppStore((s) => s.addAnnotation)
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
-  const measurements = useAppStore((s) => s.measurements)
-  const annotateMode = useAppStore((s) => s.annotateMode)
-  const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
-  const annotations = useAppStore((s) => s.annotations)
-  const addAnnotation = useAppStore((s) => s.addAnnotation)
-  const setView = useAppStore((s) => s.setView)
-  const setModelStatus = useAppStore((s) => s.setModelStatus)
-  const controlsRef = useRef<OrbitControlsImpl | null>(null)
+  const measurements   = useAppStore((s) => s.measurements)
+  const overlay        = useAppStore((s) => s.floorplanOverlay)
+  const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
-  const [pendingForm, setPendingForm] = useState<FormState | null>(null)
+  const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
+  const [isDragOver, setIsDragOver]     = useState(false)
 
-  const handlePlaceRequest = (position: [number, number, number], screenX: number, screenY: number) => {
+  // Disable orbit while the user is actively tracing or calibrating on the overlay
+  const orbitEnabled = !overlay.traceModeActive && !overlay.calibrationMode
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragOver(true)
+  }
+  function handleDragLeave() { setIsDragOver(false) }
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragOver(false)
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      /\.(pdf|png|jpe?g|tiff?|webp)$/i.test(f.name)
+    )
+    if (files.length > 0) addDrawings(files)
+  }
+
+  function handlePlaceRequest(position: [number, number, number], screenX: number, screenY: number) {
     setPendingForm({ position3D: position, screenX, screenY })
   }
 
-  const handleFormSubmit = (text: string, icon: string, color: string) => {
+  function handleFormSubmit(text: string, icon: string, color: string) {
     if (!pendingForm) return
-    addAnnotation({ text, icon, color, position: pendingForm.position3D })
+    addAnnotation({
+      position: pendingForm.position3D,
+      text,
+      icon,
+      color,
+    })
     setPendingForm(null)
   }
 
   return (
-    <div className={styles.viewer}>
+    <div
+      className={styles.viewer}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Toolbar overlay */}
       {model.status === 'ready' && (
         <div className={styles.toolbar}>
@@ -268,13 +296,7 @@ export default function ModelViewer() {
         </div>
       )}
 
-      {/* Editing toolbar (left) */}
-      {model.status === 'ready' && <Toolbar />}
-
-      {/* Properties panel (right) */}
-      {model.status === 'ready' && <PropertiesPanel />}
-
-      {/* Camera preset HUD */}
+      {/* Camera preset HUD — visible whenever the model exists */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
       {model.status === 'ready' && <ProductPlacementPanel />}
 
@@ -341,63 +363,56 @@ export default function ModelViewer() {
         />
       )}
 
+      {/* FloorplanPanel renders DOM controls (inputs, buttons) outside the
+         Canvas so they stay in the react-dom reconciler. */}
+      <div className={styles.floorplanPanelRoot}>
+        <FloorplanPanel />
+      </div>
+
       <Canvas
         shadows
-        onPointerMissed={() => clearSelection()}
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
-        style={{ touchAction: 'none', background: '#1e293b', cursor: annotateMode ? 'crosshair' : 'default' }}
+        style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
+        onCreated={({ gl }) => { gl.setClearColor('#060d1a') }}
       >
         <CameraRig />
-        <SceneBackground />
-        <ambientLight intensity={0.7} />
-        <hemisphereLight args={['#87ceeb', '#3a3a3a', 0.6]} />
-        <directionalLight
-          position={[20, 30, 20]}
-          intensity={2}
-          castShadow
-          shadow-mapSize={[2048, 2048]}
-        />
-        <directionalLight position={[-15, 20, -10]} intensity={0.8} />
+        <ambientLight intensity={0.6} />
+        <directionalLight position={[10, 20, 10]} intensity={1.0} />
 
-        <Suspense fallback={null}>
-          <Environment preset="city" background={false} />
-        </Suspense>
+        {gridSettings.visible && (
+          <Grid
+            args={[200, 200]}
+            cellSize={gridSettings.cellSize}
+            cellThickness={0.5}
+            cellColor={gridSettings.color}
+            sectionSize={gridSettings.cellSize * 5}
+            sectionThickness={1.2}
+            sectionColor={gridSettings.color}
+            fadeDistance={120}
+            fadeStrength={1.5}
+            position={[0, -0.01, 0]}
+          />
+        )}
 
-        {/* Ground plane — always visible, gives spatial reference */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
-          <planeGeometry args={[60, 60]} />
-          <meshStandardMaterial color="#1e293b" roughness={0.9} />
-        </mesh>
-
-        <Grid
-          args={[50, 50]}
-          cellSize={1}
-          cellThickness={0.6}
-          cellColor="#334155"
-          sectionSize={5}
-          sectionThickness={1.2}
-          sectionColor="#475569"
-          fadeDistance={80}
-          position={[0, -0.01, 0]}
-        />
+        <FloatingLogo3D />
+        <FloorplanOverlay />
+        <LiveWallsLayer />
 
         {model.status === 'building' && <BuildingProgress />}
         {(model.status === 'building' || model.status === 'ready') && (
           <>
             <BuildingModel layers={layers} />
             <ProductPlacements />
-            {model.status === 'ready' && <SelectionManager />}
             {model.status === 'ready' && <MeasureTool key={measureMode ? 'measure-on' : 'measure-off'} />}
-            {model.status === 'ready' && (
-              <AnnotationTool onPlaceRequest={handlePlaceRequest} />
-            )}
+            {model.status === 'ready' && <AnnotationTool onPlaceRequest={handlePlaceRequest} />}
           </>
         )}
 
         <OrbitControls
           ref={controlsRef}
           makeDefault
+          enabled={orbitEnabled}
           enableDamping
           dampingFactor={0.12}
           rotateSpeed={0.6}
@@ -407,48 +422,24 @@ export default function ModelViewer() {
           maxDistance={200}
           enablePan
           screenSpacePanning
-          mouseButtons={{
-            LEFT: THREE.MOUSE.ROTATE,
-            MIDDLE: THREE.MOUSE.DOLLY,
-            RIGHT: THREE.MOUSE.PAN,
-          }}
-          touches={{
-            ONE: THREE.TOUCH.ROTATE,
-            TWO: THREE.TOUCH.DOLLY_PAN,
-          }}
         />
-
         <CameraPresetApplier controlsRef={controlsRef} />
 
-        <GizmoHelper alignment="bottom-right" margin={[80, 80]}>
-          <GizmoViewport
-            axisColors={['#f87171', '#4ade80', '#60a5fa']}
-            labelColor="#f1f5f9"
-          />
-        </GizmoHelper>
 
-        <Stats className={styles.stats} />
       </Canvas>
 
-      {model.status === 'error' && (
+      {model.status === 'building' && (
         <div className={styles.overlay}>
-          <div className={styles.errorMsg}>
-            <p>⚠️ Could not build 3D model</p>
-            <p className={styles.hint}>Try analysing the drawings first, then click Build 3D again</p>
-            <button className={styles.dismissBtn} onClick={() => { setView('drawings'); setModelStatus('idle') }}>
-              Back to Drawings
-            </button>
+          <div className={styles.buildingMsg}>
+            <span className={styles.spinner}>⬡</span>
+            Building 3D model…
           </div>
         </div>
       )}
 
-      {model.status === 'idle' && (
-        <div className={styles.overlay}>
-          <div className={styles.idleMsg}>
-            <p>No model built yet.</p>
-            <p className={styles.hint}>Upload drawings and click "Build 3D Model"</p>
-          </div>
-        </div>
+      {/* Drag-over border — only a thin ring, never blocks the workspace */}
+      {isDragOver && (
+        <div className={styles.dragRing} />
       )}
     </div>
   )

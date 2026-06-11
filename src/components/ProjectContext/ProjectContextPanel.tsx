@@ -1,143 +1,181 @@
-import { useMemo, useState } from 'react'
-
-const STORAGE_KEY = 'blueprint3d-project-context-v1'
-
-interface ProjectContextData {
-  wallTypes: string
-  materials: string
-  constructionMetrics: string
-  symbolTargets: string
-  correctionNotes: string
-}
-
-const DEFAULT_DATA: ProjectContextData = {
-  wallTypes: '',
-  materials: '',
-  constructionMetrics: '',
-  symbolTargets: '',
-  correctionNotes: '',
-}
-
-function loadInitial(): ProjectContextData {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT_DATA
-    const parsed = JSON.parse(raw) as Partial<ProjectContextData>
-    return {
-      wallTypes: parsed.wallTypes ?? '',
-      materials: parsed.materials ?? '',
-      constructionMetrics: parsed.constructionMetrics ?? '',
-      symbolTargets: parsed.symbolTargets ?? '',
-      correctionNotes: parsed.correctionNotes ?? '',
-    }
-  } catch {
-    return DEFAULT_DATA
-  }
-}
-
-function saveData(next: ProjectContextData) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
-  } catch {
-    // ignore storage errors in private/restricted mode
-  }
-}
+import { useMemo } from 'react'
+import { useAppStore } from '../../store/useAppStore'
+import type { WizardGroupId } from '../../types'
+import {
+  WIZARD_GROUPS,
+  getPreviousWizardGroup,
+} from './wizardGroups'
 
 interface Props {
   phase: 'pre3d' | 'post3d'
 }
 
 export default function ProjectContextPanel({ phase }: Props) {
-  const [data, setData] = useState<ProjectContextData>(() => loadInitial())
-  const [savedAt, setSavedAt] = useState<number | null>(null)
+  const wizard = useAppStore((s) => s.wizardState)
+  const updateWizardData = useAppStore((s) => s.updateWizardData)
+  const jumpToWizardGroup = useAppStore((s) => s.jumpToWizardGroup)
+  const completeWizardGroup = useAppStore((s) => s.completeWizardGroup)
+  const resetWizard = useAppStore((s) => s.resetWizard)
 
-  const header = phase === 'pre3d'
-    ? 'AI Build Context (Before 3D)'
-    : 'Model Corrections & Context (After 3D)'
-
-  const subtitle = phase === 'pre3d'
-    ? 'Add known wall types, materials, and targets to improve extraction accuracy.'
-    : 'Refine correction notes and target symbols while reviewing the generated model.'
+  const activeGroup = useMemo(
+    () => WIZARD_GROUPS.find((group) => group.id === wizard.currentGroup) ?? WIZARD_GROUPS[0],
+    [wizard.currentGroup],
+  )
 
   const filledCount = useMemo(
     () =>
-      [data.wallTypes, data.materials, data.constructionMetrics, data.symbolTargets, data.correctionNotes]
-        .filter((v) => v.trim().length > 0).length,
-    [data],
+      Object.values(wizard.data)
+        .filter((value) => value.trim().length > 0).length,
+    [wizard.data],
   )
 
-  const patch = (partial: Partial<ProjectContextData>) => {
-    setData((prev) => {
-      const next = { ...prev, ...partial }
-      saveData(next)
-      setSavedAt(Date.now())
-      return next
-    })
+  const subtitlePrefix = phase === 'pre3d'
+    ? '3D-first setup'
+    : 'Live 3D construction context'
+
+  const jumpToGroup = (groupId: WizardGroupId) => {
+    const targetIndex = WIZARD_GROUPS.findIndex((group) => group.id === groupId)
+    const highestCompletedIndex = Math.max(
+      -1,
+      ...wizard.completedGroups.map((completedId) => WIZARD_GROUPS.findIndex((group) => group.id === completedId)),
+    )
+    if (targetIndex > highestCompletedIndex + 1) return
+    jumpToWizardGroup(groupId)
   }
+
+  const goBack = () => {
+    const previous = getPreviousWizardGroup(activeGroup.id)
+    if (!previous) return
+    jumpToGroup(previous)
+  }
+
+  const handleCompleteCurrentGroup = () => {
+    const missing = activeGroup.fields.some((field) => wizard.data[field.key].trim().length === 0)
+    if (missing) return
+    completeWizardGroup(activeGroup.id)
+  }
+
+  const isGroupComplete = (groupId: WizardGroupId) => wizard.completedGroups.includes(groupId)
+  const isFinalGroup = activeGroup.id === 'group3'
 
   return (
     <div style={{ display: 'grid', gap: 8 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{header}</div>
-      <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{subtitle}</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>
+        Unified Construction Wizard
+      </div>
+      <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>
+        {subtitlePrefix} · Complete Set 1 → Set 2 → Set 3 to drive the live 3D workspace.
+      </div>
 
-      <label style={{ fontSize: 12, color: '#cbd5e1' }}>
-        Wall types / assemblies
-        <textarea
-          value={data.wallTypes}
-          onChange={(e) => patch({ wallTypes: e.target.value })}
-          placeholder="e.g. 6 inch exterior CMU, 3-5/8 inch metal stud interior"
-          rows={2}
-          style={{ width: '100%', marginTop: 4, borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8 }}
-        />
-      </label>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {WIZARD_GROUPS.map((group, index) => {
+          const active = group.id === activeGroup.id
+          const complete = isGroupComplete(group.id)
+          return (
+            <button
+              key={group.id}
+              type="button"
+              onClick={() => jumpToGroup(group.id)}
+              style={{
+                borderRadius: 999,
+                border: active ? '1px solid #38bdf8' : '1px solid #334155',
+                background: active ? 'rgba(56,189,248,0.15)' : complete ? 'rgba(16,185,129,0.15)' : '#0f172a',
+                color: active ? '#bae6fd' : complete ? '#a7f3d0' : '#cbd5e1',
+                padding: '4px 10px',
+                fontSize: 11,
+                cursor: 'pointer',
+              }}
+              disabled={index > Math.max(0, wizard.completedGroups.length)}
+              title={group.title}
+            >
+              {index + 1}. {complete ? '✓ ' : ''}{group.id.toUpperCase()}
+            </button>
+          )
+        })}
+      </div>
 
-      <label style={{ fontSize: 12, color: '#cbd5e1' }}>
-        Materials
-        <textarea
-          value={data.materials}
-          onChange={(e) => patch({ materials: e.target.value })}
-          placeholder="e.g. drywall layers, glazing type, framing material"
-          rows={2}
-          style={{ width: '100%', marginTop: 4, borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8 }}
-        />
-      </label>
+      <div style={{ fontSize: 12, color: '#cbd5e1', fontWeight: 600 }}>{activeGroup.title}</div>
+      <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.35 }}>{activeGroup.subtitle}</div>
 
-      <label style={{ fontSize: 12, color: '#cbd5e1' }}>
-        Construction metrics
-        <textarea
-          value={data.constructionMetrics}
-          onChange={(e) => patch({ constructionMetrics: e.target.value })}
-          placeholder="e.g. floor-to-floor height, module spacing, tolerance assumptions"
-          rows={2}
-          style={{ width: '100%', marginTop: 4, borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8 }}
-        />
-      </label>
+      {activeGroup.fields.map((field) => (
+        <label key={field.key} style={{ fontSize: 12, color: '#cbd5e1' }}>
+          {field.label}
+          <ul style={{ marginTop: 6, marginBottom: 6, paddingLeft: 18, color: '#94a3b8', lineHeight: 1.3 }}>
+            {field.subQuestions.map((question) => (
+              <li key={question}>{question}</li>
+            ))}
+          </ul>
+          <textarea
+            value={wizard.data[field.key]}
+            onChange={(e) => updateWizardData({ [field.key]: e.target.value })}
+            placeholder={field.placeholder}
+            rows={field.rows}
+            style={{
+              width: '100%',
+              marginTop: 4,
+              borderRadius: 8,
+              border: '1px solid #334155',
+              background: '#0f172a',
+              color: '#e2e8f0',
+              padding: 8,
+            }}
+          />
+        </label>
+      ))}
 
-      <label style={{ fontSize: 12, color: '#cbd5e1' }}>
-        Symbol targets (doors/windows/sweeps/fixtures)
-        <textarea
-          value={data.symbolTargets}
-          onChange={(e) => patch({ symbolTargets: e.target.value })}
-          placeholder="e.g. prioritize door swings, storefront windows, floor sweeps"
-          rows={2}
-          style={{ width: '100%', marginTop: 4, borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8 }}
-        />
-      </label>
-
-      <label style={{ fontSize: 12, color: '#cbd5e1' }}>
-        Post-3D edits / correction notes
-        <textarea
-          value={data.correctionNotes}
-          onChange={(e) => patch({ correctionNotes: e.target.value })}
-          placeholder="e.g. fix missed openings on level 2 west wall"
-          rows={2}
-          style={{ width: '100%', marginTop: 4, borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8 }}
-        />
-      </label>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={goBack}
+          disabled={activeGroup.id === 'group1'}
+          style={{
+            background: activeGroup.id === 'group1' ? '#0f172a' : '#1e293b',
+            color: activeGroup.id === 'group1' ? '#64748b' : '#e2e8f0',
+            border: '1px solid #334155',
+            padding: '6px 10px',
+            borderRadius: 8,
+            cursor: activeGroup.id === 'group1' ? 'not-allowed' : 'pointer',
+            fontSize: 12,
+          }}
+        >
+          ← Previous Set
+        </button>
+        <button
+          type="button"
+          onClick={handleCompleteCurrentGroup}
+          style={{
+            background: '#0ea5e9',
+            color: '#082f49',
+            border: 'none',
+            padding: '6px 10px',
+            borderRadius: 8,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
+          {isFinalGroup ? 'Complete Set 3 + Update 3D' : 'Complete Set + Update 3D →'}
+        </button>
+        <button
+          type="button"
+          onClick={resetWizard}
+          style={{
+            background: '#1e293b',
+            color: '#fca5a5',
+            border: '1px solid #334155',
+            padding: '6px 10px',
+            borderRadius: 8,
+            cursor: 'pointer',
+            fontSize: 12,
+          }}
+        >
+          Cancel wizard
+        </button>
+      </div>
 
       <div style={{ fontSize: 11, color: '#94a3b8' }}>
-        {filledCount}/5 fields filled
-        {savedAt ? ` · saved ${new Date(savedAt).toLocaleTimeString()}` : ''}
+        {filledCount}/6 fields filled · {wizard.completedGroups.length}/3 sets completed
+        {wizard.savedAt ? ` · saved ${new Date(wizard.savedAt).toLocaleTimeString()}` : ''}
       </div>
     </div>
   )

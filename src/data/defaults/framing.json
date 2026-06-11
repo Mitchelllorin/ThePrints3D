@@ -1,0 +1,121 @@
+{
+  "studSizes": {
+    "2x4": {
+      "nominalIn": "2x4",
+      "actualWidthMm": 38,
+      "actualDepthMm": 89,
+      "label": "2x4 (1-1/2\" x 3-1/2\")"
+    },
+    "2x6": {
+      "nominalIn": "2x6",
+      "actualWidthMm": 38,
+      "actualDepthMm": 140,
+      "label": "2x6 (1-1/2\" x 5-1/2\")"
+    },
+    "2x8": {
+      "nominalIn": "2x8",
+      "actualWidthMm": 38,
+      "actualDepthMm": 184,
+      "label": "2x8 (1-1/2\" x 7-1/4\")"
+    },
+    "2x10": {
+      "nominalIn": "2x10",
+      "actualWidthMm": 38,
+      "actualDepthMm": 235,
+      "label": "2x10 (1-1/2\" x 9-1/4\")"
+    },
+    "2x12": {
+      "nominalIn": "2x12",
+      "actualWidthMm": 38,
+      "actualDepthMm": 286,
+      "label": "2x12 (1-1/2\" x 11-1/4\")"
+    }
+  },
+  "spacings": {
+    "16": {
+      "inches": 16,
+      "mm": 406.4,
+      "label": "16\" OC (standard residential)"
+    },
+    "24": {
+      "inches": 24,
+      "mm": 609.6,
+      "label": "24\" OC (non-load-bearing / advanced framing)"
+    }
+  },
+  "headers": {
+    "maxSpanBySize": {
+      "2x4": 914,
+      "2x6": 1829,
+      "2x8": 2438,
+      "2x10": 3048,
+      "2x12": 3658
+    },
+    "defaultDoublePly": true,
+    "cripplesAbove": true,
+    "note": "Header depth = opening width / 2, rounded up to next stud size. Double-ply by default for load-bearing walls."
+  },
+  "plates": {
+    "bottomCount": 1,
+    "topCount": 2,
+    "note": "Single bottom plate, double top plate is standard residential. Reduce to single top plate for non-load-bearing partitions."
+  },
+  "cornerAssemblies": {
+    "standard": {
+      "type": "three-stud",
+      "label": "Three-stud corner (standard)",
+      "studCount": 3,
+      "note": "Two studs forming the corner + one backing stud for drywall nailing surface."
+    },
+    "california": {
+      "type": "california",
+      "label": "California corner (energy-efficient)",
+      "studCount": 2,
+      "note": "Two studs with clips/blocking for drywall attachment. Better insulation at corners."
+    }
+  },
+  "buildingTypeDefaults": {
+    "residential-single": {
+      "studSize": "2x4",
+      "spacingIn": 16,
+      "cornerType": "standard",
+      "topPlates": 2,
+      "bottomPlates": 1
+    },
+    "residential-multi": {
+      "studSize": "2x6",
+      "spacingIn": 16,
+      "cornerType": "standard",
+      "topPlates": 2,
+      "bottomPlates": 1
+    },
+    "commercial": {
+      "studSize": "2x6",
+      "spacingIn": 16,
+      "cornerType": "standard",
+      "topPlates": 2,
+      "bottomPlates": 1
+    },
+    "industrial": {
+      "studSize": "2x6",
+      "spacingIn": 24,
+      "cornerType": "standard",
+      "topPlates": 2,
+      "bottomPlates": 1
+    },
+    "institutional": {
+      "studSize": "2x6",
+      "spacingIn": 16,
+      "cornerType": "standard",
+      "topPlates": 2,
+      "bottomPlates": 1
+    },
+    "unknown": {
+      "studSize": "2x4",
+      "spacingIn": 16,
+      "cornerType": "standard",
+      "topPlates": 2,
+      "bottomPlates": 1
+    }
+  }
+}

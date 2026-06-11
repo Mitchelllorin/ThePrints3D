@@ -139,10 +139,7 @@ export default function AnnotationPanel() {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = (ev) => {
-      try { importAnnotations(JSON.parse(ev.target?.result as string)) }
-      catch { alert('Invalid annotation file') }
-    }
+    reader.onload = (ev) => importAnnotations(ev.target?.result as string)
     reader.readAsText(file)
     e.target.value = ''
   }
