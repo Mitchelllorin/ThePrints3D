@@ -8,6 +8,7 @@
  */
 
 import { create } from 'zustand'
+import type { ParsedWall } from '../types'
 
 type CalibrationUnit = 'mm' | 'm' | 'ft' | 'in'
 
@@ -34,6 +35,8 @@ interface FloorplanLocalState {
   /** Anchor of the active rubber-band segment (line style only) */
   traceStart: [number, number] | null
   traceStroke: [number, number][]
+  /** Walls reduced from a finished freehand stroke, awaiting keep/discard */
+  pendingWalls: ParsedWall[] | null
   hoverPixel: [number, number] | null
 
   // ─── calibration ─────────────────────────────────────────────────
@@ -59,6 +62,7 @@ interface FloorplanLocalState {
   setTraceStyle: (v: TraceStyle) => void
   setTraceStart: (v: [number, number] | null) => void
   setTraceStroke: (v: [number, number][] | ((prev: [number, number][]) => [number, number][])) => void
+  setPendingWalls: (v: ParsedWall[] | null) => void
   setHoverPixel: (v: [number, number] | null) => void
   setCalibrationA: (v: [number, number] | null) => void
   setCalibrationB: (v: [number, number] | null) => void
@@ -79,6 +83,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   traceStyle: 'line',
   traceStart: null,
   traceStroke: [],
+  pendingWalls: null,
   hoverPixel: null,
   calibrationA: null,
   calibrationB: null,
@@ -91,9 +96,10 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   practiceMode: true,
   seedProcessing: false,
 
-  setTraceMode: (v) => set(v ? { traceMode: true } : { traceMode: false, traceStart: null, traceStroke: [] }),
-  setTraceStyle: (v) => set({ traceStyle: v, traceStart: null, traceStroke: [] }),
+  setTraceMode: (v) => set(v ? { traceMode: true } : { traceMode: false, traceStart: null, traceStroke: [], pendingWalls: null }),
+  setTraceStyle: (v) => set({ traceStyle: v, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTraceStart: (v) => set({ traceStart: v }),
+  setPendingWalls: (v) => set({ pendingWalls: v }),
   setTraceStroke: (v) => {
     if (typeof v === 'function') {
       set({ traceStroke: v(get().traceStroke) })

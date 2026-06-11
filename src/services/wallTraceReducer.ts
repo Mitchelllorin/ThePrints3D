@@ -10,6 +10,22 @@ export interface WallTraceOptions {
   minLengthPx?: number
 }
 
+/** Snap the segment start→end to horizontal/vertical/45°, returning the adjusted end. */
+function snapSegmentAngle(start: StrokePoint, end: StrokePoint): StrokePoint {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  const length = Math.hypot(dx, dy)
+  const deg = (Math.atan2(dy, dx) * 180) / Math.PI
+  const nearHorizontal = Math.abs(deg) <= 20 || Math.abs(Math.abs(deg) - 180) <= 20
+  const nearVertical   = Math.abs(Math.abs(deg) - 90) <= 20
+
+  if (nearHorizontal) return { x: end.x, y: start.y }
+  if (nearVertical)   return { x: start.x, y: end.y }
+  const snap = Math.round(deg / 45) * 45
+  const rad  = (snap * Math.PI) / 180
+  return { x: start.x + Math.cos(rad) * length, y: start.y + Math.sin(rad) * length }
+}
+
 export function reduceStrokeToWall(
   points: StrokePoint[],
   options: WallTraceOptions = {},
@@ -19,39 +35,179 @@ export function reduceStrokeToWall(
 
   const start = points[0]
   const end = points[points.length - 1]
-  const dx = end.x - start.x
-  const dy = end.y - start.y
-  const length = Math.hypot(dx, dy)
-  if (length < minLengthPx) return null
+  if (Math.hypot(end.x - start.x, end.y - start.y) < minLengthPx) return null
 
-  const angle = Math.atan2(dy, dx)
-  const deg = (angle * 180) / Math.PI
-  const nearHorizontal = Math.abs(deg) <= 20 || Math.abs(Math.abs(deg) - 180) <= 20
-  const nearVertical   = Math.abs(Math.abs(deg) - 90) <= 20
-
-  let x2 = end.x
-  let y2 = end.y
-  if (nearHorizontal) {
-    y2 = start.y
-  } else if (nearVertical) {
-    x2 = start.x
-  } else {
-    // Snap to nearest 45° increment
-    const snap = Math.round(deg / 45) * 45
-    const rad  = (snap * Math.PI) / 180
-    x2 = start.x + Math.cos(rad) * length
-    y2 = start.y + Math.sin(rad) * length
-  }
-
+  const snapped = snapSegmentAngle(start, end)
   return {
     x1: start.x,
     y1: start.y,
-    x2,
-    y2,
+    x2: snapped.x,
+    y2: snapped.y,
     thickness: defaultThicknessPx,
     source: 'user',
     detectionConfidence: 1,
   }
+}
+
+// ── Multi-segment stroke reduction ─────────────────────────────────────────────
+
+/** Perpendicular distance of point P to the line through A–B. */
+function perpDistance(p: StrokePoint, a: StrokePoint, b: StrokePoint): number {
+  const abx = b.x - a.x, aby = b.y - a.y
+  const len = Math.hypot(abx, aby)
+  if (len === 0) return Math.hypot(p.x - a.x, p.y - a.y)
+  return Math.abs((p.x - a.x) * aby - (p.y - a.y) * abx) / len
+}
+
+/** Ramer–Douglas–Peucker polyline simplification. */
+export function simplifyStroke(points: StrokePoint[], tolerancePx = 8): StrokePoint[] {
+  if (points.length <= 2) return points.slice()
+  let maxDist = 0
+  let maxIdx = 0
+  const first = points[0]
+  const last = points[points.length - 1]
+  for (let i = 1; i < points.length - 1; i++) {
+    const d = perpDistance(points[i], first, last)
+    if (d > maxDist) { maxDist = d; maxIdx = i }
+  }
+  if (maxDist <= tolerancePx) return [first, last]
+  const left = simplifyStroke(points.slice(0, maxIdx + 1), tolerancePx)
+  const right = simplifyStroke(points.slice(maxIdx), tolerancePx)
+  return [...left.slice(0, -1), ...right]
+}
+
+export interface StrokeToWallsOptions extends WallTraceOptions {
+  /** RDP simplification tolerance. @default 8 */
+  simplifyTolerancePx?: number
+  /** Adjacent segments within this angle merge into one. @default 12 */
+  collinearToleranceDeg?: number
+  /** Segments shorter than this are treated as hand jitter. @default 30 */
+  minSegmentPx?: number
+}
+
+/**
+ * Reduce a freehand stroke into one or more straight wall segments.
+ *
+ * Understands corners: an L-shaped stroke becomes two walls that share an
+ * exact corner point, not one diagonal. Each segment is angle-snapped to
+ * horizontal/vertical/45° while preserving chain connectivity, so traced
+ * corners stay closed.
+ */
+export function reduceStrokeToWalls(
+  points: StrokePoint[],
+  options: StrokeToWallsOptions = {},
+): ParsedWall[] {
+  const {
+    defaultThicknessPx = 8,
+    simplifyTolerancePx = 8,
+    collinearToleranceDeg = 12,
+    minSegmentPx = 30,
+  } = options
+  if (points.length < 2) return []
+
+  // 1. Straighten the stroke into its essential vertices
+  let verts = simplifyStroke(points, simplifyTolerancePx)
+
+  // 2. Drop jitter vertices too close to the previously kept one
+  const spaced: StrokePoint[] = [verts[0]]
+  for (let i = 1; i < verts.length; i++) {
+    const prev = spaced[spaced.length - 1]
+    const isLast = i === verts.length - 1
+    const d = Math.hypot(verts[i].x - prev.x, verts[i].y - prev.y)
+    if (d >= minSegmentPx) {
+      spaced.push(verts[i])
+    } else if (isLast && spaced.length > 1) {
+      // Fold a short tail into the final vertex instead of adding a stub
+      spaced[spaced.length - 1] = verts[i]
+    }
+  }
+  verts = spaced
+  if (verts.length < 2) return []
+
+  // 3. Merge near-collinear neighbours (slight hand drift, not a corner)
+  const merged: StrokePoint[] = [verts[0]]
+  for (let i = 1; i < verts.length - 1; i++) {
+    const a = merged[merged.length - 1]
+    const b = verts[i]
+    const c = verts[i + 1]
+    const angAB = Math.atan2(b.y - a.y, b.x - a.x)
+    const angBC = Math.atan2(c.y - b.y, c.x - b.x)
+    let diff = Math.abs(angAB - angBC) * (180 / Math.PI)
+    if (diff > 180) diff = 360 - diff
+    if (diff > collinearToleranceDeg) merged.push(b)
+  }
+  merged.push(verts[verts.length - 1])
+
+  // 4. Chain segments with angle snapping — each wall starts exactly where
+  //    the previous one ended, so corners are closed by construction.
+  const walls: ParsedWall[] = []
+  let cursor = merged[0]
+  for (let i = 1; i < merged.length; i++) {
+    const end = snapSegmentAngle(cursor, merged[i])
+    if (Math.hypot(end.x - cursor.x, end.y - cursor.y) >= minSegmentPx) {
+      walls.push({
+        x1: cursor.x,
+        y1: cursor.y,
+        x2: end.x,
+        y2: end.y,
+        thickness: defaultThicknessPx,
+        source: 'user',
+        detectionConfidence: 1,
+      })
+      cursor = end
+    }
+  }
+  return walls
+}
+
+// ── Tie-in extension ───────────────────────────────────────────────────────────
+
+/**
+ * If a traced wall stops short of another wall, extend it along its own
+ * direction until it meets that wall's line — the "I stopped short of the
+ * line, it should know to go to the line" behaviour. Each endpoint extends
+ * independently, up to `maxExtendPx`.
+ */
+export function extendWallToNearbyWall(
+  wall: ParsedWall,
+  walls: ParsedWall[],
+  maxExtendPx = 45,
+): ParsedWall {
+  const dx = wall.x2 - wall.x1
+  const dy = wall.y2 - wall.y1
+  const len = Math.hypot(dx, dy)
+  if (len === 0) return wall
+  const ux = dx / len
+  const uy = dy / len
+
+  /** Nearest forward intersection of ray (origin, dir) with any wall segment. */
+  const rayHit = (ox: number, oy: number, dirX: number, dirY: number): { x: number; y: number } | null => {
+    let bestT = maxExtendPx
+    let best: { x: number; y: number } | null = null
+    for (const w of walls) {
+      if (w === wall) continue
+      const sx = w.x2 - w.x1
+      const sy = w.y2 - w.y1
+      const denom = dirX * sy - dirY * sx
+      if (Math.abs(denom) < 1e-9) continue // parallel
+      const t = ((w.x1 - ox) * sy - (w.y1 - oy) * sx) / denom
+      const u = Math.abs(sx) > Math.abs(sy)
+        ? (ox + t * dirX - w.x1) / sx
+        : (oy + t * dirY - w.y1) / sy
+      if (t > 1 && t <= bestT && u >= -0.05 && u <= 1.05) {
+        bestT = t
+        best = { x: ox + t * dirX, y: oy + t * dirY }
+      }
+    }
+    return best
+  }
+
+  const result = { ...wall }
+  const startHit = rayHit(wall.x1, wall.y1, -ux, -uy)
+  if (startHit) { result.x1 = startHit.x; result.y1 = startHit.y }
+  const endHit = rayHit(wall.x2, wall.y2, ux, uy)
+  if (endHit) { result.x2 = endHit.x; result.y2 = endHit.y }
+  return result
 }
 
 // ── Geometry helpers ───────────────────────────────────────────────────────────

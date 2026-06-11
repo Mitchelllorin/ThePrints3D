@@ -180,9 +180,17 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 export default function ModelViewer() {
   const gridSettings = useUISettingsStore(useShallow((s) => ({
     visible: s.gridVisible,
+    opacity: s.gridOpacity,
     color: s.gridColor,
     cellSize: s.gridCellSize,
   })))
+
+  // drei's Grid has no opacity prop — fade by blending the line colour
+  // toward the canvas background instead.
+  const gridColor = new THREE.Color('#060d1a').lerp(
+    new THREE.Color(gridSettings.color),
+    gridSettings.opacity,
+  )
   const model      = useAppStore((s) => s.model)
   const drawings   = useAppStore((s) => s.drawings)
   const addDrawings = useAppStore((s) => s.addDrawings)
@@ -456,10 +464,10 @@ export default function ModelViewer() {
             args={[200, 200]}
             cellSize={gridSettings.cellSize}
             cellThickness={0.5}
-            cellColor={gridSettings.color}
+            cellColor={gridColor}
             sectionSize={gridSettings.cellSize * 5}
             sectionThickness={1.2}
-            sectionColor={gridSettings.color}
+            sectionColor={gridColor}
             fadeDistance={120}
             fadeStrength={1.5}
             position={[0, -0.01, 0]}

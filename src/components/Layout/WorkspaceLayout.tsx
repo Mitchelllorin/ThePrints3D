@@ -397,6 +397,7 @@ export default function WorkspaceLayout() {
   const canUndo = useAppStore((s) => s.historyPast.length > 0)
   const canRedo = useAppStore((s) => s.historyFuture.length > 0)
   const logoOpacity = useUISettingsStore((s) => s.logoOpacity)
+  const logoSize    = useUISettingsStore((s) => s.logoSize)
 
   const handleLoadPreset = (presetId: PresetDifficulty) => {
     try {
@@ -409,7 +410,6 @@ export default function WorkspaceLayout() {
       console.error('Failed to load preset:', presetId, error)
     }
   }
-  const logoSize    = useUISettingsStore((s) => s.logoSize)
   const topbarOpacity = useUISettingsStore((s) => s.topbarOpacity)
 
   const hasDrawings = drawings.length > 0

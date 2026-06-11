@@ -29,6 +29,9 @@ export default function FloorplanPanel() {
   const updateOverlay   = useAppStore((s) => s.updateFloorplanOverlay)
   const setDrawingScale = useAppStore((s) => s.setDrawingScale)
   const clearTracingForDrawing = useAppStore((s) => s.clearTracingForDrawing)
+  const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
+  const undoAction      = useAppStore((s) => s.undo)
+  const canUndo         = useAppStore((s) => s.historyPast.length > 0)
   const userTraces      = useAppStore((s) => s.userTraces)
   const processWithSeeds = useAppStore((s) => s.processWithSeeds)
 
@@ -48,6 +51,8 @@ export default function FloorplanPanel() {
   const markCalibrationHandled = useFloorplanLocalStore((s) => s.markCalibrationHandled)
   const pendingTrace   = useFloorplanLocalStore((s) => s.pendingTraceAfterCalibration)
   const setPendingTrace = useFloorplanLocalStore((s) => s.setPendingTraceAfterCalibration)
+  const pendingWalls   = useFloorplanLocalStore((s) => s.pendingWalls)
+  const setPendingWalls = useFloorplanLocalStore((s) => s.setPendingWalls)
   const seedProcessing = useFloorplanLocalStore((s) => s.seedProcessing)
 
   // The ONE active unit — calibration estimate, input, and label all read it.
@@ -150,21 +155,34 @@ export default function FloorplanPanel() {
     }
   }
 
-  const cancelTracing = () => { setTraceMode(false); setTraceStroke([]); setTraceStart(null); setHoverPixel(null) }
+  const cancelTracing = () => { setTraceMode(false); setTraceStroke([]); setTraceStart(null); setPendingWalls(null); setHoverPixel(null) }
 
-  // Escape ends the active wall run first, then exits trace mode entirely.
+  const keepPendingWalls = () => {
+    if (!drawing || !pendingWalls || pendingWalls.length === 0) return
+    addUserTracedWalls(drawing.id, pendingWalls)
+    setPendingWalls(null)
+  }
+
+  // Escape: discard pending walls → end the active run → exit trace mode.
+  // Enter keeps the pending walls.
   useEffect(() => {
     if (!traceMode) return
     const onKey = (e: KeyboardEvent) => {
+      const local = useFloorplanLocalStore.getState()
+      if (e.key === 'Enter' && local.pendingWalls) {
+        e.preventDefault()
+        keepPendingWalls()
+        return
+      }
       if (e.key !== 'Escape') return
-      const { traceStart: activeStart } = useFloorplanLocalStore.getState()
-      if (activeStart) useFloorplanLocalStore.getState().setTraceStart(null)
+      if (local.pendingWalls) local.setPendingWalls(null)
+      else if (local.traceStart) local.setTraceStart(null)
       else cancelTracing()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [traceMode])
+  }, [traceMode, pendingWalls, drawing?.id])
 
   const handleSmartRefine = async () => {
     if (!drawing) return
@@ -338,53 +356,77 @@ export default function FloorplanPanel() {
         {traceMode && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>Tracing walls</span>
-            <span className={styles.stepText}>
-              {userWallCount > 0 ? `${userWallCount} wall${userWallCount !== 1 ? 's' : ''} traced` : 'Trace the walls on the print'}
-            </span>
-            <span className={styles.stepHint}>
-              {traceStyle === 'line'
-                ? traceStart
-                  ? 'Tap the next corner — walls chain automatically. Esc ends the run.'
-                  : 'Tap a wall corner to start, then tap the next corner'
-                : 'Draw a stroke along each wall'}
-            </span>
-            <div className={styles.btnRow}>
-              <button
-                className={traceStyle === 'line' ? styles.action : styles.secondary}
-                onClick={() => setTraceStyle('line')}
-                title="Tap corner to corner with a stretchy guide line"
-              >
-                ⌖ Line
-              </button>
-              <button
-                className={traceStyle === 'freehand' ? styles.action : styles.secondary}
-                onClick={() => setTraceStyle('freehand')}
-                title="Draw freehand along each wall"
-              >
-                ✏ Freehand
-              </button>
-            </div>
-            <div className={styles.btnRow}>
-              {userWallCount > 0 && (
-                <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>
-                  Build 3D →
-                </button>
-              )}
-              {traceStyle === 'line' && traceStart && (
-                <button className={styles.secondary} onClick={() => setTraceStart(null)}>
-                  End run
-                </button>
-              )}
-              {hasTrace && (
-                <button className={styles.secondary} onClick={handleSmartRefine} disabled={seedProcessing}>
-                  {seedProcessing ? 'Refining…' : 'Smart refine'}
-                </button>
-              )}
-              <button className={styles.secondary} onClick={() => { clearTracingForDrawing(drawing.id); cancelTracing() }}>
-                Clear
-              </button>
-              <button className={styles.cancel} onClick={cancelTracing}>Done</button>
-            </div>
+            {pendingWalls ? (
+              <>
+                <span className={styles.stepText}>
+                  Keep {pendingWalls.length} wall{pendingWalls.length !== 1 ? 's' : ''}?
+                </span>
+                <span className={styles.stepHint}>Enter to keep · Esc to discard</span>
+                <div className={styles.btnRow}>
+                  <button className={styles.action} onClick={keepPendingWalls}>
+                    ✓ Keep
+                  </button>
+                  <button className={styles.secondary} onClick={() => setPendingWalls(null)}>
+                    ✕ Discard
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <span className={styles.stepText}>
+                  {userWallCount > 0 ? `${userWallCount} wall${userWallCount !== 1 ? 's' : ''} traced` : 'Trace the walls on the print'}
+                </span>
+                <span className={styles.stepHint}>
+                  {traceStyle === 'line'
+                    ? traceStart
+                      ? 'Tap the next corner — walls chain automatically. Esc ends the run.'
+                      : 'Tap a wall corner to start, then tap the next corner'
+                    : 'Draw a stroke along each wall — corners in the stroke become connected walls'}
+                </span>
+                <div className={styles.btnRow}>
+                  <button
+                    className={traceStyle === 'line' ? styles.action : styles.secondary}
+                    onClick={() => setTraceStyle('line')}
+                    title="Tap corner to corner with a stretchy guide line"
+                  >
+                    ⌖ Line
+                  </button>
+                  <button
+                    className={traceStyle === 'freehand' ? styles.action : styles.secondary}
+                    onClick={() => setTraceStyle('freehand')}
+                    title="Draw freehand along each wall"
+                  >
+                    ✏ Freehand
+                  </button>
+                  {canUndo && userWallCount > 0 && (
+                    <button className={styles.secondary} onClick={undoAction} title="Undo last wall (Ctrl+Z)">
+                      ↶ Undo
+                    </button>
+                  )}
+                </div>
+                <div className={styles.btnRow}>
+                  {userWallCount > 0 && (
+                    <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>
+                      Build 3D →
+                    </button>
+                  )}
+                  {traceStyle === 'line' && traceStart && (
+                    <button className={styles.secondary} onClick={() => setTraceStart(null)}>
+                      End run
+                    </button>
+                  )}
+                  {hasTrace && (
+                    <button className={styles.secondary} onClick={handleSmartRefine} disabled={seedProcessing}>
+                      {seedProcessing ? 'Refining…' : 'Smart refine'}
+                    </button>
+                  )}
+                  <button className={styles.secondary} onClick={() => { clearTracingForDrawing(drawing.id); cancelTracing() }}>
+                    Clear
+                  </button>
+                  <button className={styles.cancel} onClick={cancelTracing}>Done</button>
+                </div>
+              </>
+            )}
           </div>
         )}
 

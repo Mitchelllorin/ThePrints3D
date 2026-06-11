@@ -16,7 +16,14 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { reduceStrokeToWall, snapTraceWallToExisting, snapPointToWalls } from '../../services/wallTraceReducer'
+import type { ParsedWall } from '../../types'
+import {
+  extendWallToNearbyWall,
+  reduceStrokeToWall,
+  reduceStrokeToWalls,
+  snapPointToWalls,
+  snapTraceWallToExisting,
+} from '../../services/wallTraceReducer'
 
 const DEFAULT_WIDTH = 12
 const DEFAULT_DEPTH = 8
@@ -72,10 +79,6 @@ export default function FloorplanOverlay() {
   const addTrace = useAppStore((s) => s.addTrace)
 
   const gridSnapM = useConfigStore((s) => s.gridSnapM)
-  const wallTraceThicknessPx = useConfigStore((s) => s.wallTraceThicknessPx)
-  const wallTraceMinLengthPx = useConfigStore((s) => s.wallTraceMinLengthPx)
-  const wallTraceSnapEndpointPx = useConfigStore((s) => s.wallTraceSnapEndpointPx)
-  const wallTraceSnapLinePx = useConfigStore((s) => s.wallTraceSnapLinePx)
   const wallTraceStyle = useConfigStore((s) => s.wallTraceStyle)
 
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
@@ -84,6 +87,8 @@ export default function FloorplanOverlay() {
   const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
   const traceStroke = useFloorplanLocalStore((s) => s.traceStroke)
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
+  const pendingWalls = useFloorplanLocalStore((s) => s.pendingWalls)
+  const setPendingWalls = useFloorplanLocalStore((s) => s.setPendingWalls)
   const hoverPixel = useFloorplanLocalStore((s) => s.hoverPixel)
   const setHoverPixel = useFloorplanLocalStore((s) => s.setHoverPixel)
   const calibrationA = useFloorplanLocalStore((s) => s.calibrationA)
@@ -254,7 +259,8 @@ export default function FloorplanOverlay() {
         setTraceStart(null)
         return
       }
-      const wall = snapTraceWallToExisting(reduced, drawing.parsedWalls)
+      const snappedWall = snapTraceWallToExisting(reduced, drawing.parsedWalls)
+      const wall = extendWallToNearbyWall(snappedWall, drawing.parsedWalls)
       addUserTracedWall(drawing.id, wall)
       addTrace({ points: [traceStart, [wall.x2, wall.y2]], timestamp: Date.now() })
       setTraceStart([wall.x2, wall.y2])
@@ -282,6 +288,24 @@ export default function FloorplanOverlay() {
     setTraceStroke((prev) => (prev.length === 0 ? prev : [...prev, pixel]))
   }
 
+  // Snap and tie in only the FREE ends of a wall chain — interior corners
+  // must keep their exact shared points.
+  const tieInChainEnds = (walls: ParsedWall[], existing: ParsedWall[]): ParsedWall[] => {
+    if (walls.length === 0) return walls
+    const out = walls.map((w) => ({ ...w }))
+    const first = out[0]
+    const last = out[out.length - 1]
+    const s = snapPointToWalls(first.x1, first.y1, existing)
+    first.x1 = s.x; first.y1 = s.y
+    const e = snapPointToWalls(last.x2, last.y2, existing)
+    last.x2 = e.x; last.y2 = e.y
+    const extFirst = extendWallToNearbyWall(first, existing)
+    first.x1 = extFirst.x1; first.y1 = extFirst.y1
+    const extLast = extendWallToNearbyWall(last, existing)
+    last.x2 = extLast.x2; last.y2 = extLast.y2
+    return out
+  }
+
   const handleWorkspacePointerUp = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || !traceMode || traceStyle !== 'freehand') return
     event.stopPropagation()
@@ -289,18 +313,12 @@ export default function FloorplanOverlay() {
     setTraceStroke((prev) => {
       if (prev.length === 0) return prev
       const points = [...prev, pixel]
-      const reduced = reduceStrokeToWall(points.map(([x, y]) => ({ x, y })), {
-        defaultThicknessPx: wallTraceThicknessPx,
-        minLengthPx: wallTraceMinLengthPx,
-      })
-      if (reduced) {
-        const snapped = snapTraceWallToExisting(
-          reduced,
-          drawing.parsedWalls,
-          wallTraceSnapEndpointPx,
-          wallTraceSnapLinePx,
-        )
-        addUserTracedWall(drawing.id, snapped)
+      // Multi-segment reduction: corners in the stroke become connected walls.
+      // Nothing commits yet — walls go to a keep/discard preview so an
+      // accidental lift of the pointer never creates geometry by surprise.
+      const walls = reduceStrokeToWalls(points.map(([x, y]) => ({ x, y })))
+      if (walls.length > 0) {
+        setPendingWalls(tieInChainEnds(walls, drawing.parsedWalls))
         addTrace({ points, timestamp: Date.now() })
       }
       return []
@@ -416,6 +434,19 @@ export default function FloorplanOverlay() {
       {tracePreviewPoints && (
         <Line points={tracePreviewPoints} color="#38bdf8" lineWidth={4} />
       )}
+
+      {pendingWalls?.map((w, i) => (
+        <Line
+          key={`pending-${i}`}
+          points={[planeLocalToWorld([w.x1, w.y1]), planeLocalToWorld([w.x2, w.y2])]}
+          color="#4ade80"
+          lineWidth={5}
+          dashed
+          dashScale={1.4}
+          dashSize={0.26}
+          gapSize={0.14}
+        />
+      ))}
 
       {traceMode && traceStyle === 'line' && traceStart && (
         <mesh position={planeLocalToWorld(traceStart)}>

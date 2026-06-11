@@ -38,10 +38,6 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  opacity: var(--bp-logo-opacity, 1);
-  transform: scale(var(--bp-logo-scale, 1));
-  transform-origin: left center;
-  transition: opacity 0.2s, transform 0.2s;
 }
 
 .brandName {

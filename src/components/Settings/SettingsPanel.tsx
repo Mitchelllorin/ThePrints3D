@@ -93,26 +93,11 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
             />
           </Group>
 
-          <Group title="Logo">
-            <Slider
-              label="Opacity"
-              value={Math.round(s.logoOpacity * 100)}
-              min={0} max={100} step={1} unit="%"
-              onChange={(v) => s.set({ logoOpacity: v / 100 })}
-            />
-            <Slider
-              label="Size"
-              value={Math.round(s.logoSize * 100)}
-              min={50} max={200} step={5} unit="%"
-              onChange={(v) => s.set({ logoSize: v / 100 })}
-            />
-          </Group>
-
           <Group title="3D Grid">
             <Slider
               label="Opacity"
               value={Math.round(s.gridOpacity * 100)}
-              min={0} max={100} step={1} unit="%"
+              min={5} max={100} step={1} unit="%"
               onChange={(v) => s.set({ gridOpacity: v / 100 })}
             />
             <ColorRow
@@ -121,16 +106,10 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               onChange={(v) => s.set({ gridColor: v })}
             />
             <Slider
-              label="Cell size"
+              label="Spacing"
               value={s.gridCellSize}
               min={0.5} max={10} step={0.5} unit=" m"
               onChange={(v) => s.set({ gridCellSize: v })}
-            />
-            <Slider
-              label="Divisions"
-              value={s.gridDivisions}
-              min={2} max={40} step={1}
-              onChange={(v) => s.set({ gridDivisions: v })}
             />
           </Group>
 

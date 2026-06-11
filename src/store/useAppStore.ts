@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { current } from 'immer'
 import { immer } from 'zustand/middleware/immer'
 import type {
   AppView,
@@ -197,7 +198,14 @@ const DEFAULT_FLOORPLAN_OVERLAY: FloorplanOverlayState = {
 
 const HISTORY_LIMIT = 80
 
+// Drawings ever added this session, by id — kept OUTSIDE the store because
+// Drawing holds a File and blob URLs that can't survive the JSON snapshot
+// round-trip. Lets undo restore a removed drawing and redo re-add one.
+const drawingPool = new Map<string, Drawing>()
+
 interface WorkspaceHistorySnapshot {
+  /** Which drawings existed, in order — add/remove drawing is undoable */
+  drawingIds: string[]
   drawingStates: Array<{
     id: string
     parsedWalls: ParsedWall[]
@@ -285,6 +293,7 @@ interface AppState {
   setDrawingType: (id: string, type: DrawingType) => void
   setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
   addUserTracedWall: (id: string, wall: ParsedWall) => void
+  addUserTracedWalls: (id: string, walls: ParsedWall[]) => void
   clearUserTracedWalls: (id: string) => void
   clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
@@ -402,6 +411,7 @@ function computeFloorLevels(drawings: Drawing[]) {
 
 function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
   return deepCopy({
+    drawingIds: state.drawings.map((d) => d.id),
     drawingStates: state.drawings.map((d) => ({
       id: d.id,
       parsedWalls: d.parsedWalls,
@@ -430,6 +440,13 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
 }
 
 function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
+  // Rebuild the drawings array first — drawings may have been added or
+  // removed since this snapshot. Removed ones come back from the pool.
+  const existing = new Map(state.drawings.map((d) => [d.id, d]))
+  state.drawings = snapshot.drawingIds
+    .map((id) => existing.get(id) ?? drawingPool.get(id))
+    .filter((d): d is Drawing => Boolean(d))
+
   for (const ds of snapshot.drawingStates) {
     const drawing = state.drawings.find((d) => d.id === ds.id)
     if (!drawing) continue
@@ -519,6 +536,7 @@ export const useAppStore = create<AppState>()(
     },
 
     addDrawings: (files) => {
+      pushHistory()
       const newIds: string[] = []
       set((s) => {
         for (const file of files) {
@@ -550,6 +568,7 @@ export const useAppStore = create<AppState>()(
             scaleConfidence: null,
             uploadedAt: Date.now(),
           }
+          drawingPool.set(id, drawing)
           s.drawings.push(drawing)
           if (!s.floorplanOverlay.drawingId) {
             s.floorplanOverlay.drawingId = drawing.id
@@ -576,10 +595,9 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         const idx = s.drawings.findIndex((d) => d.id === id)
         if (idx !== -1) {
-          const previewUrl = s.drawings[idx].previewUrl
-          const rasterUrl = s.drawings[idx].rasterUrl
-          if (previewUrl) URL.revokeObjectURL(previewUrl)
-          if (rasterUrl && rasterUrl !== previewUrl) URL.revokeObjectURL(rasterUrl)
+          // Keep the full current state (and its blob URLs alive) in the pool
+          // so undo can bring the drawing back intact.
+          drawingPool.set(id, current(s.drawings[idx]) as Drawing)
           s.drawings.splice(idx, 1)
         }
         if (s.selectedDrawingId === id) s.selectedDrawingId = null
@@ -625,6 +643,23 @@ export const useAppStore = create<AppState>()(
           { ...wall, source: 'user' as const, detectionConfidence: 1 },
         ]
         const userWalls = cornerInferEnabled ? inferCorners(combined, cornerTolerancePx) : combined
+        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+      })
+    },
+
+    // Batch variant: one stroke may reduce to several connected walls — they
+    // commit together as a single undo step.
+    addUserTracedWalls: (id, walls) => {
+      if (walls.length === 0) return
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        const userWalls = inferCorners([
+          ...d.parsedWalls.filter((w) => w.source === 'user'),
+          ...walls.map((w) => ({ ...w, source: 'user' as const, detectionConfidence: 1 })),
+        ])
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
       })
     },
@@ -831,6 +866,7 @@ export const useAppStore = create<AppState>()(
           presetDifficulty: difficulty,
           ...drawingSeed,
         }
+        drawingPool.set(drawing.id, drawing)
         s.drawings.push(drawing)
         s.selectedDrawingId = drawing.id
         s.floorplanOverlay = {

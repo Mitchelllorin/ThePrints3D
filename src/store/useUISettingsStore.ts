@@ -20,7 +20,6 @@ export interface UISettings {
   gridOpacity: number
   gridColor: string
   gridCellSize: number
-  gridDivisions: number
   // Accent
   accentColor: string
 }
@@ -40,7 +39,6 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   gridOpacity: 0.8,
   gridColor: '#1a4a7a',
   gridCellSize: 1,
-  gridDivisions: 10,
   accentColor: '#38bdf8',
 }
 
