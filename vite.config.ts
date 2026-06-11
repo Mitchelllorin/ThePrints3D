@@ -1,13 +1,16 @@
-console.log("preview trigger");
 import { defineConfig } from 'vite'
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import { VitePWA } from 'vite-plugin-pwa'
-console.log("THIS IS A REAL CHANGE", Math.random());
 
 // https://vite.dev/config/
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? '/',
+  server: {
+    // Honor a harness-assigned port (e.g. Claude preview); default to Vite's 5173
+    port: process.env.PORT ? Number(process.env.PORT) : 5173,
+    strictPort: Boolean(process.env.PORT),
+  },
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),

@@ -1,14 +1,25 @@
 /**
  * LogoBadge3D — static extruded 3D wordmark for the top bar.
  * Orthographic camera, positions run left→right from 0 and Center does the centering.
- * Print group is shear-rotated on Z to simulate italic.
+ * Print group is X-sheared for a true italic lean — baseline stays level.
  */
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { Text3D, Center } from '@react-three/drei'
+import { Matrix4 } from 'three'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 
 const FONT = '/fonts/helvetiker_bold.typeface.json'
+
+// Italic shear for "Print": x' = x + 0.22·y slants letter tops toward the 3D
+// while y stays untouched, so the baseline lines up with Blue and 3D.
+// Translation (x=0.90) is baked into the matrix since matrixAutoUpdate is off.
+const PRINT_ITALIC = new Matrix4().set(
+  1, 0.22, 0, 0.90,
+  0, 1,    0, 0,
+  0, 0,    1, 0,
+  0, 0,    0, 1,
+)
 
 function Wordmark() {
   const opacity = useUISettingsStore((s) => s.logoOpacity)
@@ -33,16 +44,16 @@ function Wordmark() {
             </Text3D>
           </group>
 
-          {/* Print — Z-rotation fakes italic lean */}
-          <group position={[0.90, 0, 0]} rotation={[0, 0, -0.18]}>
+          {/* Print — sheared italic, letters lean toward the 3D */}
+          <group matrix={PRINT_ITALIC} matrixAutoUpdate={false}>
             <Text3D font={FONT} size={size} height={height} {...bevel}>
               Print
               <meshStandardMaterial color="#f97316" roughness={0.2} metalness={0.3} transparent opacity={opacity} />
             </Text3D>
           </group>
 
-          {/* 3D — superscript, right after Print */}
-          <group position={[1.88, 0.14, 0]}>
+          {/* 3D — superscript, right after Print (offset allows for the italic lean) */}
+          <group position={[1.96, 0.14, 0]}>
             <Text3D font={FONT} size={size * 0.68} height={height * 0.75} {...bevel}>
               3D
               <meshStandardMaterial color="#4ade80" roughness={0.2} metalness={0.35} transparent opacity={opacity} />
