@@ -10,7 +10,6 @@ import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
 import AnnotationTool from './AnnotationTool'
 import CameraHud from './CameraHud'
-import ProductPlacementPanel from './ProductPlacementPanel'
 import ProductPlacements from './ProductPlacements'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
@@ -288,6 +287,29 @@ export default function ModelViewer() {
           >
             📤 Share PNG
           </button>
+          {hasWalls && (
+            <>
+              <button
+                className={styles.toolBtn}
+                onClick={() => { buildForMe(); setShowWizard(false) }}
+                title="Auto-build framing from detected walls — takes all defaults"
+                data-testid="build-for-me-btn"
+              >
+                {buildResult ? 'Rebuild' : 'Build for me'}
+              </button>
+              <button
+                className={`${styles.toolBtn} ${showWizard ? styles.toolBtnActive : ''}`}
+                onClick={() => {
+                  if (!buildResult) buildForMe()
+                  setShowWizard(!showWizard)
+                }}
+                title="Walk construction decisions step by step"
+                data-testid="wizard-btn"
+              >
+                Wizard
+              </button>
+            </>
+          )}
           {(measureMode || annotateMode) && (
             <span className={styles.toolHint}>
               {measureMode ? 'Click a surface to place point A, then point B' : 'Click a surface to place an annotation pin'}
@@ -298,7 +320,7 @@ export default function ModelViewer() {
 
       {/* Camera preset HUD — visible whenever the model exists */}
       {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
-      {model.status === 'ready' && <ProductPlacementPanel />}
+      {/* ProductPlacementPanel hidden by default — access via Layers panel */}
 
       {model.status === 'ready' && (
         <aside
@@ -362,6 +384,9 @@ export default function ModelViewer() {
           onCancel={() => setPendingForm(null)}
         />
       )}
+
+      {/* Construction Wizard — step-through decisions panel */}
+      {showWizard && <ConstructionWizard />}
 
       {/* FloorplanPanel renders DOM controls (inputs, buttons) outside the
          Canvas so they stay in the react-dom reconciler. */}

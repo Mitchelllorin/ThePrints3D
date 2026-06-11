@@ -113,6 +113,15 @@ const DEFAULT_LAYERS: Layer[] = [
     icon: '🚪',
   },
   {
+    id: 'framing',
+    label: 'Framing',
+    color: '#d4a574',
+    visible: false,
+    opacity: 0.85,
+    sourceTypes: ['floor-plan', 'architectural'],
+    icon: '🪵',
+  },
+  {
     id: 'electrical',
     label: 'Electrical',
     color: '#fbbf24',
@@ -248,6 +257,10 @@ interface AppState {
   detectedWallTypes: DetectedWallType[]
   wallDetectionConfig: WallDetectionConfig
 
+  // Construction Engine
+  buildResult: BuildResult | null
+  constructionDecisions: Decision[]
+
   // Actions
   setView: (view: AppView) => void
   addDrawings: (files: File[]) => void
@@ -305,6 +318,10 @@ interface AppState {
   setProjectWallTypes: (types: WallType[]) => void
   exportCorrectionDataset: () => string
   setWallDetectionConfig: (patch: Partial<WallDetectionConfig>) => void
+  // Construction Engine
+  buildForMe: () => void
+  updateDecision: (decisionId: string, chosenValue: unknown) => void
+  clearBuildResult: () => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -459,6 +476,10 @@ export const useAppStore = create<AppState>()(
     correctionCount: defaultSmartProcessingState.correctionCount,
     detectedWallTypes: [],
     wallDetectionConfig: { ...DEFAULT_WALL_DETECTION_CONFIG },
+
+    // Construction Engine
+    buildResult: null,
+    constructionDecisions: [],
 
     setView: (view) =>
       set((s) => {
@@ -1118,6 +1139,62 @@ export const useAppStore = create<AppState>()(
         })),
         correctionCount: state.correctionCount,
       }, null, 2)
+    },
+
+    // ─── Construction Engine ──────────────────────────────────────────
+    buildForMe: () => {
+      const state = get()
+      const allParsed = state.drawings.filter((d) => d.parsedWalls.length > 0)
+      if (allParsed.length === 0) return
+
+      const ref = allParsed.reduce((a, b) =>
+        a.parsedWalls.length > b.parsedWalls.length ? a : b,
+      )
+      const scaleMmPerPx = ref.scaleMmPerPx ?? 23.5
+      const allWalls = allParsed.flatMap((d) => d.parsedWalls)
+      const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
+
+      const result = buildFraming(allWalls, allOpenings, {
+        scaleMmPerPx,
+        floorHeightM: 2.7,
+        buildingType: 'residential-single',
+      })
+
+      set((s) => {
+        s.buildResult = result
+        s.constructionDecisions = result.decisions
+        // Auto-enable the framing layer
+        const framingLayer = s.layers.find((l) => l.id === 'framing')
+        if (framingLayer) framingLayer.visible = true
+        s.model.status = 'ready'
+        s.view = 'model'
+      })
+
+      logEvent('construction.build_for_me', {
+        componentCount: result.components.length,
+        decisionCount: result.decisions.length,
+        suggestionCount: result.suggestions.length,
+      })
+    },
+
+    updateDecision: (decisionId, chosenValue) => {
+      set((s) => {
+        const decision = s.constructionDecisions.find((d) => d.id === decisionId)
+        if (decision) {
+          decision.chosen = chosenValue
+        }
+        if (s.buildResult) {
+          const bd = s.buildResult.decisions.find((d) => d.id === decisionId)
+          if (bd) bd.chosen = chosenValue
+        }
+      })
+    },
+
+    clearBuildResult: () => {
+      set((s) => {
+        s.buildResult = null
+        s.constructionDecisions = []
+      })
     },
     }
   })

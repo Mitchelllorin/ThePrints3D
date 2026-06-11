@@ -1,0 +1,75 @@
+{
+  "outletSpacing": {
+    "residential": {
+      "maxIntervalM": 3.66,
+      "heightFromFloorM": 0.35,
+      "label": "Every 12 ft / 3.66 m (NEC 210.52)"
+    },
+    "commercial": {
+      "maxIntervalM": 5.5,
+      "heightFromFloorM": 0.45,
+      "label": "Every 18 ft / 5.5 m (commercial standard)"
+    },
+    "kitchen": {
+      "maxIntervalM": 1.22,
+      "heightFromFloorM": 1.07,
+      "label": "Every 4 ft / 1.22 m above counter (NEC 210.52C)"
+    }
+  },
+  "switchHeight": {
+    "standard": { "heightM": 1.2, "label": "48\" / 1.2 m AFF" },
+    "ada": { "heightM": 1.07, "label": "42\" / 1.07 m AFF (ADA accessible)" }
+  },
+  "panelDefaults": {
+    "residential": { "amps": 200, "circuits": 40, "label": "200A / 40-circuit" },
+    "commercial": { "amps": 400, "circuits": 84, "label": "400A / 84-circuit" }
+  },
+  "conduitSizes": {
+    "half-inch": { "mm": 16, "label": "1/2\" EMT" },
+    "three-quarter": { "mm": 21, "label": "3/4\" EMT" },
+    "one-inch": { "mm": 27, "label": "1\" EMT" }
+  },
+  "wireSizes": {
+    "14awg": { "label": "14 AWG (15A circuits)" },
+    "12awg": { "label": "12 AWG (20A circuits)" },
+    "10awg": { "label": "10 AWG (30A circuits)" }
+  },
+  "buildingTypeDefaults": {
+    "residential-single": {
+      "outletType": "residential",
+      "switchHeight": "standard",
+      "panel": "residential",
+      "conduit": "half-inch"
+    },
+    "residential-multi": {
+      "outletType": "residential",
+      "switchHeight": "standard",
+      "panel": "residential",
+      "conduit": "three-quarter"
+    },
+    "commercial": {
+      "outletType": "commercial",
+      "switchHeight": "ada",
+      "panel": "commercial",
+      "conduit": "three-quarter"
+    },
+    "industrial": {
+      "outletType": "commercial",
+      "switchHeight": "ada",
+      "panel": "commercial",
+      "conduit": "one-inch"
+    },
+    "institutional": {
+      "outletType": "commercial",
+      "switchHeight": "ada",
+      "panel": "commercial",
+      "conduit": "three-quarter"
+    },
+    "unknown": {
+      "outletType": "residential",
+      "switchHeight": "standard",
+      "panel": "residential",
+      "conduit": "half-inch"
+    }
+  }
+}

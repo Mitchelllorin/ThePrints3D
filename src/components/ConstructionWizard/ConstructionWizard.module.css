@@ -1,0 +1,206 @@
+.wizard {
+  position: absolute;
+  top: 56px;
+  right: 8px;
+  width: 320px;
+  max-height: calc(100vh - 72px);
+  overflow-y: auto;
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 12px;
+  color: #e2e8f0;
+  font-size: 13px;
+  z-index: 20;
+  backdrop-filter: blur(8px);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+  color: #f1f5f9;
+}
+
+.progress {
+  font-size: 11px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skipToggle {
+  background: none;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 10px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.skipToggle:hover {
+  color: #e2e8f0;
+  border-color: #64748b;
+}
+
+.layerBar {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.layerPill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #94a3b8;
+}
+
+.layerDone {
+  background: rgba(16, 185, 129, 0.15);
+  color: #a7f3d0;
+  border-color: #065f46;
+}
+
+.card {
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.cardLayer {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.cardQuestion {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+
+.cardConfidence {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.autoTag {
+  font-size: 10px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.optionBtn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #cbd5e1;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.optionBtn:hover {
+  border-color: #64748b;
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.optionChosen {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  color: #f1f5f9;
+}
+
+.optionLabel {
+  flex: 1;
+}
+
+.defaultTag {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin-left: 6px;
+}
+
+.nav {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.navBtn {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.navBtn:hover:not(:disabled) {
+  color: #e2e8f0;
+  border-color: #64748b;
+}
+
+.navBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.suggestions {
+  border-top: 1px solid #334155;
+  padding-top: 8px;
+}
+
+.suggestionsTitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fbbf24;
+  margin-bottom: 4px;
+}
+
+.suggestion {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.35;
+  padding: 4px 0;
+}

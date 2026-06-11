@@ -1,0 +1,74 @@
+{
+  "ductSizes": {
+    "small": { "widthMm": 150, "heightMm": 150, "label": "6\"x6\" branch" },
+    "medium": { "widthMm": 250, "heightMm": 200, "label": "10\"x8\" branch" },
+    "large": { "widthMm": 400, "heightMm": 300, "label": "16\"x12\" trunk" },
+    "main": { "widthMm": 600, "heightMm": 400, "label": "24\"x16\" main trunk" }
+  },
+  "registerSizes": {
+    "supply": { "widthMm": 250, "heightMm": 100, "label": "10\"x4\" supply register" },
+    "return": { "widthMm": 400, "heightMm": 200, "label": "16\"x8\" return grille" }
+  },
+  "ahuDefaults": {
+    "residential": {
+      "type": "split-system",
+      "tonnage": 3,
+      "label": "3-ton split system"
+    },
+    "commercial": {
+      "type": "rooftop-unit",
+      "tonnage": 10,
+      "label": "10-ton RTU"
+    }
+  },
+  "clearances": {
+    "ductAboveCeilingM": 0.3,
+    "registerFromFloorM": 0.15,
+    "returnFromCeilingM": 0.3,
+    "minClearanceToStructureM": 0.025
+  },
+  "buildingTypeDefaults": {
+    "residential-single": {
+      "trunkDuct": "large",
+      "branchDuct": "small",
+      "ahu": "residential",
+      "supplyRegister": "supply",
+      "returnGrille": "return"
+    },
+    "residential-multi": {
+      "trunkDuct": "main",
+      "branchDuct": "medium",
+      "ahu": "residential",
+      "supplyRegister": "supply",
+      "returnGrille": "return"
+    },
+    "commercial": {
+      "trunkDuct": "main",
+      "branchDuct": "medium",
+      "ahu": "commercial",
+      "supplyRegister": "supply",
+      "returnGrille": "return"
+    },
+    "industrial": {
+      "trunkDuct": "main",
+      "branchDuct": "large",
+      "ahu": "commercial",
+      "supplyRegister": "supply",
+      "returnGrille": "return"
+    },
+    "institutional": {
+      "trunkDuct": "main",
+      "branchDuct": "medium",
+      "ahu": "commercial",
+      "supplyRegister": "supply",
+      "returnGrille": "return"
+    },
+    "unknown": {
+      "trunkDuct": "large",
+      "branchDuct": "small",
+      "ahu": "residential",
+      "supplyRegister": "supply",
+      "returnGrille": "return"
+    }
+  }
+}

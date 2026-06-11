@@ -1,0 +1,83 @@
+{
+  "types": {
+    "fiberglass-batt": {
+      "rValuePerInch": 3.2,
+      "label": "Fiberglass batt",
+      "note": "Standard residential cavity fill"
+    },
+    "mineral-wool": {
+      "rValuePerInch": 3.8,
+      "label": "Mineral wool batt",
+      "note": "Better fire resistance and soundproofing"
+    },
+    "spray-foam-closed": {
+      "rValuePerInch": 6.5,
+      "label": "Closed-cell spray foam",
+      "note": "Highest R-value, vapor barrier, premium cost"
+    },
+    "spray-foam-open": {
+      "rValuePerInch": 3.7,
+      "label": "Open-cell spray foam",
+      "note": "Good air sealing, moderate R-value"
+    },
+    "rigid-xps": {
+      "rValuePerInch": 5.0,
+      "label": "Rigid XPS board",
+      "note": "Exterior sheathing / foundation"
+    }
+  },
+  "locations": {
+    "exterior-wall": {
+      "minRValue": 13,
+      "typicalThicknessMm": 89,
+      "label": "Exterior wall cavity"
+    },
+    "interior-partition": {
+      "minRValue": 0,
+      "typicalThicknessMm": 0,
+      "label": "Interior partition (sound only)"
+    },
+    "ceiling": {
+      "minRValue": 38,
+      "typicalThicknessMm": 300,
+      "label": "Ceiling / attic floor"
+    },
+    "floor": {
+      "minRValue": 19,
+      "typicalThicknessMm": 140,
+      "label": "Floor over unconditioned space"
+    }
+  },
+  "buildingTypeDefaults": {
+    "residential-single": {
+      "exteriorWall": "fiberglass-batt",
+      "ceiling": "fiberglass-batt",
+      "floor": "fiberglass-batt"
+    },
+    "residential-multi": {
+      "exteriorWall": "mineral-wool",
+      "ceiling": "mineral-wool",
+      "floor": "mineral-wool"
+    },
+    "commercial": {
+      "exteriorWall": "mineral-wool",
+      "ceiling": "rigid-xps",
+      "floor": "rigid-xps"
+    },
+    "industrial": {
+      "exteriorWall": "spray-foam-closed",
+      "ceiling": "rigid-xps",
+      "floor": "rigid-xps"
+    },
+    "institutional": {
+      "exteriorWall": "mineral-wool",
+      "ceiling": "mineral-wool",
+      "floor": "rigid-xps"
+    },
+    "unknown": {
+      "exteriorWall": "fiberglass-batt",
+      "ceiling": "fiberglass-batt",
+      "floor": "fiberglass-batt"
+    }
+  }
+}
