@@ -43,6 +43,7 @@ import {
   setWizardCurrentGroup,
   type ProjectContextWizardState,
 } from '../components/ProjectContext/wizardState'
+import { loadWizardState as loadOnboardingWizardState } from '../onboarding/storage'
 
 // ─── Camera Presets ────────────────────────────────────────────────────────────
 export interface CameraPreset {
@@ -652,12 +653,14 @@ export const useAppStore = create<AppState>()(
         if (d) { d.status = 'processing'; d.parseProgress = 0 }
       })
 
+      const onboardingDrywall = loadOnboardingWizardState().meta.drywall
+      const drywallCfg = onboardingDrywall === 'unknown' ? 'single-layer' : onboardingDrywall
       const patch = await runProcessor(drawing, (pct) => {
         set((s) => {
           const d = s.drawings.find((d) => d.id === id)
           if (d) d.parseProgress = pct
         })
-      })
+      }, drywallCfg)
 
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)
@@ -1172,11 +1175,12 @@ export const useAppStore = create<AppState>()(
       const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
 
       const cfg = useConfigStore.getState()
-      const { buildFloorHeightM, buildType, buildAutoEnableFraming, studSpacingIn, defaultStudSize, cornerType } = cfg
+      const { buildAutoEnableFraming, studSpacingIn, defaultStudSize, cornerType } = cfg
+      const onboardingMeta = loadOnboardingWizardState().meta
       const result = buildFraming(allWalls, allOpenings, {
         scaleMmPerPx,
-        floorHeightM: buildFloorHeightM,
-        buildingType: buildType,
+        floorHeightM: onboardingMeta.floorHeightM,
+        buildingType: onboardingMeta.buildingType === 'unknown' ? 'residential-single' : onboardingMeta.buildingType,
         spacingMm: studSpacingIn * 25.4,
         studSize: defaultStudSize,
         cornerType,
@@ -1202,6 +1206,8 @@ export const useAppStore = create<AppState>()(
         componentCount: result.components.length,
         decisionCount: result.decisions.length,
         suggestionCount: result.suggestions.length,
+        floorHeightM: onboardingMeta.floorHeightM,
+        buildingType: onboardingMeta.buildingType,
       })
     },
 
