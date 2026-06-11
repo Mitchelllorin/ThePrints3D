@@ -9,9 +9,9 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
+import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import type { ParsedWall } from '../../types'
 
-const WALL_HEIGHT = 2.7       // metres — standard 9ft ceiling
 const MIN_THICKNESS = 0.1     // metres — minimum visible thickness
 const DEFAULT_THICKNESS_MM = 140  // 2×4 stud + drywall both sides
 
@@ -19,9 +19,10 @@ interface WallMeshProps {
   wall: ParsedWall
   pixelToWorld: (px: number, py: number) => THREE.Vector3
   scaleMmPerPx: number | null
+  wallHeight: number
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight }: WallMeshProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
 
@@ -40,11 +41,11 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx }: WallMeshProps) {
 
   return (
     <mesh
-      position={[cx, WALL_HEIGHT / 2, cz]}
+      position={[cx, wallHeight / 2, cz]}
       rotation={[0, -angle, 0]}
       castShadow
     >
-      <boxGeometry args={[length, WALL_HEIGHT, thicknessM]} />
+      <boxGeometry args={[length, wallHeight, thicknessM]} />
       <meshStandardMaterial
         color="#94b8d0"
         roughness={0.7}
@@ -59,6 +60,13 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx }: WallMeshProps) {
 export default function LiveWallsLayer() {
   const drawings  = useAppStore((s) => s.drawings)
   const overlay   = useAppStore((s) => s.floorplanOverlay)
+  const model     = useAppStore((s) => s.model)
+  const wizardInputs = useAppStore((s) => s.wizardInputs)
+
+  const wallHeight = useMemo(
+    () => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM,
+    [wizardInputs],
+  )
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageWidth  = drawing?.rasterWidth  ?? 1400
@@ -89,7 +97,12 @@ export default function LiveWallsLayer() {
     return out
   }, [drawings])
 
-  if (userWalls.length === 0) return null
+  // Once the model is built, BuildingModel renders these same walls with the
+  // same overlay transform — drawing them twice just z-fights. Live preview
+  // is only needed before the first build or while actively tracing.
+  const modelOwnsWalls = (model.status === 'ready' || model.status === 'building') && !overlay.traceModeActive
+
+  if (userWalls.length === 0 || modelOwnsWalls) return null
 
   return (
     <group name="live-walls">
@@ -99,6 +112,7 @@ export default function LiveWallsLayer() {
           wall={wall}
           pixelToWorld={pixelToWorld}
           scaleMmPerPx={scaleMmPerPx}
+          wallHeight={wallHeight}
         />
       ))}
     </group>

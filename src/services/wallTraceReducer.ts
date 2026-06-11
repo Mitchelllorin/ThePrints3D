@@ -127,7 +127,17 @@ function nearestPointOnWallLine(
 /**
  * Snap a single point to nearby existing wall endpoints or wall lines.
  * Endpoint snapping takes priority over line snapping.
+ * Exported for the rubber-band trace tool, which snaps each tap as it lands.
  */
+export function snapPointToWalls(
+  px: number, py: number,
+  walls: ParsedWall[],
+  endpointTolerance = 28,
+  lineTolerance = 18,
+): { x: number; y: number } {
+  return snapPoint(px, py, walls, endpointTolerance, lineTolerance)
+}
+
 function snapPoint(
   px: number, py: number,
   walls: ParsedWall[],

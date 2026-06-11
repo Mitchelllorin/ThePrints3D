@@ -1,9 +1,8 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
-import LogoBadge3D from './LogoBadge3D'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
@@ -393,6 +392,10 @@ export default function WorkspaceLayout() {
   const projectWallTypes   = useAppStore((s) => s.projectWallTypes)
   const detectedWallTypes  = useAppStore((s) => s.detectedWallTypes)
   const setProjectWallTypes = useAppStore((s) => s.setProjectWallTypes)
+  const undo    = useAppStore((s) => s.undo)
+  const redo    = useAppStore((s) => s.redo)
+  const canUndo = useAppStore((s) => s.historyPast.length > 0)
+  const canRedo = useAppStore((s) => s.historyFuture.length > 0)
   const logoOpacity = useUISettingsStore((s) => s.logoOpacity)
 
   const handleLoadPreset = (presetId: PresetDifficulty) => {
@@ -420,6 +423,32 @@ export default function WorkspaceLayout() {
     e.target.value = ''
   }
 
+  // Global undo/redo shortcuts: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+Y.
+  // Skipped while typing so text fields keep their native undo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      const target = e.target as HTMLElement | null
+      if (target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      )) return
+      const key = e.key.toLowerCase()
+      if (key === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) useAppStore.getState().redo()
+        else useAppStore.getState().undo()
+      } else if (key === 'y') {
+        e.preventDefault()
+        useAppStore.getState().redo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <div className={styles.root}>
       {/* Hidden file input */}
@@ -433,12 +462,33 @@ export default function WorkspaceLayout() {
 
       {/* Top bar — thin, semi-transparent, sits above viewport */}
       <div className={styles.topbar} style={{ background: `rgba(var(--bp-panel-rgb, 10, 16, 30), ${topbarOpacity})` }}>
-        <div style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <LogoBadge3D />
+        <div style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span className={styles.logo}>
+            <span className={styles.logoBlue}>Blue</span><span className={styles.logoPrint}>Print</span><span className={styles.logo3D}>3D</span>
+          </span>
           <span className={styles.logoSub}>by LearnIt3D</span>
         </div>
 
-        <div className={styles.topbarActions} />
+        <div className={styles.topbarActions}>
+          <button
+            className={styles.historyBtn}
+            onClick={undo}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            aria-label="Undo"
+          >
+            ↶
+          </button>
+          <button
+            className={styles.historyBtn}
+            onClick={redo}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Shift+Z)"
+            aria-label="Redo"
+          >
+            ↷
+          </button>
+        </div>
       </div>
 
       {/* Panel + tab — one unit that slides together.

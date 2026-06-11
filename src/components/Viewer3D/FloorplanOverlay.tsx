@@ -16,7 +16,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { reduceStrokeToWall, snapTraceWallToExisting } from '../../services/wallTraceReducer'
+import { reduceStrokeToWall, snapTraceWallToExisting, snapPointToWalls } from '../../services/wallTraceReducer'
 
 const DEFAULT_WIDTH = 12
 const DEFAULT_DEPTH = 8
@@ -79,6 +79,9 @@ export default function FloorplanOverlay() {
   const wallTraceStyle = useConfigStore((s) => s.wallTraceStyle)
 
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
+  const traceStyle = useFloorplanLocalStore((s) => s.traceStyle)
+  const traceStart = useFloorplanLocalStore((s) => s.traceStart)
+  const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
   const traceStroke = useFloorplanLocalStore((s) => s.traceStroke)
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
   const hoverPixel = useFloorplanLocalStore((s) => s.hoverPixel)
@@ -169,6 +172,13 @@ export default function FloorplanOverlay() {
     return [start, end] as [[number, number, number], [number, number, number]]
   }, [calibrationA, calibrationB, hoverPixel, overlay.calibrationMode, planeLocalToWorld])
 
+  // Rubber-band trace preview — same stretchy interaction as calibration
+  const tracePreviewPoints = useMemo(() => {
+    if (!traceMode || traceStyle !== 'line' || !traceStart || !hoverPixel) return null
+    return [planeLocalToWorld(traceStart), planeLocalToWorld(hoverPixel)] as
+      [[number, number, number], [number, number, number]]
+  }, [traceMode, traceStyle, traceStart, hoverPixel, planeLocalToWorld])
+
   // ─── drag handlers ─────────────────────────────────────────────────────
 
   const applyMove = (dx: number, dz: number) => {
@@ -221,8 +231,33 @@ export default function FloorplanOverlay() {
     const pixel = worldToPixel(event.point)
 
     if (traceMode) {
-      setTraceStroke([pixel])
-      setHoverPixel(pixel)
+      if (traceStyle === 'freehand') {
+        setTraceStroke([pixel])
+        setHoverPixel(pixel)
+        return
+      }
+
+      // Rubber-band: tap A anchors, tap B commits, B becomes the next A so
+      // consecutive segments share an exact corner point.
+      const snapped = snapPointToWalls(pixel[0], pixel[1], drawing.parsedWalls)
+      if (!traceStart) {
+        setTraceStart([snapped.x, snapped.y])
+        setHoverPixel(pixel)
+        return
+      }
+      const reduced = reduceStrokeToWall([
+        { x: traceStart[0], y: traceStart[1] },
+        { x: snapped.x, y: snapped.y },
+      ])
+      if (!reduced) {
+        // Tap landed on the anchor — treat as "end this wall run"
+        setTraceStart(null)
+        return
+      }
+      const wall = snapTraceWallToExisting(reduced, drawing.parsedWalls)
+      addUserTracedWall(drawing.id, wall)
+      addTrace({ points: [traceStart, [wall.x2, wall.y2]], timestamp: Date.now() })
+      setTraceStart([wall.x2, wall.y2])
       return
     }
 
@@ -243,15 +278,16 @@ export default function FloorplanOverlay() {
     event.stopPropagation()
     const pixel = worldToPixel(event.point)
     setHoverPixel(pixel)
-    if (!traceMode) return
+    if (!traceMode || traceStyle !== 'freehand') return
     setTraceStroke((prev) => (prev.length === 0 ? prev : [...prev, pixel]))
   }
 
   const handleWorkspacePointerUp = (event: ThreeEvent<PointerEvent>) => {
-    if (!drawing || !traceMode) return
+    if (!drawing || !traceMode || traceStyle !== 'freehand') return
     event.stopPropagation()
     const pixel = worldToPixel(event.point)
     setTraceStroke((prev) => {
+      if (prev.length === 0) return prev
       const points = [...prev, pixel]
       const reduced = reduceStrokeToWall(points.map(([x, y]) => ({ x, y })), {
         defaultThicknessPx: wallTraceThicknessPx,
@@ -375,6 +411,17 @@ export default function FloorplanOverlay() {
 
       {traceWorldPoints.length > 1 && (wallTraceStyle === 'arrow' || wallTraceStyle === 'both') && (
         <TraceArrow start={traceWorldPoints[0]} end={traceWorldPoints[traceWorldPoints.length - 1]} />
+      )}
+
+      {tracePreviewPoints && (
+        <Line points={tracePreviewPoints} color="#38bdf8" lineWidth={4} />
+      )}
+
+      {traceMode && traceStyle === 'line' && traceStart && (
+        <mesh position={planeLocalToWorld(traceStart)}>
+          <sphereGeometry args={[0.09, 16, 16]} />
+          <meshBasicMaterial color="#38bdf8" />
+        </mesh>
       )}
 
       {calibrationPreviewPoints && (

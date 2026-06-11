@@ -214,6 +214,10 @@ interface WorkspaceHistorySnapshot {
   wizardState: ProjectContextWizardState
   wizardInputs: WorkspaceWizardInputs | null
   model: Model3D
+  buildResult: BuildResult | null
+  constructionDecisions: Decision[]
+  detectedWallTypes: DetectedWallType[]
+  correctionCount: number
 }
 
 function deepCopy<T>(value: T): T {
@@ -418,6 +422,10 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     wizardState: state.wizardState,
     wizardInputs: state.wizardInputs,
     model: state.model,
+    buildResult: state.buildResult,
+    constructionDecisions: state.constructionDecisions,
+    detectedWallTypes: state.detectedWallTypes,
+    correctionCount: state.correctionCount,
   })
 }
 
@@ -444,6 +452,10 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   state.wizardState = deepCopy(snapshot.wizardState)
   state.wizardInputs = deepCopy(snapshot.wizardInputs)
   state.model = deepCopy(snapshot.model)
+  state.buildResult = deepCopy(snapshot.buildResult)
+  state.constructionDecisions = deepCopy(snapshot.constructionDecisions)
+  state.detectedWallTypes = deepCopy(snapshot.detectedWallTypes)
+  state.correctionCount = snapshot.correctionCount
   saveAnnotations(state.annotations)
   saveWizardState(state.wizardState)
 }
@@ -653,8 +665,9 @@ export const useAppStore = create<AppState>()(
         if (d) { d.status = 'processing'; d.parseProgress = 0 }
       })
 
+      // Onboarding 'mixed' has no classifier equivalent — assume standard single-layer
       const onboardingDrywall = loadOnboardingWizardState().meta.drywall
-      const drywallCfg = onboardingDrywall === 'unknown' ? 'single-layer' : onboardingDrywall
+      const drywallCfg = onboardingDrywall === 'mixed' ? 'single-layer' : onboardingDrywall
       const patch = await runProcessor(drawing, (pct) => {
         set((s) => {
           const d = s.drawings.find((d) => d.id === id)
@@ -1192,6 +1205,7 @@ export const useAppStore = create<AppState>()(
         steelDeflectionGapMm: cfg.steelDeflectionGapMm,
       })
 
+      pushHistory()
       set((s) => {
         s.buildResult = result
         s.constructionDecisions = result.decisions
@@ -1212,6 +1226,7 @@ export const useAppStore = create<AppState>()(
     },
 
     updateDecision: (decisionId, chosenValue) => {
+      pushHistory()
       set((s) => {
         const decision = s.constructionDecisions.find((d) => d.id === decisionId)
         if (decision) {
@@ -1225,6 +1240,7 @@ export const useAppStore = create<AppState>()(
     },
 
     clearBuildResult: () => {
+      pushHistory()
       set((s) => {
         s.buildResult = null
         s.constructionDecisions = []

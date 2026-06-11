@@ -1,10 +1,12 @@
 /**
  * FloatingLogo3D — extruded 3D wordmark bouncing around the workspace.
- * Blue(blue) Print(orange) 3D(green) — all same size, actual geometry depth.
+ * Blue(blue) Print(orange) 3D(green) — laid out with the font's own glyph
+ * advance widths, exactly as the font would space "BluePrint3D" typed as a
+ * single word. No hand-tuned offsets.
  */
-import { useRef, Suspense } from 'react'
+import { useRef, useMemo, Suspense } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Text3D, Center } from '@react-three/drei'
+import { Text3D, useFont } from '@react-three/drei'
 import * as THREE from 'three'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 
@@ -19,37 +21,55 @@ const initVel = () => new THREE.Vector3(
   randomSign() * (0.4 + Math.random() * 0.2),
 )
 
+const BASE_SIZE = 0.52
+
+const WORDS = [
+  { text: 'Blue',  color: '#60a5fa', scale: 1,    yOffset: 0,                metalness: 0.2 },
+  { text: 'Print', color: '#f97316', scale: 1,    yOffset: 0,                metalness: 0.2 },
+  { text: '3D',    color: '#4ade80', scale: 0.68, yOffset: BASE_SIZE * 0.42, metalness: 0.3 },
+] as const
+
+interface TypefaceData {
+  resolution: number
+  glyphs: Record<string, { ha: number } | undefined>
+}
+
+/** Advance width of `text` at `size`, from the typeface's glyph metrics. */
+function measureWord(data: TypefaceData, text: string, size: number): number {
+  const scale = size / data.resolution
+  let w = 0
+  for (const ch of text) w += (data.glyphs[ch]?.ha ?? data.glyphs['?']?.ha ?? 0) * scale
+  return w
+}
+
 function WordmarkMesh({ opacity }: { opacity: number }) {
-  const size   = 0.52
   const height = 0.14
   const bevel  = { bevelEnabled: true, bevelSize: 0.02, bevelThickness: 0.04, bevelSegments: 4 }
 
+  const font = useFont(FONT_URL)
+
+  const offsets = useMemo(() => {
+    const data = font.data as unknown as TypefaceData
+    const widths = WORDS.map((w) => measureWord(data, w.text, BASE_SIZE * w.scale))
+    const total = widths.reduce((a, b) => a + b, 0)
+    const starts: number[] = []
+    for (let i = 0, x = -total / 2; i < widths.length; x += widths[i], i++) {
+      starts.push(x)
+    }
+    return starts
+  }, [font])
+
   return (
-    // Wrap in a group so all three words move as one unit when the group bounces
-    <group>
-      {/* Blue */}
-      <group position={[-2.56, 0, 0]}>
-        <Text3D font={FONT_URL} size={size} height={height} {...bevel}>
-          Blue
-          <meshStandardMaterial color="#60a5fa" roughness={0.3} metalness={0.2} transparent opacity={opacity} />
-        </Text3D>
-      </group>
-
-      {/* Print — tight against Blue */}
-      <group position={[-0.82, 0, 0]}>
-        <Text3D font={FONT_URL} size={size} height={height} {...bevel}>
-          Print
-          <meshStandardMaterial color="#f97316" roughness={0.3} metalness={0.2} transparent opacity={opacity} />
-        </Text3D>
-      </group>
-
-      {/* 3D — superscript, tight against Print */}
-      <group position={[1.52, 0.22, 0]}>
-        <Text3D font={FONT_URL} size={size * 0.68} height={height * 0.75} {...bevel}>
-          3D
-          <meshStandardMaterial color="#4ade80" roughness={0.3} metalness={0.3} transparent opacity={opacity} />
-        </Text3D>
-      </group>
+    // Drop by half the cap height so the wordmark is vertically centred on the pivot
+    <group position={[0, -BASE_SIZE / 2, 0]}>
+      {WORDS.map((word, i) => (
+        <group key={word.text} position={[offsets[i], word.yOffset, 0]} scale={word.scale}>
+          <Text3D font={FONT_URL} size={BASE_SIZE} height={height} {...bevel}>
+            {word.text}
+            <meshStandardMaterial color={word.color} roughness={0.3} metalness={word.metalness} transparent opacity={opacity} />
+          </Text3D>
+        </group>
+      ))}
     </group>
   )
 }
@@ -89,9 +109,7 @@ export default function FloatingLogo3D() {
   return (
     <group ref={groupRef} position={[0, 3, 0]}>
       <Suspense fallback={null}>
-        <Center>
-          <WordmarkMesh opacity={opacity} />
-        </Center>
+        <WordmarkMesh opacity={opacity} />
       </Suspense>
     </group>
   )

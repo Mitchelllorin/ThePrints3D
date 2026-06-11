@@ -9,6 +9,15 @@
 
 import { create } from 'zustand'
 
+type CalibrationUnit = 'mm' | 'm' | 'ft' | 'in'
+
+/**
+ * 'line'     — calibration-style rubber band: tap A, stretchy preview, tap B.
+ *              Segments chain (B becomes the next A) so corners connect exactly.
+ * 'freehand' — draw a stroke along the wall; it's reduced to a straight segment.
+ */
+type TraceStyle = 'line' | 'freehand'
+
 type DragKind = 'move' | 'corner' | 'edge' | 'rotate'
 
 interface DragState {
@@ -21,6 +30,9 @@ interface DragState {
 interface FloorplanLocalState {
   // ─── tracing ─────────────────────────────────────────────────────
   traceMode: boolean
+  traceStyle: TraceStyle
+  /** Anchor of the active rubber-band segment (line style only) */
+  traceStart: [number, number] | null
   traceStroke: [number, number][]
   hoverPixel: [number, number] | null
 
@@ -30,6 +42,9 @@ interface FloorplanLocalState {
   distanceInput: string
   /** Drawing ids whose calibration the user has completed or explicitly skipped. */
   calibrationHandledIds: string[]
+  distanceUnit: CalibrationUnit
+  /** When true, finishing calibration drops straight into trace mode */
+  pendingTraceAfterCalibration: boolean
 
   // ─── drag ────────────────────────────────────────────────────────
   drag: DragState | null
@@ -41,34 +56,44 @@ interface FloorplanLocalState {
 
   // ─── actions ─────────────────────────────────────────────────────
   setTraceMode: (v: boolean) => void
+  setTraceStyle: (v: TraceStyle) => void
+  setTraceStart: (v: [number, number] | null) => void
   setTraceStroke: (v: [number, number][] | ((prev: [number, number][]) => [number, number][])) => void
   setHoverPixel: (v: [number, number] | null) => void
   setCalibrationA: (v: [number, number] | null) => void
   setCalibrationB: (v: [number, number] | null) => void
   setDistanceInput: (v: string) => void
   markCalibrationHandled: (id: string) => void
+  setDistanceUnit: (v: CalibrationUnit) => void
+  setPendingTraceAfterCalibration: (v: boolean) => void
   setDrag: (v: DragState | null) => void
   setPresetOpen: (v: boolean) => void
   setPracticeMode: (v: boolean) => void
   setSeedProcessing: (v: boolean) => void
 }
 
-export type { DragKind, DragState }
+export type { CalibrationUnit, DragKind, DragState, TraceStyle }
 
 export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => ({
   traceMode: false,
+  traceStyle: 'line',
+  traceStart: null,
   traceStroke: [],
   hoverPixel: null,
   calibrationA: null,
   calibrationB: null,
   distanceInput: '',
   calibrationHandledIds: [],
+  distanceUnit: 'mm',
+  pendingTraceAfterCalibration: false,
   drag: null,
   presetOpen: false,
   practiceMode: true,
   seedProcessing: false,
 
-  setTraceMode: (v) => set({ traceMode: v }),
+  setTraceMode: (v) => set(v ? { traceMode: true } : { traceMode: false, traceStart: null, traceStroke: [] }),
+  setTraceStyle: (v) => set({ traceStyle: v, traceStart: null, traceStroke: [] }),
+  setTraceStart: (v) => set({ traceStart: v }),
   setTraceStroke: (v) => {
     if (typeof v === 'function') {
       set({ traceStroke: v(get().traceStroke) })
@@ -85,6 +110,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
       ? s
       : { calibrationHandledIds: [...s.calibrationHandledIds, id] },
   ),
+  setDistanceUnit: (v) => set({ distanceUnit: v }),
+  setPendingTraceAfterCalibration: (v) => set({ pendingTraceAfterCalibration: v }),
   setDrag: (v) => set({ drag: v }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),

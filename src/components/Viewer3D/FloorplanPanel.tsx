@@ -34,6 +34,10 @@ export default function FloorplanPanel() {
 
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
   const setTraceMode   = useFloorplanLocalStore((s) => s.setTraceMode)
+  const traceStyle     = useFloorplanLocalStore((s) => s.traceStyle)
+  const setTraceStyle  = useFloorplanLocalStore((s) => s.setTraceStyle)
+  const traceStart     = useFloorplanLocalStore((s) => s.traceStart)
+  const setTraceStart  = useFloorplanLocalStore((s) => s.setTraceStart)
   const calibrationA   = useFloorplanLocalStore((s) => s.calibrationA)
   const setCalibrationA = useFloorplanLocalStore((s) => s.setCalibrationA)
   const calibrationB   = useFloorplanLocalStore((s) => s.calibrationB)
@@ -42,6 +46,8 @@ export default function FloorplanPanel() {
   const setDistanceInput = useFloorplanLocalStore((s) => s.setDistanceInput)
   const calibrationHandledIds = useFloorplanLocalStore((s) => s.calibrationHandledIds)
   const markCalibrationHandled = useFloorplanLocalStore((s) => s.markCalibrationHandled)
+  const pendingTrace   = useFloorplanLocalStore((s) => s.pendingTraceAfterCalibration)
+  const setPendingTrace = useFloorplanLocalStore((s) => s.setPendingTraceAfterCalibration)
   const seedProcessing = useFloorplanLocalStore((s) => s.seedProcessing)
 
   // The ONE active unit — calibration estimate, input, and label all read it.
@@ -99,8 +105,28 @@ export default function FloorplanPanel() {
   const cancelCalibration = () => {
     if (drawing) markCalibrationHandled(drawing.id)
     setCalibrationA(null); setCalibrationB(null); setHoverPixel(null)
-    setDistanceInput('')
+    setDistanceInput(''); setPendingTrace(false)
     updateOverlay({ calibrationMode: false }, false)
+  }
+
+  const beginTracing = () => {
+    setCalibrationA(null); setCalibrationB(null); setHoverPixel(null)
+    setDistanceInput(''); setPendingTrace(false)
+    updateOverlay({ calibrationMode: false }, false)
+    setTraceMode(true)
+  }
+
+  // Tracing always confirms the scale first — a wrong scale poisons every
+  // measurement and material estimate downstream. 'parsed' means the user
+  // calibrated (or the title block was read); anything weaker asks first.
+  const startTracing = () => {
+    if (!drawing) return
+    if (drawing.scaleMmPerPx !== null && drawing.scaleConfidence === 'parsed') {
+      beginTracing()
+      return
+    }
+    setPendingTrace(true)
+    startCalibration()
   }
 
   const finalizeCalibration = () => {
@@ -118,9 +144,27 @@ export default function FloorplanPanel() {
     markCalibrationHandled(drawing.id)
     updateOverlay({ scale: estimatedScale, calibrationMode: false }, false)
     setCalibrationA(null); setCalibrationB(null); setHoverPixel(null); setDistanceInput('')
+    if (pendingTrace) {
+      setPendingTrace(false)
+      setTraceMode(true)
+    }
   }
 
-  const cancelTracing = () => { setTraceMode(false); setTraceStroke([]); setHoverPixel(null) }
+  const cancelTracing = () => { setTraceMode(false); setTraceStroke([]); setTraceStart(null); setHoverPixel(null) }
+
+  // Escape ends the active wall run first, then exits trace mode entirely.
+  useEffect(() => {
+    if (!traceMode) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const { traceStart: activeStart } = useFloorplanLocalStore.getState()
+      if (activeStart) useFloorplanLocalStore.getState().setTraceStart(null)
+      else cancelTracing()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [traceMode])
 
   const handleSmartRefine = async () => {
     if (!drawing) return
@@ -236,6 +280,7 @@ export default function FloorplanPanel() {
                     placeholder={`distance in ${activeUnit}`}
                     value={distanceInput}
                     autoFocus
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setDistanceInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') finalizeCalibration() }}
                   />
@@ -247,7 +292,12 @@ export default function FloorplanPanel() {
                 <span className={styles.stepHint}>Change units in Settings → Units &amp; calibration</span>
               </>
             )}
-            <button className={styles.cancel} onClick={cancelCalibration}>Skip</button>
+            {pendingTrace && drawing.scaleMmPerPx !== null && (
+              <button className={styles.secondary} onClick={beginTracing}>
+                Skip — keep detected scale
+              </button>
+            )}
+            <button className={styles.cancel} onClick={cancelCalibration}>Cancel</button>
           </div>
         )}
 
@@ -263,7 +313,7 @@ export default function FloorplanPanel() {
                   <button className={styles.action} onClick={() => buildModel()}>
                     Build 3D →
                   </button>
-                  <button className={styles.secondary} onClick={() => { cancelCalibration(); setTraceMode(true) }}>
+                  <button className={styles.secondary} onClick={startTracing}>
                     Trace walls
                   </button>
                   <button className={styles.secondary} onClick={startCalibration}>
@@ -276,7 +326,7 @@ export default function FloorplanPanel() {
                 <span className={styles.stepLabel}>Step 2 of 2</span>
                 <span className={styles.stepText}>Trace the walls</span>
                 <span className={styles.stepHint}>Draw over each wall on the floor plan</span>
-                <button className={styles.action} onClick={() => { cancelCalibration(); setTraceMode(true) }}>
+                <button className={styles.action} onClick={startTracing}>
                   Start tracing →
                 </button>
               </>
@@ -289,12 +339,40 @@ export default function FloorplanPanel() {
           <div className={styles.step}>
             <span className={styles.stepLabel}>Tracing walls</span>
             <span className={styles.stepText}>
-              {userWallCount > 0 ? `${userWallCount} wall${userWallCount !== 1 ? 's' : ''} traced` : 'Draw along each wall'}
+              {userWallCount > 0 ? `${userWallCount} wall${userWallCount !== 1 ? 's' : ''} traced` : 'Trace the walls on the print'}
             </span>
+            <span className={styles.stepHint}>
+              {traceStyle === 'line'
+                ? traceStart
+                  ? 'Tap the next corner — walls chain automatically. Esc ends the run.'
+                  : 'Tap a wall corner to start, then tap the next corner'
+                : 'Draw a stroke along each wall'}
+            </span>
+            <div className={styles.btnRow}>
+              <button
+                className={traceStyle === 'line' ? styles.action : styles.secondary}
+                onClick={() => setTraceStyle('line')}
+                title="Tap corner to corner with a stretchy guide line"
+              >
+                ⌖ Line
+              </button>
+              <button
+                className={traceStyle === 'freehand' ? styles.action : styles.secondary}
+                onClick={() => setTraceStyle('freehand')}
+                title="Draw freehand along each wall"
+              >
+                ✏ Freehand
+              </button>
+            </div>
             <div className={styles.btnRow}>
               {userWallCount > 0 && (
                 <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>
                   Build 3D →
+                </button>
+              )}
+              {traceStyle === 'line' && traceStart && (
+                <button className={styles.secondary} onClick={() => setTraceStart(null)}>
+                  End run
                 </button>
               )}
               {hasTrace && (

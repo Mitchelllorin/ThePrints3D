@@ -205,7 +205,7 @@ describe('filterWallsForNoisyPrint', () => {
     const result = filterWallsForNoisyPrint({
       walls: [longWall, shortDiag],
       classified: [],
-      stats: { total: 10, byClass: {}, kept: 2 },
+      stats: { total: 10, wall: 2, dimension: 0, dashed: 0, dotted: 0, leader: 8, unknown: 0 },
       imageWidth: 500,
       imageHeight: 500,
       minWallLengthPx: 55,
@@ -219,7 +219,7 @@ describe('filterWallsForNoisyPrint', () => {
     const result = filterWallsForNoisyPrint({
       walls: singleWall,
       classified: [],
-      stats: { total: 1, byClass: {}, kept: 1 },
+      stats: { total: 1, wall: 1, dimension: 0, dashed: 0, dotted: 0, leader: 0, unknown: 0 },
       imageWidth: 500,
       imageHeight: 500,
       minWallLengthPx: 55,

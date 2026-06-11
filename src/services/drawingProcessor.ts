@@ -11,6 +11,7 @@ import { detectWallsWithAI } from './aiWallDetector'
 import { inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
 import { filterWallsForNoisyPrint } from './noisyPrintFilter'
+import { inferCorners } from './wallTraceReducer'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -138,7 +139,11 @@ export async function processDrawing(
 
     // 5. Classify each detected wall into a structural type (2x4 / 2x6 / etc.)
     //    Only meaningful once scale is known — otherwise leave as 'unknown'.
-    const walls: ParsedWall[] = filtered.walls.map((w) => {
+    //    Corner inference first: perpendicular walls whose endpoints nearly
+    //    meet get extended/trimmed to an exact intersection, so detected
+    //    walls connect instead of floating as disjoint segments.
+    const corneredWalls = inferCorners(filtered.walls)
+    const walls: ParsedWall[] = corneredWalls.map((w) => {
       const finishedMm = pxToMm(w.thickness, effectiveScale)
       if (finishedMm === null) {
         return {

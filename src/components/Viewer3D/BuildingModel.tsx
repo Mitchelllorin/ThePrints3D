@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import type { Drawing, FloorLevel, Layer, ParsedOpening, ParsedRoom, ParsedWall } from '../../types'
+import type { Drawing, FloorLevel, FloorplanOverlayState, Layer, ParsedOpening, ParsedRoom, ParsedWall } from '../../types'
 import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
@@ -45,18 +45,6 @@ function disposeObject(obj: THREE.Object3D) {
 
 interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number }
 
-function footprintOf(walls: ParsedWall[], mmPerPx: number, cx: number, cy: number): Footprint {
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
-  const s = mmPerPx / 1000
-  for (const w of walls) {
-    const x1 = (w.x1 - cx) * s, x2 = (w.x2 - cx) * s
-    const z1 = (w.y1 - cy) * s, z2 = (w.y2 - cy) * s
-    minX = Math.min(minX, x1, x2); maxX = Math.max(maxX, x1, x2)
-    minZ = Math.min(minZ, z1, z2); maxZ = Math.max(maxZ, z1, z2)
-  }
-  return { minX, maxX, minZ, maxZ }
-}
-
 function centerOfWalls(walls: ParsedWall[]): [number, number] {
   if (walls.length === 0) return [0, 0]
   let sx = 0, sy = 0
@@ -64,31 +52,90 @@ function centerOfWalls(walls: ParsedWall[]): [number, number] {
   return [sx / walls.length, sy / walls.length]
 }
 
+// ─── Pixel → world transforms ─────────────────────────────────────────────────
+//
+// Geometry parsed from a drawing lives in image-pixel space. To appear in the
+// right place in the 3D world it must use the SAME mapping as the floorplan
+// overlay the user positioned/calibrated — otherwise walls render offset from
+// the print they were traced on.
+
+interface DrawingTransform {
+  /** Map an image-pixel coordinate to world [x, z] metres */
+  toWorld: (px: number, py: number) => [number, number]
+  /** Average metres-per-pixel — for thickness/width scalars */
+  mPerPx: number
+  /** World yaw applied by this transform (for axis-aligned plates/markers) */
+  yawRad: number
+}
+
+/** Transform matching FloorplanOverlay/LiveWallsLayer: overlay position+scale+rotation. */
+function makeOverlayTransform(
+  overlay: FloorplanOverlayState,
+  imageWidth: number,
+  imageHeight: number,
+): DrawingTransform {
+  const rot = THREE.MathUtils.degToRad(overlay.rotationDeg)
+  const cos = Math.cos(rot)
+  const sin = Math.sin(rot)
+  const [w, d] = overlay.scale
+  return {
+    toWorld: (px, py) => {
+      const lx = ((px / imageWidth) - 0.5) * w
+      const lz = ((py / imageHeight) - 0.5) * d
+      return [
+        overlay.position[0] + lx * cos + lz * sin,
+        overlay.position[1] - lx * sin + lz * cos,
+      ]
+    },
+    mPerPx: (w / imageWidth + d / imageHeight) / 2,
+    yawRad: rot,
+  }
+}
+
+/** Legacy transform for sheets not bound to the overlay: centred at the wall centroid. */
+function makeCenteredTransform(cx: number, cy: number, mmPerPx: number): DrawingTransform {
+  const s = mmPerPx / 1000
+  return {
+    toWorld: (px, py) => [(px - cx) * s, (py - cy) * s],
+    mPerPx: s,
+    yawRad: 0,
+  }
+}
+
+function footprintOfTransformed(walls: ParsedWall[], t: DrawingTransform): Footprint {
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+  for (const w of walls) {
+    const [x1, z1] = t.toWorld(w.x1, w.y1)
+    const [x2, z2] = t.toWorld(w.x2, w.y2)
+    minX = Math.min(minX, x1, x2); maxX = Math.max(maxX, x1, x2)
+    minZ = Math.min(minZ, z1, z2); maxZ = Math.max(maxZ, z1, z2)
+  }
+  return { minX, maxX, minZ, maxZ }
+}
+
 // ─── Real geometry from detected walls ────────────────────────────────────────
 
 function buildRealWalls(
   group: THREE.Group,
   walls: ParsedWall[],
-  mmPerPx: number,
-  cx: number,
-  cy: number,
+  transform: DrawingTransform,
   elevation: number,
   floorHeight: number,
   wallMat: THREE.MeshStandardMaterial,
   userWallMat: THREE.MeshStandardMaterial,
-   layerId: string,
-   defaultThicknessM: number,
+  layerId: string,
+  defaultThicknessM: number,
 ) {
-  const s = mmPerPx / 1000  // px → metres
-
   // Pre-compute metric geometry for every wall so we can clean up corners.
+  // Coordinates come from the drawing's transform so the build lands exactly
+  // where the floor-plan overlay is placed (overlay or centred transform).
   const segs = walls.map((w) => {
-    const x1 = (w.x1 - cx) * s, z1 = (w.y1 - cy) * s
-    const x2 = (w.x2 - cx) * s, z2 = (w.y2 - cy) * s
+    const [x1, z1] = transform.toWorld(w.x1, w.y1)
+    const [x2, z2] = transform.toWorld(w.x2, w.y2)
     return {
       w, x1, z1, x2, z2,
       len: Math.hypot(x2 - x1, z2 - z1),
-      thick: Math.max(w.thickness > 1 ? w.thickness * s : defaultThicknessM, 0.05),
+      thick: Math.max(w.thickness > 1 ? w.thickness * transform.mPerPx : defaultThicknessM, 0.05),
     }
   })
 
@@ -419,22 +466,16 @@ const ROOM_TINTS = [
 function buildRoomPlates(
   group: THREE.Group,
   rooms: ParsedRoom[],
-  mmPerPx: number,
-  cx: number,
-  cy: number,
+  transform: DrawingTransform,
   elevation: number,
   layerId: string
 ) {
-  const s = mmPerPx / 1000  // px → metres
   rooms.forEach((room, i) => {
-    const rx1 = (room.x1 - cx) * s
-    const rz1 = (room.y1 - cy) * s
-    const rx2 = (room.x2 - cx) * s
-    const rz2 = (room.y2 - cy) * s
-
-    const rw = rx2 - rx1
-    const rd = rz2 - rz1
+    const rw = (room.x2 - room.x1) * transform.mPerPx
+    const rd = (room.y2 - room.y1) * transform.mPerPx
     if (rw <= 0 || rd <= 0) return
+
+    const [cx, cz] = transform.toWorld((room.x1 + room.x2) / 2, (room.y1 + room.y2) / 2)
 
     const geo = new THREE.BoxGeometry(rw, 0.01, rd)
     const color = ROOM_TINTS[i % ROOM_TINTS.length]
@@ -448,11 +489,8 @@ function buildRoomPlates(
         side: THREE.DoubleSide,
       }),
     )
-    mesh.position.set(
-      (rx1 + rx2) / 2,
-      elevation + 0.02,
-      (rz1 + rz2) / 2,
-    )
+    mesh.position.set(cx, elevation + 0.02, cz)
+    mesh.rotation.y = transform.yawRad
     mesh.receiveShadow = true
     mesh.userData.layer = layerId
     group.add(mesh)
@@ -464,21 +502,16 @@ function buildRoomPlates(
 function buildOpeningMarkers(
   group: THREE.Group,
   openings: ParsedOpening[],
-  mmPerPx: number,
-  cx: number,
-  cy: number,
+  transform: DrawingTransform,
   elevation: number,
   floorHeight: number,
   doorColor: string,
   windowColor: string,
   layerId: string
 ) {
-  const s = mmPerPx / 1000
-
   for (const op of openings) {
-    const ox = (op.x - cx) * s
-    const oz = (op.y - cy) * s
-    const widthM = Math.max(op.widthPx * s, 0.05)
+    const [ox, oz] = transform.toWorld(op.x, op.y)
+    const widthM = Math.max(op.widthPx * transform.mPerPx, 0.05)
 
     const isDoor = op.type === 'door'
     const markerH = isDoor ? floorHeight * 0.85 : floorHeight * 0.45
@@ -502,6 +535,7 @@ function buildOpeningMarkers(
       }),
     )
     mesh.position.set(ox, markerY, oz)
+    mesh.rotation.y = transform.yawRad
     mesh.userData.layer = layerId
     group.add(mesh)
   }
@@ -605,7 +639,6 @@ export default function BuildingModel({ layers }: Props) {
   const model = useAppStore((s) => s.model)
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
-  const previewMode = useAppStore((s) => s.previewMode)
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
   const explodeAmount = useAppStore((s) => s.explodeAmount)
@@ -616,11 +649,6 @@ export default function BuildingModel({ layers }: Props) {
   // Explode animation state that must persist across frames (not re-rendered).
   const explodeCurrentRef = useRef(0)
   const explodeCenterRef = useRef(new THREE.Vector3())
-
-  // Captured each build so the group can be aligned to the live floor-plan
-  // overlay — built geometry is centred on the wall centroid, the overlay maps
-  // the image centre to overlay.position, so they differ by a rigid transform.
-  const alignRef = useRef({ cx: 0, cy: 0, s: 0, imgCx: 0, imgCy: 0, refId: null as string | null, hasWalls: false })
 
   useEffect(() => {
     if (!groupRef.current) return
@@ -657,31 +685,6 @@ export default function BuildingModel({ layers }: Props) {
     }))
 
     const allParsed = drawings.filter((d) => d.parsedWalls.length > 0)
-    let globalCx = 0
-    let globalCy = 0
-    let globalMmPerPx = DEFAULT_SCALE_MM_PER_PX
-
-    let refDrawing: Drawing | null = null
-    if (allParsed.length > 0) {
-      const ref = allParsed.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
-      const [rcx, rcy] = centerOfWalls(ref.parsedWalls)
-      globalCx = rcx
-      globalCy = rcy
-      globalMmPerPx = ref.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
-      refDrawing = ref
-    }
-
-    // Record how to map this build onto the overlay (same origin + scale as the
-    // live trace) — applied to the group below so built walls land where traced.
-    alignRef.current = {
-      cx: globalCx,
-      cy: globalCy,
-      s: globalMmPerPx / 1000,
-      imgCx: (refDrawing?.rasterWidth ?? 1400) / 2,
-      imgCy: (refDrawing?.rasterHeight ?? 900) / 2,
-      refId: refDrawing?.id ?? null,
-      hasWalls: !!refDrawing && refDrawing.parsedWalls.length > 0,
-    }
 
     const fallbackScaleUsages = drawings.filter((d) => d.parsedWalls.length > 0 && !d.scaleMmPerPx).length
     if (fallbackScaleUsages > 0) {
@@ -691,10 +694,27 @@ export default function BuildingModel({ layers }: Props) {
       }, 'warn')
     }
 
+    // Per-drawing pixel→world transform. The drawing bound to the floorplan
+    // overlay uses the overlay's position/scale/rotation so the 3D geometry
+    // lands exactly on the print the user calibrated. Other sheets fall back
+    // to the centred transform.
+    const overlayDrawingId = overlay.drawingId ?? drawings[0]?.id ?? null
+    const transformFor = (d: Drawing): DrawingTransform => {
+      if (d.id === overlayDrawingId && d.rasterWidth && d.rasterHeight) {
+        return makeOverlayTransform(overlay, d.rasterWidth, d.rasterHeight)
+      }
+      const [cx, cy] = centerOfWalls(d.parsedWalls)
+      return makeCenteredTransform(cx, cy, d.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX)
+    }
+    const transforms = new Map<string, DrawingTransform>(
+      drawings.map((d) => [d.id, transformFor(d)]),
+    )
+
+    // Footprint: union of transformed wall extents → fall back to the overlay
+    // rectangle (drawing loaded, nothing parsed yet) → wizard concept size.
     let globalFp: Footprint | null = null
     for (const d of allParsed) {
-      const mmPx = d.scaleMmPerPx ?? globalMmPerPx
-      const fp = footprintOf(d.parsedWalls, mmPx, globalCx, globalCy)
+      const fp = footprintOfTransformed(d.parsedWalls, transforms.get(d.id)!)
       if (!globalFp) {
         globalFp = fp
       } else {
@@ -705,6 +725,23 @@ export default function BuildingModel({ layers }: Props) {
       }
     }
 
+    const overlayDrawing = drawings.find((d) => d.id === overlayDrawingId)
+    if (!globalFp && overlayDrawing?.rasterWidth && overlayDrawing.rasterHeight) {
+      const t = transforms.get(overlayDrawing.id)!
+      const corners = [
+        t.toWorld(0, 0),
+        t.toWorld(overlayDrawing.rasterWidth, 0),
+        t.toWorld(overlayDrawing.rasterWidth, overlayDrawing.rasterHeight),
+        t.toWorld(0, overlayDrawing.rasterHeight),
+      ]
+      globalFp = {
+        minX: Math.min(...corners.map((c) => c[0])),
+        maxX: Math.max(...corners.map((c) => c[0])),
+        minZ: Math.min(...corners.map((c) => c[1])),
+        maxZ: Math.max(...corners.map((c) => c[1])),
+      }
+    }
+
     const defaultFp: Footprint = {
       minX: -sceneConfig.footprintWidthM / 2,
       maxX: sceneConfig.footprintWidthM / 2,
@@ -712,15 +749,15 @@ export default function BuildingModel({ layers }: Props) {
       maxZ: sceneConfig.footprintDepthM / 2,
     }
     const fp = globalFp ?? defaultFp
+
+    // Procedural "concept massing" (perimeter box, columns, beam) is ONLY for
+    // the empty workspace driven by wizard text. The moment a real drawing
+    // exists it must never render — fake walls/posts on top of a real plan.
+    const conceptMode = drawings.length === 0
+
     const baseWallDrawings = drawings.filter(
       (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0,
     )
-
-    // A "real build" exists once the user has traced/detected walls or run the
-    // construction engine. The generic procedural sample room is a fallback that
-    // only stands in for an empty scene — and only when preview mode is enabled.
-    const isRealBuild = baseWallDrawings.length > 0 || (buildResult?.components.length ?? 0) > 0
-    const showPreviewRoom = previewMode && !isRealBuild
 
     buildFoundation(group, fp, sceneConfig.foundationType)
 
@@ -754,13 +791,10 @@ export default function BuildingModel({ layers }: Props) {
             const userWMat = mat('#60a5fa', wallLayer.opacity, { roughness: 0.45, metalness: 0.15 })
             if (wallDrawings.length > 0) {
               for (const d of wallDrawings) {
-                const mmPx = d.scaleMmPerPx ?? globalMmPerPx
                 buildRealWalls(
                   group,
                   d.parsedWalls,
-                  mmPx,
-                  globalCx,
-                  globalCy,
+                  transforms.get(d.id)!,
                   elev,
                   fh,
                   wMat,
@@ -769,7 +803,7 @@ export default function BuildingModel({ layers }: Props) {
                   sceneConfig.defaultWallThicknessM,
                 )
               }
-            } else if (showPreviewRoom) {
+            } else if (conceptMode) {
               buildProceduralWalls(group, fp, elev, fh, wMat)
             }
             break
@@ -779,8 +813,7 @@ export default function BuildingModel({ layers }: Props) {
             if (!floorLayer?.visible) break
             for (const d of wallDrawings) {
               if (d.parsedRooms.length > 0) {
-                const mmPx = d.scaleMmPerPx ?? globalMmPerPx
-                buildRoomPlates(group, d.parsedRooms, mmPx, globalCx, globalCy, elev, 'floors')
+                buildRoomPlates(group, d.parsedRooms, transforms.get(d.id)!, elev, 'floors')
               }
             }
             break
@@ -790,13 +823,10 @@ export default function BuildingModel({ layers }: Props) {
             if (!dwLayer?.visible) break
             for (const d of wallDrawings) {
               if (d.parsedOpenings.length > 0) {
-                const mmPx = d.scaleMmPerPx ?? globalMmPerPx
                 buildOpeningMarkers(
                   group,
                   d.parsedOpenings,
-                  mmPx,
-                  globalCx,
-                  globalCy,
+                  transforms.get(d.id)!,
                   elev,
                   fh,
                   '#7dd3fc',
@@ -817,9 +847,9 @@ export default function BuildingModel({ layers }: Props) {
           }
           case 'structure': {
             const structLayer = layerMap.get('structure')
-            // The procedural columns/beam are part of the generic sample room:
-            // only draw them as a preview stand-in, never over a real build.
-            if (structLayer?.visible && showPreviewRoom) {
+            // Procedural columns/beam are concept-massing only — never render
+            // them when the user has loaded a real drawing.
+            if (structLayer?.visible && conceptMode && sceneConfig.hasLoadBearingWalls) {
               const sMat = mat(structLayer.color, structLayer.opacity, { roughness: 0.5 })
               buildStructure(group, fp, elev, fh, sMat)
             }
@@ -869,28 +899,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, previewMode])
-
-  // Align the built group onto the live floor-plan overlay so traced walls and
-  // the 3D build share one origin + scale — no offset. The build is centred on
-  // the wall centroid; the overlay maps the image centre to overlay.position at
-  // the same metres-per-pixel, so the group offset is a single rigid transform.
-  useEffect(() => {
-    const group = groupRef.current
-    if (!group) return
-    const a = alignRef.current
-    if (!a.hasWalls || a.refId !== overlay.drawingId) {
-      group.position.set(0, 0, 0)
-      group.rotation.set(0, 0, 0)
-      return
-    }
-    const offX = (a.cx - a.imgCx) * a.s
-    const offZ = (a.cy - a.imgCy) * a.s
-    const rot = THREE.MathUtils.degToRad(overlay.rotationDeg)
-    const v = new THREE.Vector3(offX, 0, offZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot)
-    group.position.set(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
-    group.rotation.set(0, rot, 0)
-  }, [overlay.position, overlay.rotationDeg, overlay.drawingId, drawings, buildResult, previewMode])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay])
 
   // Explode driver: each frame, ease the current progress toward the slider
   // target and fan every component out along its vector from the model centre,

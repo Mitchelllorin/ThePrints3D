@@ -46,9 +46,11 @@
 
 .brandName {
   font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0;
   color: #f1f5f9;
+  white-space: nowrap;
 }
 
 .brandBlue {
