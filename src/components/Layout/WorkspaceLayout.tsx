@@ -123,6 +123,9 @@ export default function WorkspaceLayout() {
     try {
       loadPresetDrawing(presetId, true)
       setUploadDismissed(true)
+      // UX convention: a one-shot pick (preset, file, etc.) retracts the panel —
+      // the user chose what they wanted, so the panel gets out of the way.
+      setOpen(null)
     } catch (error) {
       console.error('Failed to load preset:', presetId, error)
     }
