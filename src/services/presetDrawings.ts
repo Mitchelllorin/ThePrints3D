@@ -197,7 +197,16 @@ export function listPresetDefinitions() {
 export function createPresetDrawing(difficulty: PresetDifficulty, practiceMode: boolean): Pick<Drawing, 'name' | 'file' | 'pageCount' | 'currentPage' | 'previewUrl' | 'rasterUrl' | 'rasterWidth' | 'rasterHeight' | 'parsedWalls' | 'parsedRooms' | 'parsedOpenings' | 'parsedText' | 'parsedSymbols' | 'parsedAnnotationCandidates' | 'parseProgress' | 'floorNumber' | 'status' | 'scaleMmPerPx' | 'scaleNotation' | 'scaleConfidence' | 'uploadedAt' | 'type'> & { wizardInputs: WorkspaceWizardInputs; overlayScale: [number, number] } {
   const definition = PRESET_DEFINITIONS[difficulty]
   const svg = drawSvg(definition)
-  const file = new File([svg], `${difficulty}-preset.svg`, { type: 'image/svg+xml' })
+  let file: File
+  try {
+    file = new File([svg], `${difficulty}-preset.svg`, { type: 'image/svg+xml' })
+  } catch {
+    const blob = new Blob([svg], { type: 'image/svg+xml' })
+    file = Object.assign(blob, {
+      name: `${difficulty}-preset.svg`,
+      lastModified: Date.now(),
+    }) as unknown as File
+  }
   const url = URL.createObjectURL(file)
   const worldWidthM = (definition.widthPx * definition.mmPerPx) / 1000
   const worldDepthM = (definition.heightPx * definition.mmPerPx) / 1000

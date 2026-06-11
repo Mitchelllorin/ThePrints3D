@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { listPresetDefinitions } from '../../services/presetDrawings'
+import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import LogoBadge3D from './LogoBadge3D'
 import LayerPanel from '../Layers/LayerPanel'
@@ -9,46 +9,45 @@ import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import styles from './WorkspaceLayout.module.css'
 
-// ── Settings helper components (declared outside render to avoid state reset) ─
-function Slider({ label, val, min, max, step, unit = '', onChange }: {
-  label: string; val: number; min: number; max: number; step: number; unit?: string
-  onChange: (v: number) => void
-}) {
-  return (
-    <label className={styles.settingRow}>
-      <span className={styles.settingLabel}>{label}</span>
-      <input type="range" min={min} max={max} step={step} value={val}
-        onChange={(e) => onChange(Number(e.target.value))} className={styles.settingSlider} />
-      <span className={styles.settingVal}>{val}{unit}</span>
-    </label>
-  )
-}
-
-function Toggle({ label, val, onChange }: { label: string; val: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className={styles.settingRow} style={{ cursor: 'pointer' }}>
-      <span className={styles.settingLabel}>{label}</span>
-      <input type="checkbox" checked={val} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--bp-accent, #38bdf8)', width: 16, height: 16 }} />
-      <span className={styles.settingVal}>{val ? 'On' : 'Off'}</span>
-    </label>
-  )
-}
-
-function ColorRow({ label, val, onChange }: { label: string; val: string; onChange: (v: string) => void }) {
-  return (
-    <label className={styles.settingRow}>
-      <span className={styles.settingLabel}>{label}</span>
-      <input type="color" value={val} onChange={(e) => onChange(e.target.value)} className={styles.settingColor} />
-      <span className={styles.settingVal}>{val}</span>
-    </label>
-  )
-}
-
 // ── Settings panel content ───────────────────────────────────────────────────
 function SettingsContent() {
   const s = useUISettingsStore()
   const set = useUISettingsStore((x) => x.set)
   const reset = useUISettingsStore((x) => x.reset)
+
+  function Slider({ label, val, min, max, step, unit = '', onChange }: {
+    label: string; val: number; min: number; max: number; step: number; unit?: string
+    onChange: (v: number) => void
+  }) {
+    return (
+      <label className={styles.settingRow}>
+        <span className={styles.settingLabel}>{label}</span>
+        <input type="range" min={min} max={max} step={step} value={val}
+          onChange={(e) => onChange(Number(e.target.value))} className={styles.settingSlider} />
+        <span className={styles.settingVal}>{val}{unit}</span>
+      </label>
+    )
+  }
+
+  function Toggle({ label, val, onChange }: { label: string; val: boolean; onChange: (v: boolean) => void }) {
+    return (
+      <label className={styles.settingRow} style={{ cursor: 'pointer' }}>
+        <span className={styles.settingLabel}>{label}</span>
+        <input type="checkbox" checked={val} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--bp-accent, #38bdf8)', width: 16, height: 16 }} />
+        <span className={styles.settingVal}>{val ? 'On' : 'Off'}</span>
+      </label>
+    )
+  }
+
+  function ColorRow({ label, val, onChange }: { label: string; val: string; onChange: (v: string) => void }) {
+    return (
+      <label className={styles.settingRow}>
+        <span className={styles.settingLabel}>{label}</span>
+        <input type="color" value={val} onChange={(e) => onChange(e.target.value)} className={styles.settingColor} />
+        <span className={styles.settingVal}>{val}</span>
+      </label>
+    )
+  }
 
   return (
     <div className={styles.settingsBody}>
@@ -80,11 +79,29 @@ function SettingsContent() {
   )
 }
 
+// ── Preset panel content ───────────────────────────────────────────────────
+function PresetPanel({ onLoad }: { onLoad: (presetId: PresetDifficulty) => void }) {
+  return (
+    <div className={styles.presetList}>
+      {listPresetDefinitions().map((preset) => (
+        <button
+          key={preset.id}
+          className={styles.presetBtn}
+          onClick={() => onLoad(preset.id)}
+        >
+          {preset.name}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ── Panel tabs ───────────────────────────────────────────────────────────────
-type PanelId = 'layers' | 'settings'
+type PanelId = 'layers' | 'settings' | 'presets'
 
 const TABS: Array<{ id: PanelId; icon: string; label: string }> = [
   { id: 'layers',   icon: '≡', label: 'Layers'   },
+  { id: 'presets',  icon: '★', label: 'Presets'  },
   { id: 'settings', icon: '⚙', label: 'Settings' },
 ]
 
@@ -101,6 +118,15 @@ export default function WorkspaceLayout() {
   const detectedWallTypes  = useAppStore((s) => s.detectedWallTypes)
   const setProjectWallTypes = useAppStore((s) => s.setProjectWallTypes)
   const logoOpacity = useUISettingsStore((s) => s.logoOpacity)
+
+  const handleLoadPreset = (presetId: PresetDifficulty) => {
+    try {
+      loadPresetDrawing(presetId, true)
+      setUploadDismissed(true)
+    } catch (error) {
+      console.error('Failed to load preset:', presetId, error)
+    }
+  }
   const logoSize    = useUISettingsStore((s) => s.logoSize)
   const topbarOpacity = useUISettingsStore((s) => s.topbarOpacity)
 
@@ -159,6 +185,12 @@ export default function WorkspaceLayout() {
                 />
               </>
             )}
+            {open === 'presets' && (
+              <>
+                <p className={styles.sectionTitle}>Presets</p>
+                <PresetPanel onLoad={handleLoadPreset} />
+              </>
+            )}
             {open === 'settings' && <SettingsContent />}
           </div>
         </div>
@@ -195,18 +227,7 @@ export default function WorkspaceLayout() {
               📷 Scan with camera
             </button>
           </div>
-          <div className={styles.uploadHintDivider}>or try a preset</div>
-          <div className={styles.presetRow}>
-            {listPresetDefinitions().map((p) => (
-              <button
-                key={p.id}
-                className={styles.presetBtn}
-                onClick={() => { loadPresetDrawing(p.id, false); setUploadDismissed(true) }}
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
+          <p className={styles.uploadHintSub}>Use the left sidebar to browse presets or import a floor plan to begin.</p>
         </div>
       )}
     </div>

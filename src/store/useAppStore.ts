@@ -26,8 +26,6 @@ import {
 } from '../services/sheetParser'
 import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
-import type { BuildResult, Decision } from '../services/decisions'
-import { buildFraming } from '../services/constructionEngine'
 import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReducer'
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
@@ -214,7 +212,13 @@ interface WorkspaceHistorySnapshot {
 }
 
 function deepCopy<T>(value: T): T {
-  // Always use JSON round-trip: structuredClone fails on Immer draft Proxies
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(value)
+    } catch {
+      return JSON.parse(JSON.stringify(value)) as T
+    }
+  }
   return JSON.parse(JSON.stringify(value)) as T
 }
 
@@ -819,12 +823,9 @@ export const useAppStore = create<AppState>()(
         }
         saveWizardState(s.wizardState)
         s.wizardInputs = wizardInputs
-        const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
+        const { floorGroupingLog } = computeFloorLevels(s.drawings)
         s.floorGroupingLog = floorGroupingLog
-        s.model.floorLevels = levels
-        s.model.status = 'building'
-        s.model.generatedAt = Date.now()
-        s.view = 'model'
+        s.model = deepCopy(DEFAULT_MODEL)
       })
     },
 

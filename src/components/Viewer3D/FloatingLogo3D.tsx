@@ -79,8 +79,9 @@ export default function FloatingLogo3D() {
     if (p.z >  BOUNDS.z)    v.z = -Math.abs(v.z)
     if (p.z < -BOUNDS.z)    v.z =  Math.abs(v.z)
 
-    // Face generally towards camera
-    groupRef.current.lookAt(0, p.y, 20)
+    // Slow natural spin on all axes — no moon-lock
+    groupRef.current.rotation.y += delta * 0.35
+    groupRef.current.rotation.x += delta * 0.08
   })
 
   if (!visible) return null
