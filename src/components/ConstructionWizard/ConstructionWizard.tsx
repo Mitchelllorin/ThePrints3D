@@ -145,8 +145,8 @@ export default function ConstructionWizard() {
       {buildResult.suggestions.length > 0 && (
         <div className={styles.suggestions}>
           <div className={styles.suggestionsTitle}>Suggestions</div>
-          {buildResult.suggestions.map((s, i) => (
-            <div key={i} className={styles.suggestion}>{s}</div>
+          {buildResult.suggestions.map((suggestion: string, index: number) => (
+            <div key={index} className={styles.suggestion}>{suggestion}</div>
           ))}
         </div>
       )}

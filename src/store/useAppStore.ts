@@ -3,6 +3,8 @@ import { immer } from 'zustand/middleware/immer'
 import type {
   AppView,
   Annotation,
+  BuildResult,
+  Decision,
   DetectedWallType,
   Drawing,
   DrawingType,
@@ -18,6 +20,7 @@ import type {
 } from '../types'
 import type { ProductCatalogItem, ProductPlacement } from '../types/products'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
+import { buildFraming } from '../services/constructionEngine'
 import {
   groupByFloorWithLog,
   floorToElevation,

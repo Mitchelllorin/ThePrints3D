@@ -11,6 +11,7 @@ import MeasureTool from './MeasureTool'
 import AnnotationTool from './AnnotationTool'
 import CameraHud from './CameraHud'
 import ProductPlacements from './ProductPlacements'
+import ConstructionWizard from '../ConstructionWizard/ConstructionWizard'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
@@ -192,11 +193,15 @@ export default function ModelViewer() {
   const clearMeasurements = useAppStore((s) => s.clearMeasurements)
   const removeMeasurement = useAppStore((s) => s.removeMeasurement)
   const measurements   = useAppStore((s) => s.measurements)
+  const buildResult    = useAppStore((s) => s.buildResult)
+  const buildForMe     = useAppStore((s) => s.buildForMe)
   const overlay        = useAppStore((s) => s.floorplanOverlay)
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
+  const [showWizard, setShowWizard]     = useState(false)
   const [isDragOver, setIsDragOver]     = useState(false)
+  const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
 
   // Disable orbit while the user is actively tracing or calibrating on the overlay
   const orbitEnabled = !overlay.traceModeActive && !overlay.calibrationMode
