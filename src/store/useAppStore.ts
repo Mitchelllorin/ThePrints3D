@@ -264,6 +264,10 @@ interface AppState {
   buildResult: BuildResult | null
   constructionDecisions: Decision[]
 
+  // Preview: when true, the 3D scene may render the generic procedural sample
+  // room (fallback) if no real walls/build exist. Suppressed by a real build.
+  previewMode: boolean
+
   // Actions
   setView: (view: AppView) => void
   addDrawings: (files: File[]) => void
@@ -325,6 +329,7 @@ interface AppState {
   buildForMe: () => void
   updateDecision: (decisionId: string, chosenValue: unknown) => void
   clearBuildResult: () => void
+  setPreviewMode: (on: boolean) => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -483,6 +488,7 @@ export const useAppStore = create<AppState>()(
     // Construction Engine
     buildResult: null,
     constructionDecisions: [],
+    previewMode: true,
 
     setView: (view) =>
       set((s) => {
@@ -1197,6 +1203,12 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         s.buildResult = null
         s.constructionDecisions = []
+      })
+    },
+
+    setPreviewMode: (on) => {
+      set((s) => {
+        s.previewMode = on
       })
     },
     }
