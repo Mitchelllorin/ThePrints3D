@@ -103,10 +103,11 @@
 
 .toolbar {
   position: absolute;
-  top: 12px;
+  /* Sit clear below the 44px header so it is never overlapped or click-blocked. */
+  top: 52px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 10;
+  z-index: 45;
   display: flex;
   align-items: center;
   gap: 8px;
