@@ -24,6 +24,15 @@ function mat(color: string, opacity: number, extra?: Partial<THREE.MeshStandardM
   })
 }
 
+/** Free the GPU resources held by a scene object (geometry + material). */
+function disposeObject(obj: THREE.Object3D) {
+  const mesh = obj as Partial<THREE.Mesh>
+  mesh.geometry?.dispose()
+  const material = mesh.material
+  if (Array.isArray(material)) material.forEach((m) => m.dispose())
+  else material?.dispose()
+}
+
 interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number }
 
 function footprintOf(walls: ParsedWall[], mmPerPx: number, cx: number, cy: number): Footprint {
@@ -518,12 +527,19 @@ export default function BuildingModel({ layers }: Props) {
   const model = useAppStore((s) => s.model)
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const previewMode = useAppStore((s) => s.previewMode)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
 
   useEffect(() => {
     if (!groupRef.current) return
     const group = groupRef.current
-    while (group.children.length > 0) group.remove(group.children[0])
+    // Tear down the previous build, freeing GPU resources (e.g. the preview
+    // room's meshes when a real build replaces it).
+    while (group.children.length > 0) {
+      const child = group.children[0]
+      group.remove(child)
+      disposeObject(child)
+    }
 
     const layerMap = new Map(layers.map((l) => [l.id, l]))
     const sceneConfig = deriveWorkspaceSceneConfig(wizardInputs)
@@ -594,6 +610,12 @@ export default function BuildingModel({ layers }: Props) {
       (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0,
     )
 
+    // A "real build" exists once the user has traced/detected walls or run the
+    // construction engine. The generic procedural sample room is a fallback that
+    // only stands in for an empty scene — and only when preview mode is enabled.
+    const isRealBuild = baseWallDrawings.length > 0 || (buildResult?.components.length ?? 0) > 0
+    const showPreviewRoom = previewMode && !isRealBuild
+
     buildFoundation(group, fp, sceneConfig.foundationType)
 
     for (const level of floorLevels) {
@@ -641,7 +663,7 @@ export default function BuildingModel({ layers }: Props) {
                   sceneConfig.defaultWallThicknessM,
                 )
               }
-            } else {
+            } else if (showPreviewRoom) {
               buildProceduralWalls(group, fp, elev, fh, wMat)
             }
             break
@@ -689,9 +711,9 @@ export default function BuildingModel({ layers }: Props) {
           }
           case 'structure': {
             const structLayer = layerMap.get('structure')
-            const hasStructuralInput = sceneConfig.hasLoadBearingWalls ||
-              drawings.some((d) => d.type === 'structural' && d.parsedWalls.length > 0)
-            if (structLayer?.visible && hasStructuralInput) {
+            // The procedural columns/beam are part of the generic sample room:
+            // only draw them as a preview stand-in, never over a real build.
+            if (structLayer?.visible && showPreviewRoom) {
               const sMat = mat(structLayer.color, structLayer.opacity, { roughness: 0.5 })
               buildStructure(group, fp, elev, fh, sMat)
             }
@@ -730,7 +752,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, previewMode])
 
   return <group ref={groupRef} />
 }
