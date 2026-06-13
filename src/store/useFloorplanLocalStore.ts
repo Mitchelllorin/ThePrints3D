@@ -28,6 +28,8 @@ interface FloorplanLocalState {
   calibrationA: [number, number] | null
   calibrationB: [number, number] | null
   distanceInput: string
+  /** Drawing ids whose calibration the user has completed or explicitly skipped. */
+  calibrationHandledIds: string[]
 
   // ─── drag ────────────────────────────────────────────────────────
   drag: DragState | null
@@ -44,6 +46,7 @@ interface FloorplanLocalState {
   setCalibrationA: (v: [number, number] | null) => void
   setCalibrationB: (v: [number, number] | null) => void
   setDistanceInput: (v: string) => void
+  markCalibrationHandled: (id: string) => void
   setDrag: (v: DragState | null) => void
   setPresetOpen: (v: boolean) => void
   setPracticeMode: (v: boolean) => void
@@ -59,6 +62,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   calibrationA: null,
   calibrationB: null,
   distanceInput: '',
+  calibrationHandledIds: [],
   drag: null,
   presetOpen: false,
   practiceMode: true,
@@ -76,6 +80,11 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setCalibrationA: (v) => set({ calibrationA: v }),
   setCalibrationB: (v) => set({ calibrationB: v }),
   setDistanceInput: (v) => set({ distanceInput: v }),
+  markCalibrationHandled: (id) => set((s) =>
+    s.calibrationHandledIds.includes(id)
+      ? s
+      : { calibrationHandledIds: [...s.calibrationHandledIds, id] },
+  ),
   setDrag: (v) => set({ drag: v }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),

@@ -40,6 +40,8 @@ export default function FloorplanPanel() {
   const setCalibrationB = useFloorplanLocalStore((s) => s.setCalibrationB)
   const distanceInput  = useFloorplanLocalStore((s) => s.distanceInput)
   const setDistanceInput = useFloorplanLocalStore((s) => s.setDistanceInput)
+  const calibrationHandledIds = useFloorplanLocalStore((s) => s.calibrationHandledIds)
+  const markCalibrationHandled = useFloorplanLocalStore((s) => s.markCalibrationHandled)
   const seedProcessing = useFloorplanLocalStore((s) => s.seedProcessing)
 
   // The ONE active unit — calibration estimate, input, and label all read it.
@@ -93,7 +95,9 @@ export default function FloorplanPanel() {
     updateOverlay({ calibrationMode: true, guidedStep: 1, locked: false }, false)
   }
 
+  // Skip / cancel both count as "handled" so the wizard doesn't re-prompt.
   const cancelCalibration = () => {
+    if (drawing) markCalibrationHandled(drawing.id)
     setCalibrationA(null); setCalibrationB(null); setHoverPixel(null)
     setDistanceInput('')
     updateOverlay({ calibrationMode: false }, false)
@@ -111,6 +115,7 @@ export default function FloorplanPanel() {
     const mmPerPx = realMm / pxDist
     const ratio   = Math.round((25.4 / 72) * (1 / mmPerPx))
     setDrawingScale(drawing.id, mmPerPx, ratio > 0 ? `1:${ratio}` : 'custom')
+    markCalibrationHandled(drawing.id)
     updateOverlay({ scale: estimatedScale, calibrationMode: false }, false)
     setCalibrationA(null); setCalibrationB(null); setHoverPixel(null); setDistanceInput('')
   }
@@ -130,6 +135,17 @@ export default function FloorplanPanel() {
     e.target.value = ''
   }
 
+  // Calibration fires FIRST: the moment a ready drawing is shown and the user
+  // hasn't yet calibrated or skipped it, drop straight into calibration mode —
+  // tracing/building stay gated until then.
+  useEffect(() => {
+    if (!drawing || drawing.status !== 'ready') return
+    if (calibrationHandledIds.includes(drawing.id)) return
+    if (overlay.calibrationMode || traceMode) return
+    startCalibration()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawing?.id, drawing?.status, calibrationHandledIds, overlay.calibrationMode, traceMode])
+
   // ── state machine ─────────────────────────────────────────────────────────
   // No drawing at all — render nothing (the drop zone in ModelViewer handles it)
   if (!drawing) return (
@@ -141,6 +157,9 @@ export default function FloorplanPanel() {
   const isAnalysing  = drawing.status === 'processing'
   const isPending    = drawing.status === 'pending'
   const isCalibrated = drawing.scaleMmPerPx !== null && drawing.scaleConfidence !== 'fallback'
+  const calibrationHandled = calibrationHandledIds.includes(drawing.id)
+  // Tracing/building is reachable once calibration is set OR explicitly skipped.
+  const calibrationCleared = isCalibrated || calibrationHandled
   const hasWalls     = drawing.parsedWalls.length > 0
 
   return (
@@ -181,7 +200,7 @@ export default function FloorplanPanel() {
         )}
 
         {/* ── Step 1: calibrate ── */}
-        {!isAnalysing && !isPending && !isCalibrated && !overlay.calibrationMode && !traceMode && (
+        {!isAnalysing && !isPending && !calibrationCleared && !overlay.calibrationMode && !traceMode && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>Step 1 of 2</span>
             <span className={styles.stepText}>Set the scale</span>
@@ -228,12 +247,12 @@ export default function FloorplanPanel() {
                 <span className={styles.stepHint}>Change units in Settings → Units &amp; calibration</span>
               </>
             )}
-            <button className={styles.cancel} onClick={cancelCalibration}>Cancel</button>
+            <button className={styles.cancel} onClick={cancelCalibration}>Skip</button>
           </div>
         )}
 
         {/* ── Step 2: trace walls ── */}
-        {!isAnalysing && !isPending && isCalibrated && !overlay.calibrationMode && !traceMode && (
+        {!isAnalysing && !isPending && calibrationCleared && !overlay.calibrationMode && !traceMode && (
           <div className={styles.step}>
             {hasWalls ? (
               <>
