@@ -163,6 +163,15 @@
   color: #475569;
 }
 
+.unitLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bp-accent, #38bdf8);
+  min-width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .numInput:focus {
   outline: none;
   border-color: var(--bp-accent, #38bdf8);

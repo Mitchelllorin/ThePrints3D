@@ -32,9 +32,10 @@ function snap(value: number, enabled: boolean, increment: number = GRID_SNAP) {
  * current point: a straight shaft plus a two-barb arrowhead at the live end.
  * Recomputed every frame from the latest endpoint, so it stretches as you draw.
  */
-function TraceArrow({ start, end }: {
+function TraceArrow({ start, end, color = '#38bdf8' }: {
   start: [number, number, number]
   end: [number, number, number]
+  color?: string
 }) {
   const dx = end[0] - start[0]
   const dz = end[2] - start[2]
@@ -55,8 +56,8 @@ function TraceArrow({ start, end }: {
 
   return (
     <>
-      <Line points={[start, tip]} color="#38bdf8" lineWidth={4} />
-      <Line points={[b1, tip, b2]} color="#38bdf8" lineWidth={4} />
+      <Line points={[start, tip]} color={color} lineWidth={4} />
+      <Line points={[b1, tip, b2]} color={color} lineWidth={4} />
     </>
   )
 }
@@ -377,7 +378,7 @@ export default function FloorplanOverlay() {
       )}
 
       {calibrationPreviewPoints && (
-        <Line points={calibrationPreviewPoints} color="#f59e0b" lineWidth={4} dashed={Boolean(calibrationB)} dashScale={1.2} dashSize={0.28} gapSize={0.18} />
+        <TraceArrow start={calibrationPreviewPoints[0]} end={calibrationPreviewPoints[1]} color="#f59e0b" />
       )}
     </>
   )

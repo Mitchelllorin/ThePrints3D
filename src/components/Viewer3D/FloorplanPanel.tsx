@@ -4,18 +4,19 @@
  * Shows exactly one contextual prompt at a time. No panels, no headers,
  * no dense button grids — just the next action the user needs to take.
  */
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
-import { useFloorplanLocalStore, type CalibrationUnit } from '../../store/useFloorplanLocalStore'
+import { useConfigStore } from '../../store/useConfigStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import { convertLength, formatLengthFromMm } from '../../services/unitConverter'
 import styles from './AmbientGuide.module.css'
 
-function toMm(value: number, unit: CalibrationUnit): number {
-  switch (unit) {
-    case 'm':  return value * 1000
-    case 'ft': return value * 304.8
-    case 'in': return value * 25.4
-    default:   return value
-  }
+// Scale assumed before the user has calibrated, so the live estimate has
+// something to show. The user confirms or overrides it during calibration.
+const DEFAULT_SCALE_MM_PER_PX = 23.5
+
+function unitPrecision(unit: string): number {
+  return unit === 'mm' ? 0 : 2
 }
 
 export default function FloorplanPanel() {
@@ -39,9 +40,10 @@ export default function FloorplanPanel() {
   const setCalibrationB = useFloorplanLocalStore((s) => s.setCalibrationB)
   const distanceInput  = useFloorplanLocalStore((s) => s.distanceInput)
   const setDistanceInput = useFloorplanLocalStore((s) => s.setDistanceInput)
-  const distanceUnit   = useFloorplanLocalStore((s) => s.distanceUnit)
-  const setDistanceUnit = useFloorplanLocalStore((s) => s.setDistanceUnit)
   const seedProcessing = useFloorplanLocalStore((s) => s.seedProcessing)
+
+  // The ONE active unit — calibration estimate, input, and label all read it.
+  const activeUnit     = useConfigStore((s) => s.activeUnit)
   const setSeedProcessing = useFloorplanLocalStore((s) => s.setSeedProcessing)
   const setHoverPixel  = useFloorplanLocalStore((s) => s.setHoverPixel)
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
@@ -64,6 +66,26 @@ export default function FloorplanPanel() {
     return [widthM, depthM] as [number, number]
   })()
 
+  // ── live calibration estimate (in the active unit) ───────────────────────
+  // Pixel span of the picked segment × the current scale → the app's own
+  // estimated real distance, shown and pre-filled in the SAME active unit the
+  // input expects. The estimate and the input can never disagree on units.
+  const calibPxDist = (calibrationA && calibrationB)
+    ? Math.hypot(calibrationB[0] - calibrationA[0], calibrationB[1] - calibrationA[1])
+    : 0
+  const currentScaleMmPerPx = drawing?.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
+  const estimateMm = calibPxDist * currentScaleMmPerPx
+  const estimateInUnit = convertLength(estimateMm, 'mm', activeUnit)
+
+  // Pre-fill the input with the estimate when both points are set (or the unit
+  // changes), so the user can confirm with one tap or type over it to override.
+  useEffect(() => {
+    if (calibrationA && calibrationB) {
+      setDistanceInput(estimateInUnit > 0 ? estimateInUnit.toFixed(unitPrecision(activeUnit)) : '')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calibrationA, calibrationB, activeUnit])
+
   // ── actions ──────────────────────────────────────────────────────────────
   const startCalibration = () => {
     setTraceMode(false); setTraceStroke([]); setCalibrationA(null)
@@ -81,7 +103,9 @@ export default function FloorplanPanel() {
     if (!drawing || !calibrationA || !calibrationB) return
     const realDist = Number.parseFloat(distanceInput)
     if (!Number.isFinite(realDist) || realDist <= 0) return
-    const realMm = toMm(realDist, distanceUnit)
+    // Real distance is interpreted in the active unit — the same unit shown in
+    // the estimate and printed on the input label. One source of truth.
+    const realMm = convertLength(realDist, activeUnit, 'mm')
     const pxDist = Math.hypot(calibrationB[0] - calibrationA[0], calibrationB[1] - calibrationA[1])
     if (pxDist < 1) return
     const mmPerPx = realMm / pxDist
@@ -180,29 +204,28 @@ export default function FloorplanPanel() {
             )}
             {calibrationA && calibrationB && (
               <>
-                <span className={styles.stepText}>Enter the real distance</span>
+                <span className={styles.stepText}>Confirm the distance</span>
+                <span className={styles.stepHint}>
+                  We estimate ~{formatLengthFromMm(estimateMm, activeUnit)}. Confirm, or type the real distance.
+                </span>
                 <div className={styles.calibRow}>
                   <input
                     className={styles.numInput}
                     type="number"
                     min="0.001"
                     step="any"
-                    placeholder="e.g. 5"
+                    placeholder={`distance in ${activeUnit}`}
                     value={distanceInput}
                     autoFocus
                     onChange={(e) => setDistanceInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') finalizeCalibration() }}
                   />
-                  <select className={styles.select} value={distanceUnit} onChange={(e) => setDistanceUnit(e.target.value as CalibrationUnit)}>
-                    <option value="m">m</option>
-                    <option value="ft">ft</option>
-                    <option value="mm">mm</option>
-                    <option value="in">in</option>
-                  </select>
+                  <span className={styles.unitLabel}>{activeUnit}</span>
                   <button className={styles.action} onClick={finalizeCalibration} disabled={!distanceInput.trim()}>
                     Apply
                   </button>
                 </div>
+                <span className={styles.stepHint}>Change units in Settings → Units &amp; calibration</span>
               </>
             )}
             <button className={styles.cancel} onClick={cancelCalibration}>Cancel</button>

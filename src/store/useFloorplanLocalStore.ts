@@ -9,8 +9,6 @@
 
 import { create } from 'zustand'
 
-type CalibrationUnit = 'mm' | 'm' | 'ft' | 'in'
-
 type DragKind = 'move' | 'corner' | 'edge' | 'rotate'
 
 interface DragState {
@@ -30,7 +28,6 @@ interface FloorplanLocalState {
   calibrationA: [number, number] | null
   calibrationB: [number, number] | null
   distanceInput: string
-  distanceUnit: CalibrationUnit
 
   // ─── drag ────────────────────────────────────────────────────────
   drag: DragState | null
@@ -47,14 +44,13 @@ interface FloorplanLocalState {
   setCalibrationA: (v: [number, number] | null) => void
   setCalibrationB: (v: [number, number] | null) => void
   setDistanceInput: (v: string) => void
-  setDistanceUnit: (v: CalibrationUnit) => void
   setDrag: (v: DragState | null) => void
   setPresetOpen: (v: boolean) => void
   setPracticeMode: (v: boolean) => void
   setSeedProcessing: (v: boolean) => void
 }
 
-export type { CalibrationUnit, DragKind, DragState }
+export type { DragKind, DragState }
 
 export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => ({
   traceMode: false,
@@ -63,7 +59,6 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   calibrationA: null,
   calibrationB: null,
   distanceInput: '',
-  distanceUnit: 'mm',
   drag: null,
   presetOpen: false,
   practiceMode: true,
@@ -81,7 +76,6 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setCalibrationA: (v) => set({ calibrationA: v }),
   setCalibrationB: (v) => set({ calibrationB: v }),
   setDistanceInput: (v) => set({ distanceInput: v }),
-  setDistanceUnit: (v) => set({ distanceUnit: v }),
   setDrag: (v) => set({ drag: v }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),

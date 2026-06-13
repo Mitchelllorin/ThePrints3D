@@ -5,6 +5,14 @@ import type { BuildingType } from '../onboarding/types'
 export type WallTraceStyle = 'dotted' | 'arrow' | 'both'
 
 /**
+ * The ONE active length unit for the whole app. This is the single source of
+ * truth: calibration's estimate, the calibration input field (and its label),
+ * and every measurement readout all read this exact value. Nothing derives a
+ * unit separately, so the estimate and the input can never disagree.
+ */
+export type ActiveUnit = 'mm' | 'cm' | 'm' | 'in' | 'ft'
+
+/**
  * useConfigStore — the central, typed home for *behavioural* configuration:
  * the knobs that change how processes and actions work (wall tracing, corner
  * inference, snapping, units, build output). Every system reads its tunables
@@ -41,8 +49,12 @@ export interface AppConfig {
   gridSnapM: number
 
   // ── Units ─────────────────────────────────────────────────────────────────
-  /** Display unit system for measurements and readouts. */
-  unitSystem: 'metric' | 'imperial'
+  /**
+   * The single active length unit (see ActiveUnit). Drives calibration and
+   * every measurement/readout. Defaults to millimetres — a precise, unambiguous
+   * construction default — but is exposed in the Units & calibration settings.
+   */
+  activeUnit: ActiveUnit
 
   // ── Build output ──────────────────────────────────────────────────────────
   /** Storey height (metres) fed to the construction engine. */
@@ -62,7 +74,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   cornerInferEnabled: true,
   cornerTolerancePx: 20,
   gridSnapM: 0.25,
-  unitSystem: 'metric',
+  activeUnit: 'mm',
   buildFloorHeightM: 2.7,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,

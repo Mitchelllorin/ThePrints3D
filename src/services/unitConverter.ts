@@ -88,6 +88,30 @@ export function convertLength(value: number, from: LengthUnit, to: LengthUnit): 
   return mmToLength(lengthToMm(value, from), to)
 }
 
+/** Sensible decimal precision per unit for human-readable readouts. */
+function lengthDecimals(unit: LengthUnit): number {
+  switch (unit) {
+    case 'mm': return 0
+    case 'cm': return 1
+    case 'm':  return 3
+    case 'in': return 1
+    case 'ft': return 2
+    case 'ft-in': return 1
+    case 'yd': return 2
+  }
+}
+
+/**
+ * Format a millimetre measurement in the given unit, e.g. `"1234 mm"` or
+ * `"1.235 m"`. Single helper so the calibration estimate and the measurement
+ * readouts present the active unit identically — never hand-rolled per call.
+ */
+export function formatLengthFromMm(valueMm: number, unit: LengthUnit): string {
+  if (unit === 'ft-in') return inchesToFeetInches(convertLength(valueMm, 'mm', 'in'))
+  const v = convertLength(valueMm, 'mm', unit)
+  return `${v.toFixed(lengthDecimals(unit))} ${unit}`
+}
+
 function areaToM2(value: number, unit: AreaUnit): number {
   switch (unit) {
     case 'mm2': return value / 1_000_000

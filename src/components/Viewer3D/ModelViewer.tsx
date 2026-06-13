@@ -6,7 +6,8 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import { convertLength, inchesToFeetInches } from '../../services/unitConverter'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import { formatLengthFromMm } from '../../services/unitConverter'
 import { useShallow } from 'zustand/react/shallow'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
@@ -198,7 +199,8 @@ export default function ModelViewer() {
   const buildResult    = useAppStore((s) => s.buildResult)
   const buildForMe     = useAppStore((s) => s.buildForMe)
   const overlay        = useAppStore((s) => s.floorplanOverlay)
-  const unitSystem     = useConfigStore((s) => s.unitSystem)
+  const updateOverlay  = useAppStore((s) => s.updateFloorplanOverlay)
+  const activeUnit     = useConfigStore((s) => s.activeUnit)
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
@@ -227,6 +229,19 @@ export default function ModelViewer() {
     setPendingForm({ position3D: position, screenX, screenY })
   }
 
+  // Re-calibrate at any time from the toolbar — resets the picked points and
+  // re-enters calibration mode; the ambient guide drives the rest of the flow.
+  function handleRecalibrate() {
+    const fp = useFloorplanLocalStore.getState()
+    fp.setTraceMode(false)
+    fp.setTraceStroke([])
+    fp.setCalibrationA(null)
+    fp.setCalibrationB(null)
+    fp.setHoverPixel(null)
+    fp.setDistanceInput('')
+    updateOverlay({ calibrationMode: true, guidedStep: 1, locked: false }, false)
+  }
+
   function handleFormSubmit(text: string, icon: string, color: string) {
     if (!pendingForm) return
     addAnnotation({
@@ -248,6 +263,14 @@ export default function ModelViewer() {
       {/* Toolbar overlay */}
       {model.status === 'ready' && (
         <div className={styles.toolbar}>
+          <button
+            className={`${styles.toolBtn} ${overlay.calibrationMode ? styles.toolBtnActive : ''}`}
+            onClick={handleRecalibrate}
+            title="Re-set the real-world scale — pick two points and confirm the distance"
+            data-testid="recalibrate-btn"
+          >
+            📐 {overlay.calibrationMode ? 'Calibrating…' : 'Recalibrate'}
+          </button>
           <button
             className={`${styles.toolBtn} ${measureMode ? styles.toolBtnActive : ''}`}
             onClick={() => setMeasureMode(!measureMode)}
@@ -353,16 +376,9 @@ export default function ModelViewer() {
                 <div className={styles.measurementEmpty}>No measurements yet.</div>
               ) : (
                 measurements.map((m) => {
-                  let value: string
-                  let unit: string
-                  if (unitSystem === 'imperial') {
-                    value = inchesToFeetInches(convertLength(m.distanceM, 'm', 'in'))
-                    unit = ''
-                  } else {
-                    const isMeters = m.distanceM >= 1
-                    value = isMeters ? m.distanceM.toFixed(2) : (m.distanceM * 1000).toFixed(0)
-                    unit = isMeters ? 'm' : 'mm'
-                  }
+                  // Same active unit as calibration — one source of truth.
+                  const value = formatLengthFromMm(m.distanceM * 1000, activeUnit)
+                  const unit = ''
                   return (
                     <div key={m.id} className={styles.measurementEntry}>
                       <div className={styles.measurementValueRow}>

@@ -8,7 +8,7 @@ import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
-import { useConfigStore, type WallTraceStyle } from '../../store/useConfigStore'
+import { useConfigStore, type WallTraceStyle, type ActiveUnit } from '../../store/useConfigStore'
 import styles from './WorkspaceLayout.module.css'
 
 // ── Reusable setting controls (module scope: stable component identities) ─────
@@ -86,6 +86,14 @@ function CollapsibleSection({ id, title, openId, setOpenId, children }: {
   )
 }
 
+const UNIT_OPTIONS: Array<{ value: ActiveUnit; label: string }> = [
+  { value: 'mm', label: 'Millimetres (mm)' },
+  { value: 'cm', label: 'Centimetres (cm)' },
+  { value: 'm', label: 'Metres (m)' },
+  { value: 'in', label: 'Inches (in)' },
+  { value: 'ft', label: 'Feet (ft)' },
+]
+
 const BUILD_TYPE_OPTIONS: Array<{ value: BuildingType; label: string }> = [
   { value: 'residential-single', label: 'Residential (single)' },
   { value: 'residential-multi', label: 'Residential (multi)' },
@@ -130,8 +138,8 @@ function SettingsContent() {
         <Slider label="Grid step" val={cfg.gridSnapM} min={0} max={2} step={0.05} unit="m" onChange={(v) => setCfg({ gridSnapM: v })} />
       </CollapsibleSection>
 
-      <CollapsibleSection id="units" title="Units" openId={openId} setOpenId={setOpenId}>
-        <Select label="System" val={cfg.unitSystem} options={[{ value: 'metric', label: 'Metric' }, { value: 'imperial', label: 'Imperial' }]} onChange={(v) => setCfg({ unitSystem: v as 'metric' | 'imperial' })} />
+      <CollapsibleSection id="units" title="Units & calibration" openId={openId} setOpenId={setOpenId}>
+        <Select label="Active unit" val={cfg.activeUnit} options={UNIT_OPTIONS} onChange={(v) => setCfg({ activeUnit: v as ActiveUnit })} />
       </CollapsibleSection>
 
       <CollapsibleSection id="build" title="Build output" openId={openId} setOpenId={setOpenId}>
