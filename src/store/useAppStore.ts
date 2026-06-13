@@ -269,6 +269,9 @@ interface AppState {
   // room (fallback) if no real walls/build exist. Suppressed by a real build.
   previewMode: boolean
 
+  // Explode view: 0 = assembled, 1 = fully separated. Ephemeral viewport state.
+  explodeAmount: number
+
   // Actions
   setView: (view: AppView) => void
   addDrawings: (files: File[]) => void
@@ -331,6 +334,7 @@ interface AppState {
   updateDecision: (decisionId: string, chosenValue: unknown) => void
   clearBuildResult: () => void
   setPreviewMode: (on: boolean) => void
+  setExplodeAmount: (amount: number) => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -490,6 +494,7 @@ export const useAppStore = create<AppState>()(
     buildResult: null,
     constructionDecisions: [],
     previewMode: true,
+    explodeAmount: 0,
 
     setView: (view) =>
       set((s) => {
@@ -1213,6 +1218,12 @@ export const useAppStore = create<AppState>()(
     setPreviewMode: (on) => {
       set((s) => {
         s.previewMode = on
+      })
+    },
+
+    setExplodeAmount: (amount) => {
+      set((s) => {
+        s.explodeAmount = Math.max(0, Math.min(1, amount))
       })
     },
     }

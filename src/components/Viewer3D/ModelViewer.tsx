@@ -200,6 +200,8 @@ export default function ModelViewer() {
   const buildForMe     = useAppStore((s) => s.buildForMe)
   const overlay        = useAppStore((s) => s.floorplanOverlay)
   const updateOverlay  = useAppStore((s) => s.updateFloorplanOverlay)
+  const explodeAmount  = useAppStore((s) => s.explodeAmount)
+  const setExplodeAmount = useAppStore((s) => s.setExplodeAmount)
   const activeUnit     = useConfigStore((s) => s.activeUnit)
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
@@ -341,6 +343,19 @@ export default function ModelViewer() {
               </button>
             </>
           )}
+          <label className={styles.explodeControl} title="Separate every component outward from the model centre">
+            <span>💥 Explode</span>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              value={explodeAmount}
+              onChange={(e) => setExplodeAmount(Number(e.target.value))}
+              className={styles.explodeSlider}
+              data-testid="explode-slider"
+            />
+          </label>
           {(measureMode || annotateMode) && (
             <span className={styles.toolHint}>
               {measureMode ? 'Click a surface to place point A, then point B' : 'Click a surface to place an annotation pin'}

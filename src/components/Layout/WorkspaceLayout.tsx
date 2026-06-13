@@ -95,6 +95,18 @@ const UNIT_OPTIONS: Array<{ value: ActiveUnit; label: string }> = [
   { value: 'ft', label: 'Feet (ft)' },
 ]
 
+// Systems exposed in the Explode section's per-system offset multipliers.
+const EXPLODE_SYSTEMS: Array<{ key: string; label: string }> = [
+  { key: 'framing', label: 'Framing' },
+  { key: 'walls', label: 'Walls' },
+  { key: 'floors', label: 'Floors' },
+  { key: 'doors-windows', label: 'Openings' },
+  { key: 'structure', label: 'Structure' },
+  { key: 'mep', label: 'MEP' },
+  { key: 'ceiling', label: 'Ceiling' },
+  { key: 'foundation', label: 'Foundation' },
+]
+
 const BUILD_TYPE_OPTIONS: Array<{ value: BuildingType; label: string }> = [
   { value: 'residential-single', label: 'Residential (single)' },
   { value: 'residential-multi', label: 'Residential (multi)' },
@@ -147,6 +159,23 @@ function SettingsContent() {
         <Slider label="Floor height" val={cfg.buildFloorHeightM} min={2} max={6} step={0.1} unit="m" onChange={(v) => setCfg({ buildFloorHeightM: v })} />
         <Select label="Type" val={cfg.buildType} options={BUILD_TYPE_OPTIONS} onChange={(v) => setCfg({ buildType: v as BuildingType })} />
         <Toggle label="Auto framing" val={cfg.buildAutoEnableFraming} onChange={(v) => setCfg({ buildAutoEnableFraming: v })} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="explode" title="Explode" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Speed" val={cfg.explodeSpeed} min={0.5} max={12} step={0.5} onChange={(v) => setCfg({ explodeSpeed: v })} />
+        <Slider label="Spread" val={cfg.explodeSpread} min={0} max={3} step={0.1} unit="×" onChange={(v) => setCfg({ explodeSpread: v })} />
+        {EXPLODE_SYSTEMS.map((sys) => (
+          <Slider
+            key={sys.key}
+            label={sys.label}
+            val={cfg.explodeSystemMultipliers[sys.key] ?? 1}
+            min={0}
+            max={3}
+            step={0.1}
+            unit="×"
+            onChange={(v) => setCfg({ explodeSystemMultipliers: { ...cfg.explodeSystemMultipliers, [sys.key]: v } })}
+          />
+        ))}
       </CollapsibleSection>
 
       <CollapsibleSection id="preview" title="Preview" openId={openId} setOpenId={setOpenId}>

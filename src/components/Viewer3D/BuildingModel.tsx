@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
+import { useConfigStore } from '../../store/useConfigStore'
 import type { Drawing, FloorLevel, Layer, ParsedOpening, ParsedRoom, ParsedWall } from '../../types'
 import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
@@ -22,6 +24,12 @@ function mat(color: string, opacity: number, extra?: Partial<THREE.MeshStandardM
     opacity,
     ...extra,
   })
+}
+
+/** Map a scene layer to its explode system key (MEP disciplines collapse to one). */
+function explodeSystemKey(layer: unknown): string {
+  if (layer === 'electrical' || layer === 'plumbing' || layer === 'mechanical') return 'mep'
+  return typeof layer === 'string' ? layer : 'walls'
 }
 
 /** Free the GPU resources held by a scene object (geometry + material). */
@@ -529,6 +537,14 @@ export default function BuildingModel({ layers }: Props) {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const previewMode = useAppStore((s) => s.previewMode)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
+  const explodeAmount = useAppStore((s) => s.explodeAmount)
+  const explodeSpeed = useConfigStore((s) => s.explodeSpeed)
+  const explodeSpread = useConfigStore((s) => s.explodeSpread)
+  const explodeMults = useConfigStore((s) => s.explodeSystemMultipliers)
+
+  // Explode animation state that must persist across frames (not re-rendered).
+  const explodeCurrentRef = useRef(0)
+  const explodeCenterRef = useRef(new THREE.Vector3())
 
   useEffect(() => {
     if (!groupRef.current) return
@@ -744,6 +760,17 @@ export default function BuildingModel({ layers }: Props) {
       buildFramingGeometry(group, buildResult.components, framingLayer.opacity)
     }
 
+    // Snapshot each mesh's assembled position + the model centre, so the explode
+    // view can fan components out from where they really are (not fixed offsets).
+    const box = new THREE.Box3()
+    for (const child of group.children) {
+      child.userData.basePos = child.position.clone()
+      box.expandByPoint(child.position)
+    }
+    if (!box.isEmpty()) box.getCenter(explodeCenterRef.current)
+    else explodeCenterRef.current.set(0, 0, 0)
+    explodeCurrentRef.current = 0
+
     const timer = setTimeout(() => {
       setModelStatus('ready')
       logEvent('model.build.completed', {
@@ -753,6 +780,44 @@ export default function BuildingModel({ layers }: Props) {
     }, 1500)
     return () => clearTimeout(timer)
   }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, previewMode])
+
+  // Explode driver: each frame, ease the current progress toward the slider
+  // target and fan every component out along its vector from the model centre,
+  // scaled per system. Eased with smoothstep for a smooth in/out feel.
+  useFrame((_, delta) => {
+    const group = groupRef.current
+    if (!group) return
+
+    // Settle to exactly assembled once the slider returns to zero.
+    if (explodeAmount === 0 && explodeCurrentRef.current < 1e-3) {
+      if (explodeCurrentRef.current !== 0) {
+        explodeCurrentRef.current = 0
+        for (const child of group.children) {
+          const base = child.userData.basePos as THREE.Vector3 | undefined
+          if (base) child.position.copy(base)
+        }
+      }
+      return
+    }
+
+    explodeCurrentRef.current = THREE.MathUtils.damp(
+      explodeCurrentRef.current, explodeAmount, Math.max(0.1, explodeSpeed), delta,
+    )
+    const t = explodeCurrentRef.current
+    const eased = t * t * (3 - 2 * t) // smoothstep
+    const center = explodeCenterRef.current
+
+    for (const child of group.children) {
+      const base = child.userData.basePos as THREE.Vector3 | undefined
+      if (!base) continue
+      const mult = (explodeMults[explodeSystemKey(child.userData.layer)] ?? 1) * explodeSpread * eased
+      child.position.set(
+        base.x + (base.x - center.x) * mult,
+        base.y + (base.y - center.y) * mult,
+        base.z + (base.z - center.z) * mult,
+      )
+    }
+  })
 
   return <group ref={groupRef} />
 }

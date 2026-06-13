@@ -63,6 +63,14 @@ export interface AppConfig {
   buildType: BuildingType
   /** Automatically reveal the framing layer after "Build for me". */
   buildAutoEnableFraming: boolean
+
+  // ── Explode view ────────────────────────────────────────────────────────────
+  /** How quickly the model eases toward the explode-slider target (per second). */
+  explodeSpeed: number
+  /** Global multiplier on how far components fan out from model centre. */
+  explodeSpread: number
+  /** Per-system fan-out multipliers, keyed by scene layer (e.g. framing, mep). */
+  explodeSystemMultipliers: Record<string, number>
 }
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
@@ -78,6 +86,18 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   buildFloorHeightM: 2.7,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,
+  explodeSpeed: 4,
+  explodeSpread: 1,
+  explodeSystemMultipliers: {
+    framing: 1,
+    walls: 1.2,
+    floors: 0.5,
+    'doors-windows': 1,
+    structure: 0.8,
+    mep: 1.6,
+    ceiling: 1.4,
+    foundation: 0.3,
+  },
 }
 
 const STORAGE_KEY = 'bp3d-app-config'
