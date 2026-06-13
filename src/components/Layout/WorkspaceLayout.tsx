@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
+import type { BuildingType } from '../../onboarding/types'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import LogoBadge3D from './LogoBadge3D'
 import LayerPanel from '../Layers/LayerPanel'
@@ -7,74 +8,170 @@ import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useConfigStore } from '../../store/useConfigStore'
 import styles from './WorkspaceLayout.module.css'
+
+// ── Reusable setting controls (module scope: stable component identities) ─────
+function Slider({ label, val, min, max, step, unit = '', onChange }: {
+  label: string; val: number; min: number; max: number; step: number; unit?: string
+  onChange: (v: number) => void
+}) {
+  return (
+    <label className={styles.settingRow}>
+      <span className={styles.settingLabel}>{label}</span>
+      <input type="range" min={min} max={max} step={step} value={val}
+        onChange={(e) => onChange(Number(e.target.value))} className={styles.settingSlider} />
+      <span className={styles.settingVal}>{val}{unit}</span>
+    </label>
+  )
+}
+
+function Toggle({ label, val, onChange }: { label: string; val: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className={styles.settingRow} style={{ cursor: 'pointer' }}>
+      <span className={styles.settingLabel}>{label}</span>
+      <input type="checkbox" checked={val} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--bp-accent, #38bdf8)', width: 16, height: 16 }} />
+      <span className={styles.settingVal}>{val ? 'On' : 'Off'}</span>
+    </label>
+  )
+}
+
+function ColorRow({ label, val, onChange }: { label: string; val: string; onChange: (v: string) => void }) {
+  return (
+    <label className={styles.settingRow}>
+      <span className={styles.settingLabel}>{label}</span>
+      <input type="color" value={val} onChange={(e) => onChange(e.target.value)} className={styles.settingColor} />
+      <span className={styles.settingVal}>{val}</span>
+    </label>
+  )
+}
+
+function Select({ label, val, options, onChange }: {
+  label: string; val: string; options: Array<{ value: string; label: string }>
+  onChange: (v: string) => void
+}) {
+  return (
+    <label className={styles.settingRow}>
+      <span className={styles.settingLabel}>{label}</span>
+      <select className={styles.settingSelect} value={val} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
+  )
+}
+
+/**
+ * CollapsibleSection — the standard retractable toggle-tab pattern (the same
+ * single-open toggle the Settings/Presets tab strip uses): click the header to
+ * expand the section, click again (or open another) to retract it. Every
+ * settings category is rendered through this so the panel stays uniform.
+ */
+function CollapsibleSection({ id, title, openId, setOpenId, children }: {
+  id: string; title: string; openId: string | null
+  setOpenId: (id: string | null) => void; children: ReactNode
+}) {
+  const open = openId === id
+  return (
+    <div className={styles.collapsible}>
+      <button
+        type="button"
+        className={`${styles.collapsibleHeader} ${open ? styles.collapsibleHeaderOpen : ''}`}
+        onClick={() => setOpenId(open ? null : id)}
+      >
+        <span className={styles.collapsibleCaret}>{open ? '▾' : '▸'}</span>
+        <span className={styles.collapsibleTitle}>{title}</span>
+      </button>
+      {open && <div className={styles.collapsibleBody}>{children}</div>}
+    </div>
+  )
+}
+
+const BUILD_TYPE_OPTIONS: Array<{ value: BuildingType; label: string }> = [
+  { value: 'residential-single', label: 'Residential (single)' },
+  { value: 'residential-multi', label: 'Residential (multi)' },
+  { value: 'commercial', label: 'Commercial' },
+  { value: 'industrial', label: 'Industrial' },
+  { value: 'institutional', label: 'Institutional' },
+  { value: 'unknown', label: 'Unknown' },
+]
 
 // ── Settings panel content ───────────────────────────────────────────────────
 function SettingsContent() {
-  const s = useUISettingsStore()
-  const set = useUISettingsStore((x) => x.set)
-  const reset = useUISettingsStore((x) => x.reset)
+  const ui = useUISettingsStore()
+  const setUI = useUISettingsStore((x) => x.set)
+  const resetUI = useUISettingsStore((x) => x.reset)
+  const cfg = useConfigStore()
+  const setCfg = useConfigStore((x) => x.set)
+  const resetCfg = useConfigStore((x) => x.reset)
+  const previewMode = useAppStore((x) => x.previewMode)
+  const setPreviewMode = useAppStore((x) => x.setPreviewMode)
 
-  function Slider({ label, val, min, max, step, unit = '', onChange }: {
-    label: string; val: number; min: number; max: number; step: number; unit?: string
-    onChange: (v: number) => void
-  }) {
-    return (
-      <label className={styles.settingRow}>
-        <span className={styles.settingLabel}>{label}</span>
-        <input type="range" min={min} max={max} step={step} value={val}
-          onChange={(e) => onChange(Number(e.target.value))} className={styles.settingSlider} />
-        <span className={styles.settingVal}>{val}{unit}</span>
-      </label>
-    )
-  }
+  // Single-open accordion, matching the panel tab strip's toggle behaviour.
+  const [openId, setOpenId] = useState<string | null>('wall-trace')
 
-  function Toggle({ label, val, onChange }: { label: string; val: boolean; onChange: (v: boolean) => void }) {
-    return (
-      <label className={styles.settingRow} style={{ cursor: 'pointer' }}>
-        <span className={styles.settingLabel}>{label}</span>
-        <input type="checkbox" checked={val} onChange={(e) => onChange(e.target.checked)} style={{ accentColor: 'var(--bp-accent, #38bdf8)', width: 16, height: 16 }} />
-        <span className={styles.settingVal}>{val ? 'On' : 'Off'}</span>
-      </label>
-    )
-  }
-
-  function ColorRow({ label, val, onChange }: { label: string; val: string; onChange: (v: string) => void }) {
-    return (
-      <label className={styles.settingRow}>
-        <span className={styles.settingLabel}>{label}</span>
-        <input type="color" value={val} onChange={(e) => onChange(e.target.value)} className={styles.settingColor} />
-        <span className={styles.settingVal}>{val}</span>
-      </label>
-    )
-  }
+  const resetAll = () => { resetUI(); resetCfg() }
 
   return (
     <div className={styles.settingsBody}>
-      <p className={styles.settingGroup}>Panels</p>
-      <Slider label="Top bar" val={Math.round(s.topbarOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => set({ topbarOpacity: v / 100 })} />
-      <Slider label="Side panel" val={Math.round(s.sidebarOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => set({ sidebarOpacity: v / 100 })} />
-      <Slider label="Floaters" val={Math.round(s.panelOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => set({ panelOpacity: v / 100 })} />
+      <CollapsibleSection id="wall-trace" title="Wall trace" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Thickness" val={cfg.wallTraceThicknessPx} min={2} max={40} step={1} unit="px" onChange={(v) => setCfg({ wallTraceThicknessPx: v })} />
+        <Slider label="Min length" val={cfg.wallTraceMinLengthPx} min={4} max={60} step={1} unit="px" onChange={(v) => setCfg({ wallTraceMinLengthPx: v })} />
+        <Slider label="Snap end" val={cfg.wallTraceSnapEndpointPx} min={0} max={80} step={1} unit="px" onChange={(v) => setCfg({ wallTraceSnapEndpointPx: v })} />
+        <Slider label="Snap line" val={cfg.wallTraceSnapLinePx} min={0} max={80} step={1} unit="px" onChange={(v) => setCfg({ wallTraceSnapLinePx: v })} />
+      </CollapsibleSection>
 
-      <p className={styles.settingGroup}>3D Wordmark</p>
-      <Toggle label="Visible" val={s.logo3DVisible} onChange={(v) => set({ logo3DVisible: v })} />
-      <Slider label="Opacity" val={Math.round(s.logo3DOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ logo3DOpacity: v / 100 })} />
-      <Slider label="Speed" val={s.logo3DFloatSpeed} min={0} max={5} step={0.1} onChange={(v) => set({ logo3DFloatSpeed: v })} />
-      <Slider label="Bounce" val={s.logo3DFloatHeight} min={0} max={2} step={0.05} unit="m" onChange={(v) => set({ logo3DFloatHeight: v })} />
+      <CollapsibleSection id="corners" title="Corners" openId={openId} setOpenId={setOpenId}>
+        <Toggle label="Infer corners" val={cfg.cornerInferEnabled} onChange={(v) => setCfg({ cornerInferEnabled: v })} />
+        <Slider label="Tolerance" val={cfg.cornerTolerancePx} min={0} max={60} step={1} unit="px" onChange={(v) => setCfg({ cornerTolerancePx: v })} />
+      </CollapsibleSection>
 
-      <p className={styles.settingGroup}>Top bar logo</p>
-      <Slider label="Opacity" val={Math.round(s.logoOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => set({ logoOpacity: v / 100 })} />
-      <Slider label="Size" val={Math.round(s.logoSize * 100)} min={50} max={200} step={5} unit="%" onChange={(v) => set({ logoSize: v / 100 })} />
+      <CollapsibleSection id="snapping" title="Snapping" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Grid step" val={cfg.gridSnapM} min={0} max={2} step={0.05} unit="m" onChange={(v) => setCfg({ gridSnapM: v })} />
+      </CollapsibleSection>
 
-      <p className={styles.settingGroup}>3D Grid</p>
-      <Toggle label="Visible" val={s.gridVisible} onChange={(v) => set({ gridVisible: v })} />
-      <ColorRow label="Color" val={s.gridColor} onChange={(v) => set({ gridColor: v })} />
-      <Slider label="Cell size" val={s.gridCellSize} min={0.5} max={10} step={0.5} unit="m" onChange={(v) => set({ gridCellSize: v })} />
+      <CollapsibleSection id="units" title="Units" openId={openId} setOpenId={setOpenId}>
+        <Select label="System" val={cfg.unitSystem} options={[{ value: 'metric', label: 'Metric' }, { value: 'imperial', label: 'Imperial' }]} onChange={(v) => setCfg({ unitSystem: v as 'metric' | 'imperial' })} />
+      </CollapsibleSection>
 
-      <p className={styles.settingGroup}>Accent</p>
-      <ColorRow label="Color" val={s.accentColor} onChange={(v) => set({ accentColor: v })} />
+      <CollapsibleSection id="build" title="Build output" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Floor height" val={cfg.buildFloorHeightM} min={2} max={6} step={0.1} unit="m" onChange={(v) => setCfg({ buildFloorHeightM: v })} />
+        <Select label="Type" val={cfg.buildType} options={BUILD_TYPE_OPTIONS} onChange={(v) => setCfg({ buildType: v as BuildingType })} />
+        <Toggle label="Auto framing" val={cfg.buildAutoEnableFraming} onChange={(v) => setCfg({ buildAutoEnableFraming: v })} />
+      </CollapsibleSection>
 
-      <button className={styles.resetBtn} onClick={reset}>Reset to defaults</button>
+      <CollapsibleSection id="preview" title="Preview" openId={openId} setOpenId={setOpenId}>
+        <Toggle label="Sample room" val={previewMode} onChange={setPreviewMode} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="panels" title="Panels" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Top bar" val={Math.round(ui.topbarOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => setUI({ topbarOpacity: v / 100 })} />
+        <Slider label="Side panel" val={Math.round(ui.sidebarOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => setUI({ sidebarOpacity: v / 100 })} />
+        <Slider label="Floaters" val={Math.round(ui.panelOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => setUI({ panelOpacity: v / 100 })} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="wordmark" title="3D wordmark" openId={openId} setOpenId={setOpenId}>
+        <Toggle label="Visible" val={ui.logo3DVisible} onChange={(v) => setUI({ logo3DVisible: v })} />
+        <Slider label="Opacity" val={Math.round(ui.logo3DOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ logo3DOpacity: v / 100 })} />
+        <Slider label="Speed" val={ui.logo3DFloatSpeed} min={0} max={5} step={0.1} onChange={(v) => setUI({ logo3DFloatSpeed: v })} />
+        <Slider label="Bounce" val={ui.logo3DFloatHeight} min={0} max={2} step={0.05} unit="m" onChange={(v) => setUI({ logo3DFloatHeight: v })} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="topbar-logo" title="Top bar logo" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Opacity" val={Math.round(ui.logoOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ logoOpacity: v / 100 })} />
+        <Slider label="Size" val={Math.round(ui.logoSize * 100)} min={50} max={200} step={5} unit="%" onChange={(v) => setUI({ logoSize: v / 100 })} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="grid" title="3D grid" openId={openId} setOpenId={setOpenId}>
+        <Toggle label="Visible" val={ui.gridVisible} onChange={(v) => setUI({ gridVisible: v })} />
+        <ColorRow label="Color" val={ui.gridColor} onChange={(v) => setUI({ gridColor: v })} />
+        <Slider label="Cell size" val={ui.gridCellSize} min={0.5} max={10} step={0.5} unit="m" onChange={(v) => setUI({ gridCellSize: v })} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="accent" title="Accent" openId={openId} setOpenId={setOpenId}>
+        <ColorRow label="Color" val={ui.accentColor} onChange={(v) => setUI({ accentColor: v })} />
+      </CollapsibleSection>
+
+      <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>
     </div>
   )
 }

@@ -33,6 +33,7 @@ import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReduce
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
+import { useConfigStore } from './useConfigStore'
 import {
   DEFAULT_WIZARD_STATE,
   completeWizardGroup as completeWizardGroupState,
@@ -596,14 +597,16 @@ export const useAppStore = create<AppState>()(
 
     addUserTracedWall: (id, wall) => {
       pushHistory()
+      const { cornerInferEnabled, cornerTolerancePx } = useConfigStore.getState()
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
-        const userWalls = inferCorners([
+        const combined = [
           ...d.parsedWalls.filter((w) => w.source === 'user'),
           { ...wall, source: 'user' as const, detectionConfidence: 1 },
-        ])
+        ]
+        const userWalls = cornerInferEnabled ? inferCorners(combined, cornerTolerancePx) : combined
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
       })
     },
@@ -1163,18 +1166,19 @@ export const useAppStore = create<AppState>()(
       const allWalls = allParsed.flatMap((d) => d.parsedWalls)
       const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
 
+      const { buildFloorHeightM, buildType, buildAutoEnableFraming } = useConfigStore.getState()
       const result = buildFraming(allWalls, allOpenings, {
         scaleMmPerPx,
-        floorHeightM: 2.7,
-        buildingType: 'residential-single',
+        floorHeightM: buildFloorHeightM,
+        buildingType: buildType,
       })
 
       set((s) => {
         s.buildResult = result
         s.constructionDecisions = result.decisions
-        // Auto-enable the framing layer
+        // Auto-enable the framing layer (configurable)
         const framingLayer = s.layers.find((l) => l.id === 'framing')
-        if (framingLayer) framingLayer.visible = true
+        if (framingLayer && buildAutoEnableFraming) framingLayer.visible = true
         s.model.status = 'ready'
         s.view = 'model'
       })

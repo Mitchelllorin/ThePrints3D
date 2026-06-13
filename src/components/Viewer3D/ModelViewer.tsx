@@ -5,6 +5,8 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useConfigStore } from '../../store/useConfigStore'
+import { convertLength, inchesToFeetInches } from '../../services/unitConverter'
 import { useShallow } from 'zustand/react/shallow'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
@@ -196,6 +198,7 @@ export default function ModelViewer() {
   const buildResult    = useAppStore((s) => s.buildResult)
   const buildForMe     = useAppStore((s) => s.buildForMe)
   const overlay        = useAppStore((s) => s.floorplanOverlay)
+  const unitSystem     = useConfigStore((s) => s.unitSystem)
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
@@ -350,9 +353,16 @@ export default function ModelViewer() {
                 <div className={styles.measurementEmpty}>No measurements yet.</div>
               ) : (
                 measurements.map((m) => {
-                  const isMeters = m.distanceM >= 1
-                  const value = isMeters ? m.distanceM.toFixed(2) : (m.distanceM * 1000).toFixed(0)
-                  const unit = isMeters ? 'm' : 'mm'
+                  let value: string
+                  let unit: string
+                  if (unitSystem === 'imperial') {
+                    value = inchesToFeetInches(convertLength(m.distanceM, 'm', 'in'))
+                    unit = ''
+                  } else {
+                    const isMeters = m.distanceM >= 1
+                    value = isMeters ? m.distanceM.toFixed(2) : (m.distanceM * 1000).toFixed(0)
+                    unit = isMeters ? 'm' : 'mm'
+                  }
                   return (
                     <div key={m.id} className={styles.measurementEntry}>
                       <div className={styles.measurementValueRow}>

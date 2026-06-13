@@ -14,6 +14,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
+import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { reduceStrokeToWall, snapTraceWallToExisting } from '../../services/wallTraceReducer'
 
@@ -21,9 +22,9 @@ const DEFAULT_WIDTH = 12
 const DEFAULT_DEPTH = 8
 const GRID_SNAP = 0.25
 
-function snap(value: number, enabled: boolean) {
-  if (!enabled) return value
-  return Math.round(value / GRID_SNAP) * GRID_SNAP
+function snap(value: number, enabled: boolean, increment: number = GRID_SNAP) {
+  if (!enabled || increment <= 0) return value
+  return Math.round(value / increment) * increment
 }
 
 export default function FloorplanOverlay() {
@@ -34,6 +35,12 @@ export default function FloorplanOverlay() {
   const checkpointHistory = useAppStore((s) => s.checkpointHistory)
   const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
   const addTrace = useAppStore((s) => s.addTrace)
+
+  const gridSnapM = useConfigStore((s) => s.gridSnapM)
+  const wallTraceThicknessPx = useConfigStore((s) => s.wallTraceThicknessPx)
+  const wallTraceMinLengthPx = useConfigStore((s) => s.wallTraceMinLengthPx)
+  const wallTraceSnapEndpointPx = useConfigStore((s) => s.wallTraceSnapEndpointPx)
+  const wallTraceSnapLinePx = useConfigStore((s) => s.wallTraceSnapLinePx)
 
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const traceStroke = useFloorplanLocalStore((s) => s.traceStroke)
@@ -131,8 +138,8 @@ export default function FloorplanOverlay() {
   const applyMove = (dx: number, dz: number) => {
     updateOverlay({
       position: [
-        snap(overlay.position[0] + dx, overlay.snapToGrid),
-        snap(overlay.position[1] + dz, overlay.snapToGrid),
+        snap(overlay.position[0] + dx, overlay.snapToGrid, gridSnapM),
+        snap(overlay.position[1] + dz, overlay.snapToGrid, gridSnapM),
       ],
     }, false)
   }
@@ -140,8 +147,8 @@ export default function FloorplanOverlay() {
   const applyScale = (dWidth: number, dDepth: number) => {
     updateOverlay({
       scale: [
-        Math.max(0.5, snap(width + dWidth, overlay.snapToGrid)),
-        Math.max(0.5, snap(depth + dDepth, overlay.snapToGrid)),
+        Math.max(0.5, snap(width + dWidth, overlay.snapToGrid, gridSnapM)),
+        Math.max(0.5, snap(depth + dDepth, overlay.snapToGrid, gridSnapM)),
       ],
     }, false)
   }
@@ -210,9 +217,17 @@ export default function FloorplanOverlay() {
     const pixel = worldToPixel(event.point)
     setTraceStroke((prev) => {
       const points = [...prev, pixel]
-      const reduced = reduceStrokeToWall(points.map(([x, y]) => ({ x, y })))
+      const reduced = reduceStrokeToWall(points.map(([x, y]) => ({ x, y })), {
+        defaultThicknessPx: wallTraceThicknessPx,
+        minLengthPx: wallTraceMinLengthPx,
+      })
       if (reduced) {
-        const snapped = snapTraceWallToExisting(reduced, drawing.parsedWalls)
+        const snapped = snapTraceWallToExisting(
+          reduced,
+          drawing.parsedWalls,
+          wallTraceSnapEndpointPx,
+          wallTraceSnapLinePx,
+        )
         addUserTracedWall(drawing.id, snapped)
         addTrace({ points, timestamp: Date.now() })
       }

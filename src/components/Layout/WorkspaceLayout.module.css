@@ -375,6 +375,57 @@
   min-width: 0;
 }
 
+.settingSelect {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+
+/* ── Collapsible settings sections (retractable toggle-tab pattern) ─────────
+   Mirrors the panel tab strip: one section open at a time, click to retract. */
+.collapsible {
+  border-bottom: 1px solid rgba(30, 41, 59, 0.4);
+}
+
+.collapsibleHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 10px 16px;
+  text-align: left;
+  color: #334155;
+  transition: color 0.15s, background 0.15s;
+}
+.collapsibleHeader:hover { color: #94a3b8; background: rgba(30, 41, 59, 0.35); }
+
+.collapsibleHeaderOpen { color: var(--bp-accent, #38bdf8); }
+
+.collapsibleCaret {
+  font-size: 9px;
+  width: 10px;
+  flex-shrink: 0;
+}
+
+.collapsibleTitle {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+}
+
+.collapsibleBody { padding: 2px 0 10px; }
+
 .resetBtn {
   margin: 16px 16px 0;
   width: calc(100% - 32px);
