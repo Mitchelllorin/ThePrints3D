@@ -8,7 +8,7 @@ import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
-import { useConfigStore } from '../../store/useConfigStore'
+import { useConfigStore, type WallTraceStyle } from '../../store/useConfigStore'
 import styles from './WorkspaceLayout.module.css'
 
 // ── Reusable setting controls (module scope: stable component identities) ─────
@@ -114,6 +114,7 @@ function SettingsContent() {
   return (
     <div className={styles.settingsBody}>
       <CollapsibleSection id="wall-trace" title="Wall trace" openId={openId} setOpenId={setOpenId}>
+        <Select label="Style" val={cfg.wallTraceStyle} options={[{ value: 'dotted', label: 'Dotted line' }, { value: 'arrow', label: 'Arrow' }, { value: 'both', label: 'Both' }]} onChange={(v) => setCfg({ wallTraceStyle: v as WallTraceStyle })} />
         <Slider label="Thickness" val={cfg.wallTraceThicknessPx} min={2} max={40} step={1} unit="px" onChange={(v) => setCfg({ wallTraceThicknessPx: v })} />
         <Slider label="Min length" val={cfg.wallTraceMinLengthPx} min={4} max={60} step={1} unit="px" onChange={(v) => setCfg({ wallTraceMinLengthPx: v })} />
         <Slider label="Snap end" val={cfg.wallTraceSnapEndpointPx} min={0} max={80} step={1} unit="px" onChange={(v) => setCfg({ wallTraceSnapEndpointPx: v })} />

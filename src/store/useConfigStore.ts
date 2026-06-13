@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import type { BuildingType } from '../onboarding/types'
 
+/** Visual feedback shown while a wall is being traced. */
+export type WallTraceStyle = 'dotted' | 'arrow' | 'both'
+
 /**
  * useConfigStore — the central, typed home for *behavioural* configuration:
  * the knobs that change how processes and actions work (wall tracing, corner
@@ -24,6 +27,8 @@ export interface AppConfig {
   wallTraceSnapEndpointPx: number
   /** A traced endpoint within this distance (px) snaps onto a wall line (T-join). */
   wallTraceSnapLinePx: number
+  /** Live visual while tracing: dotted stroke, rubber-band arrow, or both. */
+  wallTraceStyle: WallTraceStyle
 
   // ── Corners ───────────────────────────────────────────────────────────────
   /** Auto-square perpendicular traced walls that meet near a shared point. */
@@ -53,6 +58,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   wallTraceMinLengthPx: 12,
   wallTraceSnapEndpointPx: 28,
   wallTraceSnapLinePx: 18,
+  wallTraceStyle: 'both',
   cornerInferEnabled: true,
   cornerTolerancePx: 20,
   gridSnapM: 0.25,

@@ -27,6 +27,40 @@ function snap(value: number, enabled: boolean, increment: number = GRID_SNAP) {
   return Math.round(value / increment) * increment
 }
 
+/**
+ * TraceArrow — a stretchy "rubber-band" arrow from the stroke's start to the
+ * current point: a straight shaft plus a two-barb arrowhead at the live end.
+ * Recomputed every frame from the latest endpoint, so it stretches as you draw.
+ */
+function TraceArrow({ start, end }: {
+  start: [number, number, number]
+  end: [number, number, number]
+}) {
+  const dx = end[0] - start[0]
+  const dz = end[2] - start[2]
+  const len = Math.hypot(dx, dz)
+  if (len < 0.05) return null
+
+  const theta = Math.atan2(dz, dx)
+  const barbLen = Math.min(0.5, len * 0.35)
+  const barbAngle = (25 * Math.PI) / 180
+  const back = theta + Math.PI
+  const tip: [number, number, number] = [end[0], end[1], end[2]]
+  const b1: [number, number, number] = [
+    end[0] + Math.cos(back + barbAngle) * barbLen, end[1], end[2] + Math.sin(back + barbAngle) * barbLen,
+  ]
+  const b2: [number, number, number] = [
+    end[0] + Math.cos(back - barbAngle) * barbLen, end[1], end[2] + Math.sin(back - barbAngle) * barbLen,
+  ]
+
+  return (
+    <>
+      <Line points={[start, tip]} color="#38bdf8" lineWidth={4} />
+      <Line points={[b1, tip, b2]} color="#38bdf8" lineWidth={4} />
+    </>
+  )
+}
+
 export default function FloorplanOverlay() {
   const drawings = useAppStore((s) => s.drawings)
   const overlay = useAppStore((s) => s.floorplanOverlay)
@@ -41,6 +75,7 @@ export default function FloorplanOverlay() {
   const wallTraceMinLengthPx = useConfigStore((s) => s.wallTraceMinLengthPx)
   const wallTraceSnapEndpointPx = useConfigStore((s) => s.wallTraceSnapEndpointPx)
   const wallTraceSnapLinePx = useConfigStore((s) => s.wallTraceSnapLinePx)
+  const wallTraceStyle = useConfigStore((s) => s.wallTraceStyle)
 
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const traceStroke = useFloorplanLocalStore((s) => s.traceStroke)
@@ -333,8 +368,12 @@ export default function FloorplanOverlay() {
         </group>
       )}
 
-      {traceWorldPoints.length > 1 && (
+      {traceWorldPoints.length > 1 && (wallTraceStyle === 'dotted' || wallTraceStyle === 'both') && (
         <Line points={traceWorldPoints} color="#38bdf8" lineWidth={4} dashed dashScale={1.5} dashSize={0.3} gapSize={0.18} />
+      )}
+
+      {traceWorldPoints.length > 1 && (wallTraceStyle === 'arrow' || wallTraceStyle === 'both') && (
+        <TraceArrow start={traceWorldPoints[0]} end={traceWorldPoints[traceWorldPoints.length - 1]} />
       )}
 
       {calibrationPreviewPoints && (
