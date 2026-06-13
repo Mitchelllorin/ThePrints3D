@@ -100,7 +100,7 @@
 .panel {
   width: 300px;
   flex-shrink: 0;
-  background: rgba(10, 16, 30, var(--bp-panel-opacity, 0.94));
+  background: rgba(10, 16, 30, var(--bp-sidebar-opacity, 0.95));
   backdrop-filter: blur(14px);
   border-right: 1px solid rgba(30, 41, 59, 0.4);
   display: flex;
