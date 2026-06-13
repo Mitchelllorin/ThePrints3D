@@ -69,6 +69,8 @@ export interface AppConfig {
   studSpacingIn: 16 | 24
   /** Default dimensional-lumber size (wall depth) for framed walls. */
   defaultStudSize: '2x4' | '2x6'
+  /** Corner framing style: three-stud (standard) or California/two-stud. */
+  cornerType: 'three-stud' | 'california'
 
   // ── Explode view ────────────────────────────────────────────────────────────
   /** How quickly the model eases toward the explode-slider target (per second). */
@@ -94,6 +96,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   buildAutoEnableFraming: true,
   studSpacingIn: 16,
   defaultStudSize: '2x4',
+  cornerType: 'three-stud',
   explodeSpeed: 4,
   explodeSpread: 1,
   explodeSystemMultipliers: {

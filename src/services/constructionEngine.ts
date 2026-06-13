@@ -477,10 +477,17 @@ function placeCornerAssemblies(
   corners: ReturnType<typeof findCorners>,
   geometries: WallGeometry[],
   studSize: string,
+  cornerType: 'three-stud' | 'california',
 ): PlacedComponent[] {
   const components: PlacedComponent[] = []
   const depth = studDepthMm(studSize) / 1000
   const width = STUD_WIDTH_MM / 1000
+  // California (two-stud) corners use one fewer stud — better insulation, fewer
+  // thermal bridges; three-stud is the standard backing-stud corner.
+  const studCount = cornerType === 'california' ? 2 : 3
+  const label = cornerType === 'california'
+    ? 'Corner assembly (California 2-stud)'
+    : 'Corner assembly (3-stud)'
 
   for (const corner of corners) {
     const wgA = geometries.find((g) => g.wallIndex === corner.wallIndexA)
@@ -496,8 +503,8 @@ function placeCornerAssemblies(
       componentType: 'corner-assembly',
       position: [corner.position[0], y, corner.position[1]],
       rotation: [0, -wgA.angle, 0],
-      dimensions: [width * 3, studH, depth],
-      label: 'Corner assembly (3-stud)',
+      dimensions: [width * studCount, studH, depth],
+      label,
     })
   }
 
@@ -655,6 +662,8 @@ export interface ConstructionEngineOptions {
   spacingMm?: number
   /** Global override for stud size / wall depth. Falls back to the building-type default. */
   studSize?: string
+  /** Corner framing style. Falls back to three-stud (standard). */
+  cornerType?: 'three-stud' | 'california'
 }
 
 export function buildFraming(
@@ -721,7 +730,7 @@ export function buildFraming(
 
   // Corner assemblies
   const corners = findCorners(geometries)
-  components.push(...placeCornerAssemblies(corners, geometries, studSize))
+  components.push(...placeCornerAssemblies(corners, geometries, studSize, options.cornerType ?? 'three-stud'))
 
   // Decisions
   const decisions = buildFramingDecisions(buildingType, framedWalls.length, openings.length)

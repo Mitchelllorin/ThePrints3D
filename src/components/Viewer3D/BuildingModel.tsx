@@ -79,32 +79,54 @@ function buildRealWalls(
 ) {
   const s = mmPerPx / 1000  // px → metres
 
-  for (const w of walls) {
-    const wx1 = (w.x1 - cx) * s
-    const wz1 = (w.y1 - cy) * s
-    const wx2 = (w.x2 - cx) * s
-    const wz2 = (w.y2 - cy) * s
+  // Pre-compute metric geometry for every wall so we can clean up corners.
+  const segs = walls.map((w) => {
+    const x1 = (w.x1 - cx) * s, z1 = (w.y1 - cy) * s
+    const x2 = (w.x2 - cx) * s, z2 = (w.y2 - cy) * s
+    return {
+      w, x1, z1, x2, z2,
+      len: Math.hypot(x2 - x1, z2 - z1),
+      thick: Math.max(w.thickness > 1 ? w.thickness * s : defaultThicknessM, 0.05),
+    }
+  })
 
-    const len = Math.sqrt((wx2 - wx1) ** 2 + (wz2 - wz1) ** 2)
-    if (len < 0.1) continue  // skip tiny segments (<10cm)
+  const JOIN_TOL = 0.06  // metres — endpoints this close are treated as one corner
 
-    const thick = w.thickness > 1 ? w.thickness * s : defaultThicknessM
-    const angle = Math.atan2(wz2 - wz1, wx2 - wx1)
+  // Trim a wall end back to its neighbour's face so corners read clean: at a
+  // shared corner the lowest-index wall runs through and the others butt into
+  // it (no overlap, no gap). Returns how far to pull this end in (metres).
+  const trimAt = (selfIdx: number, px: number, pz: number): number => {
+    let trim = 0
+    for (let j = 0; j < selfIdx; j++) {  // only lower-index walls run through
+      const o = segs[j]
+      const near = Math.min(Math.hypot(o.x1 - px, o.z1 - pz), Math.hypot(o.x2 - px, o.z2 - pz))
+      if (near < JOIN_TOL) trim = Math.max(trim, o.thick / 2)
+    }
+    return trim
+  }
 
-    const geo = new THREE.BoxGeometry(len, floorHeight - 0.15, Math.max(thick, 0.05))
-    const mesh = new THREE.Mesh(geo, w.source === 'user' ? userWallMat : wallMat)
+  segs.forEach((seg, i) => {
+    if (seg.len < 0.1) return  // skip tiny segments (<10cm)
+    const ux = (seg.x2 - seg.x1) / seg.len
+    const uz = (seg.z2 - seg.z1) / seg.len
+    const trimA = trimAt(i, seg.x1, seg.z1)
+    const trimB = trimAt(i, seg.x2, seg.z2)
+    const len = seg.len - trimA - trimB
+    if (len < 0.05) return  // consumed by trims
 
-    mesh.position.set(
-      (wx1 + wx2) / 2,
-      elevation + floorHeight / 2,
-      (wz1 + wz2) / 2
-    )
+    const ax = seg.x1 + ux * trimA, az = seg.z1 + uz * trimA
+    const bx = seg.x2 - ux * trimB, bz = seg.z2 - uz * trimB
+    const angle = Math.atan2(bz - az, bx - ax)
+
+    const geo = new THREE.BoxGeometry(len, floorHeight - 0.15, seg.thick)
+    const mesh = new THREE.Mesh(geo, seg.w.source === 'user' ? userWallMat : wallMat)
+    mesh.position.set((ax + bx) / 2, elevation + floorHeight / 2, (az + bz) / 2)
     mesh.rotation.y = -angle
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.userData.layer = layerId
     group.add(mesh)
-  }
+  })
 }
 
 function buildFoundation(
