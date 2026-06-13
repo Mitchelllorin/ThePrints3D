@@ -606,6 +606,7 @@ export default function BuildingModel({ layers }: Props) {
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const previewMode = useAppStore((s) => s.previewMode)
+  const overlay = useAppStore((s) => s.floorplanOverlay)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
   const explodeAmount = useAppStore((s) => s.explodeAmount)
   const explodeSpeed = useConfigStore((s) => s.explodeSpeed)
@@ -615,6 +616,11 @@ export default function BuildingModel({ layers }: Props) {
   // Explode animation state that must persist across frames (not re-rendered).
   const explodeCurrentRef = useRef(0)
   const explodeCenterRef = useRef(new THREE.Vector3())
+
+  // Captured each build so the group can be aligned to the live floor-plan
+  // overlay — built geometry is centred on the wall centroid, the overlay maps
+  // the image centre to overlay.position, so they differ by a rigid transform.
+  const alignRef = useRef({ cx: 0, cy: 0, s: 0, imgCx: 0, imgCy: 0, refId: null as string | null, hasWalls: false })
 
   useEffect(() => {
     if (!groupRef.current) return
@@ -655,12 +661,26 @@ export default function BuildingModel({ layers }: Props) {
     let globalCy = 0
     let globalMmPerPx = DEFAULT_SCALE_MM_PER_PX
 
+    let refDrawing: Drawing | null = null
     if (allParsed.length > 0) {
       const ref = allParsed.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
       const [rcx, rcy] = centerOfWalls(ref.parsedWalls)
       globalCx = rcx
       globalCy = rcy
       globalMmPerPx = ref.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
+      refDrawing = ref
+    }
+
+    // Record how to map this build onto the overlay (same origin + scale as the
+    // live trace) — applied to the group below so built walls land where traced.
+    alignRef.current = {
+      cx: globalCx,
+      cy: globalCy,
+      s: globalMmPerPx / 1000,
+      imgCx: (refDrawing?.rasterWidth ?? 1400) / 2,
+      imgCy: (refDrawing?.rasterHeight ?? 900) / 2,
+      refId: refDrawing?.id ?? null,
+      hasWalls: !!refDrawing && refDrawing.parsedWalls.length > 0,
     }
 
     const fallbackScaleUsages = drawings.filter((d) => d.parsedWalls.length > 0 && !d.scaleMmPerPx).length
@@ -850,6 +870,27 @@ export default function BuildingModel({ layers }: Props) {
     }, 1500)
     return () => clearTimeout(timer)
   }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, previewMode])
+
+  // Align the built group onto the live floor-plan overlay so traced walls and
+  // the 3D build share one origin + scale — no offset. The build is centred on
+  // the wall centroid; the overlay maps the image centre to overlay.position at
+  // the same metres-per-pixel, so the group offset is a single rigid transform.
+  useEffect(() => {
+    const group = groupRef.current
+    if (!group) return
+    const a = alignRef.current
+    if (!a.hasWalls || a.refId !== overlay.drawingId) {
+      group.position.set(0, 0, 0)
+      group.rotation.set(0, 0, 0)
+      return
+    }
+    const offX = (a.cx - a.imgCx) * a.s
+    const offZ = (a.cy - a.imgCy) * a.s
+    const rot = THREE.MathUtils.degToRad(overlay.rotationDeg)
+    const v = new THREE.Vector3(offX, 0, offZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), rot)
+    group.position.set(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
+    group.rotation.set(0, rot, 0)
+  }, [overlay.position, overlay.rotationDeg, overlay.drawingId, drawings, buildResult, previewMode])
 
   // Explode driver: each frame, ease the current progress toward the slider
   // target and fan every component out along its vector from the model centre,
