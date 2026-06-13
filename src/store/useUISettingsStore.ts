@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 
 export interface UISettings {
-  // Panels
+  // Panels / toolbars / menus
   topbarOpacity: number
   sidebarOpacity: number
   panelOpacity: number
+  /** Surface colour shared by the top bar, side panel, toolbars and floaters. */
+  panelColor: string
   // Logo (2D topbar)
   logoOpacity: number
   logoSize: number
@@ -27,6 +29,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   topbarOpacity: 0.95,
   sidebarOpacity: 0.95,
   panelOpacity: 0.92,
+  panelColor: '#0f172a',
   logoOpacity: 1,
   logoSize: 1,
   logo3DVisible: true,

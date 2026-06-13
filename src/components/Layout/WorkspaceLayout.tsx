@@ -221,10 +221,11 @@ function SettingsContent() {
         <Toggle label="Sample room" val={previewMode} onChange={setPreviewMode} />
       </CollapsibleSection>
 
-      <CollapsibleSection id="panels" title="Panels" openId={openId} setOpenId={setOpenId}>
-        <Slider label="Top bar" val={Math.round(ui.topbarOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => setUI({ topbarOpacity: v / 100 })} />
-        <Slider label="Side panel" val={Math.round(ui.sidebarOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => setUI({ sidebarOpacity: v / 100 })} />
-        <Slider label="Floaters" val={Math.round(ui.panelOpacity * 100)} min={20} max={100} step={1} unit="%" onChange={(v) => setUI({ panelOpacity: v / 100 })} />
+      <CollapsibleSection id="panels" title="UI menu / toolbar / panel" openId={openId} setOpenId={setOpenId}>
+        <ColorRow label="Colour" val={ui.panelColor} onChange={(v) => setUI({ panelColor: v })} />
+        <Slider label="Top bar" val={Math.round(ui.topbarOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ topbarOpacity: v / 100 })} />
+        <Slider label="Side panel" val={Math.round(ui.sidebarOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ sidebarOpacity: v / 100 })} />
+        <Slider label="Floaters" val={Math.round(ui.panelOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ panelOpacity: v / 100 })} />
       </CollapsibleSection>
 
       <CollapsibleSection id="wordmark" title="3D wordmark" openId={openId} setOpenId={setOpenId}>
@@ -431,7 +432,7 @@ export default function WorkspaceLayout() {
       </div>
 
       {/* Top bar — thin, semi-transparent, sits above viewport */}
-      <div className={styles.topbar} style={{ background: `rgba(10,16,30,${topbarOpacity})` }}>
+      <div className={styles.topbar} style={{ background: `rgba(var(--bp-panel-rgb, 10, 16, 30), ${topbarOpacity})` }}>
         <div style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center', display: 'flex', alignItems: 'center', gap: 6 }}>
           <LogoBadge3D />
           <span className={styles.logoSub}>by LearnIt3D</span>
