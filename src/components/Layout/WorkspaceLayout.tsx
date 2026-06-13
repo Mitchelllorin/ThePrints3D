@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
+import { convertValue, type ConverterKind, type ConverterUnit } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import LogoBadge3D from './LogoBadge3D'
 import LayerPanel from '../Layers/LayerPanel'
@@ -202,12 +203,112 @@ function PresetPanel({ onLoad }: { onLoad: (presetId: PresetDifficulty) => void 
   )
 }
 
+// ── Unit converter panel ─────────────────────────────────────────────────────
+// Every unit in every combination, in one place. The main flows never make the
+// user pick a unit (they read the active unit); this is the on-demand tool for
+// the times a tradesperson just needs a quick conversion.
+const CONVERTER_CATEGORIES: Array<{
+  kind: ConverterKind; label: string; units: Array<{ value: ConverterUnit; label: string }>
+}> = [
+  { kind: 'length', label: 'Length', units: [
+    { value: 'mm', label: 'mm' }, { value: 'cm', label: 'cm' }, { value: 'm', label: 'm' },
+    { value: 'in', label: 'in' }, { value: 'ft', label: 'ft' }, { value: 'yd', label: 'yd' },
+  ] },
+  { kind: 'area', label: 'Area', units: [
+    { value: 'mm2', label: 'mm²' }, { value: 'm2', label: 'm²' }, { value: 'ft2', label: 'ft²' }, { value: 'yd2', label: 'yd²' },
+  ] },
+  { kind: 'volume', label: 'Volume', units: [
+    { value: 'm3', label: 'm³' }, { value: 'ft3', label: 'ft³' }, { value: 'yd3', label: 'yd³' },
+  ] },
+  { kind: 'weight', label: 'Weight', units: [
+    { value: 'kg', label: 'kg' }, { value: 'lb', label: 'lb' },
+  ] },
+  { kind: 'temperature', label: 'Temperature', units: [
+    { value: 'c', label: '°C' }, { value: 'f', label: '°F' },
+  ] },
+  { kind: 'pressure', label: 'Pressure', units: [
+    { value: 'kpa', label: 'kPa' }, { value: 'psi', label: 'psi' },
+  ] },
+]
+
+function formatConverted(n: number): string {
+  if (!Number.isFinite(n)) return '—'
+  return parseFloat(n.toFixed(4)).toString()
+}
+
+function ConverterPanel() {
+  const activeUnit = useConfigStore((s) => s.activeUnit)
+  const [kind, setKind] = useState<ConverterKind>('length')
+  const [value, setValue] = useState('1')
+  const [from, setFrom] = useState<ConverterUnit>(activeUnit)
+  const [to, setTo] = useState<ConverterUnit>('ft')
+
+  const cat = CONVERTER_CATEGORIES.find((c) => c.kind === kind) ?? CONVERTER_CATEGORIES[0]
+  const unitValues = cat.units.map((u) => u.value)
+
+  // Derive the effective units during render (no setState-in-effect): if the
+  // stored unit isn't valid for the chosen category, fall back. Length defaults
+  // its "from" to the app's active unit, so the common case needs no picking.
+  const fromEff: ConverterUnit = unitValues.includes(from)
+    ? from
+    : (kind === 'length' && unitValues.includes(activeUnit) ? activeUnit : cat.units[0].value)
+  const toEff: ConverterUnit = unitValues.includes(to) && to !== fromEff
+    ? to
+    : (cat.units.find((u) => u.value !== fromEff) ?? cat.units[0]).value
+
+  const numeric = Number.parseFloat(value)
+  const hasValue = Number.isFinite(numeric)
+  const result = hasValue ? convertValue(kind, numeric, fromEff, toEff) : NaN
+
+  return (
+    <div className={styles.settingsBody}>
+      <label className={styles.settingRow}>
+        <span className={styles.settingLabel}>Measure</span>
+        <select className={styles.settingSelect} value={kind} onChange={(e) => setKind(e.target.value as ConverterKind)}>
+          {CONVERTER_CATEGORIES.map((c) => <option key={c.kind} value={c.kind}>{c.label}</option>)}
+        </select>
+      </label>
+
+      <label className={styles.settingRow}>
+        <span className={styles.settingLabel}>Value</span>
+        <input className={styles.convInput} type="number" step="any" value={value} onChange={(e) => setValue(e.target.value)} />
+        <select className={styles.settingSelect} value={fromEff} onChange={(e) => setFrom(e.target.value as ConverterUnit)}>
+          {cat.units.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+        </select>
+      </label>
+
+      <div className={styles.convSwapRow}>
+        <button className={styles.convSwap} onClick={() => { setFrom(toEff); setTo(fromEff) }} title="Swap units">⇅</button>
+      </div>
+
+      <label className={styles.settingRow}>
+        <span className={styles.settingLabel}>Result</span>
+        <span className={styles.convResult}>{formatConverted(result)}</span>
+        <select className={styles.settingSelect} value={toEff} onChange={(e) => setTo(e.target.value as ConverterUnit)}>
+          {cat.units.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
+        </select>
+      </label>
+
+      <p className={styles.settingGroup}>All units</p>
+      <div className={styles.convList}>
+        {cat.units.map((u) => (
+          <div key={u.value} className={styles.convListRow}>
+            <span className={styles.convListUnit}>{u.label}</span>
+            <span className={styles.convListVal}>{hasValue ? formatConverted(convertValue(kind, numeric, fromEff, u.value)) : '—'}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Panel tabs ───────────────────────────────────────────────────────────────
-type PanelId = 'layers' | 'settings' | 'presets'
+type PanelId = 'layers' | 'settings' | 'presets' | 'convert'
 
 const TABS: Array<{ id: PanelId; icon: string; label: string }> = [
   { id: 'layers',   icon: '≡', label: 'Layers'   },
   { id: 'presets',  icon: '★', label: 'Presets'  },
+  { id: 'convert',  icon: '⇄', label: 'Convert'  },
   { id: 'settings', icon: '⚙', label: 'Settings' },
 ]
 
@@ -298,6 +399,12 @@ export default function WorkspaceLayout() {
               <>
                 <p className={styles.sectionTitle}>Presets</p>
                 <PresetPanel onLoad={handleLoadPreset} />
+              </>
+            )}
+            {open === 'convert' && (
+              <>
+                <p className={styles.sectionTitle}>Unit converter</p>
+                <ConverterPanel />
               </>
             )}
             {open === 'settings' && <SettingsContent />}
