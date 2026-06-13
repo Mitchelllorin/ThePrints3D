@@ -64,6 +64,12 @@ export interface AppConfig {
   /** Automatically reveal the framing layer after "Build for me". */
   buildAutoEnableFraming: boolean
 
+  // ── Framing ─────────────────────────────────────────────────────────────────
+  /** Global stud spacing, on-centre (inches). */
+  studSpacingIn: 16 | 24
+  /** Default dimensional-lumber size (wall depth) for framed walls. */
+  defaultStudSize: '2x4' | '2x6'
+
   // ── Explode view ────────────────────────────────────────────────────────────
   /** How quickly the model eases toward the explode-slider target (per second). */
   explodeSpeed: number
@@ -86,6 +92,8 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   buildFloorHeightM: 2.7,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,
+  studSpacingIn: 16,
+  defaultStudSize: '2x4',
   explodeSpeed: 4,
   explodeSpread: 1,
   explodeSystemMultipliers: {

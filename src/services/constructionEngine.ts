@@ -651,6 +651,10 @@ export interface ConstructionEngineOptions {
   scaleMmPerPx: number
   floorHeightM?: number
   buildingType?: BuildingType
+  /** Global override for stud spacing (mm). Falls back to the building-type default. */
+  spacingMm?: number
+  /** Global override for stud size / wall depth. Falls back to the building-type default. */
+  studSize?: string
 }
 
 export function buildFraming(
@@ -667,8 +671,9 @@ export function buildFraming(
   _resetIdCounter()
 
   const [cx, cy] = centerOfWalls(walls)
-  const studSize = resolveStudSize(buildingType)
-  const spacingMm = resolveSpacingMm(buildingType)
+  // Global setting overrides take precedence over the building-type defaults.
+  const studSize = options.studSize ?? resolveStudSize(buildingType)
+  const spacingMm = options.spacingMm ?? resolveSpacingMm(buildingType)
   const bt = buildingType in framingDefaults.buildingTypeDefaults
     ? buildingType
     : 'unknown'

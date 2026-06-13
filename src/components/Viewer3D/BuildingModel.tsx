@@ -521,6 +521,7 @@ function buildFramingGeometry(
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.userData.layer = 'framing'
+    mesh.userData.id = comp.id
     mesh.userData.componentType = comp.componentType
     mesh.userData.label = comp.label
     group.add(mesh)
