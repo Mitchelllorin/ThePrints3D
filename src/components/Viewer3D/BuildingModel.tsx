@@ -32,13 +32,15 @@ function explodeSystemKey(layer: unknown): string {
   return typeof layer === 'string' ? layer : 'walls'
 }
 
-/** Free the GPU resources held by a scene object (geometry + material). */
+/** Free the GPU resources held by a scene object and any descendants. */
 function disposeObject(obj: THREE.Object3D) {
-  const mesh = obj as Partial<THREE.Mesh>
-  mesh.geometry?.dispose()
-  const material = mesh.material
-  if (Array.isArray(material)) material.forEach((m) => m.dispose())
-  else material?.dispose()
+  obj.traverse((node) => {
+    const mesh = node as Partial<THREE.Mesh>
+    mesh.geometry?.dispose()
+    const material = mesh.material
+    if (Array.isArray(material)) material.forEach((m) => m.dispose())
+    else material?.dispose()
+  })
 }
 
 interface Footprint { minX: number; maxX: number; minZ: number; maxZ: number }
@@ -518,35 +520,80 @@ const FRAMING_COLORS: Record<string, string> = {
   'corner-assembly': '#c9a56c',
 }
 
+/**
+ * Build a cold-formed-steel C-channel as a group of three thin boxes (web +
+ * two flanges) — robust orientation from plain box maths, no extrude-axis
+ * guesswork. C-studs open along the wall; track webs sit at the top/bottom.
+ */
+function buildCChannel(comp: PlacedComponent, material: THREE.MeshStandardMaterial): THREE.Group {
+  const [w, h, d] = comp.dimensions
+  const t = Math.min(0.005, w * 0.35, h * 0.35, d * 0.35) // sheet thickness (render)
+  const g = new THREE.Group()
+  const add = (dims: [number, number, number], pos: [number, number, number]) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(...dims), material)
+    m.position.set(...pos)
+    m.castShadow = true
+    m.receiveShadow = true
+    g.add(m)
+  }
+  if (comp.profile === 'track') {
+    // x = run along wall, y = leg height, z = web depth across wall.
+    const top = comp.componentType === 'top-plate'
+    add([w, t, d], [0, top ? h / 2 - t / 2 : -(h / 2 - t / 2), 0]) // web
+    add([w, h, t], [0, 0, d / 2 - t / 2]) // flange
+    add([w, h, t], [0, 0, -(d / 2 - t / 2)]) // flange
+  } else {
+    // C-stud: x = flange run along wall, y = length, z = web depth across wall.
+    add([t, h, d], [-(w / 2 - t / 2), 0, 0]) // web
+    add([w, h, t], [0, 0, d / 2 - t / 2]) // flange
+    add([w, h, t], [0, 0, -(d / 2 - t / 2)]) // flange
+  }
+  return g
+}
+
 function buildFramingGeometry(
   group: THREE.Group,
   components: PlacedComponent[],
   opacity: number,
 ) {
+  // Shared steel material — silvery, metallic — reused across all C-channels.
+  const steelMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#9aa6b2'),
+    transparent: opacity < 1,
+    opacity,
+    roughness: 0.35,
+    metalness: 0.85,
+  })
+
   for (const comp of components) {
     const [w, h, d] = comp.dimensions
     if (w < 0.001 || h < 0.001 || d < 0.001) continue
 
-    const geo = new THREE.BoxGeometry(w, h, d)
-    const color = FRAMING_COLORS[comp.componentType] ?? '#c9a56c'
-    const material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(color),
-      transparent: opacity < 1,
-      opacity,
-      roughness: 0.75,
-      metalness: 0.05,
-    })
+    const isSteel = comp.profile === 'c-stud' || comp.profile === 'track'
+    const obj: THREE.Object3D = isSteel
+      ? buildCChannel(comp, steelMat)
+      : new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, d),
+          new THREE.MeshStandardMaterial({
+            color: new THREE.Color(FRAMING_COLORS[comp.componentType] ?? '#c9a56c'),
+            transparent: opacity < 1,
+            opacity,
+            roughness: 0.75,
+            metalness: 0.05,
+          }),
+        )
 
-    const mesh = new THREE.Mesh(geo, material)
-    mesh.position.set(comp.position[0], comp.position[1], comp.position[2])
-    mesh.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2])
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    mesh.userData.layer = 'framing'
-    mesh.userData.id = comp.id
-    mesh.userData.componentType = comp.componentType
-    mesh.userData.label = comp.label
-    group.add(mesh)
+    if (obj instanceof THREE.Mesh) {
+      obj.castShadow = true
+      obj.receiveShadow = true
+    }
+    obj.position.set(comp.position[0], comp.position[1], comp.position[2])
+    obj.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+    obj.userData.layer = 'framing'
+    obj.userData.id = comp.id
+    obj.userData.componentType = comp.componentType
+    obj.userData.label = comp.label
+    group.add(obj)
   }
 }
 

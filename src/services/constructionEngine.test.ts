@@ -236,3 +236,58 @@ describe('decisions – ordering & smart-skip', () => {
     expect(shouldSmartSkip(studSize!)).toBe(false)
   })
 })
+
+describe('constructionEngine – steel framing', () => {
+  beforeEach(() => {
+    _resetIdCounter()
+  })
+
+  it('converts studs to C-studs and plates to track when material is steel', () => {
+    const walls = [makeWall()]
+    const result = buildFraming(walls, [], {
+      ...DEFAULT_OPTIONS,
+      material: 'steel',
+      steelWidth: '3-5/8',
+      steelGauge: '18',
+    })
+
+    const studs = result.components.filter((c) => c.componentType === 'stud')
+    expect(studs.length).toBeGreaterThan(0)
+    for (const s of studs) {
+      expect(s.material).toBe('steel')
+      expect(s.profile).toBe('c-stud')
+      expect(s.gauge).toBe('18')
+      // Web depth across the wall = 3-5/8" ≈ 92.1mm
+      expect(s.dimensions[2]).toBeCloseTo(0.0921, 3)
+    }
+
+    const plates = result.components.filter(
+      (c) => c.componentType === 'top-plate' || c.componentType === 'bottom-plate',
+    )
+    expect(plates.length).toBeGreaterThan(0)
+    for (const p of plates) {
+      expect(p.profile).toBe('track')
+      expect(p.label.toLowerCase()).toContain('track')
+    }
+  })
+
+  it('leaves a deflection gap by shortening steel studs', () => {
+    const walls = [makeWall()]
+    const wood = buildFraming(walls, [], DEFAULT_OPTIONS)
+    _resetIdCounter()
+    const steel = buildFraming(walls, [], { ...DEFAULT_OPTIONS, material: 'steel', steelDeflectionGapMm: 20 })
+
+    const woodStud = wood.components.find((c) => c.componentType === 'stud')!
+    const steelStud = steel.components.find((c) => c.componentType === 'stud')!
+    // Steel stud is shorter than the wood stud by the deflection gap (0.02m).
+    expect(woodStud.dimensions[1] - steelStud.dimensions[1]).toBeCloseTo(0.02, 3)
+  })
+
+  it('keeps wood framing as solid rectangles by default', () => {
+    const walls = [makeWall()]
+    const result = buildFraming(walls, [], DEFAULT_OPTIONS)
+    const stud = result.components.find((c) => c.componentType === 'stud')!
+    expect(stud.material ?? 'wood').toBe('wood')
+    expect(stud.profile ?? 'rect').toBe('rect')
+  })
+})

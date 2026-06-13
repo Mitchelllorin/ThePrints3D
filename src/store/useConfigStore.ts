@@ -72,6 +72,20 @@ export interface AppConfig {
   /** Corner framing style: three-stud (standard) or California/two-stud. */
   cornerType: 'three-stud' | 'california'
 
+  // ── Steel framing ───────────────────────────────────────────────────────────
+  /** Framing material — wood dimensional lumber or cold-formed steel. */
+  framingMaterial: 'wood' | 'steel'
+  /** Steel stud/track web width (nominal). */
+  steelWidth: '1-5/8' | '2-1/2' | '3-1/2' | '3-5/8' | '6' | '8'
+  /** Steel gauge, thin → heavy. */
+  steelGauge: '25' | '20' | '18' | '16' | '12'
+  /** Top track type (slotted/deflection by default — allows vertical movement). */
+  steelTrackTop: 'shallow' | 'deep' | 'slotted' | 'double'
+  /** Bottom track type (shallow by default). */
+  steelTrackBottom: 'shallow' | 'deep' | 'slotted' | 'double'
+  /** Deflection gap left at the top of steel studs (mm). */
+  steelDeflectionGapMm: number
+
   // ── Explode view ────────────────────────────────────────────────────────────
   /** How quickly the model eases toward the explode-slider target (per second). */
   explodeSpeed: number
@@ -97,6 +111,12 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   studSpacingIn: 16,
   defaultStudSize: '2x4',
   cornerType: 'three-stud',
+  framingMaterial: 'wood',
+  steelWidth: '3-5/8',
+  steelGauge: '25',
+  steelTrackTop: 'slotted',
+  steelTrackBottom: 'shallow',
+  steelDeflectionGapMm: 19,
   explodeSpeed: 4,
   explodeSpread: 1,
   explodeSystemMultipliers: {

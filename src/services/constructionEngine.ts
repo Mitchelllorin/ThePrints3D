@@ -664,6 +664,71 @@ export interface ConstructionEngineOptions {
   studSize?: string
   /** Corner framing style. Falls back to three-stud (standard). */
   cornerType?: 'three-stud' | 'california'
+  /** Framing material. Wood (default) keeps solid lumber; steel emits C-studs + track. */
+  material?: 'wood' | 'steel'
+  /** Steel web width (nominal, e.g. '3-5/8'). */
+  steelWidth?: string
+  /** Steel gauge for labels/BOM. */
+  steelGauge?: string
+  /** Top/bottom steel track types (for labels/BOM). */
+  steelTrackTop?: string
+  steelTrackBottom?: string
+  /** Deflection gap left at the top of steel studs (mm). */
+  steelDeflectionGapMm?: number
+}
+
+// Nominal steel stud/track web widths → actual mm.
+const STEEL_WIDTHS_MM: Record<string, number> = {
+  '1-5/8': 41.3,
+  '2-1/2': 63.5,
+  '3-1/2': 88.9,
+  '3-5/8': 92.1,
+  '6': 152.4,
+  '8': 203.2,
+}
+const STEEL_FLANGE_MM = 35 // ~1-3/8" flange run along the wall
+
+/**
+ * Transform an already-placed wood layout into cold-formed steel: studs become
+ * C-studs at the steel web width, plates become track (slotted top / shallow
+ * bottom), and studs are shortened to leave a deflection gap at the top. Done
+ * as a post-pass so the (correct) wood placement geometry is reused as-is.
+ */
+function applySteel(
+  components: PlacedComponent[],
+  opts: { widthMm: number; gauge: string; deflectionGapM: number; trackTop: string; trackBottom: string },
+): void {
+  const widthM = opts.widthMm / 1000
+  const flangeM = STEEL_FLANGE_MM / 1000
+  for (const c of components) {
+    c.material = 'steel'
+    const isVertical = c.componentType === 'stud' || c.componentType === 'king-stud'
+      || c.componentType === 'jack-stud' || c.componentType === 'cripple-stud'
+      || c.componentType === 'corner-assembly'
+    if (isVertical) {
+      c.profile = 'c-stud'
+      c.gauge = opts.gauge
+      // Corner assemblies keep their multi-stud along-wall width; single studs
+      // take the steel flange run. Depth across the wall = steel web width.
+      if (c.componentType !== 'corner-assembly') c.dimensions[0] = flangeM
+      c.dimensions[2] = widthM
+      // Deflection gap: shorten the stud and drop its top, leaving room to move.
+      c.dimensions[1] = Math.max(0.05, c.dimensions[1] - opts.deflectionGapM)
+      c.position[1] -= opts.deflectionGapM / 2
+      c.label = `Steel C-stud ${opts.gauge}ga`
+    } else if (c.componentType === 'top-plate' || c.componentType === 'bottom-plate') {
+      c.profile = 'track'
+      c.gauge = opts.gauge
+      c.dimensions[2] = widthM
+      const top = c.componentType === 'top-plate'
+      c.label = top ? `Top track (${opts.trackTop})` : `Bottom track (${opts.trackBottom})`
+    } else {
+      // Headers etc. stay solid (steel box beam), just retagged as steel.
+      c.profile = 'rect'
+      c.gauge = opts.gauge
+      c.dimensions[2] = widthM
+    }
+  }
 }
 
 export function buildFraming(
@@ -731,6 +796,18 @@ export function buildFraming(
   // Corner assemblies
   const corners = findCorners(geometries)
   components.push(...placeCornerAssemblies(corners, geometries, studSize, options.cornerType ?? 'three-stud'))
+
+  // Steel: convert the wood layout into cold-formed C-studs + track.
+  if (options.material === 'steel') {
+    const widthMm = STEEL_WIDTHS_MM[options.steelWidth ?? '3-5/8'] ?? STEEL_WIDTHS_MM['3-5/8']
+    applySteel(components, {
+      widthMm,
+      gauge: options.steelGauge ?? '25',
+      deflectionGapM: (options.steelDeflectionGapMm ?? 19) / 1000,
+      trackTop: options.steelTrackTop ?? 'slotted',
+      trackBottom: options.steelTrackBottom ?? 'shallow',
+    })
+  }
 
   // Decisions
   const decisions = buildFramingDecisions(buildingType, framedWalls.length, openings.length)

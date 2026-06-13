@@ -107,6 +107,30 @@ const EXPLODE_SYSTEMS: Array<{ key: string; label: string }> = [
   { key: 'foundation', label: 'Foundation' },
 ]
 
+const STEEL_WIDTH_OPTIONS = [
+  { value: '1-5/8', label: '1-5/8"' },
+  { value: '2-1/2', label: '2-1/2"' },
+  { value: '3-1/2', label: '3-1/2"' },
+  { value: '3-5/8', label: '3-5/8" (interior)' },
+  { value: '6', label: '6"' },
+  { value: '8', label: '8"' },
+]
+
+const STEEL_GAUGE_OPTIONS = [
+  { value: '25', label: '25 ga (interior)' },
+  { value: '20', label: '20 ga' },
+  { value: '18', label: '18 ga (load-bearing)' },
+  { value: '16', label: '16 ga' },
+  { value: '12', label: '12 ga (heavy)' },
+]
+
+const STEEL_TRACK_OPTIONS = [
+  { value: 'shallow', label: 'Shallow' },
+  { value: 'deep', label: 'Deep' },
+  { value: 'slotted', label: 'Slotted / deflection' },
+  { value: 'double', label: 'Legacy double-track' },
+]
+
 const BUILD_TYPE_OPTIONS: Array<{ value: BuildingType; label: string }> = [
   { value: 'residential-single', label: 'Residential (single)' },
   { value: 'residential-multi', label: 'Residential (multi)' },
@@ -156,9 +180,18 @@ function SettingsContent() {
       </CollapsibleSection>
 
       <CollapsibleSection id="framing" title="Framing" openId={openId} setOpenId={setOpenId}>
+        <Select label="Material" val={cfg.framingMaterial} options={[{ value: 'wood', label: 'Wood' }, { value: 'steel', label: 'Steel (CFS)' }]} onChange={(v) => setCfg({ framingMaterial: v as 'wood' | 'steel' })} />
         <Select label="Stud spacing" val={String(cfg.studSpacingIn)} options={[{ value: '16', label: '16" OC' }, { value: '24', label: '24" OC' }]} onChange={(v) => setCfg({ studSpacingIn: Number(v) as 16 | 24 })} />
         <Select label="Wall depth" val={cfg.defaultStudSize} options={[{ value: '2x4', label: '2×4 (3-1/2")' }, { value: '2x6', label: '2×6 (5-1/2")' }]} onChange={(v) => setCfg({ defaultStudSize: v as '2x4' | '2x6' })} />
         <Select label="Corner" val={cfg.cornerType} options={[{ value: 'three-stud', label: 'Three-stud' }, { value: 'california', label: 'California (2-stud)' }]} onChange={(v) => setCfg({ cornerType: v as 'three-stud' | 'california' })} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="steel" title="Steel" openId={openId} setOpenId={setOpenId}>
+        <Select label="Width" val={cfg.steelWidth} options={STEEL_WIDTH_OPTIONS} onChange={(v) => setCfg({ steelWidth: v as typeof cfg.steelWidth })} />
+        <Select label="Gauge" val={cfg.steelGauge} options={STEEL_GAUGE_OPTIONS} onChange={(v) => setCfg({ steelGauge: v as typeof cfg.steelGauge })} />
+        <Select label="Top track" val={cfg.steelTrackTop} options={STEEL_TRACK_OPTIONS} onChange={(v) => setCfg({ steelTrackTop: v as typeof cfg.steelTrackTop })} />
+        <Select label="Bottom track" val={cfg.steelTrackBottom} options={STEEL_TRACK_OPTIONS} onChange={(v) => setCfg({ steelTrackBottom: v as typeof cfg.steelTrackBottom })} />
+        <Slider label="Deflection gap" val={cfg.steelDeflectionGapMm} min={0} max={40} step={1} unit="mm" onChange={(v) => setCfg({ steelDeflectionGapMm: v })} />
       </CollapsibleSection>
 
       <CollapsibleSection id="build" title="Build output" openId={openId} setOpenId={setOpenId}>

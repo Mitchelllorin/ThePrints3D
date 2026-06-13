@@ -84,6 +84,12 @@ export interface PlacedComponent {
   dimensions: [number, number, number]
   /** Human-readable label for UI/tooltips */
   label: string
+  /** Framing material. Defaults to wood when absent. */
+  material?: 'wood' | 'steel'
+  /** Render profile: solid rectangle (wood), steel C-stud, or steel track. */
+  profile?: 'rect' | 'c-stud' | 'track'
+  /** Steel gauge (e.g. '25', '18') for labels/BOM. */
+  gauge?: string
 }
 
 // ─── Build result ───────────────────────────────────────────────────────────

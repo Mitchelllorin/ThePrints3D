@@ -1171,7 +1171,8 @@ export const useAppStore = create<AppState>()(
       const allWalls = allParsed.flatMap((d) => d.parsedWalls)
       const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
 
-      const { buildFloorHeightM, buildType, buildAutoEnableFraming, studSpacingIn, defaultStudSize, cornerType } = useConfigStore.getState()
+      const cfg = useConfigStore.getState()
+      const { buildFloorHeightM, buildType, buildAutoEnableFraming, studSpacingIn, defaultStudSize, cornerType } = cfg
       const result = buildFraming(allWalls, allOpenings, {
         scaleMmPerPx,
         floorHeightM: buildFloorHeightM,
@@ -1179,6 +1180,12 @@ export const useAppStore = create<AppState>()(
         spacingMm: studSpacingIn * 25.4,
         studSize: defaultStudSize,
         cornerType,
+        material: cfg.framingMaterial,
+        steelWidth: cfg.steelWidth,
+        steelGauge: cfg.steelGauge,
+        steelTrackTop: cfg.steelTrackTop,
+        steelTrackBottom: cfg.steelTrackBottom,
+        steelDeflectionGapMm: cfg.steelDeflectionGapMm,
       })
 
       set((s) => {
