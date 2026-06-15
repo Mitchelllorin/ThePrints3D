@@ -56,6 +56,28 @@ export interface ParsedWall {
   typeConfidence?: number
 }
 
+/**
+ * A furniture/fixture item placed by the user into the 3D scene.
+ * Position is in world metres (X/Z ground plane); dimensions come from the
+ * catalog default and may be tweaked via the per-axis scale factors.
+ */
+export interface PlacedObject {
+  id: string
+  /** Catalog type key, e.g. 'sofa' | 'door' */
+  type: string
+  /** World position on the ground plane (metres) */
+  x: number
+  z: number
+  /** Rotation about the vertical (Y) axis, radians */
+  rotationY: number
+  /** Per-axis scale factors applied to the catalog default dimensions */
+  scaleX: number
+  scaleZ: number
+  scaleY: number
+  /** Human-readable label shown in the UI */
+  label: string
+}
+
 /** A room (enclosed region) detected by flood-filling the rasterized image. */
 export interface ParsedRoom {
   id: string

@@ -15,6 +15,7 @@ import type {
   LayerId,
   Measurement,
   Model3D,
+  PlacedObject,
   UserTrace,
   WallType,
   WorkspaceWizardInputs,
@@ -215,6 +216,7 @@ interface WorkspaceHistorySnapshot {
   }>
   layers: Array<Pick<Layer, 'id' | 'visible' | 'opacity'>>
   productPlacements: ProductPlacement[]
+  placedObjects: PlacedObject[]
   annotations: Annotation[]
   measurements: Measurement[]
   userTraces: UserTrace[]
@@ -257,6 +259,8 @@ interface AppState {
   cameraPreset: CameraPreset | null
   productCatalog: ProductCatalogItem[]
   productPlacements: ProductPlacement[]
+  /** User-placed furniture/fixtures in the 3D scene */
+  placedObjects: PlacedObject[]
   wizardInputs: WorkspaceWizardInputs | null
   wizardState: ProjectContextWizardState
   floorplanOverlay: FloorplanOverlayState
@@ -294,6 +298,8 @@ interface AppState {
   setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
   addUserTracedWall: (id: string, wall: ParsedWall) => void
   addUserTracedWalls: (id: string, walls: ParsedWall[]) => void
+  /** Delete a single user-traced wall by its index within the drawing's user walls. */
+  deleteUserWall: (id: string, userIndex: number) => void
   clearUserTracedWalls: (id: string) => void
   clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
@@ -349,6 +355,10 @@ interface AppState {
   clearBuildResult: () => void
   setPreviewMode: (on: boolean) => void
   setExplodeAmount: (amount: number) => void
+  // Placed objects (furniture/fixtures)
+  addPlacedObject: (obj: PlacedObject) => void
+  removePlacedObject: (id: string) => void
+  updatePlacedObject: (id: string, patch: Partial<PlacedObject>) => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -425,6 +435,7 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
       opacity: l.opacity,
     })),
     productPlacements: state.productPlacements,
+    placedObjects: state.placedObjects,
     annotations: state.annotations,
     measurements: state.measurements,
     userTraces: state.userTraces,
@@ -462,6 +473,7 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
     layer.opacity = layerPatch.opacity
   }
   state.productPlacements = deepCopy(snapshot.productPlacements)
+  state.placedObjects = deepCopy(snapshot.placedObjects ?? [])
   state.annotations = deepCopy(snapshot.annotations)
   state.measurements = deepCopy(snapshot.measurements)
   state.userTraces = deepCopy(snapshot.userTraces)
@@ -503,6 +515,7 @@ export const useAppStore = create<AppState>()(
     cameraPreset: null,
     productCatalog: [],
     productPlacements: [],
+    placedObjects: [],
     wizardInputs: null,
     wizardState: loadWizardState(),
     floorplanOverlay: deepCopy(DEFAULT_FLOORPLAN_OVERLAY),
@@ -660,6 +673,21 @@ export const useAppStore = create<AppState>()(
           ...d.parsedWalls.filter((w) => w.source === 'user'),
           ...walls.map((w) => ({ ...w, source: 'user' as const, detectionConfidence: 1 })),
         ])
+        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+      })
+    },
+
+    // Remove a single user-traced wall (identified by its index among the
+    // drawing's user walls, matching the order the overlay/UI iterate them).
+    deleteUserWall: (id, userIndex) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+        if (userIndex < 0 || userIndex >= userWalls.length) return
+        userWalls.splice(userIndex, 1)
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
       })
     },
@@ -1292,6 +1320,29 @@ export const useAppStore = create<AppState>()(
     setExplodeAmount: (amount) => {
       set((s) => {
         s.explodeAmount = Math.max(0, Math.min(1, amount))
+      })
+    },
+
+    // ─── Placed objects (furniture / fixtures) ────────────────────────
+    addPlacedObject: (obj) => {
+      pushHistory()
+      set((s) => {
+        s.placedObjects.push(obj)
+      })
+    },
+
+    removePlacedObject: (id) => {
+      pushHistory()
+      set((s) => {
+        s.placedObjects = s.placedObjects.filter((o) => o.id !== id)
+      })
+    },
+
+    updatePlacedObject: (id, patch) => {
+      pushHistory()
+      set((s) => {
+        const obj = s.placedObjects.find((o) => o.id === id)
+        if (obj) Object.assign(obj, patch)
       })
     },
     }

@@ -9,6 +9,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm } from '../../services/unitConverter'
+import { OBJECT_CATALOG, getCatalogItem } from '../../data/objectCatalog'
 import styles from './AmbientGuide.module.css'
 
 // Scale assumed before the user has calibrated, so the live estimate has
@@ -34,6 +35,11 @@ export default function FloorplanPanel() {
   const canUndo         = useAppStore((s) => s.historyPast.length > 0)
   const userTraces      = useAppStore((s) => s.userTraces)
   const processWithSeeds = useAppStore((s) => s.processWithSeeds)
+  const deleteUserWall  = useAppStore((s) => s.deleteUserWall)
+  const placedObjects   = useAppStore((s) => s.placedObjects)
+  const removePlacedObject = useAppStore((s) => s.removePlacedObject)
+  const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
+  const modelReady      = useAppStore((s) => s.model.status === 'ready')
 
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
   const setTraceMode   = useFloorplanLocalStore((s) => s.setTraceMode)
@@ -54,6 +60,12 @@ export default function FloorplanPanel() {
   const pendingWalls   = useFloorplanLocalStore((s) => s.pendingWalls)
   const setPendingWalls = useFloorplanLocalStore((s) => s.setPendingWalls)
   const seedProcessing = useFloorplanLocalStore((s) => s.seedProcessing)
+  const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
+  const setSelectedWallIndex = useFloorplanLocalStore((s) => s.setSelectedWallIndex)
+  const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
+  const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
+  const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
+  const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
 
   // The ONE active unit — calibration estimate, input, and label all read it.
   const activeUnit     = useConfigStore((s) => s.activeUnit)
@@ -223,6 +235,25 @@ export default function FloorplanPanel() {
   // Tracing/building is reachable once calibration is set OR explicitly skipped.
   const calibrationCleared = isCalibrated || calibrationHandled
   const hasWalls     = drawing.parsedWalls.length > 0
+
+  // ── editing (post-build): wall + object selection ───────────────────────
+  const editMode = !overlay.calibrationMode && !traceMode
+  const userWalls = drawing.parsedWalls.filter((w) => w.source === 'user')
+  const selectedObject = placedObjects.find((o) => o.id === selectedObjectId) ?? null
+  const selectedObjItem = selectedObject ? getCatalogItem(selectedObject.type) : null
+
+  const deleteSelectedWall = () => {
+    if (selectedWallIndex == null) return
+    deleteUserWall(drawing.id, selectedWallIndex)
+    setSelectedWallIndex(null)
+    if (modelReady) buildModel()
+  }
+
+  const deleteSelectedObject = () => {
+    if (!selectedObject) return
+    removePlacedObject(selectedObject.id)
+    setSelectedObjectId(null)
+  }
 
   return (
     <>
@@ -428,6 +459,68 @@ export default function FloorplanPanel() {
               </>
             )}
           </div>
+        )}
+
+        {/* ── Selected wall (post-build edit) ── */}
+        {editMode && selectedWallIndex != null && userWalls[selectedWallIndex] && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>Wall selected</span>
+            <span className={styles.stepHint}>Wall {selectedWallIndex + 1} of {userWalls.length}</span>
+            <div className={styles.btnRow}>
+              <button className={styles.action} onClick={deleteSelectedWall}>🗑 Delete wall</button>
+              <button className={styles.secondary} onClick={() => setSelectedWallIndex(null)}>Deselect</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Selected object (info card + transform) ── */}
+        {editMode && selectedObject && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>{selectedObject.label}</span>
+            {selectedObjItem && (
+              <span className={styles.stepHint}>
+                {(selectedObjItem.defaultW * selectedObject.scaleX).toFixed(2)} × {(selectedObjItem.defaultD * selectedObject.scaleZ).toFixed(2)} × {(selectedObjItem.defaultH * selectedObject.scaleY).toFixed(2)} m · drag to move, knob to rotate
+              </span>
+            )}
+            <div className={styles.btnRow}>
+              <button className={styles.secondary} onClick={() => updatePlacedObject(selectedObject.id, { rotationY: selectedObject.rotationY + Math.PI / 2 })}>
+                ⟳ Rotate 90°
+              </button>
+              <button className={styles.action} onClick={deleteSelectedObject}>🗑 Delete</button>
+              <button className={styles.secondary} onClick={() => setSelectedObjectId(null)}>Deselect</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Objects palette (place furniture/fixtures) ── */}
+        {editMode && drawing.status === 'ready' && (
+          <details className={styles.details}>
+            <summary className={styles.detailsSummary}>Objects</summary>
+            <div className={styles.detailsBody}>
+              {placeObjectType ? (
+                <>
+                  <span className={styles.stepHint}>
+                    Click on the plan to place “{getCatalogItem(placeObjectType)?.label ?? placeObjectType}”.
+                  </span>
+                  <button className={styles.secondary} onClick={() => setPlaceObjectType(null)}>
+                    Cancel placement
+                  </button>
+                </>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                  {OBJECT_CATALOG.map((item) => (
+                    <button
+                      key={item.type}
+                      className={styles.secondary}
+                      onClick={() => { setPlaceObjectType(item.type); setSelectedObjectId(null); setSelectedWallIndex(null) }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </details>
         )}
 
         {/* ── Overlay fine-tuning (always accessible, collapsed by default) ── */}

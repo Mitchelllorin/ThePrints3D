@@ -18,6 +18,7 @@ import ConstructionWizard from '../ConstructionWizard/ConstructionWizard'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
+import PlacedObjectsLayer from './PlacedObjectsLayer'
 import FloatingLogo3D from './FloatingLogo3D'
 import styles from './ModelViewer.module.css'
 
@@ -477,6 +478,7 @@ export default function ModelViewer() {
         <FloatingLogo3D />
         <FloorplanOverlay />
         <LiveWallsLayer />
+        <PlacedObjectsLayer />
 
         {model.status === 'building' && <BuildingProgress />}
         {(model.status === 'building' || model.status === 'ready') && (

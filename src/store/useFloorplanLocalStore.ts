@@ -52,6 +52,14 @@ interface FloorplanLocalState {
   // ─── drag ────────────────────────────────────────────────────────
   drag: DragState | null
 
+  // ─── editing / selection ─────────────────────────────────────────
+  /** Index (within a drawing's user walls) of the selected wall, or null. */
+  selectedWallIndex: number | null
+  /** Catalog type currently armed for placement (next canvas click drops it). */
+  placeObjectType: string | null
+  /** Id of the currently selected placed object, or null. */
+  selectedObjectId: string | null
+
   // ─── UI toggles ──────────────────────────────────────────────────
   presetOpen: boolean
   practiceMode: boolean
@@ -71,6 +79,9 @@ interface FloorplanLocalState {
   setDistanceUnit: (v: CalibrationUnit) => void
   setPendingTraceAfterCalibration: (v: boolean) => void
   setDrag: (v: DragState | null) => void
+  setSelectedWallIndex: (v: number | null) => void
+  setPlaceObjectType: (v: string | null) => void
+  setSelectedObjectId: (v: string | null) => void
   setPresetOpen: (v: boolean) => void
   setPracticeMode: (v: boolean) => void
   setSeedProcessing: (v: boolean) => void
@@ -88,6 +99,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   calibrationA: null,
   calibrationB: null,
   distanceInput: '',
+  selectedWallIndex: null,
+  placeObjectType: null,
+  selectedObjectId: null,
   calibrationHandledIds: [],
   distanceUnit: 'mm',
   pendingTraceAfterCalibration: false,
@@ -119,6 +133,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setDistanceUnit: (v) => set({ distanceUnit: v }),
   setPendingTraceAfterCalibration: (v) => set({ pendingTraceAfterCalibration: v }),
   setDrag: (v) => set({ drag: v }),
+  setSelectedWallIndex: (v) => set({ selectedWallIndex: v }),
+  setPlaceObjectType: (v) => set({ placeObjectType: v }),
+  setSelectedObjectId: (v) => set({ selectedObjectId: v }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),
   setSeedProcessing: (v) => set({ seedProcessing: v }),

@@ -3,10 +3,11 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import type { Drawing, FloorLevel, FloorplanOverlayState, Layer, ParsedOpening, ParsedRoom, ParsedWall } from '../../types'
+import type { Drawing, FloorLevel, FloorplanOverlayState, Layer, ParsedRoom, ParsedWall } from '../../types'
 import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { getCatalogItem } from '../../data/objectCatalog'
 
 interface Props {
   layers: Layer[]
@@ -115,6 +116,17 @@ function footprintOfTransformed(walls: ParsedWall[], t: DrawingTransform): Footp
 
 // ─── Real geometry from detected walls ────────────────────────────────────────
 
+/** A user-placed door/window in world space, to be cut into a wall. */
+interface OpeningSpec {
+  x: number
+  z: number
+  /** Clear opening width along the wall, metres */
+  width: number
+  /** Clear opening height from the floor, metres */
+  height: number
+  type: 'door' | 'window'
+}
+
 function buildRealWalls(
   group: THREE.Group,
   walls: ParsedWall[],
@@ -125,6 +137,7 @@ function buildRealWalls(
   userWallMat: THREE.MeshStandardMaterial,
   layerId: string,
   defaultThicknessM: number,
+  openings: OpeningSpec[] = [],
 ) {
   // Pre-compute metric geometry for every wall so we can clean up corners.
   // Coordinates come from the drawing's transform so the build lands exactly
@@ -140,6 +153,7 @@ function buildRealWalls(
   })
 
   const JOIN_TOL = 0.06  // metres — endpoints this close are treated as one corner
+  const wallTop = floorHeight - 0.15
 
   // Trim a wall end back to its neighbour's face so corners read clean: at a
   // shared corner the lowest-index wall runs through and the others butt into
@@ -154,6 +168,33 @@ function buildRealWalls(
     return trim
   }
 
+  // Assign each placed opening to the nearest wall segment it sits on. A door
+  // dropped within ~20px (of the print) of a wall line snaps onto it.
+  const perpTol = Math.max(0.4, 20 * transform.mPerPx)
+  const openingsBySeg = new Map<number, Array<{ t: number; width: number; height: number }>>()
+  for (const op of openings) {
+    let bestI = -1, bestPerp = Infinity, bestT = 0
+    segs.forEach((s, i) => {
+      if (s.len < 0.1) return
+      const ux = (s.x2 - s.x1) / s.len, uz = (s.z2 - s.z1) / s.len
+      const dx = op.x - s.x1, dz = op.z - s.z1
+      const t = dx * ux + dz * uz
+      if (t < 0 || t > s.len) return
+      const perp = Math.abs(-dx * uz + dz * ux)
+      if (perp < bestPerp) { bestPerp = perp; bestI = i; bestT = t }
+    })
+    if (bestI >= 0 && bestPerp <= perpTol + segs[bestI].thick) {
+      const arr = openingsBySeg.get(bestI) ?? []
+      arr.push({ t: bestT, width: op.width, height: op.height })
+      openingsBySeg.set(bestI, arr)
+    }
+  }
+
+  const headerMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(FRAMING_COLORS['header']), roughness: 0.7 })
+  const studMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(FRAMING_COLORS['king-stud']), roughness: 0.7 })
+  const STUD_W = 0.05
+  const HEADER_THK = 0.2
+
   segs.forEach((seg, i) => {
     if (seg.len < 0.1) return  // skip tiny segments (<10cm)
     const ux = (seg.x2 - seg.x1) / seg.len
@@ -164,17 +205,63 @@ function buildRealWalls(
     if (len < 0.05) return  // consumed by trims
 
     const ax = seg.x1 + ux * trimA, az = seg.z1 + uz * trimA
-    const bx = seg.x2 - ux * trimB, bz = seg.z2 - uz * trimB
-    const angle = Math.atan2(bz - az, bx - ax)
+    const angle = Math.atan2(seg.z2 - seg.z1, seg.x2 - seg.x1)
+    const thick = seg.thick
+    const bodyMat = seg.w.source === 'user' ? userWallMat : wallMat
 
-    const geo = new THREE.BoxGeometry(len, floorHeight - 0.15, seg.thick)
-    const mesh = new THREE.Mesh(geo, seg.w.source === 'user' ? userWallMat : wallMat)
-    mesh.position.set((ax + bx) / 2, elevation + floorHeight / 2, (az + bz) / 2)
-    mesh.rotation.y = -angle
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    mesh.userData.layer = layerId
-    group.add(mesh)
+    // Place a box oriented along this wall. `tCenter` is the distance along the
+    // wall from `a`; the box spans `lengthAlong` and rises `height` from `yBottom`.
+    const placeAlong = (
+      tCenter: number, lengthAlong: number, yBottom: number, height: number,
+      depthAcross: number, material: THREE.MeshStandardMaterial,
+    ) => {
+      if (lengthAlong <= 0.001 || height <= 0.001) return
+      const wx = ax + ux * tCenter
+      const wz = az + uz * tCenter
+      const m = new THREE.Mesh(new THREE.BoxGeometry(lengthAlong, height, depthAcross), material)
+      m.position.set(wx, elevation + yBottom + height / 2, wz)
+      m.rotation.y = -angle
+      m.castShadow = true
+      m.receiveShadow = true
+      m.userData.layer = layerId
+      group.add(m)
+    }
+
+    // Openings on this wall, mapped to trimmed-wall distance, clamped & sorted.
+    const ops = (openingsBySeg.get(i) ?? [])
+      .map((o) => {
+        const c = o.t - trimA
+        const w = Math.min(o.width, len - 0.1)
+        const h = Math.min(o.height, wallTop - HEADER_THK - 0.05)
+        return { c, w, h, s0: c - w / 2, s1: c + w / 2 }
+      })
+      .filter((o) => o.w > 0.05 && o.h > 0.1 && o.s1 > 0.05 && o.s0 < len - 0.05)
+      .map((o) => ({ ...o, s0: Math.max(0, o.s0), s1: Math.min(len, o.s1) }))
+      .sort((a, b) => a.s0 - b.s0)
+
+    if (ops.length === 0) {
+      placeAlong(len / 2, len, 0, wallTop, thick, bodyMat)
+      return
+    }
+
+    let cursor = 0
+    for (const o of ops) {
+      // Solid full-height wall up to the opening.
+      if (o.s0 - cursor > 0.02) placeAlong((cursor + o.s0) / 2, o.s0 - cursor, 0, wallTop, thick, bodyMat)
+      // "Header above" — the wall piece spanning the opening above the header.
+      placeAlong(o.c, o.w, o.h, wallTop - o.h, thick, bodyMat)
+      // Header beam at the top of the clear opening (proud so it reads as framing).
+      placeAlong(o.c, o.w + STUD_W * 2, o.h, HEADER_THK, thick + 0.04, headerMat)
+      // Jack studs carry the header — full opening height, just inside the edges.
+      placeAlong(o.s0 + STUD_W / 2, STUD_W, 0, o.h, thick + 0.04, studMat)
+      placeAlong(o.s1 - STUD_W / 2, STUD_W, 0, o.h, thick + 0.04, studMat)
+      // King studs beside the jacks — full wall height.
+      placeAlong(o.s0 - STUD_W / 2, STUD_W, 0, wallTop, thick + 0.04, studMat)
+      placeAlong(o.s1 + STUD_W / 2, STUD_W, 0, wallTop, thick + 0.04, studMat)
+      cursor = o.s1
+    }
+    // Remaining solid wall after the last opening.
+    if (len - cursor > 0.02) placeAlong((cursor + len) / 2, len - cursor, 0, wallTop, thick, bodyMat)
   })
 }
 
@@ -235,7 +322,6 @@ const SCENE_MODULE_ORDER = [
   'floors',
   'walls',
   'rooms',
-  'openings',
   'ceiling',
   'structure',
   'mep',
@@ -497,50 +583,6 @@ function buildRoomPlates(
   })
 }
 
-// ─── Opening markers ──────────────────────────────────────────────────────────
-
-function buildOpeningMarkers(
-  group: THREE.Group,
-  openings: ParsedOpening[],
-  transform: DrawingTransform,
-  elevation: number,
-  floorHeight: number,
-  doorColor: string,
-  windowColor: string,
-  layerId: string
-) {
-  for (const op of openings) {
-    const [ox, oz] = transform.toWorld(op.x, op.y)
-    const widthM = Math.max(op.widthPx * transform.mPerPx, 0.05)
-
-    const isDoor = op.type === 'door'
-    const markerH = isDoor ? floorHeight * 0.85 : floorHeight * 0.45
-    const markerY = isDoor ? elevation + markerH / 2 : elevation + floorHeight * 0.35 + markerH / 2
-    const color = isDoor ? doorColor : windowColor
-
-    const markerW = widthM
-    const markerD = 0.05  // thin slab
-
-    const geoW = op.orientation === 'horizontal' ? markerW : markerD
-    const geoD = op.orientation === 'horizontal' ? markerD : markerW
-
-    const geo = new THREE.BoxGeometry(geoW, markerH, geoD)
-    const mesh = new THREE.Mesh(
-      geo,
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(color),
-        transparent: true,
-        opacity: 0.6,
-        roughness: 0.4,
-      }),
-    )
-    mesh.position.set(ox, markerY, oz)
-    mesh.rotation.y = transform.yawRad
-    mesh.userData.layer = layerId
-    group.add(mesh)
-  }
-}
-
 // ─── Framing from Construction Engine ─────────────────────────────────────────
 
 const FRAMING_COLORS: Record<string, string> = {
@@ -640,6 +682,7 @@ export default function BuildingModel({ layers }: Props) {
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const overlay = useAppStore((s) => s.floorplanOverlay)
+  const placedObjects = useAppStore((s) => s.placedObjects)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
   const explodeAmount = useAppStore((s) => s.explodeAmount)
   const explodeSpeed = useConfigStore((s) => s.explodeSpeed)
@@ -759,6 +802,20 @@ export default function BuildingModel({ layers }: Props) {
       (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0,
     )
 
+    // User-placed doors/windows become real openings cut into the wall meshes.
+    const openingSpecs: OpeningSpec[] = placedObjects
+      .filter((o) => o.type === 'door' || o.type === 'window')
+      .map((o) => {
+        const item = getCatalogItem(o.type)
+        return {
+          x: o.x,
+          z: o.z,
+          width: (item?.defaultW ?? 0.9) * o.scaleX,
+          height: (item?.defaultH ?? 2) * o.scaleY,
+          type: o.type as 'door' | 'window',
+        }
+      })
+
     buildFoundation(group, fp, sceneConfig.foundationType)
 
     for (const level of floorLevels) {
@@ -801,6 +858,7 @@ export default function BuildingModel({ layers }: Props) {
                   userWMat,
                   'walls',
                   sceneConfig.defaultWallThicknessM,
+                  openingSpecs,
                 )
               }
             } else if (conceptMode) {
@@ -818,25 +876,8 @@ export default function BuildingModel({ layers }: Props) {
             }
             break
           }
-          case 'openings': {
-            const dwLayer = layerMap.get('doors-windows')
-            if (!dwLayer?.visible) break
-            for (const d of wallDrawings) {
-              if (d.parsedOpenings.length > 0) {
-                buildOpeningMarkers(
-                  group,
-                  d.parsedOpenings,
-                  transforms.get(d.id)!,
-                  elev,
-                  fh,
-                  '#7dd3fc',
-                  '#a5b4fc',
-                  'doors-windows',
-                )
-              }
-            }
-            break
-          }
+          // Openings are no longer separate markers — user-placed doors/windows
+          // are cut directly into the wall meshes (see buildRealWalls).
           case 'ceiling': {
             const ceilLayer = layerMap.get('ceiling')
             const hasRCP = floorDrawings.some((d) => d.type === 'rcp') || sceneConfig.specialFeatures.length > 0
@@ -899,7 +940,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects])
 
   // Explode driver: each frame, ease the current progress toward the slider
   // target and fan every component out along its vector from the model centre,

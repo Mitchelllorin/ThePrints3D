@@ -24,6 +24,12 @@ import {
   snapPointToWalls,
   snapTraceWallToExisting,
 } from '../../services/wallTraceReducer'
+import { getCatalogItem } from '../../data/objectCatalog'
+
+let _objectSeq = 0
+function genObjectId() {
+  return `obj-${_objectSeq++}-${Math.round(performance.now())}`
+}
 
 const DEFAULT_WIDTH = 12
 const DEFAULT_DEPTH = 8
@@ -77,6 +83,7 @@ export default function FloorplanOverlay() {
   const checkpointHistory = useAppStore((s) => s.checkpointHistory)
   const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
   const addTrace = useAppStore((s) => s.addTrace)
+  const addPlacedObject = useAppStore((s) => s.addPlacedObject)
 
   const gridSnapM = useConfigStore((s) => s.gridSnapM)
   const wallTraceStyle = useConfigStore((s) => s.wallTraceStyle)
@@ -97,6 +104,11 @@ export default function FloorplanOverlay() {
   const setCalibrationB = useFloorplanLocalStore((s) => s.setCalibrationB)
   const drag = useFloorplanLocalStore((s) => s.drag)
   const setDrag = useFloorplanLocalStore((s) => s.setDrag)
+  const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
+  const setSelectedWallIndex = useFloorplanLocalStore((s) => s.setSelectedWallIndex)
+  const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
+  const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
+  const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageUrl = drawing ? (drawing.rasterUrl ?? drawing.previewUrl) : null
@@ -295,14 +307,24 @@ export default function FloorplanOverlay() {
     const out = walls.map((w) => ({ ...w }))
     const first = out[0]
     const last = out[out.length - 1]
+    // Snap the two FREE ends of the chain onto nearby existing endpoints/lines.
     const s = snapPointToWalls(first.x1, first.y1, existing)
     first.x1 = s.x; first.y1 = s.y
     const e = snapPointToWalls(last.x2, last.y2, existing)
     last.x2 = e.x; last.y2 = e.y
-    const extFirst = extendWallToNearbyWall(first, existing)
-    first.x1 = extFirst.x1; first.y1 = extFirst.y1
-    const extLast = extendWallToNearbyWall(last, existing)
-    last.x2 = extLast.x2; last.y2 = extLast.y2
+    // Extend EVERY segment toward nearby existing walls so any endpoint that
+    // nearly meets a detected line auto-extends to touch it. `existing` excludes
+    // the chain's own siblings, so interior corners aren't pulled apart here…
+    for (const w of out) {
+      const ext = extendWallToNearbyWall(w, existing)
+      w.x1 = ext.x1; w.y1 = ext.y1; w.x2 = ext.x2; w.y2 = ext.y2
+    }
+    // …then re-stitch interior corners so consecutive segments keep an exact
+    // shared point even if one side happened to extend.
+    for (let i = 1; i < out.length; i++) {
+      out[i].x1 = out[i - 1].x2
+      out[i].y1 = out[i - 1].y2
+    }
     return out
   }
 
@@ -324,6 +346,46 @@ export default function FloorplanOverlay() {
       return []
     })
     setHoverPixel(null)
+  }
+
+  // ─── object placement + wall selection (non-trace edit mode) ────────────
+  const userWalls = useMemo(
+    () => (drawing ? drawing.parsedWalls.filter((w) => w.source === 'user') : []),
+    [drawing],
+  )
+  // Edit mode = not tracing, not calibrating, not dragging the overlay handles.
+  const editMode = !traceMode && !overlay.calibrationMode && !drag
+  // Click-target half-width for walls, ~20px of the print mapped to metres.
+  const wallPickWidthM = Math.max(0.25, 20 * (width / imageWidth))
+
+  // Leaving trace/calibration clears any stale selection or armed placement.
+  useEffect(() => {
+    if (traceMode || overlay.calibrationMode) {
+      setSelectedWallIndex(null)
+      setSelectedObjectId(null)
+      setPlaceObjectType(null)
+    }
+  }, [traceMode, overlay.calibrationMode, setSelectedWallIndex, setSelectedObjectId, setPlaceObjectType])
+
+  const handlePlaceObject = (event: ThreeEvent<PointerEvent>) => {
+    if (!placeObjectType) return
+    event.stopPropagation()
+    const item = getCatalogItem(placeObjectType)
+    const id = genObjectId()
+    addPlacedObject({
+      id,
+      type: placeObjectType,
+      x: event.point.x,
+      z: event.point.z,
+      rotationY: 0,
+      scaleX: 1,
+      scaleZ: 1,
+      scaleY: 1,
+      label: item?.label ?? placeObjectType,
+    })
+    setPlaceObjectType(null)
+    setSelectedObjectId(id)
+    setSelectedWallIndex(null)
   }
 
   // ─── render (Three.js only) ────────────────────────────────────────────
@@ -358,6 +420,18 @@ export default function FloorplanOverlay() {
             >
               <planeGeometry args={[width, depth]} />
               <meshBasicMaterial transparent opacity={0.02} color="#ffffff" side={THREE.DoubleSide} />
+            </mesh>
+          )}
+
+          {/* Object placement: a click anywhere on the print drops the armed item. */}
+          {placeObjectType && (
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[0, 0.03, 0]}
+              onPointerDown={handlePlaceObject}
+            >
+              <planeGeometry args={[width, depth]} />
+              <meshBasicMaterial transparent opacity={0.08} color="#4ade80" side={THREE.DoubleSide} />
             </mesh>
           )}
 
@@ -453,6 +527,42 @@ export default function FloorplanOverlay() {
           <sphereGeometry args={[0.09, 16, 16]} />
           <meshBasicMaterial color="#38bdf8" />
         </mesh>
+      )}
+
+      {/* Wall select: thin invisible click targets along each user wall. */}
+      {editMode && !placeObjectType && userWalls.map((w, i) => {
+        const a = planeLocalToWorld([w.x1, w.y1])
+        const b = planeLocalToWorld([w.x2, w.y2])
+        const len = Math.hypot(b[0] - a[0], b[2] - a[2])
+        if (len < 0.05) return null
+        const ang = Math.atan2(b[2] - a[2], b[0] - a[0])
+        return (
+          <mesh
+            key={`wall-pick-${i}`}
+            position={[(a[0] + b[0]) / 2, 0.06, (a[2] + b[2]) / 2]}
+            rotation={[0, -ang, 0]}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              setSelectedWallIndex(i)
+              setSelectedObjectId(null)
+            }}
+          >
+            <boxGeometry args={[len, 0.08, wallPickWidthM]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+        )
+      })}
+
+      {/* Highlight the selected wall. */}
+      {editMode && selectedWallIndex != null && userWalls[selectedWallIndex] && (
+        <Line
+          points={[
+            planeLocalToWorld([userWalls[selectedWallIndex].x1, userWalls[selectedWallIndex].y1]),
+            planeLocalToWorld([userWalls[selectedWallIndex].x2, userWalls[selectedWallIndex].y2]),
+          ]}
+          color="#facc15"
+          lineWidth={7}
+        />
       )}
 
       {calibrationPreviewPoints && (
