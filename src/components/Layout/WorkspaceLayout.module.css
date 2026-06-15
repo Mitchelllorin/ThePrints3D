@@ -202,7 +202,7 @@
 
 .tabActive {
   color: var(--bp-accent, #38bdf8);
-  border-color: rgba(56, 189, 248, 0.35);
+  border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 35%, transparent);
   background: rgba(15, 30, 55, 0.8);
 }
 
@@ -332,7 +332,7 @@
   text-align: center;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.presetBtn:hover { background: #1e293b; color: #94a3b8; border-color: rgba(56,189,248,0.3); }
+.presetBtn:hover { background: #1e293b; color: #94a3b8; border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 30%, transparent); }
 
 /* ── Settings content ────────────────────────────────────────────────────── */
 .settingsBody { padding: 4px 0 16px; }

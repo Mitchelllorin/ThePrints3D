@@ -26,15 +26,15 @@
 }
 
 .modeBtnActive {
-  background: #1e3a5f !important;
-  border-color: #38bdf8 !important;
-  color: #38bdf8 !important;
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 22%, #0f172a) !important;
+  border-color: var(--bp-accent, #38bdf8) !important;
+  color: var(--bp-accent, #38bdf8) !important;
   animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bp-accent, #38bdf8) 0%, transparent); }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--bp-accent, #38bdf8) 25%, transparent); }
 }
 
 /* ── Annotation list ──────────────────────────────────────────────────────────── */
@@ -86,7 +86,7 @@
 }
 
 .rowSelected {
-  border-color: #38bdf8 !important;
+  border-color: var(--bp-accent, #38bdf8) !important;
   background: #0f172a !important;
 }
 
@@ -120,7 +120,7 @@
 .textEdit {
   flex: 1;
   background: #0f172a;
-  border: 1px solid #38bdf8;
+  border: 1px solid var(--bp-accent, #38bdf8);
   border-radius: 5px;
   color: #f1f5f9;
   font-size: 12px;
@@ -200,7 +200,7 @@
 }
 
 .swatchActive {
-  border-color: #38bdf8 !important;
+  border-color: var(--bp-accent, #38bdf8) !important;
 }
 
 /* ── Footer actions ───────────────────────────────────────────────────────────── */

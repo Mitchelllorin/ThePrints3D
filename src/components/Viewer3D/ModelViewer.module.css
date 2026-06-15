@@ -138,16 +138,16 @@
 }
 
 .toolBtnActive {
-  background: #1e3a5f !important;
-  border-color: #38bdf8 !important;
-  color: #38bdf8 !important;
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 22%, #0f172a) !important;
+  border-color: var(--bp-accent, #38bdf8) !important;
+  color: var(--bp-accent, #38bdf8) !important;
 }
 
 .toolBadge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #38bdf8;
+  background: var(--bp-accent, #38bdf8);
   color: #0f172a;
   font-size: 10px;
   font-weight: 700;
@@ -315,7 +315,7 @@
   padding: 16px 28px;
   font-size: 16px;
   font-weight: 600;
-  color: #38bdf8;
+  color: var(--bp-accent, #38bdf8);
   backdrop-filter: blur(6px);
 }
 
@@ -424,7 +424,7 @@
 }
 
 .floorplanBtn:hover {
-  background: #0ea5e9;
+  background: var(--bp-accent, #0ea5e9);
   color: #082f49;
 }
 
@@ -495,6 +495,6 @@
 }
 
 .floorplanPresetCard:hover {
-  border-color: #38bdf8;
-  background: rgba(14, 165, 233, 0.12);
+  border-color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 12%, transparent);
 }
