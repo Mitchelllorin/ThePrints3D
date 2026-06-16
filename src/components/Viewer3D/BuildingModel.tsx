@@ -8,7 +8,7 @@ import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { getCatalogItem } from '../../data/objectCatalog'
-import { WALL_THICKNESS_M } from '../../services/constructionCode'
+import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 
 interface Props {
   layers: Layer[]
@@ -135,7 +135,6 @@ function buildRealWalls(
   elevation: number,
   floorHeight: number,
   wallMat: THREE.MeshStandardMaterial,
-  userWallMat: THREE.MeshStandardMaterial,
   layerId: string,
   defaultThicknessM: number,
   openings: OpeningSpec[] = [],
@@ -212,18 +211,44 @@ function buildRealWalls(
     const ax = seg.x1 + ux * trimA, az = seg.z1 + uz * trimA
     const angle = Math.atan2(seg.z2 - seg.z1, seg.x2 - seg.x1)
     const thick = seg.thick
-    const bodyMat = seg.w.source === 'user' ? userWallMat : wallMat
+
+    // Two-material wall body: interior finish on one broad face, exterior
+    // cladding on the other. Materials come from the wall's chosen presets,
+    // inheriting the wall layer's opacity.
+    const finishMaterial = (key: string) => {
+      const p = wallMaterialPreset(key)
+      return new THREE.MeshStandardMaterial({
+        color: new THREE.Color(p.color),
+        roughness: p.roughness,
+        metalness: p.metalness ?? 0,
+        transparent: wallMat.opacity < 1,
+        opacity: wallMat.opacity,
+      })
+    }
+    const extKey = seg.w.exteriorMaterial ?? (seg.w.wallRole === 'exterior-bearing' ? 'stucco' : 'drywall')
+    const bodyMats: THREE.MeshStandardMaterial[] = [
+      finishMaterial(seg.w.interiorMaterial ?? 'drywall'), // index 0 — interior
+      finishMaterial(extKey),                              // index 1 — exterior
+    ]
 
     // Place a box oriented along this wall. `tCenter` is the distance along the
     // wall from `a`; the box spans `lengthAlong` and rises `height` from `yBottom`.
+    // A material array drives the two-face wall body; a single material is used
+    // for framing members (studs/header).
     const placeAlong = (
       tCenter: number, lengthAlong: number, yBottom: number, height: number,
-      depthAcross: number, material: THREE.MeshStandardMaterial,
+      depthAcross: number, material: THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[],
     ) => {
       if (lengthAlong <= 0.001 || height <= 0.001) return
       const wx = ax + ux * tCenter
       const wz = az + uz * tCenter
-      const m = new THREE.Mesh(new THREE.BoxGeometry(lengthAlong, height, depthAcross), material)
+      const geo = new THREE.BoxGeometry(lengthAlong, height, depthAcross)
+      if (Array.isArray(material)) {
+        // BoxGeometry groups are ordered +x,−x,+y,−y,+z,−z (matIndex 0..5). The
+        // two broad faces are ±Z: +Z → exterior (1), everything else → interior (0).
+        for (const g of geo.groups) g.materialIndex = g.materialIndex === 4 ? 1 : 0
+      }
+      const m = new THREE.Mesh(geo, material)
       m.position.set(wx, elevation + yBottom + height / 2, wz)
       m.rotation.y = -angle
       m.castShadow = true
@@ -245,16 +270,16 @@ function buildRealWalls(
       .sort((a, b) => a.s0 - b.s0)
 
     if (ops.length === 0) {
-      placeAlong(len / 2, len, 0, wallTop, thick, bodyMat)
+      placeAlong(len / 2, len, 0, wallTop, thick, bodyMats)
       return
     }
 
     let cursor = 0
     for (const o of ops) {
       // Solid full-height wall up to the opening.
-      if (o.s0 - cursor > 0.02) placeAlong((cursor + o.s0) / 2, o.s0 - cursor, 0, wallTop, thick, bodyMat)
+      if (o.s0 - cursor > 0.02) placeAlong((cursor + o.s0) / 2, o.s0 - cursor, 0, wallTop, thick, bodyMats)
       // "Header above" — the wall piece spanning the opening above the header.
-      placeAlong(o.c, o.w, o.h, wallTop - o.h, thick, bodyMat)
+      placeAlong(o.c, o.w, o.h, wallTop - o.h, thick, bodyMats)
       // Header beam at the top of the clear opening (proud so it reads as framing).
       placeAlong(o.c, o.w + STUD_W * 2, o.h, HEADER_THK, thick + 0.04, headerMat)
       // Jack studs carry the header — full opening height, just inside the edges.
@@ -266,7 +291,7 @@ function buildRealWalls(
       cursor = o.s1
     }
     // Remaining solid wall after the last opening.
-    if (len - cursor > 0.02) placeAlong((cursor + len) / 2, len - cursor, 0, wallTop, thick, bodyMat)
+    if (len - cursor > 0.02) placeAlong((cursor + len) / 2, len - cursor, 0, wallTop, thick, bodyMats)
   })
 }
 
@@ -850,7 +875,6 @@ export default function BuildingModel({ layers }: Props) {
             const wallLayer = layerMap.get('walls')
             if (!wallLayer?.visible) break
             const wMat = mat(wallLayer.color, wallLayer.opacity, { roughness: 0.7 })
-            const userWMat = mat('#60a5fa', wallLayer.opacity, { roughness: 0.45, metalness: 0.15 })
             if (wallDrawings.length > 0) {
               for (const d of wallDrawings) {
                 buildRealWalls(
@@ -860,7 +884,6 @@ export default function BuildingModel({ layers }: Props) {
                   elev,
                   fh,
                   wMat,
-                  userWMat,
                   'walls',
                   sceneConfig.defaultWallThicknessM,
                   openingSpecs,

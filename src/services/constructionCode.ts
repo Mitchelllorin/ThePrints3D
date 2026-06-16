@@ -21,3 +21,52 @@ export const DEFAULT_WALL_THICKNESS_M = 0.0889  // 2×4
 export function wallThicknessM(framingType?: string): number {
   return (framingType && WALL_THICKNESS_M[framingType]) || DEFAULT_WALL_THICKNESS_M
 }
+
+// ── Wall finish/cladding materials (PBR presets for the two wall faces) ───────
+
+export interface WallMaterialPreset {
+  color: string
+  roughness: number
+  metalness?: number
+}
+
+export const WALL_MATERIALS: Record<string, WallMaterialPreset> = {
+  drywall:     { color: '#f5f0eb', roughness: 0.9 },
+  plaster:     { color: '#ece7df', roughness: 0.85 },
+  tile:        { color: '#e2e8f0', roughness: 0.3 },
+  brick:       { color: '#8b4513', roughness: 0.95 },
+  concrete:    { color: '#a8a29e', roughness: 0.95 },
+  stone:       { color: '#9ca3af', roughness: 1.0 },
+  vinylSiding: { color: '#e8e0d0', roughness: 0.7 },
+  woodSiding:  { color: '#c4a265', roughness: 0.95 },
+  stucco:      { color: '#d4c5a9', roughness: 0.95 },
+  metalPanel:  { color: '#94a3b8', roughness: 0.3, metalness: 0.8 },
+  fiberCement: { color: '#cbd5e1', roughness: 0.85 },
+}
+
+export const DEFAULT_INTERIOR_MATERIAL = 'drywall'
+export const DEFAULT_EXTERIOR_MATERIAL = 'stucco'
+
+export function wallMaterialPreset(key?: string): WallMaterialPreset {
+  return (key && WALL_MATERIALS[key]) || WALL_MATERIALS.drywall
+}
+
+/** Interior-finish options for the wall property card (label → preset key). */
+export const INTERIOR_FINISHES: Array<{ label: string; key: string }> = [
+  { label: 'Drywall', key: 'drywall' },
+  { label: 'Plaster', key: 'plaster' },
+  { label: 'Tile', key: 'tile' },
+  { label: 'Exposed Brick', key: 'brick' },
+  { label: 'Concrete', key: 'concrete' },
+]
+
+/** Exterior-cladding options for the wall property card (label → preset key). */
+export const EXTERIOR_CLADDINGS: Array<{ label: string; key: string }> = [
+  { label: 'Stucco', key: 'stucco' },
+  { label: 'Vinyl Siding', key: 'vinylSiding' },
+  { label: 'Wood Siding', key: 'woodSiding' },
+  { label: 'Brick', key: 'brick' },
+  { label: 'Stone', key: 'stone' },
+  { label: 'Metal Panel', key: 'metalPanel' },
+  { label: 'Fiber Cement', key: 'fiberCement' },
+]

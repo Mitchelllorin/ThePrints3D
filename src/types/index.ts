@@ -58,6 +58,10 @@ export interface ParsedWall {
   framingType?: string
   /** Structural role chosen in the wall-type picker, e.g. 'exterior-bearing' */
   wallRole?: string
+  /** Interior face finish preset key (see WALL_MATERIALS), e.g. 'drywall' */
+  interiorMaterial?: string
+  /** Exterior face cladding preset key (see WALL_MATERIALS), e.g. 'stucco' */
+  exteriorMaterial?: string
 }
 
 /**

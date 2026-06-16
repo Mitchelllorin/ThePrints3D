@@ -313,6 +313,8 @@ interface AppState {
   addUserTracedWalls: (id: string, walls: ParsedWall[]) => void
   /** Delete a single user-traced wall by its index within the drawing's user walls. */
   deleteUserWall: (id: string, userIndex: number) => void
+  /** Patch a single user-traced wall by its index within the drawing's user walls. */
+  updateUserWall: (id: string, userIndex: number, patch: Partial<ParsedWall>) => void
   clearUserTracedWalls: (id: string) => void
   clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
@@ -677,9 +679,10 @@ export const useAppStore = create<AppState>()(
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        const exteriorMaterial = activeWallRole === 'exterior-bearing' ? 'stucco' : 'drywall'
         const combined = [
           ...d.parsedWalls.filter((w) => w.source === 'user'),
-          { ...wall, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole },
+          { ...wall, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole, interiorMaterial: 'drywall', exteriorMaterial },
         ]
         const userWalls = cornerInferEnabled ? inferCorners(combined, cornerTolerancePx) : combined
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
@@ -697,9 +700,10 @@ export const useAppStore = create<AppState>()(
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        const exteriorMaterial = activeWallRole === 'exterior-bearing' ? 'stucco' : 'drywall'
         const userWalls = inferCorners([
           ...d.parsedWalls.filter((w) => w.source === 'user'),
-          ...walls.map((w) => ({ ...w, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole })),
+          ...walls.map((w) => ({ ...w, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole, interiorMaterial: 'drywall', exteriorMaterial })),
         ])
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
       })
@@ -717,6 +721,20 @@ export const useAppStore = create<AppState>()(
         if (userIndex < 0 || userIndex >= userWalls.length) return
         userWalls.splice(userIndex, 1)
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+      })
+    },
+
+    // Patch a single user-traced wall (by index among user walls), e.g. to
+    // change its interior/exterior finish materials.
+    updateUserWall: (id, userIndex, patch) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+        const target = userWalls[userIndex]
+        if (!target) return
+        Object.assign(target, patch)
       })
     },
 

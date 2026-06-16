@@ -14,6 +14,7 @@ import {
   TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS,
   PLUMBING_PICKER, ELECTRICAL_PICKER,
 } from '../../data/traceLayers'
+import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
 import styles from './AmbientGuide.module.css'
 
 // ── Discipline layer tabs (Framing/Plumbing/Electrical wired; HVAC placeholder)
@@ -74,6 +75,7 @@ export default function FloorplanPanel() {
   const userTraces      = useAppStore((s) => s.userTraces)
   const processWithSeeds = useAppStore((s) => s.processWithSeeds)
   const deleteUserWall  = useAppStore((s) => s.deleteUserWall)
+  const updateUserWall  = useAppStore((s) => s.updateUserWall)
   const placedObjects   = useAppStore((s) => s.placedObjects)
   const removePlacedObject = useAppStore((s) => s.removePlacedObject)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
@@ -742,6 +744,26 @@ export default function FloorplanPanel() {
           <div className={styles.step}>
             <span className={styles.stepLabel}>Wall selected</span>
             <span className={styles.stepHint}>Wall {selectedWallIndex + 1} of {userWalls.length}</span>
+            <label className={styles.row}>
+              <span className={styles.propLabel}>Interior</span>
+              <select
+                className={styles.select}
+                value={userWalls[selectedWallIndex].interiorMaterial ?? 'drywall'}
+                onChange={(e) => { updateUserWall(drawing.id, selectedWallIndex, { interiorMaterial: e.target.value }); if (modelReady) buildModel() }}
+              >
+                {INTERIOR_FINISHES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </label>
+            <label className={styles.row}>
+              <span className={styles.propLabel}>Exterior</span>
+              <select
+                className={styles.select}
+                value={userWalls[selectedWallIndex].exteriorMaterial ?? 'stucco'}
+                onChange={(e) => { updateUserWall(drawing.id, selectedWallIndex, { exteriorMaterial: e.target.value }); if (modelReady) buildModel() }}
+              >
+                {EXTERIOR_CLADDINGS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </label>
             <div className={styles.btnRow}>
               <button className={styles.action} onClick={deleteSelectedWall}>🗑 Delete wall</button>
               <button className={styles.secondary} onClick={() => setSelectedWallIndex(null)}>Deselect</button>
