@@ -385,7 +385,8 @@ export default function WorkspaceLayout() {
   const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
   const explodeAmount = useAppStore((s) => s.explodeAmount)
   const setExplodeAmount = useAppStore((s) => s.setExplodeAmount)
-  const showExplode = useAppStore((s) => s.model.status === 'ready' || s.buildResult !== null)
+  // Always available once a plan is loaded — never vanishes after a build state change.
+  const showExplode = useAppStore((s) => s.drawings.length > 0)
   const measureMode = useAppStore((s) => s.measureMode)
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
   const updateOverlay = useAppStore((s) => s.updateFloorplanOverlay)
@@ -514,8 +515,9 @@ export default function WorkspaceLayout() {
         canUndo={canUndo}
       />
 
-      {/* Explode — slider in the top-right, same language as the icons. */}
-      {showExplode && (
+      {/* Explode — slider in the top-right, same language as the icons.
+          Hidden while a side panel is open (they share the corner). */}
+      {showExplode && !open && (
         <div className={styles.explodeBar}>
           <span className={styles.explodeLabel}>Explode</span>
           <input
