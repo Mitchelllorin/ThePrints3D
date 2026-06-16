@@ -975,9 +975,12 @@ export default function BuildingModel({ layers }: Props) {
     if (framingLayer?.visible && buildResult && buildResult.components.length > 0) {
       let align: FramingAlign | undefined
       const od = drawings.find((d) => d.id === overlayDrawingId)
+      // Use the EXACT centroid + scale the engine placed components in — never
+      // recompute, or the framing drifts offset as walls are added/rebuilt.
+      const [ocx, ocy] = buildResult.frameOriginPx ?? (od ? centerOfWalls(od.parsedWalls) : [0, 0])
+      const engineMmPerPx = buildResult.frameScaleMmPerPx ?? od?.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX
       if (od && od.rasterWidth && od.rasterHeight) {
-        const [ocx, ocy] = centerOfWalls(od.parsedWalls)        // engine centroid
-        const s = (od.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX) / 1000
+        const s = engineMmPerPx / 1000
         const [w, d] = overlay.scale
         const rot = THREE.MathUtils.degToRad(overlay.rotationDeg)
         align = {

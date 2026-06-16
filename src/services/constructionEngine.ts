@@ -825,5 +825,5 @@ export function buildFraming(
     )
   }
 
-  return { components, decisions, suggestions }
+  return { components, decisions, suggestions, frameOriginPx: [cx, cy], frameScaleMmPerPx: scaleMmPerPx }
 }

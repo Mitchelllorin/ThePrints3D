@@ -98,6 +98,12 @@ export interface BuildResult {
   components: PlacedComponent[]
   decisions: Decision[]
   suggestions: string[]
+  /** The exact reference frame the engine placed components in: the wall
+   *  centroid (image-pixel space) and the scale used. Consumers re-map the
+   *  framing into world/overlay space with these — never recompute the
+   *  centroid, or it drifts as walls are added. */
+  frameOriginPx?: [number, number]
+  frameScaleMmPerPx?: number
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
