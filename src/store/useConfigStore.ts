@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { BuildingType } from '../onboarding/types'
+import type { LengthFormat } from '../services/unitConverter'
 
 /** Visual feedback shown while a wall is being traced. */
 export type WallTraceStyle = 'dotted' | 'arrow' | 'both'
@@ -55,6 +56,9 @@ export interface AppConfig {
    * construction default — but is exposed in the Units & calibration settings.
    */
   activeUnit: ActiveUnit
+  /** How measurements are written: feet-inches, feet-inches to 1/16", or the
+   *  raw active unit. Defaults to feet-and-inches. */
+  lengthFormat: LengthFormat
 
   // ── Build output ──────────────────────────────────────────────────────────
   /** Storey height (metres) fed to the construction engine. */
@@ -105,6 +109,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   cornerTolerancePx: 20,
   gridSnapM: 0.25,
   activeUnit: 'ft',
+  lengthFormat: 'ft-in',
   buildFloorHeightM: 2.7,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,

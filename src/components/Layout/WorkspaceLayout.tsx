@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
-import { convertValue, type ConverterKind, type ConverterUnit } from '../../services/unitConverter'
+import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TopbarLogo3D from './TopbarLogo3D'
 import TopIcons from './TopIcons'
@@ -89,6 +89,12 @@ function CollapsibleSection({ id, title, openId, setOpenId, children }: {
   )
 }
 
+const LENGTH_FORMAT_OPTIONS: Array<{ value: LengthFormat; label: string }> = [
+  { value: 'ft-in',      label: 'Feet-inches (4\' 5")' },
+  { value: 'ft-in-frac', label: 'Feet-inches 1/16"' },
+  { value: 'decimal',    label: 'Decimal (active unit)' },
+]
+
 const UNIT_OPTIONS: Array<{ value: ActiveUnit; label: string }> = [
   { value: 'mm', label: 'Millimetres (mm)' },
   { value: 'cm', label: 'Centimetres (cm)' },
@@ -171,6 +177,7 @@ function SettingsContent() {
 
       <CollapsibleSection id="units" title="Units & calibration" openId={openId} setOpenId={setOpenId}>
         <Select label="Active unit" val={cfg.activeUnit} options={UNIT_OPTIONS} onChange={(v) => setCfg({ activeUnit: v as ActiveUnit })} />
+        <Select label="Format" val={cfg.lengthFormat} options={LENGTH_FORMAT_OPTIONS} onChange={(v) => setCfg({ lengthFormat: v as LengthFormat })} />
       </CollapsibleSection>
 
       <CollapsibleSection id="framing" title="Framing" openId={openId} setOpenId={setOpenId}>

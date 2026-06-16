@@ -9,7 +9,7 @@ import { useAppStore } from '../../store/useAppStore'
 import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { convertLength, formatLengthFromMm } from '../../services/unitConverter'
+import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import {
   TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS,
@@ -89,6 +89,7 @@ export default function FloorplanPanel() {
   const setTraceStyle  = useFloorplanLocalStore((s) => s.setTraceStyle)
   const traceStart     = useFloorplanLocalStore((s) => s.traceStart)
   const setTraceStart  = useFloorplanLocalStore((s) => s.setTraceStart)
+  const hoverPixel     = useFloorplanLocalStore((s) => s.hoverPixel)
   const calibrationA   = useFloorplanLocalStore((s) => s.calibrationA)
   const setCalibrationA = useFloorplanLocalStore((s) => s.setCalibrationA)
   const calibrationB   = useFloorplanLocalStore((s) => s.calibrationB)
@@ -127,6 +128,7 @@ export default function FloorplanPanel() {
 
   // The ONE active unit — calibration estimate, input, and label all read it.
   const activeUnit     = useConfigStore((s) => s.activeUnit)
+  const lengthFormat   = useConfigStore((s) => s.lengthFormat)
   const setSeedProcessing = useFloorplanLocalStore((s) => s.setSeedProcessing)
   const setHoverPixel  = useFloorplanLocalStore((s) => s.setHoverPixel)
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
@@ -144,6 +146,13 @@ export default function FloorplanPanel() {
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const userWallCount = drawing?.parsedWalls.filter((w) => w.source === 'user').length ?? 0
   const hasTrace = userTraces.some((t) => t.points.length >= 8)
+
+  // Live running length of the wall segment being traced (anchor → cursor),
+  // in real-world units via the drawing's scale. Drives the on-screen readout.
+  const liveTraceMm = (traceMode && traceStart && hoverPixel && drawing)
+    ? Math.hypot(hoverPixel[0] - traceStart[0], hoverPixel[1] - traceStart[1]) *
+      (drawing.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX)
+    : null
 
   // ── derived scale estimate for finalizeCalibration ───────────────────────
   const estimatedScale = (() => {
@@ -386,6 +395,14 @@ export default function FloorplanPanel() {
   return (
     <>
       <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp" multiple style={{ display: 'none' }} onChange={handleFileChange} />
+
+      {/* Live measurement readout — running length while tracing a wall. */}
+      {liveTraceMm != null && (
+        <div className={styles.measureHud}>
+          <span className={styles.measureHudLabel}>Length</span>
+          <span className={styles.measureHudValue}>{formatMeasureMm(liveTraceMm, activeUnit, lengthFormat)}</span>
+        </div>
+      )}
 
       <div className={styles.guide}>
 

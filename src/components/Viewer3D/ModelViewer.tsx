@@ -7,7 +7,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { formatLengthFromMm } from '../../services/unitConverter'
+import { formatMeasureMm } from '../../services/unitConverter'
 import { useShallow } from 'zustand/react/shallow'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
@@ -216,6 +216,7 @@ export default function ModelViewer() {
   const explodeAmount  = useAppStore((s) => s.explodeAmount)
   const setExplodeAmount = useAppStore((s) => s.setExplodeAmount)
   const activeUnit     = useConfigStore((s) => s.activeUnit)
+  const lengthFormat   = useConfigStore((s) => s.lengthFormat)
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
@@ -445,8 +446,8 @@ export default function ModelViewer() {
                 <div className={styles.measurementEmpty}>No measurements yet.</div>
               ) : (
                 measurements.map((m) => {
-                  // Same active unit as calibration — one source of truth.
-                  const value = formatLengthFromMm(m.distanceM * 1000, activeUnit)
+                  // Same formatter as the live trace readout — one source of truth.
+                  const value = formatMeasureMm(m.distanceM * 1000, activeUnit, lengthFormat)
                   const unit = ''
                   return (
                     <div key={m.id} className={styles.measurementEntry}>

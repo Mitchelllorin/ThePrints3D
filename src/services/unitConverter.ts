@@ -112,6 +112,39 @@ export function formatLengthFromMm(valueMm: number, unit: LengthUnit): string {
   return `${v.toFixed(lengthDecimals(unit))} ${unit}`
 }
 
+/** How measurements are written out across the app. */
+export type LengthFormat = 'ft-in' | 'ft-in-frac' | 'decimal'
+
+/** Feet-and-inches, rounded to 1/`denom`" (denom 1 = whole inches, 16 = 1/16").
+ *  e.g. `4' 5"`, `4' 5 3/16"`. Fractions are reduced (6/16 → 3/8). */
+export function formatFeetInches(inches: number, denom: number): string {
+  if (!Number.isFinite(inches)) return '—'
+  const ticks = Math.round(Math.max(0, inches) * denom)
+  let feet = Math.floor(ticks / (12 * denom))
+  const rem = ticks - feet * 12 * denom
+  let whole = Math.floor(rem / denom)
+  const frac = rem - whole * denom
+  if (whole >= 12) { feet += Math.floor(whole / 12); whole = whole % 12 }
+  let inchStr = `${whole}`
+  if (frac > 0) {
+    let n = frac, d = denom
+    while (n % 2 === 0 && d % 2 === 0) { n /= 2; d /= 2 }
+    inchStr += ` ${n}/${d}`
+  }
+  return `${feet}' ${inchStr}"`
+}
+
+/**
+ * The one measurement formatter the live readouts, nameplates and measurement
+ * list all share. `decimal` honours the user's active unit; the imperial
+ * formats present feet-and-inches regardless of active unit.
+ */
+export function formatMeasureMm(valueMm: number, activeUnit: LengthUnit, format: LengthFormat): string {
+  if (format === 'decimal') return formatLengthFromMm(valueMm, activeUnit)
+  const inches = convertLength(valueMm, 'mm', 'in')
+  return formatFeetInches(inches, format === 'ft-in-frac' ? 16 : 1)
+}
+
 function areaToM2(value: number, unit: AreaUnit): number {
   switch (unit) {
     case 'mm2': return value / 1_000_000
