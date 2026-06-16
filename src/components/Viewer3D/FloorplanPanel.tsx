@@ -4,7 +4,7 @@
  * Shows exactly one contextual prompt at a time. No panels, no headers,
  * no dense button grids — just the next action the user needs to take.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -19,6 +19,26 @@ const DEFAULT_SCALE_MM_PER_PX = 23.5
 function unitPrecision(unit: string): number {
   return unit === 'mm' ? 0 : 2
 }
+
+// ── Wall-type picker options (stamped on every wall in a trace session) ───────
+const FRAMING_TYPES = [
+  { key: 'wood-2x4',    label: 'Wood 2×4 (3.5")',  short: 'Wood 2×4' },
+  { key: 'wood-2x6',    label: 'Wood 2×6 (5.5")',  short: 'Wood 2×6' },
+  { key: 'wood-2x8',    label: 'Wood 2×8 (7.5")',  short: 'Wood 2×8' },
+  { key: 'steel-3-5-8', label: 'Steel 3-5/8"',      short: 'Steel 3⅝"' },
+  { key: 'steel-6',     label: 'Steel 6"',          short: 'Steel 6"' },
+  { key: 'cmu',         label: 'CMU Block',         short: 'CMU' },
+] as const
+
+const WALL_ROLES = [
+  { key: 'exterior-bearing',     label: 'Exterior bearing',     short: 'Exterior' },
+  { key: 'interior-bearing',     label: 'Interior bearing',     short: 'Int. bearing' },
+  { key: 'interior-non-bearing', label: 'Interior non-bearing', short: 'Int. non-bearing' },
+  { key: 'partition',            label: 'Partition',            short: 'Partition' },
+] as const
+
+const framingShort = (key: string) => FRAMING_TYPES.find((t) => t.key === key)?.short ?? key
+const roleShort = (key: string) => WALL_ROLES.find((r) => r.key === key)?.short ?? key
 
 export default function FloorplanPanel() {
   const drawings        = useAppStore((s) => s.drawings)
@@ -66,6 +86,10 @@ export default function FloorplanPanel() {
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
+  const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
+  const setActiveWallType = useFloorplanLocalStore((s) => s.setActiveWallType)
+  const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
+  const setActiveWallRole = useFloorplanLocalStore((s) => s.setActiveWallRole)
 
   // The ONE active unit — calibration estimate, input, and label all read it.
   const activeUnit     = useConfigStore((s) => s.activeUnit)
@@ -74,6 +98,9 @@ export default function FloorplanPanel() {
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // The wall-type picker shows before tracing begins, and can be reopened
+  // mid-session via the indicator chip without leaving trace mode.
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const userWallCount = drawing?.parsedWalls.filter((w) => w.source === 'user').length ?? 0
@@ -144,6 +171,13 @@ export default function FloorplanPanel() {
     }
     setPendingTrace(true)
     startCalibration()
+  }
+
+  // Confirm the wall-type picker. Pre-trace it enters trace mode; reopened
+  // mid-session it just applies the new type and returns to tracing.
+  const confirmWallType = () => {
+    setPickerOpen(false)
+    if (!traceMode) startTracing()
   }
 
   const finalizeCalibration = () => {
@@ -351,7 +385,7 @@ export default function FloorplanPanel() {
         )}
 
         {/* ── Step 2: trace walls ── */}
-        {!isAnalysing && !isPending && calibrationCleared && !overlay.calibrationMode && !traceMode && (
+        {!isAnalysing && !isPending && calibrationCleared && !overlay.calibrationMode && !traceMode && !pickerOpen && (
           <div className={styles.step}>
             {hasWalls ? (
               <>
@@ -362,7 +396,7 @@ export default function FloorplanPanel() {
                   <button className={styles.action} onClick={() => buildModel()}>
                     Build 3D →
                   </button>
-                  <button className={styles.secondary} onClick={startTracing}>
+                  <button className={styles.secondary} onClick={() => setPickerOpen(true)}>
                     Trace walls
                   </button>
                   <button className={styles.secondary} onClick={startCalibration}>
@@ -375,7 +409,7 @@ export default function FloorplanPanel() {
                 <span className={styles.stepLabel}>Step 2 of 2</span>
                 <span className={styles.stepText}>Trace the walls</span>
                 <span className={styles.stepHint}>Draw over each wall on the floor plan</span>
-                <button className={styles.action} onClick={startTracing}>
+                <button className={styles.action} onClick={() => setPickerOpen(true)}>
                   Start tracing →
                 </button>
               </>
@@ -383,10 +417,58 @@ export default function FloorplanPanel() {
           </div>
         )}
 
+        {/* ── Wall-type picker (before tracing, or reopened mid-session) ── */}
+        {pickerOpen && !overlay.calibrationMode && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>Wall type</span>
+            <span className={styles.stepHint}>Framing</span>
+            <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+              {FRAMING_TYPES.map((ft) => (
+                <button
+                  key={ft.key}
+                  className={activeWallType === ft.key ? styles.action : styles.secondary}
+                  onClick={() => setActiveWallType(ft.key)}
+                >
+                  {ft.label}
+                </button>
+              ))}
+            </div>
+            <span className={styles.stepHint}>Role</span>
+            <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+              {WALL_ROLES.map((r) => (
+                <button
+                  key={r.key}
+                  className={activeWallRole === r.key ? styles.action : styles.secondary}
+                  onClick={() => setActiveWallRole(r.key)}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <div className={styles.btnRow}>
+              <button className={styles.action} onClick={confirmWallType}>
+                {traceMode ? 'Apply' : 'Start Tracing →'}
+              </button>
+              <button className={styles.secondary} onClick={() => setPickerOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Active tracing ── */}
-        {traceMode && (
+        {traceMode && !pickerOpen && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>Tracing walls</span>
+            {/* Persistent indicator — shows the active type, tap to change it. */}
+            <button
+              className={styles.secondary}
+              style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px' }}
+              onClick={() => setPickerOpen(true)}
+              title="Change wall type"
+            >
+              {framingShort(activeWallType)} · {roleShort(activeWallRole)}
+            </button>
             {pendingWalls ? (
               <>
                 <span className={styles.stepText}>

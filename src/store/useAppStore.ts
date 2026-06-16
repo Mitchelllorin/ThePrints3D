@@ -36,6 +36,7 @@ import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
 import { useConfigStore } from './useConfigStore'
+import { useFloorplanLocalStore } from './useFloorplanLocalStore'
 import {
   DEFAULT_WIZARD_STATE,
   completeWizardGroup as completeWizardGroupState,
@@ -647,13 +648,15 @@ export const useAppStore = create<AppState>()(
     addUserTracedWall: (id, wall) => {
       pushHistory()
       const { cornerInferEnabled, cornerTolerancePx } = useConfigStore.getState()
+      // Stamp the wall with the framing type/role chosen for this trace session.
+      const { activeWallType, activeWallRole } = useFloorplanLocalStore.getState()
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
         const combined = [
           ...d.parsedWalls.filter((w) => w.source === 'user'),
-          { ...wall, source: 'user' as const, detectionConfidence: 1 },
+          { ...wall, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole },
         ]
         const userWalls = cornerInferEnabled ? inferCorners(combined, cornerTolerancePx) : combined
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
@@ -665,13 +668,15 @@ export const useAppStore = create<AppState>()(
     addUserTracedWalls: (id, walls) => {
       if (walls.length === 0) return
       pushHistory()
+      // Stamp every wall in the batch with the active framing type/role.
+      const { activeWallType, activeWallRole } = useFloorplanLocalStore.getState()
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
         const userWalls = inferCorners([
           ...d.parsedWalls.filter((w) => w.source === 'user'),
-          ...walls.map((w) => ({ ...w, source: 'user' as const, detectionConfidence: 1 })),
+          ...walls.map((w) => ({ ...w, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole })),
         ])
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
       })

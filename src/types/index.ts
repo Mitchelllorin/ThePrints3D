@@ -54,6 +54,10 @@ export interface ParsedWall {
   finishedMm?: number
   /** 0..1 — how cleanly this wall fits its assigned bucket */
   typeConfidence?: number
+  /** Framing material/size chosen in the wall-type picker, e.g. 'wood-2x6' */
+  framingType?: string
+  /** Structural role chosen in the wall-type picker, e.g. 'exterior-bearing' */
+  wallRole?: string
 }
 
 /**
