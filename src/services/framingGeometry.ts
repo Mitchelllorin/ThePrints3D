@@ -25,7 +25,9 @@ export interface WallFramingOpts {
   thickness: number
   /** Stud on-centre spacing, metres. Defaults to 16" OC. */
   spacingM?: number
-  /** Lumber colour. */
+  /** Framing material — drives colour/finish: tan lumber vs silvery steel. */
+  material?: 'wood' | 'steel'
+  /** Lumber colour override. */
   color?: string
   /** 0–1; < 1 renders translucent (used for the ghost preview). */
   opacity?: number
@@ -42,17 +44,18 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     height,
     thickness,
     spacingM = STUD_SPACING_M,
-    color = '#c9a56c',
+    material = 'wood',
     opacity = 1,
   } = opts
 
   const group = new THREE.Group()
   if (length < 0.02 || height < 0.05) return group
 
+  const steel = material === 'steel'
   const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(color),
-    roughness: 0.75,
-    metalness: 0.05,
+    color: new THREE.Color(opts.color ?? (steel ? '#9aa6b2' : '#c9a56c')),
+    roughness: steel ? 0.35 : 0.75,
+    metalness: steel ? 0.85 : 0.05,
     transparent: opacity < 1,
     opacity,
   })

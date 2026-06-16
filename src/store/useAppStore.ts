@@ -92,11 +92,9 @@ const DEFAULT_LAYERS: Layer[] = [
   },
   {
     id: 'walls',
-    // Solid wall volumes are OFF by default — the build shows stud framing (with
-    // doorway framing) instead of solid grey blocks. Toggle on for a solid view.
     label: 'Walls',
     color: '#e2e8f0',
-    visible: false,
+    visible: true,
     opacity: 1,
     sourceTypes: ['floor-plan', 'architectural'],
     icon: '🧱',
