@@ -138,8 +138,6 @@ export default function FloorplanOverlay() {
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
-  const setPlaceGhost = useFloorplanLocalStore((s) => s.setPlaceGhost)
-  const placeCommitNonce = useFloorplanLocalStore((s) => s.placeCommitNonce)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
   const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
@@ -177,14 +175,15 @@ export default function FloorplanOverlay() {
     updateOverlay({ traceModeActive: traceMode }, false)
   }, [traceMode, updateOverlay])
 
-  // Lock the camera ONLY while a gesture must own the pointer — dragging an
-  // overlay handle, or freehand-drawing. Otherwise the camera orbits/pans
-  // freely even mid-trace/calibration; points are placed on a tap.
+  // Lock the camera whenever a gesture must own the pointer: tracing,
+  // calibrating, placing an object, or dragging an overlay handle. The grid
+  // never drifts while you tap points/place; zoom +/- still works (it drives
+  // the controls directly). Pan/orbit resumes when you leave these modes.
   useEffect(() => {
     updateOverlay({
-      orbitLocked: drag !== null || (traceMode && traceStyle === 'freehand') || placeObjectType !== null,
+      orbitLocked: drag !== null || traceMode || overlay.calibrationMode || placeObjectType !== null,
     }, false)
-  }, [drag, traceMode, traceStyle, placeObjectType, updateOverlay])
+  }, [drag, traceMode, overlay.calibrationMode, placeObjectType, updateOverlay])
 
   const estimatedScale = useMemo<[number, number]>(() => {
     if (!drawing) return overlay.scale
@@ -510,21 +509,26 @@ export default function FloorplanOverlay() {
     return best < 1.2 ? yaw : 0
   }
 
-  // Move the ghost to a ground point and record the pose (auto-oriented to the
-  // nearest wall). The "Place" button commits this pose — no precise tap needed,
-  // and the camera is locked while placing so the map never drifts.
-  const positionGhost = (event: ThreeEvent<PointerEvent>) => {
+  // Hover/drag moves the ghost (imperative — no re-render, so the ghost stays
+  // visible). The camera is locked while placing, so the print never drifts.
+  const moveGhost = (event: ThreeEvent<PointerEvent>) => {
+    if (!placeObjectType || !ghostItem) return
+    event.stopPropagation()
+    const p = rayToGround(event)
+    if (!p || !ghostRef.current) return
+    ghostRef.current.visible = true
+    ghostRef.current.position.set(p.x, ghostItem.defaultH / 2, p.z)
+    ghostRef.current.rotation.y = autoOrientYaw(p.x, p.z)
+  }
+
+  // Tap on the print places the object right there (map is locked → precise),
+  // auto-oriented to the nearest wall. No separate Place button to chase.
+  const placeAtPointer = (event: ThreeEvent<PointerEvent>) => {
     if (!placeObjectType || !ghostItem) return
     event.stopPropagation()
     const p = rayToGround(event)
     if (!p) return
-    const yaw = autoOrientYaw(p.x, p.z)
-    if (ghostRef.current) {
-      ghostRef.current.visible = true
-      ghostRef.current.position.set(p.x, ghostItem.defaultH / 2, p.z)
-      ghostRef.current.rotation.y = yaw
-    }
-    setPlaceGhost({ x: p.x, z: p.z, rotationY: yaw })
+    commitPlacement({ x: p.x, z: p.z, rotationY: autoOrientYaw(p.x, p.z) })
   }
 
   const commitPlacement = (pose: { x: number; z: number; rotationY: number }) => {
@@ -565,14 +569,6 @@ export default function FloorplanOverlay() {
     hideGhost()
     selectObjectExclusive(id)
   }
-
-  // The "Place" button bumps placeCommitNonce; commit the current ghost pose.
-  useEffect(() => {
-    if (placeCommitNonce === 0) return
-    const pose = useFloorplanLocalStore.getState().placeGhost
-    if (placeObjectType && pose) commitPlacement(pose)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeCommitNonce])
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
 
@@ -760,8 +756,8 @@ export default function FloorplanOverlay() {
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
           position={[0, 6, 0]}
-          onPointerDown={positionGhost}
-          onPointerMove={positionGhost}
+          onPointerDown={placeAtPointer}
+          onPointerMove={moveGhost}
         >
           <planeGeometry args={[4000, 4000]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />

@@ -107,8 +107,6 @@ export default function FloorplanPanel() {
   const setSelectedWallIndex = useFloorplanLocalStore((s) => s.setSelectedWallIndex)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
-  const placeGhost = useFloorplanLocalStore((s) => s.placeGhost)
-  const requestPlaceCommit = useFloorplanLocalStore((s) => s.requestPlaceCommit)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
@@ -870,15 +868,12 @@ export default function FloorplanPanel() {
         <PanelBoard onClose={closeAllPanels} />
       )}
 
-      {/* ── Placement bar — position the ghost, then Place (camera is locked). ── */}
+      {/* ── Placement bar — tap the plan to drop it (camera is locked). ── */}
       {placeObjectType && (
         <div className={styles.placeBar}>
           <span className={styles.placeHint}>
-            {placeGhost ? `Placing ${getCatalogItem(placeObjectType)?.label ?? placeObjectType}` : 'Tap the plan to position'}
+            Tap the plan to place {getCatalogItem(placeObjectType)?.label ?? placeObjectType}
           </span>
-          <button className={styles.action} disabled={!placeGhost} onClick={() => requestPlaceCommit()}>
-            Place
-          </button>
           <button className={styles.secondary} onClick={() => setPlaceObjectType(null)}>
             Cancel
           </button>
