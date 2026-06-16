@@ -102,21 +102,25 @@
   cursor: default;
 }
 
-/* ── Panel wrapper — slides as ONE unit, tab always visible ──────────────── */
-/* Panel is 300px. Tab is 42px. Total = 342px.
-   When closed: translateX(-300px) → only 42px tab visible on left edge.
-   When open:   translateX(0)      → full 342px panel+tab visible. */
-
+/* ── Slide-in panel — off-screen when closed, no peeking strip ───────────── */
+/* Left edge for Layers, right edge for Settings. Capped at 60vh so it never
+   dominates the screen; content scrolls inside. */
 .panelWrapper {
   position: absolute;
-  left: 0;
-  top: 44px;
-  bottom: 0;
-  width: 342px;
+  left: 12px;
+  top: 60px;
+  width: min(300px, calc(100vw - 24px));
   display: flex;
-  z-index: 40;
-  transform: translateX(-300px);
+  z-index: 55;
+  transform: translateX(calc(-100% - 16px));
   transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Settings slides in from the right edge instead of the left. */
+.panelRight {
+  left: auto;
+  right: 12px;
+  transform: translateX(calc(100% + 16px));
 }
 
 .panelWrapperOpen {
@@ -125,14 +129,18 @@
 
 /* ── Panel content ───────────────────────────────────────────────────────── */
 .panel {
-  width: 300px;
+  width: 100%;
   flex-shrink: 0;
+  max-height: 60vh;
+  max-height: 60dvh;
   background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-sidebar-opacity, 0.95));
   backdrop-filter: blur(calc(var(--bp-sidebar-opacity, 0.95) * 14px));
-  border-right: 1px solid rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 .panelHeader {
@@ -518,18 +526,34 @@
 }
 .resetBtn:hover { color: #94a3b8; border-color: #334155; }
 
-/* ── Landscape phones (short viewport) — slim the drawer so it doesn't
-   swallow the workspace; keep the 42px tab strip peeking. ───────────────── */
-@media (max-height: 500px) {
-  .panelWrapper { width: 290px; transform: translateX(-248px); }
-  .panelWrapperOpen { transform: translateX(0); }
-  .panel { width: 248px; }
+/* ── Floating brand mark — top-left, never intercepts canvas input ───────── */
+.logoFloat {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 50;
+  pointer-events: none;
+  transform-origin: left center;
 }
 
-/* ── Portrait phones — the drawer nearly fills the width so menu controls are
-   readable (no cramming/overlap); the 42px tab strip stays at the edge. ──── */
-@media (max-width: 560px) {
-  .panelWrapper { width: 100vw; transform: translateX(calc(-100vw + 42px)); }
-  .panelWrapperOpen { transform: translateX(0); }
-  .panel { width: calc(100vw - 42px); }
+/* ── Panel action buttons (Annotate / Share, in Settings) ────────────────── */
+.panelBtnRow {
+  display: flex;
+  gap: 8px;
+  padding: 4px 16px 8px;
 }
+
+.panelBtn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  min-height: 44px;
+  transition: background 0.15s;
+}
+.panelBtn:hover { background: rgba(255, 255, 255, 0.15); }

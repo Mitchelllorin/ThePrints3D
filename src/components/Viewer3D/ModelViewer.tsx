@@ -224,6 +224,22 @@ export default function ModelViewer() {
   const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
 
+  // UI reset: the old top toolbar + camera HUD are retired. Their actions live
+  // in the top-right icons (Rebuild/Trace/Layers/Settings/Undo) and the Settings
+  // panel (Annotate/Share/Measure/Recalibrate). Flag kept for quick reference.
+  const SHOW_LEGACY_TOOLBAR = false
+
+  // Zoom in/out by dollying the camera along its view direction toward target.
+  const zoomBy = (factor: number) => {
+    const c = controlsRef.current
+    if (!c) return
+    const cam = c.object
+    const offset = cam.position.clone().sub(c.target)
+    offset.multiplyScalar(factor)
+    cam.position.copy(c.target).add(offset)
+    c.update()
+  }
+
   // The camera stays free to orbit/pan even mid-trace/calibration — it's only
   // locked while a gesture must own the pointer (dragging an overlay handle or
   // freehand-drawing). Trace/calibration points are placed on a tap, so a drag
@@ -279,8 +295,8 @@ export default function ModelViewer() {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Toolbar overlay */}
-      {model.status === 'ready' && (
+      {/* Toolbar overlay — retired in the UI reset (see SHOW_LEGACY_TOOLBAR). */}
+      {SHOW_LEGACY_TOOLBAR && model.status === 'ready' && (
         <div className={styles.toolbar}>
           <button
             className={`${styles.toolBtn} ${overlay.calibrationMode ? styles.toolBtnActive : ''}`}
@@ -395,11 +411,18 @@ export default function ModelViewer() {
         </div>
       )}
 
-      {/* Camera preset HUD — visible whenever the model exists */}
-      {(model.status === 'ready' || model.status === 'building') && <CameraHud />}
-      {/* ProductPlacementPanel hidden by default — access via Layers panel */}
+      {/* Camera preset HUD — retired in the UI reset. */}
+      {SHOW_LEGACY_TOOLBAR && (model.status === 'ready' || model.status === 'building') && <CameraHud />}
 
-      {model.status === 'ready' && (
+      {/* Zoom — small, near-transparent, blends into the corner. */}
+      {(model.status === 'ready' || model.status === 'building') && (
+        <div className={styles.zoomControls}>
+          <button className={styles.zoomBtn} onClick={() => zoomBy(0.83)} title="Zoom in" aria-label="Zoom in">+</button>
+          <button className={styles.zoomBtn} onClick={() => zoomBy(1.2)} title="Zoom out" aria-label="Zoom out">−</button>
+        </div>
+      )}
+
+      {measureMode && model.status === 'ready' && (
         <aside
           className={`${styles.measurementsPanel} ${
             measurementsPanelCollapsed ? styles.measurementsPanelCollapsed : ''

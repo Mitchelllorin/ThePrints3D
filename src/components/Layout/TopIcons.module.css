@@ -1,0 +1,42 @@
+/* Five icon buttons, top-right. The only persistent chrome. */
+.bar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 60;
+  display: flex;
+  gap: 8px;
+  pointer-events: all;
+}
+
+.btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  backdrop-filter: blur(4px);
+}
+
+.btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.8);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.btn:disabled { opacity: 0.35; cursor: default; }
+
+.active {
+  border-color: var(--bp-accent, #38bdf8);
+  color: var(--bp-accent, #38bdf8);
+}
+
+/* Phones: keep the 44px minimum tap target. */
+@media (max-width: 767px) {
+  .btn { width: 44px; height: 44px; }
+}

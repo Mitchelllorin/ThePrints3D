@@ -271,15 +271,45 @@
   left: 0;
   right: 0;
   bottom: 0;
+  height: 64px;
   display: flex;
+  align-items: center;
   gap: 8px;
   overflow-x: auto;
-  padding: 10px 12px;
-  background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-panel-opacity, 0.92));
-  backdrop-filter: blur(calc(var(--bp-panel-opacity, 0.92) * 8px));
-  border-top: 1px solid rgba(51, 65, 85, 0.5);
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   z-index: 30;
   pointer-events: all;
+}
+
+/* Text-only object cards — no icons. */
+.trayCard,
+.trayCardActive {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.trayCard:hover { background: rgba(255, 255, 255, 0.12); }
+.trayCardActive {
+  border-color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 22%, transparent);
+  color: var(--bp-accent, #38bdf8);
 }
 
 .trayItem,

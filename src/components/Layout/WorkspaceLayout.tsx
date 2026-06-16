@@ -4,7 +4,7 @@ import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TopbarLogo3D from './TopbarLogo3D'
-import LayerToggles from './LayerToggles'
+import TopIcons from './TopIcons'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
@@ -356,15 +356,8 @@ function ConverterPanel() {
   )
 }
 
-// ── Panel tabs ───────────────────────────────────────────────────────────────
-type PanelId = 'layers' | 'settings' | 'presets' | 'convert'
-
-const TABS: Array<{ id: PanelId; icon: string; label: string }> = [
-  { id: 'layers',   icon: '≡', label: 'Layers'   },
-  { id: 'presets',  icon: '★', label: 'Presets'  },
-  { id: 'convert',  icon: '⇄', label: 'Convert'  },
-  { id: 'settings', icon: '⚙', label: 'Settings' },
-]
+// The slide-in panels reachable from the top-right icons.
+type PanelId = 'layers' | 'settings'
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 export default function WorkspaceLayout() {
@@ -379,11 +372,27 @@ export default function WorkspaceLayout() {
   const detectedWallTypes  = useAppStore((s) => s.detectedWallTypes)
   const setProjectWallTypes = useAppStore((s) => s.setProjectWallTypes)
   const undo    = useAppStore((s) => s.undo)
-  const redo    = useAppStore((s) => s.redo)
   const canUndo = useAppStore((s) => s.historyPast.length > 0)
-  const canRedo = useAppStore((s) => s.historyFuture.length > 0)
+  const buildForMe = useAppStore((s) => s.buildForMe)
+  const annotateMode = useAppStore((s) => s.annotateMode)
+  const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
+  const traceActive = useFloorplanLocalStore((s) => s.traceMode || s.activePanel === 'picker')
   const logoOpacity = useUISettingsStore((s) => s.logoOpacity)
   const logoSize    = useUISettingsStore((s) => s.logoSize)
+
+  const sharePng = () => {
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
+    if (!canvas) return
+    try {
+      const a = document.createElement('a')
+      a.href = canvas.toDataURL('image/png')
+      a.download = `blueprint3d-${Date.now()}.png`
+      a.click()
+    } catch (e) {
+      console.error('Snapshot failed', e)
+      alert('Snapshot failed — orbit the view once, then retry.')
+    }
+  }
 
   const handleLoadPreset = (presetId: PresetDifficulty) => {
     try {
@@ -396,8 +405,6 @@ export default function WorkspaceLayout() {
       console.error('Failed to load preset:', presetId, error)
     }
   }
-  const topbarOpacity = useUISettingsStore((s) => s.topbarOpacity)
-
   const hasDrawings = drawings.length > 0
   const showUploadHint = !hasDrawings && !uploadDismissed
 
@@ -457,52 +464,37 @@ export default function WorkspaceLayout() {
         <ModelViewer />
       </div>
 
-      {/* Top bar — thin, semi-transparent, sits above viewport */}
-      <div className={styles.topbar} style={{ background: `rgba(var(--bp-panel-rgb, 10, 16, 30), ${topbarOpacity})` }}>
-        <div style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <TopbarLogo3D />
-        </div>
-
-        <div className={styles.topbarActions}>
-          <button
-            className={styles.historyBtn}
-            onClick={undo}
-            disabled={!canUndo}
-            title="Undo (Ctrl+Z)"
-            aria-label="Undo"
-          >
-            ↶
-          </button>
-          <button
-            className={styles.historyBtn}
-            onClick={redo}
-            disabled={!canRedo}
-            title="Redo (Ctrl+Shift+Z)"
-            aria-label="Redo"
-          >
-            ↷
-          </button>
-        </div>
+      {/* Brand mark — small, floating, top-left; never blocks the canvas. */}
+      <div className={styles.logoFloat} style={{ opacity: logoOpacity, transform: `scale(${logoSize})` }}>
+        <TopbarLogo3D />
       </div>
 
-      {/* Top-right system toggles — visible once a plan is loaded. */}
-      {hasDrawings && <LayerToggles />}
+      {/* The only persistent chrome: five icon buttons, top-right. */}
+      <TopIcons
+        onRebuild={buildForMe}
+        onTrace={() => { setOpen(null); useFloorplanLocalStore.getState().openPicker() }}
+        onLayers={() => toggle('layers')}
+        onSettings={() => toggle('settings')}
+        onUndo={undo}
+        traceActive={traceActive}
+        layersActive={open === 'layers'}
+        settingsActive={open === 'settings'}
+        canUndo={canUndo}
+      />
 
-      {/* Panel + tab — one unit that slides together.
-          Only the 42px tab strip peeks out when retracted. */}
-      <div className={`${styles.panelWrapper} ${open ? styles.panelWrapperOpen : ''}`}>
+      {/* Slide-in panel — Layers from the left, Settings from the right.
+          Fully off-screen when closed (no peeking strip). */}
+      <div className={`${styles.panelWrapper} ${open === 'settings' ? styles.panelRight : ''} ${open ? styles.panelWrapperOpen : ''}`}>
         <div className={styles.panel}>
           <div className={styles.panelHeader}>
-            <span className={styles.panelTitle}>{TABS.find((t) => t.id === open)?.label ?? ''}</span>
-            <button className={styles.panelClose} onClick={() => setOpen(null)}>✕</button>
+            <span className={styles.panelTitle}>{open === 'settings' ? 'Settings' : 'Layers'}</span>
+            <button className={styles.panelClose} onClick={() => setOpen(null)} aria-label="Close">✕</button>
           </div>
           <div className={styles.panelScroll}>
             {open === 'layers' && (
               <>
-                <p className={styles.sectionTitle}>Layers</p>
+                <p className={styles.sectionTitle}>Systems</p>
                 <LayerPanel />
-                <p className={styles.sectionTitle}>Annotations</p>
-                <AnnotationPanel />
                 <p className={styles.sectionTitle}>Wall Types</p>
                 <WallTypeLegend
                   types={projectWallTypes}
@@ -511,34 +503,24 @@ export default function WorkspaceLayout() {
                 />
               </>
             )}
-            {open === 'presets' && (
+            {open === 'settings' && (
               <>
+                <SettingsContent />
+                <p className={styles.sectionTitle}>Annotate &amp; Export</p>
+                <div className={styles.panelBtnRow}>
+                  <button className={styles.panelBtn} onClick={() => setAnnotateMode(!annotateMode)}>
+                    {annotateMode ? 'Stop annotating' : 'Annotate'}
+                  </button>
+                  <button className={styles.panelBtn} onClick={sharePng}>Share PNG</button>
+                </div>
+                <AnnotationPanel />
                 <p className={styles.sectionTitle}>Presets</p>
                 <PresetPanel onLoad={handleLoadPreset} />
-              </>
-            )}
-            {open === 'convert' && (
-              <>
                 <p className={styles.sectionTitle}>Unit converter</p>
                 <ConverterPanel />
               </>
             )}
-            {open === 'settings' && <SettingsContent />}
           </div>
-        </div>
-
-        {/* Tabs on the right edge of the panel */}
-        <div className={styles.tabStrip}>
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`${styles.tab} ${open === t.id ? styles.tabActive : ''}`}
-              onClick={() => toggle(t.id)}
-              title={t.label}
-            >
-              <span className={styles.tabLabel}>{t.label}</span>
-            </button>
-          ))}
         </div>
       </div>
 
@@ -550,7 +532,7 @@ export default function WorkspaceLayout() {
             <span className={styles.uploadHintTitle}>Get started</span>
             <button className={styles.uploadHintDismiss} onClick={() => setUploadDismissed(true)} title="Dismiss">✕</button>
           </div>
-          <p className={styles.uploadHintSub}>Drag a floor plan onto the grid, browse presets in the left sidebar, or choose below.</p>
+          <p className={styles.uploadHintSub}>Drag a floor plan onto the grid, import one, or start from a preset.</p>
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintBtn} onClick={() => fileInputRef.current?.click()}>
               Browse files
@@ -559,6 +541,8 @@ export default function WorkspaceLayout() {
               Scan with camera
             </button>
           </div>
+          <p className={styles.uploadHintSub} style={{ marginTop: 4 }}>Or start from a preset:</p>
+          <PresetPanel onLoad={handleLoadPreset} />
         </div>
       )}
     </div>

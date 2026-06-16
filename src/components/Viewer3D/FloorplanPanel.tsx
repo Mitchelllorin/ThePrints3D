@@ -136,8 +136,6 @@ export default function FloorplanPanel() {
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
   const pickerOpen = useFloorplanLocalStore((s) => s.activePanel === 'picker')
   const panelBoardOpen = useFloorplanLocalStore((s) => s.activePanel === 'panelBoard')
-  const catalogOpen = useFloorplanLocalStore((s) => s.activePanel === 'catalog')
-  const toggleCatalog = useFloorplanLocalStore((s) => s.toggleCatalog)
   const openPicker = useFloorplanLocalStore((s) => s.openPicker)
   const openPanelBoard = useFloorplanLocalStore((s) => s.openPanelBoard)
   const armPlaceExclusive = useFloorplanLocalStore((s) => s.armPlaceExclusive)
@@ -823,7 +821,7 @@ export default function FloorplanPanel() {
 
       {/* ── Property card for the selected placed object (above the tray) ── */}
       {selectedObject && objDims && (
-        <div className={styles.propCard} style={{ bottom: 16 }}>
+        <div className={styles.propCard} style={{ bottom: trayVisible ? 76 : 16 }}>
           <div className={styles.propHeader}>
             <span className={styles.propTitle}>{selectedObject.label}</span>
             <button className={styles.cardClose} onClick={() => setSelectedObjectId(null)} aria-label="Close">✕</button>
@@ -881,34 +879,20 @@ export default function FloorplanPanel() {
         <PanelBoard onClose={closeAllPanels} />
       )}
 
-      {/* ── Object catalog — one button that opens a scrollable popover. ──
-          No persistent bar hogging the workspace; the list scrolls. ── */}
+      {/* ── Object tray — slim 64px single row, text-only, scrollable. ── */}
       {trayVisible && (
-        <>
-          <button
-            className={catalogOpen ? styles.catalogBtnActive : styles.catalogBtn}
-            onClick={toggleCatalog}
-            title="Object catalog"
-          >
-            Objects {catalogOpen ? '▾' : '▸'}
-          </button>
-          {catalogOpen && (
-            <div className={styles.catalogPanel}>
-              <div className={styles.catalogGrid}>
-                {(activeTraceLayer === 'electrical' ? electricalTrayItems() : trayItems()).map((item) => (
-                  <button
-                    key={item.type}
-                    className={placeObjectType === item.type ? styles.trayItemActive : styles.trayItem}
-                    onClick={() => armPlace(item.type)}
-                    title={item.label}
-                  >
-                    <span className={styles.trayLabel}>{item.short}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </>
+        <div className={styles.tray}>
+          {(activeTraceLayer === 'electrical' ? electricalTrayItems() : trayItems()).map((item) => (
+            <button
+              key={item.type}
+              className={placeObjectType === item.type ? styles.trayCardActive : styles.trayCard}
+              onClick={() => armPlace(item.type)}
+              title={item.label}
+            >
+              {item.short}
+            </button>
+          ))}
+        </div>
       )}
     </>
   )
