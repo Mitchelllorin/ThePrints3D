@@ -79,48 +79,34 @@
   margin-top: 4px;
 }
 
-.action {
-  background: var(--bp-accent, #38bdf8);
-  color: #0f172a;
-  border: none;
-  border-radius: 7px;
-  padding: 7px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.1s;
-  white-space: nowrap;
-}
-
-.action:hover {
-  opacity: 0.85;
-  transform: translateY(-1px);
-}
-
-.action:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  transform: none;
-}
-
+/* One consistent button style across the whole app (base = .secondary).
+   .action is the same language with a brighter "selected/primary" state. */
+.action,
 .secondary {
-  background: rgba(30, 41, 59, 0.8);
-  color: #94a3b8;
-  border: 1px solid rgba(51, 65, 85, 0.6);
-  border-radius: 7px;
-  padding: 7px 12px;
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, border-color 0.15s;
   white-space: nowrap;
+  min-height: 32px;
 }
 
+.action {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--bp-accent, #38bdf8);
+}
+
+.action:hover,
 .secondary:hover {
-  background: #1e293b;
-  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.2);
 }
 
+.action:disabled,
 .secondary:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -451,3 +437,15 @@
 }
 .loadFill { height: 100%; background: var(--bp-accent, #38bdf8); }
 .loadFillOver { background: #ef4444; }
+
+/* ── Mobile landscape (phones) — caps + tap targets ───────────────────────── */
+@media (max-width: 767px) {
+  .guide { max-height: 50vh; width: 190px; }
+  .panelBoard { max-height: 50vh; }
+  .propCard { max-height: 50vh; }
+  .tray { max-height: 80px; padding: 8px 10px; }
+  .trayItem, .trayItemActive { min-height: 44px; }
+  .action, .secondary { min-height: 44px; font-size: 14px; }
+  .stepText, .propTitle { font-size: 15px; }
+  .stepHint, .propLabel, .unit { font-size: 13px; }
+}

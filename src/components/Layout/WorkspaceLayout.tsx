@@ -3,6 +3,7 @@ import { listPresetDefinitions, type PresetDifficulty } from '../../services/pre
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
+import TopbarLogo3D from './TopbarLogo3D'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
@@ -471,11 +472,8 @@ export default function WorkspaceLayout() {
 
       {/* Top bar — thin, semi-transparent, sits above viewport */}
       <div className={styles.topbar} style={{ background: `rgba(var(--bp-panel-rgb, 10, 16, 30), ${topbarOpacity})` }}>
-        <div style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center', display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span className={styles.logo}>
-            <span className={styles.logoBlue}>Blue</span><span className={styles.logoPrint}>Print</span><span className={styles.logo3D}>3D</span>
-          </span>
-          <span className={styles.logoSub}>by LearnIt3D</span>
+        <div style={{ opacity: logoOpacity, transform: `scale(${logoSize})`, transformOrigin: 'left center', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <TopbarLogo3D />
         </div>
 
         <div className={styles.topbarActions}>
@@ -548,7 +546,6 @@ export default function WorkspaceLayout() {
               onClick={() => toggle(t.id)}
               title={t.label}
             >
-              <span className={styles.tabIcon}>{t.icon}</span>
               <span className={styles.tabLabel}>{t.label}</span>
             </button>
           ))}

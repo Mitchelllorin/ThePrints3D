@@ -117,23 +117,50 @@
   padding: 6px 10px;
   backdrop-filter: blur(calc(var(--bp-panel-opacity, 0.92) * 6px));
   pointer-events: all;
+  /* Never wrap/stack — scroll horizontally if it overflows (mobile landscape). */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  max-width: calc(100vw - 24px);
+}
+
+/* Export dropdown */
+.exportWrap { position: relative; flex: 0 0 auto; }
+.exportMenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 6px;
+  z-index: 46;
+  backdrop-filter: blur(8px);
+}
+
+/* Mobile landscape: taller tap targets, readable text. */
+@media (max-width: 767px) {
+  .toolBtn { min-height: 44px; font-size: 14px; }
 }
 
 .toolBtn {
-  background: #1e293b;
-  border: 1px solid #334155;
-  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
   font-size: 13px;
-  font-weight: 600;
-  padding: 5px 14px;
-  border-radius: 7px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
+  min-height: 32px;
 }
 
 .toolBtn:hover {
-  background: #334155;
+  background: rgba(255, 255, 255, 0.15);
   color: #f1f5f9;
 }
 

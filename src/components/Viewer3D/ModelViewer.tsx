@@ -28,7 +28,10 @@ function CameraRig() {
   const initialized = useRef(false)
   useEffect(() => {
     if (!initialized.current) {
-      camera.position.set(12, 10, 12)
+      // On phones (<768px) start ~40% closer so the floorplan fills the viewport.
+      const mobile = typeof window !== 'undefined' && window.innerWidth < 768
+      const d = mobile ? 0.6 : 1
+      camera.position.set(12 * d, 10 * d, 12 * d)
       camera.lookAt(0, 0, 0)
       initialized.current = true
     }
@@ -168,7 +171,7 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
 
         <div className={styles.formButtons}>
           <button type="submit" className={styles.formSubmit} disabled={!text.trim()}>
-            📌 Add Pin
+            Add Pin
           </button>
           <button type="button" className={styles.formCancel} onClick={onCancel}>
             Cancel
@@ -217,6 +220,7 @@ export default function ModelViewer() {
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
   const [showWizard, setShowWizard]     = useState(false)
+  const [exportOpen, setExportOpen]     = useState(false)
   const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
 
@@ -281,14 +285,14 @@ export default function ModelViewer() {
             title="Re-set the real-world scale — pick two points and confirm the distance"
             data-testid="recalibrate-btn"
           >
-            📐 {overlay.calibrationMode ? 'Calibrating…' : 'Recalibrate'}
+            {overlay.calibrationMode ? 'Calibrating…' : 'Recalibrate'}
           </button>
           <button
             className={`${styles.toolBtn} ${measureMode ? styles.toolBtnActive : ''}`}
             onClick={() => setMeasureMode(!measureMode)}
             title="Measure distances (click two points)"
           >
-            📏 {measureMode ? 'Measuring…' : 'Measure'}
+            {measureMode ? 'Measuring…' : 'Measure'}
           </button>
           {measurements.length > 0 && (
             <button
@@ -296,40 +300,51 @@ export default function ModelViewer() {
               onClick={clearMeasurements}
               title="Clear all measurements"
             >
-              🗑 Clear ({measurements.length})
+              Clear ({measurements.length})
             </button>
           )}
-          <button
-            className={`${styles.toolBtn} ${annotateMode ? styles.toolBtnActive : ''}`}
-            onClick={() => { setAnnotateMode(!annotateMode); setPendingForm(null) }}
-            title={annotateMode ? 'Exit annotation mode' : 'Annotate — click the model to place pins'}
-          >
-            📌 {annotateMode ? 'Annotating…' : 'Annotate'}
-            {annotations.length > 0 && !annotateMode && (
-              <span className={styles.toolBadge}>{annotations.length}</span>
+          {/* Export menu — collapses Annotate + Share PNG to save toolbar space. */}
+          <div className={styles.exportWrap}>
+            <button
+              className={`${styles.toolBtn} ${exportOpen || annotateMode ? styles.toolBtnActive : ''}`}
+              onClick={() => setExportOpen((v) => !v)}
+              title="Annotate or export the view"
+            >
+              Export ▾
+            </button>
+            {exportOpen && (
+              <div className={styles.exportMenu}>
+                <button
+                  className={styles.toolBtn}
+                  onClick={() => { setAnnotateMode(!annotateMode); setPendingForm(null); setExportOpen(false) }}
+                >
+                  {annotateMode ? 'Stop annotating' : 'Annotate'}
+                  {annotations.length > 0 && !annotateMode && <span className={styles.toolBadge}>{annotations.length}</span>}
+                </button>
+                <button
+                  className={styles.toolBtn}
+                  onClick={() => {
+                    setExportOpen(false)
+                    const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
+                    if (!canvas) return
+                    try {
+                      const dataUrl = canvas.toDataURL('image/png')
+                      const a = document.createElement('a')
+                      a.href = dataUrl
+                      a.download = `blueprint3d-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`
+                      a.click()
+                    } catch (err) {
+                      console.error('Snapshot failed:', err)
+                      alert('Snapshot failed — try again after orbiting the view once.')
+                    }
+                  }}
+                  data-testid="share-png-btn"
+                >
+                  Share PNG
+                </button>
+              </div>
             )}
-          </button>
-          <button
-            className={styles.toolBtn}
-            onClick={() => {
-              const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
-              if (!canvas) return
-              try {
-                const dataUrl = canvas.toDataURL('image/png')
-                const a = document.createElement('a')
-                a.href = dataUrl
-                a.download = `blueprint3d-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`
-                a.click()
-              } catch (err) {
-                console.error('Snapshot failed:', err)
-                alert('Snapshot failed — try again after orbiting the view once.')
-              }
-            }}
-            title="Save the current 3D view as a PNG image you can share"
-            data-testid="share-png-btn"
-          >
-            📤 Share PNG
-          </button>
+          </div>
           {hasWalls && (
             <>
               <button
@@ -340,21 +355,24 @@ export default function ModelViewer() {
               >
                 {buildResult ? 'Rebuild' : 'Build for me'}
               </button>
-              <button
-                className={`${styles.toolBtn} ${showWizard ? styles.toolBtnActive : ''}`}
-                onClick={() => {
-                  if (!buildResult) buildForMe()
-                  setShowWizard(!showWizard)
-                }}
-                title="Walk construction decisions step by step"
-                data-testid="wizard-btn"
-              >
-                Wizard
-              </button>
+              {/* Wizard only while setup is incomplete (before a build exists). */}
+              {!buildResult && (
+                <button
+                  className={`${styles.toolBtn} ${showWizard ? styles.toolBtnActive : ''}`}
+                  onClick={() => {
+                    if (!buildResult) buildForMe()
+                    setShowWizard(!showWizard)
+                  }}
+                  title="Walk construction decisions step by step"
+                  data-testid="wizard-btn"
+                >
+                  Wizard
+                </button>
+              )}
             </>
           )}
           <label className={styles.explodeControl} title="Separate every component outward from the model centre">
-            <span>💥 Explode</span>
+            <span>Explode</span>
             <input
               type="range"
               min={0}
