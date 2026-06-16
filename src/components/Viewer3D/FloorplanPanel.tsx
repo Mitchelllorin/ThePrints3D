@@ -391,9 +391,11 @@ export default function FloorplanPanel() {
     : activeTraceLayer === 'electrical'
       ? `${elecElement} · ${elecAmp} · ${elecElement === 'Low Voltage' ? 'LV' : elecRole}`
       : ''
-  // Tray appears once a build exists — either the construction-engine result
-  // (Build for me) or a rendered 3D model (Build 3D from tracing).
-  const trayVisible = buildResult !== null || modelReady
+  // Object placement is part of the edit-anytime flow: the catalog is available
+  // whenever a plan is loaded and you're not mid-calibration/trace (those own
+  // the workspace). Not gated to post-build anymore.
+  const trayVisible = !!drawing && drawing.status === 'ready'
+    && !overlay.calibrationMode && !traceMode && !pickerOpen
   const objDims = selectedObject && selectedObjItem
     ? {
         W: selectedObjItem.defaultW * selectedObject.scaleX,
