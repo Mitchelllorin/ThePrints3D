@@ -92,9 +92,11 @@ const DEFAULT_LAYERS: Layer[] = [
   },
   {
     id: 'walls',
+    // Solid wall volumes are OFF by default — the build shows stud framing (with
+    // doorway framing) instead of solid grey blocks. Toggle on for a solid view.
     label: 'Walls',
     color: '#e2e8f0',
-    visible: true,
+    visible: false,
     opacity: 1,
     sourceTypes: ['floor-plan', 'architectural'],
     icon: '🧱',
@@ -534,13 +536,7 @@ function computeFramingResult(
   if (allParsed.length === 0) return null
   const ref = allParsed.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
   const scaleMmPerPx = ref.scaleMmPerPx ?? 23.5
-  // If the user traced walls on a drawing, frame ONLY those (ignore the
-  // auto-detected walls so the build matches what was traced — no offset dupes).
-  const wallsFor = (d: typeof allParsed[number]) => {
-    const userW = d.parsedWalls.filter((w) => w.source === 'user')
-    return userW.length > 0 ? userW : d.parsedWalls
-  }
-  const allWalls = allParsed.flatMap(wallsFor)
+  const allWalls = allParsed.flatMap((d) => d.parsedWalls)
   const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
   const cfg = useConfigStore.getState()
   const onboardingMeta = loadOnboardingWizardState().meta

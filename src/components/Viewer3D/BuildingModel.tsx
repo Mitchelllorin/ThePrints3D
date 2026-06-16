@@ -877,13 +877,9 @@ export default function BuildingModel({ layers }: Props) {
             const wMat = mat(wallLayer.color, wallLayer.opacity, { roughness: 0.7 })
             if (wallDrawings.length > 0) {
               for (const d of wallDrawings) {
-                // If the user traced walls, build ONLY those — the auto-detected
-                // walls would otherwise render as offset/duplicate solid volumes.
-                const userW = d.parsedWalls.filter((w) => w.source === 'user')
-                const buildWalls = userW.length > 0 ? userW : d.parsedWalls
                 buildRealWalls(
                   group,
-                  buildWalls,
+                  d.parsedWalls,
                   transforms.get(d.id)!,
                   elev,
                   fh,
