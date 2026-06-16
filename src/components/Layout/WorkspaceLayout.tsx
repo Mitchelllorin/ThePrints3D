@@ -550,6 +550,13 @@ export default function WorkspaceLayout() {
             )}
             {open === 'settings' && (
               <>
+                <p className={styles.sectionTitle}>Floor plan</p>
+                <div className={styles.panelBtnRow}>
+                  <button className={styles.panelBtn} onClick={() => fileInputRef.current?.click()}>Browse files</button>
+                  <button className={styles.panelBtn} onClick={() => fileInputRef.current?.click()}>Scan</button>
+                </div>
+                <p className={styles.sectionTitle}>Presets</p>
+                <PresetPanel onLoad={handleLoadPreset} />
                 <SettingsContent />
                 <p className={styles.sectionTitle}>Tools</p>
                 <div className={styles.panelBtnRow}>
@@ -568,8 +575,6 @@ export default function WorkspaceLayout() {
                   <button className={styles.panelBtn} onClick={sharePng}>Share PNG</button>
                 </div>
                 <AnnotationPanel />
-                <p className={styles.sectionTitle}>Presets</p>
-                <PresetPanel onLoad={handleLoadPreset} />
                 <p className={styles.sectionTitle}>Unit converter</p>
                 <ConverterPanel />
               </>
