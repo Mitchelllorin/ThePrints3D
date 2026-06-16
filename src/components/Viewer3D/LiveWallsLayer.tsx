@@ -6,10 +6,11 @@
  * same transform as FloorplanOverlay (overlay position/scale/rotation) to
  * place them correctly in the world.
  */
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { buildWallFraming } from '../../services/framingGeometry'
 import type { ParsedWall } from '../../types'
 
 const MIN_THICKNESS = 0.1     // metres — minimum visible thickness
@@ -29,7 +30,6 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight }: WallMeshProp
   const dx = p2.x - p1.x
   const dz = p2.z - p1.z
   const length = Math.hypot(dx, dz)
-  if (length < 0.05) return null
 
   const cx = (p1.x + p2.x) / 2
   const cz = (p1.z + p2.z) / 2
@@ -39,21 +39,23 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight }: WallMeshProp
   const mmPerPx = scaleMmPerPx ?? DEFAULT_THICKNESS_MM / (wall.thickness || 8)
   const thicknessM = Math.max(MIN_THICKNESS, ((wall.thickness || 8) * mmPerPx) / 1000)
 
+  // Same stud framing the built model draws — studs + plates, never a solid box.
+  const framing = useMemo(
+    () => buildWallFraming({ length, height: wallHeight, thickness: thicknessM, opacity: 0.7 }),
+    [length, wallHeight, thicknessM],
+  )
+
+  // Free the GPU geometry/material when this segment changes or unmounts.
+  useEffect(() => () => {
+    framing.traverse((o) => {
+      if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
+    })
+  }, [framing])
+
+  if (length < 0.05) return null
+
   return (
-    <mesh
-      position={[cx, wallHeight / 2, cz]}
-      rotation={[0, -angle, 0]}
-      castShadow
-    >
-      <boxGeometry args={[length, wallHeight, thicknessM]} />
-      <meshStandardMaterial
-        color="#94b8d0"
-        roughness={0.7}
-        metalness={0.05}
-        transparent
-        opacity={0.55}
-      />
-    </mesh>
+    <primitive object={framing} position={[cx, 0, cz]} rotation={[0, -angle, 0]} />
   )
 }
 
