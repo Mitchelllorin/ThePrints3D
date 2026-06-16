@@ -378,6 +378,23 @@ export default function WorkspaceLayout() {
   const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
   const explodeAmount = useAppStore((s) => s.explodeAmount)
   const setExplodeAmount = useAppStore((s) => s.setExplodeAmount)
+  const measureMode = useAppStore((s) => s.measureMode)
+  const setMeasureMode = useAppStore((s) => s.setMeasureMode)
+  const updateOverlay = useAppStore((s) => s.updateFloorplanOverlay)
+  const calibrationMode = useAppStore((s) => s.floorplanOverlay.calibrationMode)
+
+  // Re-enter calibration: reset picked points and let the ambient guide drive.
+  const recalibrate = () => {
+    const fp = useFloorplanLocalStore.getState()
+    fp.setTraceMode(false)
+    fp.setTraceStroke([])
+    fp.setCalibrationA(null)
+    fp.setCalibrationB(null)
+    fp.setHoverPixel(null)
+    fp.setDistanceInput('')
+    updateOverlay({ calibrationMode: true, guidedStep: 1, locked: false }, false)
+    setOpen(null)
+  }
   const traceActive = useFloorplanLocalStore((s) => s.traceMode || s.activePanel === 'picker')
   const logoOpacity = useUISettingsStore((s) => s.logoOpacity)
   const logoSize    = useUISettingsStore((s) => s.logoSize)
@@ -518,6 +535,15 @@ export default function WorkspaceLayout() {
                   />
                   <span className={styles.settingVal}>{Math.round(explodeAmount * 100)}%</span>
                 </label>
+                <p className={styles.sectionTitle}>Tools</p>
+                <div className={styles.panelBtnRow}>
+                  <button className={styles.panelBtn} onClick={() => setMeasureMode(!measureMode)}>
+                    {measureMode ? 'Stop measuring' : 'Measure'}
+                  </button>
+                  <button className={styles.panelBtn} onClick={recalibrate}>
+                    {calibrationMode ? 'Calibrating…' : 'Recalibrate'}
+                  </button>
+                </div>
                 <p className={styles.sectionTitle}>Annotate &amp; Export</p>
                 <div className={styles.panelBtnRow}>
                   <button className={styles.panelBtn} onClick={() => setAnnotateMode(!annotateMode)}>
