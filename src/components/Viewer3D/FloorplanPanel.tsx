@@ -4,7 +4,7 @@
  * Shows exactly one contextual prompt at a time. No panels, no headers,
  * no dense button grids — just the next action the user needs to take.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -132,8 +132,9 @@ export default function FloorplanPanel() {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   // The wall-type picker shows before tracing begins, and can be reopened
-  // mid-session via the indicator chip without leaving trace mode.
-  const [pickerOpen, setPickerOpen] = useState(false)
+  // mid-session via the indicator chip. In the store so a canvas tap can close it.
+  const pickerOpen = useFloorplanLocalStore((s) => s.pickerOpen)
+  const setPickerOpen = useFloorplanLocalStore((s) => s.setPickerOpen)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const userWallCount = drawing?.parsedWalls.filter((w) => w.source === 'user').length ?? 0
@@ -378,7 +379,7 @@ export default function FloorplanPanel() {
     <>
       <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp" multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
-      <div className={styles.guide} style={trayVisible ? { bottom: 96 } : undefined}>
+      <div className={styles.guide}>
 
         {/* Drawing switcher — only shown when multiple drawings */}
         {drawings.length > 1 && !overlay.calibrationMode && !traceMode && (
@@ -426,10 +427,11 @@ export default function FloorplanPanel() {
               <span className={styles.stepLabel}>Tracing {layerLabel}</span>
               <button
                 className={styles.secondary}
-                style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px' }}
+                style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 6 }}
                 onClick={() => setPickerOpen(true)}
                 title="Change type"
               >
+                <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
                 {tradeIndicator}
               </button>
               <span className={styles.stepHint}>Tap a start point, then tap to extend. Esc ends the run.</span>
@@ -564,10 +566,11 @@ export default function FloorplanPanel() {
             {/* Persistent indicator — shows the active type, tap to change it. */}
             <button
               className={styles.secondary}
-              style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px' }}
+              style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 6 }}
               onClick={() => setPickerOpen(true)}
               title="Change wall type"
             >
+              <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
               {framingShort(activeWallType)} · {roleShort(activeWallRole)}
             </button>
             {pendingWalls ? (

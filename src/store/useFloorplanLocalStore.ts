@@ -78,6 +78,8 @@ interface FloorplanLocalState {
   placeObjectType: string | null
   /** Id of the currently selected placed object, or null. */
   selectedObjectId: string | null
+  /** Whether the pre-trace type picker drawer is open. */
+  pickerOpen: boolean
 
   // ─── UI toggles ──────────────────────────────────────────────────
   presetOpen: boolean
@@ -106,6 +108,7 @@ interface FloorplanLocalState {
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
   setSelectedObjectId: (v: string | null) => void
+  setPickerOpen: (v: boolean) => void
   setPresetOpen: (v: boolean) => void
   setPracticeMode: (v: boolean) => void
   setSeedProcessing: (v: boolean) => void
@@ -137,6 +140,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   selectedWallIndex: null,
   placeObjectType: null,
   selectedObjectId: null,
+  pickerOpen: false,
   calibrationHandledIds: [],
   distanceUnit: 'mm',
   pendingTraceAfterCalibration: false,
@@ -176,6 +180,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v }),
   setPlaceObjectType: (v) => set({ placeObjectType: v }),
   setSelectedObjectId: (v) => set({ selectedObjectId: v }),
+  setPickerOpen: (v) => set({ pickerOpen: v }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),
   setSeedProcessing: (v) => set({ seedProcessing: v }),

@@ -456,6 +456,15 @@ export default function ModelViewer() {
         camera={{ fov: 55, near: 0.1, far: 1000 }}
         style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
         onCreated={({ gl }) => { gl.setClearColor('#060d1a') }}
+        onPointerMissed={() => {
+          // Tap on empty canvas (not a wall/object) dismisses any open
+          // card/picker and clears the active selection.
+          const ls = useFloorplanLocalStore.getState()
+          ls.setSelectedObjectId(null)
+          ls.setSelectedWallIndex(null)
+          ls.setPlaceObjectType(null)
+          ls.setPickerOpen(false)
+        }}
       >
         <CameraRig />
         <ambientLight intensity={0.6} />
