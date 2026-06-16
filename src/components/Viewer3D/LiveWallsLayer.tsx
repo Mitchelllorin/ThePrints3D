@@ -8,10 +8,13 @@
  */
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { Billboard, Text } from '@react-three/drei'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming } from '../../services/framingGeometry'
+import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
+import type { ActiveUnit } from '../../store/useConfigStore'
 import type { ParsedWall } from '../../types'
 
 const MIN_THICKNESS = 0.1     // metres — minimum visible thickness
@@ -23,9 +26,11 @@ interface WallMeshProps {
   scaleMmPerPx: number | null
   wallHeight: number
   material: 'wood' | 'steel'
+  activeUnit: ActiveUnit
+  lengthFormat: LengthFormat
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, activeUnit, lengthFormat }: WallMeshProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
 
@@ -57,7 +62,15 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material }: Wa
   if (length < 0.05) return null
 
   return (
-    <primitive object={framing} position={[cx, 0, cz]} rotation={[0, -angle, 0]} />
+    <>
+      <primitive object={framing} position={[cx, 0, cz]} rotation={[0, -angle, 0]} />
+      {/* Nameplate — the wall's real length, always facing the camera. */}
+      <Billboard position={[cx, wallHeight + 0.28, cz]}>
+        <Text fontSize={0.32} color="#ffffff" anchorX="center" anchorY="middle" outlineWidth={0.025} outlineColor="#0b1120">
+          {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
+        </Text>
+      </Billboard>
+    </>
   )
 }
 
@@ -68,6 +81,8 @@ export default function LiveWallsLayer() {
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const framingMaterial = useConfigStore((s) => s.framingMaterial)
+  const activeUnit = useConfigStore((s) => s.activeUnit)
+  const lengthFormat = useConfigStore((s) => s.lengthFormat)
 
   const wallHeight = useMemo(
     () => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM,
@@ -120,6 +135,8 @@ export default function LiveWallsLayer() {
           scaleMmPerPx={scaleMmPerPx}
           wallHeight={wallHeight}
           material={framingMaterial}
+          activeUnit={activeUnit}
+          lengthFormat={lengthFormat}
         />
       ))}
     </group>
