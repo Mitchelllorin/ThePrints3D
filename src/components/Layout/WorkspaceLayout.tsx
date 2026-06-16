@@ -149,6 +149,8 @@ function SettingsContent() {
   const resetCfg = useConfigStore((x) => x.reset)
   const previewMode = useAppStore((x) => x.previewMode)
   const setPreviewMode = useAppStore((x) => x.setPreviewMode)
+  const visibleLayers = useAppStore((x) => x.visibleLayers)
+  const toggleTradeLayerVisible = useAppStore((x) => x.toggleTradeLayerVisible)
 
   // Single-open accordion, matching the panel tab strip's toggle behaviour.
   const [openId, setOpenId] = useState<string | null>('wall-trace')
@@ -218,6 +220,13 @@ function SettingsContent() {
 
       <CollapsibleSection id="preview" title="Preview" openId={openId} setOpenId={setOpenId}>
         <Toggle label="Sample room" val={previewMode} onChange={setPreviewMode} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="trade-layers" title="Trade layers" openId={openId} setOpenId={setOpenId}>
+        <Toggle label="Framing" val={visibleLayers.has('framing')} onChange={() => toggleTradeLayerVisible('framing')} />
+        <Toggle label="Plumbing" val={visibleLayers.has('plumbing')} onChange={() => toggleTradeLayerVisible('plumbing')} />
+        <Toggle label="Electrical" val={visibleLayers.has('electrical')} onChange={() => toggleTradeLayerVisible('electrical')} />
+        <Toggle label="HVAC" val={visibleLayers.has('hvac')} onChange={() => toggleTradeLayerVisible('hvac')} />
       </CollapsibleSection>
 
       <CollapsibleSection id="panels" title="UI menu / toolbar / panel" openId={openId} setOpenId={setOpenId}>

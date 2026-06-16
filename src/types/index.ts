@@ -86,6 +86,26 @@ export interface PlacedObject {
   brand?: string
 }
 
+/**
+ * A traced line for a trade discipline (plumbing/electrical). Endpoints are in
+ * image-pixel space like walls. `size`/`material` meaning depends on the trade
+ * (e.g. electrical reuses size=amperage, material=wire gauge).
+ */
+export interface TracedLine {
+  id: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  elementType: string
+  size: string
+  material: string
+  /** Plumbing supply lines: hot vs cold (drives red vs blue). */
+  tempType?: 'hot' | 'cold'
+  /** Electrical conductor role (Hot (Black)/Hot (Red)/Neutral/Ground). */
+  wireRole?: string
+}
+
 /** A room (enclosed region) detected by flood-filling the rasterized image. */
 export interface ParsedRoom {
   id: string

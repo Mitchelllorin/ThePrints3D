@@ -1,6 +1,9 @@
 import { create } from 'zustand'
-import { current } from 'immer'
+import { current, enableMapSet } from 'immer'
 import { immer } from 'zustand/middleware/immer'
+
+// Trade-layer visibility uses a Set in the immer store.
+enableMapSet()
 import type {
   AppView,
   Annotation,
@@ -16,10 +19,12 @@ import type {
   Measurement,
   Model3D,
   PlacedObject,
+  TracedLine,
   UserTrace,
   WallType,
   WorkspaceWizardInputs,
 } from '../types'
+import { type TraceLayer, TRACE_LAYER_ORDER } from '../data/traceLayers'
 import type { ProductCatalogItem, ProductPlacement } from '../types/products'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import { buildFraming } from '../services/constructionEngine'
@@ -218,6 +223,8 @@ interface WorkspaceHistorySnapshot {
   layers: Array<Pick<Layer, 'id' | 'visible' | 'opacity'>>
   productPlacements: ProductPlacement[]
   placedObjects: PlacedObject[]
+  plumbingLines: TracedLine[]
+  electricalLines: TracedLine[]
   annotations: Annotation[]
   measurements: Measurement[]
   userTraces: UserTrace[]
@@ -262,6 +269,11 @@ interface AppState {
   productPlacements: ProductPlacement[]
   /** User-placed furniture/fixtures in the 3D scene */
   placedObjects: PlacedObject[]
+  /** Traced trade lines by discipline */
+  plumbingLines: TracedLine[]
+  electricalLines: TracedLine[]
+  /** Which trade layers are currently shown in the 3D scene */
+  visibleLayers: Set<TraceLayer>
   wizardInputs: WorkspaceWizardInputs | null
   wizardState: ProjectContextWizardState
   floorplanOverlay: FloorplanOverlayState
@@ -360,6 +372,10 @@ interface AppState {
   addPlacedObject: (obj: PlacedObject) => void
   removePlacedObject: (id: string) => void
   updatePlacedObject: (id: string, patch: Partial<PlacedObject>) => void
+  // Trade trace lines
+  addPlumbingLines: (lines: TracedLine[]) => void
+  addElectricalLines: (lines: TracedLine[]) => void
+  toggleTradeLayerVisible: (layer: TraceLayer) => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -437,6 +453,8 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     })),
     productPlacements: state.productPlacements,
     placedObjects: state.placedObjects,
+    plumbingLines: state.plumbingLines,
+    electricalLines: state.electricalLines,
     annotations: state.annotations,
     measurements: state.measurements,
     userTraces: state.userTraces,
@@ -475,6 +493,8 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   }
   state.productPlacements = deepCopy(snapshot.productPlacements)
   state.placedObjects = deepCopy(snapshot.placedObjects ?? [])
+  state.plumbingLines = deepCopy(snapshot.plumbingLines ?? [])
+  state.electricalLines = deepCopy(snapshot.electricalLines ?? [])
   state.annotations = deepCopy(snapshot.annotations)
   state.measurements = deepCopy(snapshot.measurements)
   state.userTraces = deepCopy(snapshot.userTraces)
@@ -517,6 +537,9 @@ export const useAppStore = create<AppState>()(
     productCatalog: [],
     productPlacements: [],
     placedObjects: [],
+    plumbingLines: [],
+    electricalLines: [],
+    visibleLayers: new Set<TraceLayer>(TRACE_LAYER_ORDER),
     wizardInputs: null,
     wizardState: loadWizardState(),
     floorplanOverlay: deepCopy(DEFAULT_FLOORPLAN_OVERLAY),
@@ -1348,6 +1371,28 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         const obj = s.placedObjects.find((o) => o.id === id)
         if (obj) Object.assign(obj, patch)
+      })
+    },
+
+    // ─── Trade trace lines (plumbing / electrical) ────────────────────
+    addPlumbingLines: (lines) => {
+      if (lines.length === 0) return
+      pushHistory()
+      set((s) => { s.plumbingLines.push(...lines) })
+    },
+
+    addElectricalLines: (lines) => {
+      if (lines.length === 0) return
+      pushHistory()
+      set((s) => { s.electricalLines.push(...lines) })
+    },
+
+    toggleTradeLayerVisible: (layer) => {
+      set((s) => {
+        const next = new Set(s.visibleLayers)
+        if (next.has(layer)) next.delete(layer)
+        else next.add(layer)
+        s.visibleLayers = next
       })
     },
     }

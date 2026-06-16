@@ -10,15 +10,14 @@ import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm } from '../../services/unitConverter'
 import { getCatalogItem, trayItems, SUBTYPES } from '../../data/objectCatalog'
+import {
+  TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS,
+  PLUMBING_PICKER, ELECTRICAL_PICKER,
+} from '../../data/traceLayers'
 import styles from './AmbientGuide.module.css'
 
-// ── Discipline layers (only framing is wired; others are placeholders) ────────
-const TRACE_LAYERS = [
-  { key: 'framing', label: 'Framing', color: '#d4a574' },
-  { key: 'plumbing', label: 'Plumbing', color: '#38bdf8' },
-  { key: 'electrical', label: 'Electrical', color: '#fbbf24' },
-  { key: 'hvac', label: 'HVAC', color: '#a78bfa' },
-] as const
+// ── Discipline layer tabs (Framing/Plumbing/Electrical wired; HVAC placeholder)
+const TRACE_LAYERS = TRACE_LAYER_ORDER.map((key) => ({ key, label: LAYER_LABELS[key], color: LAYER_COLORS[key] }))
 
 // ── Metric ⇄ feet/inches helpers for the property card ────────────────────────
 const M_PER_IN = 0.0254
@@ -112,6 +111,16 @@ export default function FloorplanPanel() {
   const setActiveWallRole = useFloorplanLocalStore((s) => s.setActiveWallRole)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
+  const plumbElement = useFloorplanLocalStore((s) => s.plumbElement)
+  const plumbSize = useFloorplanLocalStore((s) => s.plumbSize)
+  const plumbMaterial = useFloorplanLocalStore((s) => s.plumbMaterial)
+  const plumbTemp = useFloorplanLocalStore((s) => s.plumbTemp)
+  const setPlumb = useFloorplanLocalStore((s) => s.setPlumb)
+  const elecElement = useFloorplanLocalStore((s) => s.elecElement)
+  const elecAmp = useFloorplanLocalStore((s) => s.elecAmp)
+  const elecWire = useFloorplanLocalStore((s) => s.elecWire)
+  const elecRole = useFloorplanLocalStore((s) => s.elecRole)
+  const setElec = useFloorplanLocalStore((s) => s.setElec)
 
   // The ONE active unit — calibration estimate, input, and label all read it.
   const activeUnit     = useConfigStore((s) => s.activeUnit)
@@ -199,7 +208,14 @@ export default function FloorplanPanel() {
   // mid-session it just applies the new type and returns to tracing.
   const confirmWallType = () => {
     setPickerOpen(false)
-    if (!traceMode) startTracing()
+    if (traceMode) return
+    if (activeTraceLayer === 'framing') {
+      startTracing()
+    } else {
+      // Trade layers trace lines directly — no scale calibration gate.
+      setTraceStyle('line')
+      setTraceMode(true)
+    }
   }
 
   const finalizeCalibration = () => {
@@ -336,6 +352,14 @@ export default function FloorplanPanel() {
   // workspace is fully visible — the tray and property card carry the UI.
   const showSteps = !placeObjectType && !selectedObject
   const framingActive = activeTraceLayer === 'framing'
+  const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical'
+  const layerLabel = LAYER_LABELS[activeTraceLayer]
+  // Compact indicator of what a trade trace will stamp.
+  const tradeIndicator = activeTraceLayer === 'plumbing'
+    ? `${plumbElement}${plumbElement === 'Supply Line' ? ` (${plumbTemp})` : ''} · ${plumbSize} · ${plumbMaterial}`
+    : activeTraceLayer === 'electrical'
+      ? `${elecElement} · ${elecAmp} · ${elecElement === 'Low Voltage' ? 'LV' : elecRole}`
+      : ''
   // Tray appears once a build exists — either the construction-engine result
   // (Build for me) or a rendered 3D model (Build 3D from tracing).
   const trayVisible = buildResult !== null || modelReady
@@ -385,12 +409,41 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* Non-framing disciplines are placeholders for now. */}
-        {showSteps && !framingActive && drawing.status === 'ready' && (
+        {/* HVAC is a placeholder for now. */}
+        {showSteps && activeTraceLayer === 'hvac' && drawing.status === 'ready' && (
           <div className={styles.step}>
-            <span className={styles.stepLabel}>{TRACE_LAYERS.find((l) => l.key === activeTraceLayer)?.label}</span>
-            <span className={styles.stepHint}>Coming soon — framing is the active discipline.</span>
+            <span className={styles.stepLabel}>HVAC</span>
+            <span className={styles.stepHint}>Coming soon.</span>
           </div>
+        )}
+
+        {/* Trade layers (plumbing/electrical): trace runs as coloured lines. */}
+        {showSteps && tradeActive && drawing.status === 'ready' && !pickerOpen && (
+          traceMode ? (
+            <div className={styles.step}>
+              <span className={styles.stepLabel}>Tracing {layerLabel}</span>
+              <button
+                className={styles.secondary}
+                style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px' }}
+                onClick={() => setPickerOpen(true)}
+                title="Change type"
+              >
+                {tradeIndicator}
+              </button>
+              <span className={styles.stepHint}>Tap a start point, then tap to extend. Esc ends the run.</span>
+              <div className={styles.btnRow}>
+                {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
+                <button className={styles.cancel} onClick={cancelTracing}>Done</button>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.step}>
+              <span className={styles.stepLabel}>{layerLabel}</span>
+              <span className={styles.stepText}>Trace {layerLabel.toLowerCase()} runs</span>
+              <span className={styles.stepHint}>{tradeIndicator}</span>
+              <button className={styles.action} onClick={() => setPickerOpen(true)}>Choose type →</button>
+            </div>
+          )
         )}
 
         {showSteps && framingActive && (
@@ -502,45 +555,6 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Wall-type picker (before tracing, or reopened mid-session) ── */}
-        {pickerOpen && !overlay.calibrationMode && (
-          <div className={styles.step}>
-            <span className={styles.stepLabel}>Wall type</span>
-            <span className={styles.stepHint}>Framing</span>
-            <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
-              {FRAMING_TYPES.map((ft) => (
-                <button
-                  key={ft.key}
-                  className={activeWallType === ft.key ? styles.action : styles.secondary}
-                  onClick={() => setActiveWallType(ft.key)}
-                >
-                  {ft.label}
-                </button>
-              ))}
-            </div>
-            <span className={styles.stepHint}>Role</span>
-            <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
-              {WALL_ROLES.map((r) => (
-                <button
-                  key={r.key}
-                  className={activeWallRole === r.key ? styles.action : styles.secondary}
-                  onClick={() => setActiveWallRole(r.key)}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            <div className={styles.btnRow}>
-              <button className={styles.action} onClick={confirmWallType}>
-                {traceMode ? 'Apply' : 'Start Tracing →'}
-              </button>
-              <button className={styles.secondary} onClick={() => setPickerOpen(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* ── Active tracing ── */}
         {traceMode && !pickerOpen && (
           <div className={styles.step}>
@@ -629,6 +643,98 @@ export default function FloorplanPanel() {
         )}
 
         </>
+        )}
+
+        {/* ── Pre-trace type picker (layer-aware; before tracing or reopened) ── */}
+        {showSteps && pickerOpen && !overlay.calibrationMode && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>{layerLabel} type</span>
+            {framingActive && (
+              <>
+                <span className={styles.stepHint}>Framing</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {FRAMING_TYPES.map((ft) => (
+                    <button key={ft.key} className={activeWallType === ft.key ? styles.action : styles.secondary} onClick={() => setActiveWallType(ft.key)}>{ft.label}</button>
+                  ))}
+                </div>
+                <span className={styles.stepHint}>Role</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {WALL_ROLES.map((r) => (
+                    <button key={r.key} className={activeWallRole === r.key ? styles.action : styles.secondary} onClick={() => setActiveWallRole(r.key)}>{r.label}</button>
+                  ))}
+                </div>
+              </>
+            )}
+            {activeTraceLayer === 'plumbing' && (
+              <>
+                <span className={styles.stepHint}>Element</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {PLUMBING_PICKER.element.map((e) => (
+                    <button key={e} className={plumbElement === e ? styles.action : styles.secondary} onClick={() => setPlumb({ plumbElement: e })}>{e}</button>
+                  ))}
+                </div>
+                {plumbElement === 'Supply Line' && (
+                  <>
+                    <span className={styles.stepHint}>Temperature</span>
+                    <div className={styles.btnRow}>
+                      <button className={plumbTemp === 'cold' ? styles.action : styles.secondary} onClick={() => setPlumb({ plumbTemp: 'cold' })}>Cold</button>
+                      <button className={plumbTemp === 'hot' ? styles.action : styles.secondary} onClick={() => setPlumb({ plumbTemp: 'hot' })}>Hot</button>
+                    </div>
+                  </>
+                )}
+                <span className={styles.stepHint}>Size</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {PLUMBING_PICKER.size.map((s) => (
+                    <button key={s} className={plumbSize === s ? styles.action : styles.secondary} onClick={() => setPlumb({ plumbSize: s })}>{s}</button>
+                  ))}
+                </div>
+                <span className={styles.stepHint}>Material</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {PLUMBING_PICKER.material.map((m) => (
+                    <button key={m} className={plumbMaterial === m ? styles.action : styles.secondary} onClick={() => setPlumb({ plumbMaterial: m })}>{m}</button>
+                  ))}
+                </div>
+              </>
+            )}
+            {activeTraceLayer === 'electrical' && (
+              <>
+                <span className={styles.stepHint}>Element</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {ELECTRICAL_PICKER.element.map((e) => (
+                    <button key={e} className={elecElement === e ? styles.action : styles.secondary} onClick={() => setElec({ elecElement: e })}>{e}</button>
+                  ))}
+                </div>
+                <span className={styles.stepHint}>Amperage</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {ELECTRICAL_PICKER.size.map((s) => (
+                    <button key={s} className={elecAmp === s ? styles.action : styles.secondary} onClick={() => setElec({ elecAmp: s })}>{s}</button>
+                  ))}
+                </div>
+                <span className={styles.stepHint}>Wire</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {ELECTRICAL_PICKER.material.map((m) => (
+                    <button key={m} className={elecWire === m ? styles.action : styles.secondary} onClick={() => setElec({ elecWire: m })}>{m}</button>
+                  ))}
+                </div>
+                {elecElement !== 'Low Voltage' && (
+                  <>
+                    <span className={styles.stepHint}>Wire role</span>
+                    <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                      {ELECTRICAL_PICKER.role.map((r) => (
+                        <button key={r} className={elecRole === r ? styles.action : styles.secondary} onClick={() => setElec({ elecRole: r })}>{r}</button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            <div className={styles.btnRow}>
+              <button className={styles.action} onClick={confirmWallType}>
+                {traceMode ? 'Apply' : 'Start Tracing →'}
+              </button>
+              <button className={styles.secondary} onClick={() => setPickerOpen(false)}>Cancel</button>
+            </div>
+          </div>
         )}
 
         {/* ── Selected wall (post-build edit) ── */}

@@ -9,6 +9,7 @@
 
 import { create } from 'zustand'
 import type { ParsedWall } from '../types'
+import { PLUMBING_DEFAULTS, ELECTRICAL_DEFAULTS } from '../data/traceLayers'
 
 type CalibrationUnit = 'mm' | 'm' | 'ft' | 'in'
 
@@ -57,8 +58,18 @@ interface FloorplanLocalState {
   activeWallType: string
   /** Structural role key, e.g. 'exterior-bearing'. */
   activeWallRole: string
-  /** Active discipline tab; only 'framing' is wired today. */
+  /** Active discipline tab. */
   activeTraceLayer: 'framing' | 'plumbing' | 'electrical' | 'hvac'
+  // Active plumbing selections (stamped on each plumbing line traced).
+  plumbElement: string
+  plumbSize: string
+  plumbMaterial: string
+  plumbTemp: 'hot' | 'cold'
+  // Active electrical selections (size = amperage, material = wire gauge).
+  elecElement: string
+  elecAmp: string
+  elecWire: string
+  elecRole: string
 
   // ─── editing / selection ─────────────────────────────────────────
   /** Index (within a drawing's user walls) of the selected wall, or null. */
@@ -89,6 +100,8 @@ interface FloorplanLocalState {
   setActiveWallType: (v: string) => void
   setActiveWallRole: (v: string) => void
   setActiveTraceLayer: (v: 'framing' | 'plumbing' | 'electrical' | 'hvac') => void
+  setPlumb: (patch: Partial<{ plumbElement: string; plumbSize: string; plumbMaterial: string; plumbTemp: 'hot' | 'cold' }>) => void
+  setElec: (patch: Partial<{ elecElement: string; elecAmp: string; elecWire: string; elecRole: string }>) => void
   setDrag: (v: DragState | null) => void
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
@@ -113,6 +126,14 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   activeWallType: 'wood-2x6',
   activeWallRole: 'exterior-bearing',
   activeTraceLayer: 'framing',
+  plumbElement: PLUMBING_DEFAULTS.element,
+  plumbSize: PLUMBING_DEFAULTS.size,
+  plumbMaterial: PLUMBING_DEFAULTS.material,
+  plumbTemp: PLUMBING_DEFAULTS.temp,
+  elecElement: ELECTRICAL_DEFAULTS.element,
+  elecAmp: ELECTRICAL_DEFAULTS.size,
+  elecWire: ELECTRICAL_DEFAULTS.material,
+  elecRole: ELECTRICAL_DEFAULTS.role,
   selectedWallIndex: null,
   placeObjectType: null,
   selectedObjectId: null,
@@ -149,6 +170,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setActiveWallType: (v) => set({ activeWallType: v }),
   setActiveWallRole: (v) => set({ activeWallRole: v }),
   setActiveTraceLayer: (v) => set({ activeTraceLayer: v }),
+  setPlumb: (patch) => set(patch),
+  setElec: (patch) => set(patch),
   setDrag: (v) => set({ drag: v }),
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v }),
   setPlaceObjectType: (v) => set({ placeObjectType: v }),

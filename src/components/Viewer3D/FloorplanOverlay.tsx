@@ -25,10 +25,15 @@ import {
   snapTraceWallToExisting,
 } from '../../services/wallTraceReducer'
 import { getCatalogItem } from '../../data/objectCatalog'
+import { LAYER_COLORS, plumbingColorFor, electricalColorFor, plumbingColor, electricalColor } from '../../data/traceLayers'
 
 let _objectSeq = 0
 function genObjectId() {
   return `obj-${_objectSeq++}-${Math.round(performance.now())}`
+}
+let _lineSeq = 0
+function genLineId() {
+  return `line-${_lineSeq++}-${Math.round(performance.now())}`
 }
 
 const DEFAULT_WIDTH = 12
@@ -84,6 +89,11 @@ export default function FloorplanOverlay() {
   const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
   const addTrace = useAppStore((s) => s.addTrace)
   const addPlacedObject = useAppStore((s) => s.addPlacedObject)
+  const addPlumbingLines = useAppStore((s) => s.addPlumbingLines)
+  const addElectricalLines = useAppStore((s) => s.addElectricalLines)
+  const plumbingLines = useAppStore((s) => s.plumbingLines)
+  const electricalLines = useAppStore((s) => s.electricalLines)
+  const visibleLayers = useAppStore((s) => s.visibleLayers)
 
   const gridSnapM = useConfigStore((s) => s.gridSnapM)
   const wallTraceStyle = useConfigStore((s) => s.wallTraceStyle)
@@ -109,6 +119,15 @@ export default function FloorplanOverlay() {
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
+  const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
+  const plumbElement = useFloorplanLocalStore((s) => s.plumbElement)
+  const plumbSize = useFloorplanLocalStore((s) => s.plumbSize)
+  const plumbMaterial = useFloorplanLocalStore((s) => s.plumbMaterial)
+  const plumbTemp = useFloorplanLocalStore((s) => s.plumbTemp)
+  const elecElement = useFloorplanLocalStore((s) => s.elecElement)
+  const elecAmp = useFloorplanLocalStore((s) => s.elecAmp)
+  const elecWire = useFloorplanLocalStore((s) => s.elecWire)
+  const elecRole = useFloorplanLocalStore((s) => s.elecRole)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageUrl = drawing ? (drawing.rasterUrl ?? drawing.previewUrl) : null
@@ -248,6 +267,28 @@ export default function FloorplanOverlay() {
     const pixel = worldToPixel(event.point)
 
     if (traceMode) {
+      // Trade layers (plumbing/electrical) trace simple lines, not walls.
+      if (activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical') {
+        if (!traceStart) { setTraceStart(pixel); setHoverPixel(pixel); return }
+        const a = traceStart
+        if (Math.hypot(pixel[0] - a[0], pixel[1] - a[1]) < 4) { setTraceStart(null); return }
+        if (activeTraceLayer === 'plumbing') {
+          addPlumbingLines([{
+            id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
+            elementType: plumbElement, size: plumbSize, material: plumbMaterial,
+            tempType: plumbElement === 'Supply Line' ? plumbTemp : undefined,
+          }])
+        } else {
+          addElectricalLines([{
+            id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
+            elementType: elecElement, size: elecAmp, material: elecWire,
+            wireRole: elecElement === 'Low Voltage' ? undefined : elecRole,
+          }])
+        }
+        setTraceStart(pixel) // chain: B becomes the next A
+        return
+      }
+
       if (traceStyle === 'freehand') {
         setTraceStroke([pixel])
         setHoverPixel(pixel)
@@ -408,6 +449,12 @@ export default function FloorplanOverlay() {
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
 
+  // Colour of the line currently being traced, by active discipline/selection.
+  const activeLineColor =
+    activeTraceLayer === 'plumbing' ? plumbingColorFor(plumbElement, plumbTemp)
+    : activeTraceLayer === 'electrical' ? electricalColorFor(elecElement, elecRole)
+    : LAYER_COLORS.framing
+
   // ─── render (Three.js only) ────────────────────────────────────────────
 
   return (
@@ -528,8 +575,26 @@ export default function FloorplanOverlay() {
       )}
 
       {tracePreviewPoints && (
-        <Line points={tracePreviewPoints} color="#38bdf8" lineWidth={4} />
+        <Line points={tracePreviewPoints} color={activeLineColor} lineWidth={4} />
       )}
+
+      {/* Committed trade lines drawn on the print, coloured by field convention. */}
+      {visibleLayers.has('plumbing') && plumbingLines.map((l) => (
+        <Line
+          key={l.id}
+          points={[planeLocalToWorld([l.x1, l.y1]), planeLocalToWorld([l.x2, l.y2])]}
+          color={plumbingColor(l)}
+          lineWidth={4}
+        />
+      ))}
+      {visibleLayers.has('electrical') && electricalLines.map((l) => (
+        <Line
+          key={l.id}
+          points={[planeLocalToWorld([l.x1, l.y1]), planeLocalToWorld([l.x2, l.y2])]}
+          color={electricalColor(l)}
+          lineWidth={4}
+        />
+      ))}
 
       {pendingWalls?.map((w, i) => (
         <Line
@@ -547,7 +612,7 @@ export default function FloorplanOverlay() {
       {traceMode && traceStyle === 'line' && traceStart && (
         <mesh position={planeLocalToWorld(traceStart)}>
           <sphereGeometry args={[0.09, 16, 16]} />
-          <meshBasicMaterial color="#38bdf8" />
+          <meshBasicMaterial color={activeLineColor} />
         </mesh>
       )}
 
