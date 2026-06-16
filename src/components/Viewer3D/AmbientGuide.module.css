@@ -555,3 +555,28 @@
   color: #ffffff;
   font-variant-numeric: tabular-nums;
 }
+
+/* ── Placement bar — bottom-centre, above the tray, while placing an object ── */
+.placeBar {
+  position: absolute;
+  left: 50%;
+  bottom: 76px;
+  transform: translateX(-50%);
+  z-index: 33;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  pointer-events: all;
+  max-width: calc(100vw - 24px);
+}
+.placeHint {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+  white-space: nowrap;
+}

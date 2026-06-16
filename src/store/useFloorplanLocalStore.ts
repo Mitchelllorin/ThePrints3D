@@ -74,8 +74,13 @@ interface FloorplanLocalState {
   // ─── editing / selection ─────────────────────────────────────────
   /** Index (within a drawing's user walls) of the selected wall, or null. */
   selectedWallIndex: number | null
-  /** Catalog type currently armed for placement (next canvas click drops it). */
+  /** Catalog type currently armed for placement (positioned via the ghost). */
   placeObjectType: string | null
+  /** Live ghost pose while placing: ground point + auto-oriented yaw. The
+   *  "Place" button commits the object here (no precise tap needed). */
+  placeGhost: { x: number; z: number; rotationY: number } | null
+  /** Bumped by the "Place" button; FloorplanOverlay commits on the change. */
+  placeCommitNonce: number
   /** Id of the currently selected placed object, or null. */
   selectedObjectId: string | null
   /**
@@ -111,6 +116,8 @@ interface FloorplanLocalState {
   setDrag: (v: DragState | null) => void
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
+  setPlaceGhost: (v: { x: number; z: number; rotationY: number } | null) => void
+  requestPlaceCommit: () => void
   setSelectedObjectId: (v: string | null) => void
   // Coordinated openers — one panel at a time (each sets activePanel + clears the rest).
   openPicker: () => void
@@ -150,6 +157,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   elecRole: ELECTRICAL_DEFAULTS.role,
   selectedWallIndex: null,
   placeObjectType: null,
+  placeGhost: null,
+  placeCommitNonce: 0,
   selectedObjectId: null,
   activePanel: null,
   calibrationHandledIds: [],
@@ -189,7 +198,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setElec: (patch) => set(patch),
   setDrag: (v) => set({ drag: v }),
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v, activePanel: v != null ? 'wall' : null }),
-  setPlaceObjectType: (v) => set({ placeObjectType: v }),
+  setPlaceObjectType: (v) => set({ placeObjectType: v, placeGhost: null }),
+  setPlaceGhost: (v) => set({ placeGhost: v }),
+  requestPlaceCommit: () => set((s) => ({ placeCommitNonce: s.placeCommitNonce + 1 })),
   setSelectedObjectId: (v) => set({ selectedObjectId: v, activePanel: v ? 'object' : null }),
   // One panel at a time: every opener sets activePanel and clears the rest.
   openPicker: () => set({ activePanel: 'picker', selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
@@ -199,7 +210,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
     : { activePanel: 'catalog', selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
   selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, placeObjectType: null }),
   selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, placeObjectType: null }),
-  armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, selectedObjectId: null, selectedWallIndex: null }),
+  armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null }),
   closeAllPanels: () => set({ activePanel: null, selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),

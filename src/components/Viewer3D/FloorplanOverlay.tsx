@@ -138,6 +138,8 @@ export default function FloorplanOverlay() {
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
+  const setPlaceGhost = useFloorplanLocalStore((s) => s.setPlaceGhost)
+  const placeCommitNonce = useFloorplanLocalStore((s) => s.placeCommitNonce)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
   const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
@@ -179,8 +181,10 @@ export default function FloorplanOverlay() {
   // overlay handle, or freehand-drawing. Otherwise the camera orbits/pans
   // freely even mid-trace/calibration; points are placed on a tap.
   useEffect(() => {
-    updateOverlay({ orbitLocked: drag !== null || (traceMode && traceStyle === 'freehand') }, false)
-  }, [drag, traceMode, traceStyle, updateOverlay])
+    updateOverlay({
+      orbitLocked: drag !== null || (traceMode && traceStyle === 'freehand') || placeObjectType !== null,
+    }, false)
+  }, [drag, traceMode, traceStyle, placeObjectType, updateOverlay])
 
   const estimatedScale = useMemo<[number, number]>(() => {
     if (!drawing) return overlay.scale
@@ -493,18 +497,45 @@ export default function FloorplanOverlay() {
     return () => window.removeEventListener('keydown', onKey)
   }, [placeObjectType, setPlaceObjectType])
 
-  const handlePlaceObject = (event: ThreeEvent<PointerEvent>) => {
-    if (!placeObjectType || !drawing) return
+  // Yaw that aligns an object with the nearest user wall (so it sits IN/along
+  // the wall). Returns 0 when no wall is close enough to snap to.
+  const autoOrientYaw = (x: number, z: number): number => {
+    let best = Infinity, yaw = 0
+    for (const w of userWalls) {
+      const a = planeLocalToWorld([w.x1, w.y1])
+      const b = planeLocalToWorld([w.x2, w.y2])
+      const d = segDist(x, z, a[0], a[2], b[0], b[2])
+      if (d < best) { best = d; yaw = -Math.atan2(b[2] - a[2], b[0] - a[0]) }
+    }
+    return best < 1.2 ? yaw : 0
+  }
+
+  // Move the ghost to a ground point and record the pose (auto-oriented to the
+  // nearest wall). The "Place" button commits this pose — no precise tap needed,
+  // and the camera is locked while placing so the map never drifts.
+  const positionGhost = (event: ThreeEvent<PointerEvent>) => {
+    if (!placeObjectType || !ghostItem) return
     event.stopPropagation()
-    const point = rayToGround(event)
-    if (!point) return
+    const p = rayToGround(event)
+    if (!p) return
+    const yaw = autoOrientYaw(p.x, p.z)
+    if (ghostRef.current) {
+      ghostRef.current.visible = true
+      ghostRef.current.position.set(p.x, ghostItem.defaultH / 2, p.z)
+      ghostRef.current.rotation.y = yaw
+    }
+    setPlaceGhost({ x: p.x, z: p.z, rotationY: yaw })
+  }
+
+  const commitPlacement = (pose: { x: number; z: number; rotationY: number }) => {
+    if (!placeObjectType || !drawing) return
     const item = getCatalogItem(placeObjectType)
     const id = genObjectId()
 
     // Electrical fixtures auto-connect to the nearest circuit line within 3 ft.
     let circuitId: string | undefined
     if (ELECTRICAL_TRAY_ORDER.includes(placeObjectType) && electricalLines.length > 0) {
-      const [px, py] = worldToPixel(point)
+      const [px, py] = worldToPixel(new THREE.Vector3(pose.x, 0, pose.z))
       const maxPx = (3 * 304.8) / (drawing.scaleMmPerPx ?? 8)
       let best = maxPx
       let nearestLineId: string | undefined
@@ -518,9 +549,9 @@ export default function FloorplanOverlay() {
     addPlacedObject({
       id,
       type: placeObjectType,
-      x: point.x,
-      z: point.z,
-      rotationY: 0,
+      x: pose.x,
+      z: pose.z,
+      rotationY: pose.rotationY,
       scaleX: 1,
       scaleZ: 1,
       scaleY: 1,
@@ -531,6 +562,14 @@ export default function FloorplanOverlay() {
     hideGhost()
     selectObjectExclusive(id)
   }
+
+  // The "Place" button bumps placeCommitNonce; commit the current ghost pose.
+  useEffect(() => {
+    if (placeCommitNonce === 0) return
+    const pose = useFloorplanLocalStore.getState().placeGhost
+    if (placeObjectType && pose) commitPlacement(pose)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeCommitNonce])
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
 
@@ -718,16 +757,8 @@ export default function FloorplanOverlay() {
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
           position={[0, 6, 0]}
-          onPointerDown={handlePlaceObject}
-          onPointerMove={(e) => {
-            e.stopPropagation()
-            const p = rayToGround(e)
-            if (p && ghostRef.current && ghostItem) {
-              ghostRef.current.visible = true
-              ghostRef.current.position.set(p.x, ghostItem.defaultH / 2, p.z)
-            }
-          }}
-          onPointerLeave={hideGhost}
+          onPointerDown={positionGhost}
+          onPointerMove={positionGhost}
         >
           <planeGeometry args={[4000, 4000]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
