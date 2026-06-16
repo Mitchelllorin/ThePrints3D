@@ -657,10 +657,25 @@ function buildCChannel(comp: PlacedComponent, material: THREE.MeshStandardMateri
   return g
 }
 
+/**
+ * Maps the engine's centroid-based framing coordinates onto the SAME overlay
+ * space the traced walls/ghost use, so the built framing lands exactly on the
+ * trace. Reproduces makeOverlayTransform.toWorld per component (positions stay
+ * direct children of the explode group, so explode still fans them).
+ */
+interface FramingAlign {
+  cos: number; sin: number
+  px: number; pz: number     // overlay world origin
+  lx0: number; lz0: number   // local offset of the engine centroid
+  kx: number; kz: number     // engine-metre → overlay-metre scale
+  yaw: number                // overlay rotation added to each component
+}
+
 function buildFramingGeometry(
   group: THREE.Group,
   components: PlacedComponent[],
   opacity: number,
+  align?: FramingAlign,
 ) {
   // Shared steel material — silvery, metallic — reused across all C-channels.
   const steelMat = new THREE.MeshStandardMaterial({
@@ -693,8 +708,19 @@ function buildFramingGeometry(
       obj.castShadow = true
       obj.receiveShadow = true
     }
-    obj.position.set(comp.position[0], comp.position[1], comp.position[2])
-    obj.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+    if (align) {
+      const lx = align.lx0 + comp.position[0] * align.kx
+      const lz = align.lz0 + comp.position[2] * align.kz
+      obj.position.set(
+        align.px + lx * align.cos + lz * align.sin,
+        comp.position[1],
+        align.pz - lx * align.sin + lz * align.cos,
+      )
+      obj.rotation.set(comp.rotation[0], comp.rotation[1] + align.yaw, comp.rotation[2])
+    } else {
+      obj.position.set(comp.position[0], comp.position[1], comp.position[2])
+      obj.rotation.set(comp.rotation[0], comp.rotation[1], comp.rotation[2])
+    }
     obj.userData.layer = 'framing'
     obj.userData.id = comp.id
     obj.userData.componentType = comp.componentType
@@ -943,10 +969,28 @@ export default function BuildingModel({ layers }: Props) {
       }
     }
 
-    // Framing from construction engine
+    // Framing from construction engine. Align it to the overlay space (same
+    // mapping the wall volumes/ghost use) so the built studs sit on the trace.
     const framingLayer = layerMap.get('framing')
     if (framingLayer?.visible && buildResult && buildResult.components.length > 0) {
-      buildFramingGeometry(group, buildResult.components, framingLayer.opacity)
+      let align: FramingAlign | undefined
+      const od = drawings.find((d) => d.id === overlayDrawingId)
+      if (od && od.rasterWidth && od.rasterHeight) {
+        const [ocx, ocy] = centerOfWalls(od.parsedWalls)        // engine centroid
+        const s = (od.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX) / 1000
+        const [w, d] = overlay.scale
+        const rot = THREE.MathUtils.degToRad(overlay.rotationDeg)
+        align = {
+          cos: Math.cos(rot), sin: Math.sin(rot),
+          px: overlay.position[0], pz: overlay.position[1],
+          lx0: (ocx / od.rasterWidth - 0.5) * w,
+          lz0: (ocy / od.rasterHeight - 0.5) * d,
+          kx: w / (s * od.rasterWidth),
+          kz: d / (s * od.rasterHeight),
+          yaw: rot,
+        }
+      }
+      buildFramingGeometry(group, buildResult.components, framingLayer.opacity, align)
     }
 
     // Snapshot each mesh's assembled position + the model centre, so the explode
