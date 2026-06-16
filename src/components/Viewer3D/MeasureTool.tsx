@@ -153,6 +153,9 @@ export default function MeasureTool() {
         const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
         addMeasurement({ label: null, pointA: pendingA, pointB: snappedCoord, distanceM: dist })
         setPendingA(null)
+        // One-shot: a measurement is A→B, then we exit so the user doesn't keep
+        // dropping points on everything. Tap Measure again for another.
+        useAppStore.getState().setMeasureMode(false)
       }
     },
     [measureMode, pendingA, raycaster, camera, scene, gl, addMeasurement, wallEndpointCandidates]

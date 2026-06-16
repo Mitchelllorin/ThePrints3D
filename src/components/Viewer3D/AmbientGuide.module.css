@@ -279,8 +279,8 @@
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   padding: 0 12px;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(8px);
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-panel-opacity, 0.92));
+  backdrop-filter: blur(calc(var(--bp-panel-opacity, 0.92) * 8px));
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   z-index: 30;
   pointer-events: all;

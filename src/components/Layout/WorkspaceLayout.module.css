@@ -557,3 +557,34 @@
   transition: background 0.15s;
 }
 .panelBtn:hover { background: rgba(255, 255, 255, 0.15); }
+
+/* ── Explode slider — top-right, just under the icon row, same language ──── */
+.explodeBar {
+  position: absolute;
+  top: 60px;
+  right: 12px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  backdrop-filter: blur(4px);
+  pointer-events: all;
+}
+
+.explodeLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+}
+
+.explodeSlider {
+  width: 110px;
+  accent-color: var(--bp-accent, #38bdf8);
+  cursor: pointer;
+}

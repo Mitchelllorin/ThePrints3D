@@ -378,6 +378,7 @@ export default function WorkspaceLayout() {
   const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
   const explodeAmount = useAppStore((s) => s.explodeAmount)
   const setExplodeAmount = useAppStore((s) => s.setExplodeAmount)
+  const showExplode = useAppStore((s) => s.model.status === 'ready' || s.buildResult !== null)
   const measureMode = useAppStore((s) => s.measureMode)
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
   const updateOverlay = useAppStore((s) => s.updateFloorplanOverlay)
@@ -491,7 +492,12 @@ export default function WorkspaceLayout() {
       {/* The only persistent chrome: five icon buttons, top-right. */}
       <TopIcons
         onRebuild={buildForMe}
-        onTrace={() => { setOpen(null); useFloorplanLocalStore.getState().openPicker() }}
+        onTrace={() => {
+          const fp = useFloorplanLocalStore.getState()
+          // Toggle: if already tracing/picking, exit cleanly; else open the picker.
+          if (traceActive) { fp.setTraceMode(false); fp.closeAllPanels() }
+          else { setOpen(null); fp.openPicker() }
+        }}
         onLayers={() => toggle('layers')}
         onSettings={() => toggle('settings')}
         onUndo={undo}
@@ -500,6 +506,19 @@ export default function WorkspaceLayout() {
         settingsActive={open === 'settings'}
         canUndo={canUndo}
       />
+
+      {/* Explode — slider in the top-right, same language as the icons. */}
+      {showExplode && (
+        <div className={styles.explodeBar}>
+          <span className={styles.explodeLabel}>Explode</span>
+          <input
+            type="range" min={0} max={1} step={0.01} value={explodeAmount}
+            onChange={(e) => setExplodeAmount(Number(e.target.value))}
+            className={styles.explodeSlider}
+            aria-label="Explode separation"
+          />
+        </div>
+      )}
 
       {/* Slide-in panel — Layers from the left, Settings from the right.
           Fully off-screen when closed (no peeking strip). */}
@@ -525,16 +544,6 @@ export default function WorkspaceLayout() {
             {open === 'settings' && (
               <>
                 <SettingsContent />
-                <p className={styles.sectionTitle}>Explode view</p>
-                <label className={styles.settingRow}>
-                  <span className={styles.settingLabel}>Separation</span>
-                  <input
-                    type="range" min={0} max={1} step={0.01} value={explodeAmount}
-                    onChange={(e) => setExplodeAmount(Number(e.target.value))}
-                    className={styles.settingSlider}
-                  />
-                  <span className={styles.settingVal}>{Math.round(explodeAmount * 100)}%</span>
-                </label>
                 <p className={styles.sectionTitle}>Tools</p>
                 <div className={styles.panelBtnRow}>
                   <button className={styles.panelBtn} onClick={() => setMeasureMode(!measureMode)}>
