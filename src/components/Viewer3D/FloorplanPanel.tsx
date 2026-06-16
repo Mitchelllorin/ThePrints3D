@@ -806,34 +806,6 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Overlay fine-tuning (always accessible, collapsed by default) ── */}
-        {showSteps && !overlay.calibrationMode && !traceMode && drawing.status === 'ready' && (
-          <details className={styles.details}>
-            <summary className={styles.detailsSummary}>Overlay settings</summary>
-            <div className={styles.detailsBody}>
-              <label className={styles.sliderRow}>
-                <span>Opacity</span>
-                <input type="range" min={0.1} max={1} step={0.05} value={overlay.opacity}
-                  onChange={(e) => updateOverlay({ opacity: Number(e.target.value) })} />
-              </label>
-              <label className={styles.checkRow}>
-                <input type="checkbox" checked={overlay.visible} onChange={(e) => updateOverlay({ visible: e.target.checked })} />
-                Visible
-              </label>
-              <label className={styles.checkRow}>
-                <input type="checkbox" checked={overlay.snapToGrid} onChange={(e) => updateOverlay({ snapToGrid: e.target.checked })} />
-                Snap to grid
-              </label>
-              <label className={styles.checkRow}>
-                <input type="checkbox" checked={overlay.locked} onChange={(e) => updateOverlay({ locked: e.target.checked })} />
-                Lock position
-              </label>
-              <button className={styles.secondary} onClick={() => fileInputRef.current?.click()}>
-                Upload another print
-              </button>
-            </div>
-          </details>
-        )}
       </div>
 
       {/* ── Property card for the selected placed object (above the tray) ── */}
