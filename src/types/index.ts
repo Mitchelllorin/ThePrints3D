@@ -392,6 +392,10 @@ export interface FloorplanOverlayState {
   snapToGrid: boolean
   calibrationMode: boolean
   traceModeActive: boolean
+  /** True only while a gesture must own the pointer (dragging an overlay handle
+      or freehand-drawing) — disables OrbitControls. Otherwise the camera is
+      free to orbit/pan even mid-trace/calibration. */
+  orbitLocked: boolean
   guidedStep: number
   position: [number, number]
   scale: [number, number]

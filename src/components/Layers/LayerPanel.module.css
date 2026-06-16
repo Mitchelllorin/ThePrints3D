@@ -8,8 +8,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: none;
   border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
   transition: background 0.1s;
 }
 
@@ -21,14 +26,15 @@
   opacity: 0.4;
 }
 
-.eyeBtn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0;
+.state {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bp-accent, #38bdf8);
   flex-shrink: 0;
-  line-height: 1;
+}
+
+.row.hidden .state {
+  color: #64748b;
 }
 
 .swatch {

@@ -175,6 +175,13 @@ export default function FloorplanOverlay() {
     updateOverlay({ traceModeActive: traceMode }, false)
   }, [traceMode, updateOverlay])
 
+  // Lock the camera ONLY while a gesture must own the pointer — dragging an
+  // overlay handle, or freehand-drawing. Otherwise the camera orbits/pans
+  // freely even mid-trace/calibration; points are placed on a tap.
+  useEffect(() => {
+    updateOverlay({ orbitLocked: drag !== null || (traceMode && traceStyle === 'freehand') }, false)
+  }, [drag, traceMode, traceStyle, updateOverlay])
+
   const estimatedScale = useMemo<[number, number]>(() => {
     if (!drawing) return overlay.scale
     const widthPx = drawing.rasterWidth ?? 1400
@@ -283,9 +290,27 @@ export default function FloorplanOverlay() {
 
   // ─── trace / calibration pointer handlers ──────────────────────────────
 
+  const TAP_MOVE_PX = 9
+  const pointerDownScreen = useRef<{ x: number; y: number } | null>(null)
+
+  // Press: remember where the finger landed so pointer-up can tell a tap (place
+  // a point) from a drag (the user moved the camera — OrbitControls handled it).
+  // Freehand is the exception: it draws WITH the drag, so it starts on press.
   const handleWorkspacePointerDown = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
-    event.stopPropagation()
+    pointerDownScreen.current = { x: event.nativeEvent.clientX, y: event.nativeEvent.clientY }
+    if (traceMode && traceStyle === 'freehand') {
+      event.stopPropagation()
+      const pixel = worldToPixel(event.point)
+      setTraceStroke([pixel])
+      setHoverPixel(pixel)
+    }
+  }
+
+  // Drop a trace/calibration point — called only on a genuine tap (pointer-up
+  // with no meaningful drag), so the camera is free to move between points.
+  const commitTraceOrCalibrationPoint = (event: ThreeEvent<PointerEvent>) => {
+    if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     const pixel = worldToPixel(event.point)
 
     if (traceMode) {
@@ -391,9 +416,8 @@ export default function FloorplanOverlay() {
     return out
   }
 
-  const handleWorkspacePointerUp = (event: ThreeEvent<PointerEvent>) => {
-    if (!drawing || !traceMode || traceStyle !== 'freehand') return
-    event.stopPropagation()
+  const commitFreehandStroke = (event: ThreeEvent<PointerEvent>) => {
+    if (!drawing) return
     const pixel = worldToPixel(event.point)
     setTraceStroke((prev) => {
       if (prev.length === 0) return prev
@@ -409,6 +433,34 @@ export default function FloorplanOverlay() {
       return []
     })
     setHoverPixel(null)
+  }
+
+  const handleWorkspacePointerUp = (event: ThreeEvent<PointerEvent>) => {
+    if (!drawing || (!traceMode && !overlay.calibrationMode)) return
+    // Freehand commits its stroke on release.
+    if (traceMode && traceStyle === 'freehand') {
+      event.stopPropagation()
+      commitFreehandStroke(event)
+      pointerDownScreen.current = null
+      return
+    }
+    // Tap vs drag: if the pointer travelled, it was a camera orbit/pan — the
+    // user is moving the view mid-trace/calibration, so don't drop a point.
+    const down = pointerDownScreen.current
+    pointerDownScreen.current = null
+    if (down) {
+      const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
+      if (moved > TAP_MOVE_PX) return
+    }
+    event.stopPropagation()
+    commitTraceOrCalibrationPoint(event)
+  }
+
+  // Pointer left/cancelled: never place a point (the finger didn't lift on the
+  // print); just reset, and let freehand commit whatever it had.
+  const handleWorkspacePointerCancel = (event: ThreeEvent<PointerEvent>) => {
+    pointerDownScreen.current = null
+    if (drawing && traceMode && traceStyle === 'freehand') commitFreehandStroke(event)
   }
 
   // ─── object placement + wall selection (non-trace edit mode) ────────────
@@ -528,8 +580,8 @@ export default function FloorplanOverlay() {
               onPointerDown={handleWorkspacePointerDown}
               onPointerMove={handleWorkspacePointerMove}
               onPointerUp={handleWorkspacePointerUp}
-              onPointerLeave={handleWorkspacePointerUp}
-              onPointerCancel={handleWorkspacePointerUp}
+              onPointerLeave={handleWorkspacePointerCancel}
+              onPointerCancel={handleWorkspacePointerCancel}
             >
               <planeGeometry args={[width, depth]} />
               <meshBasicMaterial transparent opacity={0.02} color="#ffffff" side={THREE.DoubleSide} />

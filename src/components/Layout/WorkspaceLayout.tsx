@@ -4,6 +4,7 @@ import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TopbarLogo3D from './TopbarLogo3D'
+import LayerToggles from './LayerToggles'
 import LayerPanel from '../Layers/LayerPanel'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
@@ -483,6 +484,9 @@ export default function WorkspaceLayout() {
           </button>
         </div>
       </div>
+
+      {/* Top-right system toggles — visible once a plan is loaded. */}
+      {hasDrawings && <LayerToggles />}
 
       {/* Panel + tab — one unit that slides together.
           Only the 42px tab strip peeks out when retracted. */}

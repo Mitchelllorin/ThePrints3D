@@ -224,8 +224,11 @@ export default function ModelViewer() {
   const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
 
-  // Disable orbit while the user is actively tracing or calibrating on the overlay
-  const orbitEnabled = !overlay.traceModeActive && !overlay.calibrationMode
+  // The camera stays free to orbit/pan even mid-trace/calibration — it's only
+  // locked while a gesture must own the pointer (dragging an overlay handle or
+  // freehand-drawing). Trace/calibration points are placed on a tap, so a drag
+  // moves the view instead of dropping a point.
+  const orbitEnabled = !overlay.orbitLocked
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
