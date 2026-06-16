@@ -134,9 +134,8 @@ export default function FloorplanPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   // The wall-type picker shows before tracing begins, and can be reopened
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
-  const pickerOpen = useFloorplanLocalStore((s) => s.pickerOpen)
-  const setPickerOpen = useFloorplanLocalStore((s) => s.setPickerOpen)
-  const panelBoardOpen = useFloorplanLocalStore((s) => s.panelBoardOpen)
+  const pickerOpen = useFloorplanLocalStore((s) => s.activePanel === 'picker')
+  const panelBoardOpen = useFloorplanLocalStore((s) => s.activePanel === 'panelBoard')
   const openPicker = useFloorplanLocalStore((s) => s.openPicker)
   const openPanelBoard = useFloorplanLocalStore((s) => s.openPanelBoard)
   const armPlaceExclusive = useFloorplanLocalStore((s) => s.armPlaceExclusive)
@@ -216,7 +215,7 @@ export default function FloorplanPanel() {
   // Confirm the wall-type picker. Pre-trace it enters trace mode; reopened
   // mid-session it just applies the new type and returns to tracing.
   const confirmWallType = () => {
-    setPickerOpen(false)
+    closeAllPanels()
     if (traceMode) return
     if (activeTraceLayer === 'framing') {
       startTracing()
@@ -267,7 +266,7 @@ export default function FloorplanPanel() {
         return
       }
       if (e.key !== 'Escape') return
-      if (local.pickerOpen || local.panelBoardOpen || local.selectedObjectId || local.selectedWallIndex != null || local.placeObjectType) {
+      if (local.activePanel || local.placeObjectType) {
         local.closeAllPanels()
         return
       }
@@ -413,7 +412,7 @@ export default function FloorplanPanel() {
                 key={l.key}
                 className={activeTraceLayer === l.key ? styles.layerTabActive : styles.layerTab}
                 style={activeTraceLayer === l.key ? { borderColor: l.color, color: l.color } : undefined}
-                onClick={() => { setActiveTraceLayer(l.key); setPickerOpen(false) }}
+                onClick={() => { setActiveTraceLayer(l.key); closeAllPanels() }}
               >
                 {l.label}
               </button>
@@ -446,7 +445,7 @@ export default function FloorplanPanel() {
               <span className={styles.stepHint}>Tap a start point, then tap to extend. Esc ends the run.</span>
               <div className={styles.btnRow}>
                 {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
-                {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>⚡ Panel</button>}
+                {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}
                 <button className={styles.cancel} onClick={cancelTracing}>Done</button>
               </div>
             </div>
@@ -457,7 +456,7 @@ export default function FloorplanPanel() {
               <span className={styles.stepHint}>{tradeIndicator}</span>
               <div className={styles.btnRow}>
                 <button className={styles.action} onClick={openPicker}>Choose type →</button>
-                {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>⚡ Panel board</button>}
+                {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel board</button>}
               </div>
             </div>
           )
@@ -594,7 +593,7 @@ export default function FloorplanPanel() {
                 <span className={styles.stepHint}>Enter to keep · Esc to discard</span>
                 <div className={styles.btnRow}>
                   <button className={styles.action} onClick={keepPendingWalls}>
-                    ✓ Keep
+                    Keep
                   </button>
                   <button className={styles.secondary} onClick={() => setPendingWalls(null)}>
                     ✕ Discard
@@ -619,18 +618,18 @@ export default function FloorplanPanel() {
                     onClick={() => setTraceStyle('line')}
                     title="Tap corner to corner with a stretchy guide line"
                   >
-                    ⌖ Line
+                    Line
                   </button>
                   <button
                     className={traceStyle === 'freehand' ? styles.action : styles.secondary}
                     onClick={() => setTraceStyle('freehand')}
                     title="Draw freehand along each wall"
                   >
-                    ✏ Freehand
+                    Freehand
                   </button>
                   {canUndo && userWallCount > 0 && (
                     <button className={styles.secondary} onClick={undoAction} title="Undo last wall (Ctrl+Z)">
-                      ↶ Undo
+                      Undo
                     </button>
                   )}
                 </div>
@@ -668,7 +667,7 @@ export default function FloorplanPanel() {
           <div className={styles.step}>
             <div className={styles.propHeader}>
               <span className={styles.stepLabel}>{layerLabel} type</span>
-              <button className={styles.cardClose} onClick={() => setPickerOpen(false)} aria-label="Close">✕</button>
+              <button className={styles.cardClose} onClick={() => closeAllPanels()} aria-label="Close">✕</button>
             </div>
             {framingActive && (
               <>
@@ -753,7 +752,7 @@ export default function FloorplanPanel() {
               <button className={styles.action} onClick={confirmWallType}>
                 {traceMode ? 'Apply' : 'Start Tracing →'}
               </button>
-              <button className={styles.secondary} onClick={() => setPickerOpen(false)}>Cancel</button>
+              <button className={styles.secondary} onClick={() => closeAllPanels()}>Cancel</button>
             </div>
           </div>
         )}
@@ -784,7 +783,7 @@ export default function FloorplanPanel() {
               </select>
             </label>
             <div className={styles.btnRow}>
-              <button className={styles.action} onClick={deleteSelectedWall}>🗑 Delete wall</button>
+              <button className={styles.action} onClick={deleteSelectedWall}>Delete wall</button>
               <button className={styles.secondary} onClick={() => setSelectedWallIndex(null)}>Deselect</button>
             </div>
           </div>
@@ -868,9 +867,9 @@ export default function FloorplanPanel() {
           </div>
           <div className={styles.btnRow}>
             <button className={styles.secondary} onClick={() => updatePlacedObject(selectedObject.id, { rotationY: selectedObject.rotationY + Math.PI / 2 })}>
-              ⟳ Rotate 90°
+              Rotate 90°
             </button>
-            <button className={styles.action} onClick={deleteSelectedObject}>🗑 Delete</button>
+            <button className={styles.action} onClick={deleteSelectedObject}>Delete</button>
           </div>
         </div>
       )}
@@ -890,7 +889,6 @@ export default function FloorplanPanel() {
               onClick={() => armPlace(item.type)}
               title={item.label}
             >
-              <span className={styles.trayIcon}>{item.icon}</span>
               <span className={styles.trayLabel}>{item.short}</span>
             </button>
           ))}
