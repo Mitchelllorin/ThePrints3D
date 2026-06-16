@@ -92,9 +92,11 @@ const DEFAULT_LAYERS: Layer[] = [
   },
   {
     id: 'walls',
+    // Off by default: show the stud framing, not the translucent solid wall
+    // volumes over it. Toggle "Walls" on in the Layers panel for a solid view.
     label: 'Walls',
     color: '#e2e8f0',
-    visible: true,
+    visible: false,
     opacity: 1,
     sourceTypes: ['floor-plan', 'architectural'],
     icon: '🧱',
