@@ -143,7 +143,7 @@ const DEFAULT_LAYERS: Layer[] = [
     id: 'electrical',
     label: 'Electrical',
     color: '#fbbf24',
-    visible: false,
+    visible: true,
     opacity: 1,
     sourceTypes: ['electrical'],
     icon: '⚡',
@@ -152,7 +152,7 @@ const DEFAULT_LAYERS: Layer[] = [
     id: 'plumbing',
     label: 'Plumbing',
     color: '#38bdf8',
-    visible: false,
+    visible: true,
     opacity: 1,
     sourceTypes: ['plumbing'],
     icon: '💧',
@@ -161,7 +161,7 @@ const DEFAULT_LAYERS: Layer[] = [
     id: 'mechanical',
     label: 'Mechanical / HVAC',
     color: '#a78bfa',
-    visible: false,
+    visible: true,
     opacity: 1,
     sourceTypes: ['mechanical'],
     icon: '🌀',
@@ -885,7 +885,20 @@ export const useAppStore = create<AppState>()(
       pushHistory()
       set((s) => {
         const layer = s.layers.find((l) => l.id === id)
-        if (layer) layer.visible = !layer.visible
+        if (!layer) return
+        layer.visible = !layer.visible
+        // One toggle, both worlds: keep the trade-line visibility set in lockstep
+        // with the layer so Electrical/Plumbing/HVAC control the traced lines AND
+        // the built geometry — no separate, redundant trade-layer toggles.
+        const traceKey: Record<string, TraceLayer> = {
+          electrical: 'electrical', plumbing: 'plumbing', mechanical: 'hvac', framing: 'framing',
+        }
+        const tk = traceKey[id]
+        if (tk) {
+          const next = new Set(s.visibleLayers)
+          if (layer.visible) next.add(tk); else next.delete(tk)
+          s.visibleLayers = next
+        }
       })
     },
 

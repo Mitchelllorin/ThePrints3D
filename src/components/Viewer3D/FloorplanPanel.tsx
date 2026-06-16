@@ -81,7 +81,6 @@ export default function FloorplanPanel() {
   const removePlacedObject = useAppStore((s) => s.removePlacedObject)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const modelReady      = useAppStore((s) => s.model.status === 'ready')
-  const buildResult     = useAppStore((s) => s.buildResult)
 
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
   const setTraceMode   = useFloorplanLocalStore((s) => s.setTraceMode)
@@ -573,15 +572,21 @@ export default function FloorplanPanel() {
           <div className={styles.step}>
             {hasWalls ? (
               <>
-                <span className={styles.stepLabel}>Step 2 of 2</span>
-                <span className={styles.stepText}>{drawing.parsedWalls.length} walls detected</span>
-                <span className={styles.stepHint}>Trace manually to correct, or build now</span>
+                <span className={styles.stepLabel}>{userWallCount > 0 ? 'Walls' : 'Step 2 of 2'}</span>
+                <span className={styles.stepText}>
+                  {userWallCount > 0
+                    ? `${userWallCount} wall${userWallCount === 1 ? '' : 's'} traced`
+                    : `${drawing.parsedWalls.length} walls detected`}
+                </span>
+                <span className={styles.stepHint}>
+                  {userWallCount > 0 ? 'Build, or trace more' : 'Trace manually to correct, or build now'}
+                </span>
                 <div className={styles.btnRow}>
                   <button className={styles.action} onClick={() => buildModel()}>
                     Build 3D →
                   </button>
                   <button className={styles.secondary} onClick={openPicker}>
-                    Trace walls
+                    {userWallCount > 0 ? 'Trace more' : 'Trace walls'}
                   </button>
                   <button className={styles.secondary} onClick={startCalibration}>
                     Re-calibrate
