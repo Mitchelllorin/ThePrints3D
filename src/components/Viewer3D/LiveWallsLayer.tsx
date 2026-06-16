@@ -61,6 +61,7 @@ export default function LiveWallsLayer() {
   const drawings  = useAppStore((s) => s.drawings)
   const overlay   = useAppStore((s) => s.floorplanOverlay)
   const model     = useAppStore((s) => s.model)
+  const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
 
   const wallHeight = useMemo(
@@ -97,10 +98,10 @@ export default function LiveWallsLayer() {
     return out
   }, [drawings])
 
-  // Once the model is built, BuildingModel renders these same walls with the
-  // same overlay transform — drawing them twice just z-fights. Live preview
-  // is only needed before the first build or while actively tracing.
-  const modelOwnsWalls = (model.status === 'ready' || model.status === 'building') && !overlay.traceModeActive
+  // Once a build exists, BuildingModel exclusively owns the 3D wall volume —
+  // the live preview boxes must disappear entirely (no double geometry / z-fight).
+  // buildResult covers "Build for me"; model status covers the "Build 3D" path.
+  const modelOwnsWalls = buildResult !== null || model.status === 'ready' || model.status === 'building'
 
   if (userWalls.length === 0 || modelOwnsWalls) return null
 
