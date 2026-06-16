@@ -369,7 +369,6 @@ type PanelId = 'layers' | 'settings'
 // ── Layout ───────────────────────────────────────────────────────────────────
 export default function WorkspaceLayout() {
   const [open, setOpen] = useState<PanelId | null>(null)
-  const [uploadDismissed, setUploadDismissed] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const drawings            = useAppStore((s) => s.drawings)
@@ -425,7 +424,6 @@ export default function WorkspaceLayout() {
   const handleLoadPreset = (presetId: PresetDifficulty) => {
     try {
       loadPresetDrawing(presetId, true)
-      setUploadDismissed(true)
       // UX convention: a one-shot pick (preset, file, etc.) retracts the panel —
       // the user chose what they wanted, so the panel gets out of the way.
       setOpen(null)
@@ -434,7 +432,8 @@ export default function WorkspaceLayout() {
     }
   }
   const hasDrawings = drawings.length > 0
-  const showUploadHint = !hasDrawings && !uploadDismissed
+  // Onboarding card persists until a plan is actually loaded — no dismiss.
+  const showUploadHint = !hasDrawings
 
   // One menu at a time across BOTH systems: opening the left drawer dismisses
   // any floorplan floater (property card / picker / panel board), and opening a
@@ -451,7 +450,7 @@ export default function WorkspaceLayout() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    if (files.length) { addDrawings(files); setUploadDismissed(true) }
+    if (files.length) { addDrawings(files) }
     e.target.value = ''
   }
 
@@ -591,7 +590,6 @@ export default function WorkspaceLayout() {
         <div className={styles.uploadHint}>
           <div className={styles.uploadHintHeader}>
             <span className={styles.uploadHintTitle}>Get started</span>
-            <button className={styles.uploadHintDismiss} onClick={() => setUploadDismissed(true)} title="Dismiss">✕</button>
           </div>
           <p className={styles.uploadHintSub}>Drag a floor plan onto the grid, import one, or start from a preset.</p>
           <div className={styles.uploadHintActions}>
