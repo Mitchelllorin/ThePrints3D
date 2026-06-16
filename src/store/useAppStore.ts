@@ -19,6 +19,7 @@ import type {
   Measurement,
   Circuit,
   Model3D,
+  ParsedOpening,
   PlacedObject,
   TracedLine,
   UserTrace,
@@ -29,6 +30,7 @@ import { type TraceLayer, TRACE_LAYER_ORDER } from '../data/traceLayers'
 import type { ProductCatalogItem, ProductPlacement } from '../types/products'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import { buildFraming } from '../services/constructionEngine'
+import { getCatalogItem } from '../data/objectCatalog'
 import {
   groupByFloorWithLog,
   floorToElevation,
@@ -531,13 +533,30 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
  */
 function computeFramingResult(
   drawings: AppState['drawings'],
+  placedObjects: PlacedObject[] = [],
 ): ReturnType<typeof buildFraming> | null {
   const allParsed = drawings.filter((d) => d.parsedWalls.length > 0)
   if (allParsed.length === 0) return null
   const ref = allParsed.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
   const scaleMmPerPx = ref.scaleMmPerPx ?? 23.5
   const allWalls = allParsed.flatMap((d) => d.parsedWalls)
-  const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
+  // Detected openings + the doors/windows the user placed (so the engine frames
+  // king/jack studs + a header around each and skips studs through the opening).
+  const placedOpenings: ParsedOpening[] = placedObjects
+    .filter((o) => (o.type === 'door' || o.type === 'window') && o.pxX != null && o.pxY != null)
+    .map((o) => {
+      const item = getCatalogItem(o.type)
+      const widthMm = (item?.defaultW ?? 0.9) * o.scaleX * 1000
+      return {
+        x: o.pxX as number,
+        y: o.pxY as number,
+        widthPx: widthMm / scaleMmPerPx,
+        widthMm,
+        orientation: Math.abs(Math.cos(o.rotationY)) >= Math.abs(Math.sin(o.rotationY)) ? 'horizontal' : 'vertical',
+        type: o.type as 'door' | 'window',
+      } satisfies ParsedOpening
+    })
+  const allOpenings = [...allParsed.flatMap((d) => d.parsedOpenings), ...placedOpenings]
   const cfg = useConfigStore.getState()
   const onboardingMeta = loadOnboardingWizardState().meta
   return buildFraming(allWalls, allOpenings, {
@@ -891,7 +910,7 @@ export const useAppStore = create<AppState>()(
     buildModel: () => {
       // Frame the walls as part of the 3D build — Build 3D and Build-for-me now
       // produce the same framed result; the Framing toggle controls visibility.
-      const framing = computeFramingResult(get().drawings)
+      const framing = computeFramingResult(get().drawings, get().placedObjects)
       const autoFraming = useConfigStore.getState().buildAutoEnableFraming
       set((s) => {
         s.model.status = s.drawings.length > 0 ? 'building' : 'idle'
@@ -1345,7 +1364,7 @@ export const useAppStore = create<AppState>()(
 
     // ─── Construction Engine ──────────────────────────────────────────
     buildForMe: () => {
-      const result = computeFramingResult(get().drawings)
+      const result = computeFramingResult(get().drawings, get().placedObjects)
       if (!result) return
       const buildAutoEnableFraming = useConfigStore.getState().buildAutoEnableFraming
 

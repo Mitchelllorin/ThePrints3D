@@ -90,6 +90,10 @@ export interface PlacedObject {
   brand?: string
   /** For electrical fixtures: the circuit this fixture auto-connected to. */
   circuitId?: string
+  /** Image-pixel position (captured at placement) so doors/windows can be fed
+   *  to the framing engine as wall openings. */
+  pxX?: number
+  pxY?: number
 }
 
 export type CircuitType = 'general' | 'dedicated' | 'gfci' | 'afci' | 'gfci+afci'

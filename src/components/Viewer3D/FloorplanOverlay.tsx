@@ -546,6 +546,7 @@ export default function FloorplanOverlay() {
       if (nearestLineId) circuitId = circuits.find((c) => c.lineIds.includes(nearestLineId!))?.id
     }
 
+    const [opx, opy] = worldToPixel(new THREE.Vector3(pose.x, 0, pose.z))
     addPlacedObject({
       id,
       type: placeObjectType,
@@ -557,6 +558,8 @@ export default function FloorplanOverlay() {
       scaleY: 1,
       label: item?.label ?? placeObjectType,
       circuitId,
+      pxX: opx,
+      pxY: opy,
     })
     setPlaceObjectType(null)
     hideGhost()
