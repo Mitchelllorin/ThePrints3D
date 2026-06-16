@@ -8,6 +8,7 @@ import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { getCatalogItem } from '../../data/objectCatalog'
+import { WALL_THICKNESS_M } from '../../services/constructionCode'
 
 interface Props {
   layers: Layer[]
@@ -145,10 +146,14 @@ function buildRealWalls(
   const segs = walls.map((w) => {
     const [x1, z1] = transform.toWorld(w.x1, w.y1)
     const [x2, z2] = transform.toWorld(w.x2, w.y2)
+    // A stamped framing type (2×4 / 2×6 / steel / CMU) sets a real nominal
+    // thickness so different framing reads as visibly different walls; auto
+    // walls without one fall back to the pixel-derived/default thickness.
+    const framingThick = w.framingType ? WALL_THICKNESS_M[w.framingType] : undefined
     return {
       w, x1, z1, x2, z2,
       len: Math.hypot(x2 - x1, z2 - z1),
-      thick: Math.max(w.thickness > 1 ? w.thickness * transform.mPerPx : defaultThicknessM, 0.05),
+      thick: framingThick ?? Math.max(w.thickness > 1 ? w.thickness * transform.mPerPx : defaultThicknessM, 0.05),
     }
   })
 
