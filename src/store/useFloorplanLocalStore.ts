@@ -57,6 +57,8 @@ interface FloorplanLocalState {
   activeWallType: string
   /** Structural role key, e.g. 'exterior-bearing'. */
   activeWallRole: string
+  /** Active discipline tab; only 'framing' is wired today. */
+  activeTraceLayer: 'framing' | 'plumbing' | 'electrical' | 'hvac'
 
   // ─── editing / selection ─────────────────────────────────────────
   /** Index (within a drawing's user walls) of the selected wall, or null. */
@@ -86,6 +88,7 @@ interface FloorplanLocalState {
   setPendingTraceAfterCalibration: (v: boolean) => void
   setActiveWallType: (v: string) => void
   setActiveWallRole: (v: string) => void
+  setActiveTraceLayer: (v: 'framing' | 'plumbing' | 'electrical' | 'hvac') => void
   setDrag: (v: DragState | null) => void
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
@@ -109,6 +112,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   distanceInput: '',
   activeWallType: 'wood-2x6',
   activeWallRole: 'exterior-bearing',
+  activeTraceLayer: 'framing',
   selectedWallIndex: null,
   placeObjectType: null,
   selectedObjectId: null,
@@ -144,6 +148,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setPendingTraceAfterCalibration: (v) => set({ pendingTraceAfterCalibration: v }),
   setActiveWallType: (v) => set({ activeWallType: v }),
   setActiveWallRole: (v) => set({ activeWallRole: v }),
+  setActiveTraceLayer: (v) => set({ activeTraceLayer: v }),
   setDrag: (v) => set({ drag: v }),
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v }),
   setPlaceObjectType: (v) => set({ placeObjectType: v }),

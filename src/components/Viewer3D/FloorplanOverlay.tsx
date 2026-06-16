@@ -9,7 +9,7 @@
  * useFloorplanLocalStore so both reconcilers can read/write it.
  */
 
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
@@ -367,6 +367,23 @@ export default function FloorplanOverlay() {
     }
   }, [traceMode, overlay.calibrationMode, setSelectedWallIndex, setSelectedObjectId, setPlaceObjectType])
 
+  // Live ghost position (world X/Z) tracked while placing. Reset during render
+  // whenever the armed type changes (incl. cancel) so no stale ghost lingers.
+  const [ghost, setGhost] = useState<[number, number] | null>(null)
+  const [ghostArmed, setGhostArmed] = useState<string | null>(placeObjectType)
+  if (placeObjectType !== ghostArmed) {
+    setGhostArmed(placeObjectType)
+    setGhost(null)
+  }
+
+  // Escape cancels placement.
+  useEffect(() => {
+    if (!placeObjectType) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPlaceObjectType(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [placeObjectType, setPlaceObjectType])
+
   const handlePlaceObject = (event: ThreeEvent<PointerEvent>) => {
     if (!placeObjectType) return
     event.stopPropagation()
@@ -384,9 +401,12 @@ export default function FloorplanOverlay() {
       label: item?.label ?? placeObjectType,
     })
     setPlaceObjectType(null)
+    setGhost(null)
     setSelectedObjectId(id)
     setSelectedWallIndex(null)
   }
+
+  const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
 
   // ─── render (Three.js only) ────────────────────────────────────────────
 
@@ -429,6 +449,8 @@ export default function FloorplanOverlay() {
               rotation={[-Math.PI / 2, 0, 0]}
               position={[0, 0.03, 0]}
               onPointerDown={handlePlaceObject}
+              onPointerMove={(e) => { e.stopPropagation(); setGhost([e.point.x, e.point.z]) }}
+              onPointerLeave={() => setGhost(null)}
             >
               <planeGeometry args={[width, depth]} />
               <meshBasicMaterial transparent opacity={0.08} color="#4ade80" side={THREE.DoubleSide} />
@@ -528,6 +550,18 @@ export default function FloorplanOverlay() {
           <meshBasicMaterial color="#38bdf8" />
         </mesh>
       )}
+
+      {/* Ghost preview — translucent box following the pointer while placing. */}
+      {placeObjectType && ghost && ghostItem && (() => {
+        const isOpening = placeObjectType === 'door' || placeObjectType === 'window'
+        const gd = isOpening ? 0.06 : ghostItem.defaultD
+        return (
+          <mesh position={[ghost[0], ghostItem.defaultH / 2, ghost[1]]}>
+            <boxGeometry args={[ghostItem.defaultW, ghostItem.defaultH, gd]} />
+            <meshStandardMaterial color={ghostItem.color} transparent opacity={0.5} depthWrite={false} />
+          </mesh>
+        )
+      })()}
 
       {/* Wall select: thin invisible click targets along each user wall. */}
       {editMode && !placeObjectType && userWalls.map((w, i) => {

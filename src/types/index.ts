@@ -80,6 +80,10 @@ export interface PlacedObject {
   scaleY: number
   /** Human-readable label shown in the UI */
   label: string
+  /** Sub-type (e.g. door 'pocket', window 'casement'); furniture leaves blank */
+  subtype?: string
+  /** Free-text brand/model (placeholder for product matching later) */
+  brand?: string
 }
 
 /** A room (enclosed region) detected by flood-filling the rasterized image. */

@@ -9,8 +9,27 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm } from '../../services/unitConverter'
-import { OBJECT_CATALOG, getCatalogItem } from '../../data/objectCatalog'
+import { getCatalogItem, trayItems, SUBTYPES } from '../../data/objectCatalog'
 import styles from './AmbientGuide.module.css'
+
+// ── Discipline layers (only framing is wired; others are placeholders) ────────
+const TRACE_LAYERS = [
+  { key: 'framing', label: 'Framing', color: '#d4a574' },
+  { key: 'plumbing', label: 'Plumbing', color: '#38bdf8' },
+  { key: 'electrical', label: 'Electrical', color: '#fbbf24' },
+  { key: 'hvac', label: 'HVAC', color: '#a78bfa' },
+] as const
+
+// ── Metric ⇄ feet/inches helpers for the property card ────────────────────────
+const M_PER_IN = 0.0254
+function metresToFtIn(m: number): { ft: number; in: number } {
+  const totalIn = m / M_PER_IN
+  const ft = Math.floor(totalIn / 12)
+  return { ft, in: Math.round(totalIn - ft * 12) }
+}
+function ftInToMetres(ft: number, inch: number): number {
+  return (ft * 12 + inch) * M_PER_IN
+}
 
 // Scale assumed before the user has calibrated, so the live estimate has
 // something to show. The user confirms or overrides it during calibration.
@@ -60,6 +79,7 @@ export default function FloorplanPanel() {
   const removePlacedObject = useAppStore((s) => s.removePlacedObject)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const modelReady      = useAppStore((s) => s.model.status === 'ready')
+  const buildResult     = useAppStore((s) => s.buildResult)
 
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
   const setTraceMode   = useFloorplanLocalStore((s) => s.setTraceMode)
@@ -90,6 +110,8 @@ export default function FloorplanPanel() {
   const setActiveWallType = useFloorplanLocalStore((s) => s.setActiveWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
   const setActiveWallRole = useFloorplanLocalStore((s) => s.setActiveWallRole)
+  const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
+  const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
 
   // The ONE active unit — calibration estimate, input, and label all read it.
   const activeUnit     = useConfigStore((s) => s.activeUnit)
@@ -254,6 +276,9 @@ export default function FloorplanPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawing?.id, drawing?.status, calibrationHandledIds, overlay.calibrationMode, traceMode])
 
+  // Exclusive menus: while an object is selected or placement is armed, the
+  // picker is render-gated out (showSteps === false), so menus never overlap.
+
   // ── state machine ─────────────────────────────────────────────────────────
   // No drawing at all — render nothing (the drop zone in ModelViewer handles it)
   if (!drawing) return (
@@ -289,11 +314,45 @@ export default function FloorplanPanel() {
     setSelectedObjectId(null)
   }
 
+  // Arm/disarm placement from the tray. Re-tapping the active item cancels.
+  // Entering place mode closes every other menu (no overlapping UI).
+  const armPlace = (type: string) => {
+    if (placeObjectType === type) { setPlaceObjectType(null); return }
+    setPlaceObjectType(type)
+    setSelectedObjectId(null)
+    setSelectedWallIndex(null)
+    setPickerOpen(false)
+  }
+
+  // Set one dimension of the selected object (metres) via its scale factor.
+  const setObjectDim = (axis: 'W' | 'D' | 'H', metres: number) => {
+    if (!selectedObject || !selectedObjItem || !(metres > 0)) return
+    const def = axis === 'W' ? selectedObjItem.defaultW : axis === 'D' ? selectedObjItem.defaultD : selectedObjItem.defaultH
+    const scale = Math.max(0.05, metres / def)
+    updatePlacedObject(selectedObject.id, axis === 'W' ? { scaleX: scale } : axis === 'D' ? { scaleZ: scale } : { scaleY: scale })
+  }
+
+  // While placing or with an object selected, the side guide stays clear so the
+  // workspace is fully visible — the tray and property card carry the UI.
+  const showSteps = !placeObjectType && !selectedObject
+  const framingActive = activeTraceLayer === 'framing'
+  // Tray appears once a build exists — either the construction-engine result
+  // (Build for me) or a rendered 3D model (Build 3D from tracing).
+  const trayVisible = buildResult !== null || modelReady
+  const objDims = selectedObject && selectedObjItem
+    ? {
+        W: selectedObjItem.defaultW * selectedObject.scaleX,
+        D: selectedObjItem.defaultD * selectedObject.scaleZ,
+        H: selectedObjItem.defaultH * selectedObject.scaleY,
+      }
+    : null
+  const objSubtypes = selectedObject ? SUBTYPES[selectedObject.type] : undefined
+
   return (
     <>
       <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp" multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
-      <div className={styles.guide}>
+      <div className={styles.guide} style={trayVisible ? { bottom: 96 } : undefined}>
 
         {/* Drawing switcher — only shown when multiple drawings */}
         {drawings.length > 1 && !overlay.calibrationMode && !traceMode && (
@@ -310,6 +369,32 @@ export default function FloorplanPanel() {
           </div>
         )}
 
+        {/* ── Discipline layer tabs ── */}
+        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && (
+          <div className={styles.layerTabs}>
+            {TRACE_LAYERS.map((l) => (
+              <button
+                key={l.key}
+                className={activeTraceLayer === l.key ? styles.layerTabActive : styles.layerTab}
+                style={activeTraceLayer === l.key ? { borderColor: l.color, color: l.color } : undefined}
+                onClick={() => { setActiveTraceLayer(l.key); setPickerOpen(false) }}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Non-framing disciplines are placeholders for now. */}
+        {showSteps && !framingActive && drawing.status === 'ready' && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>{TRACE_LAYERS.find((l) => l.key === activeTraceLayer)?.label}</span>
+            <span className={styles.stepHint}>Coming soon — framing is the active discipline.</span>
+          </div>
+        )}
+
+        {showSteps && framingActive && (
+        <>
         {/* ── Step 0: analysing ── */}
         {isAnalysing && (
           <div className={styles.hint}>
@@ -543,8 +628,11 @@ export default function FloorplanPanel() {
           </div>
         )}
 
+        </>
+        )}
+
         {/* ── Selected wall (post-build edit) ── */}
-        {editMode && selectedWallIndex != null && userWalls[selectedWallIndex] && (
+        {showSteps && editMode && selectedWallIndex != null && userWalls[selectedWallIndex] && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>Wall selected</span>
             <span className={styles.stepHint}>Wall {selectedWallIndex + 1} of {userWalls.length}</span>
@@ -555,58 +643,8 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Selected object (info card + transform) ── */}
-        {editMode && selectedObject && (
-          <div className={styles.step}>
-            <span className={styles.stepLabel}>{selectedObject.label}</span>
-            {selectedObjItem && (
-              <span className={styles.stepHint}>
-                {(selectedObjItem.defaultW * selectedObject.scaleX).toFixed(2)} × {(selectedObjItem.defaultD * selectedObject.scaleZ).toFixed(2)} × {(selectedObjItem.defaultH * selectedObject.scaleY).toFixed(2)} m · drag to move, knob to rotate
-              </span>
-            )}
-            <div className={styles.btnRow}>
-              <button className={styles.secondary} onClick={() => updatePlacedObject(selectedObject.id, { rotationY: selectedObject.rotationY + Math.PI / 2 })}>
-                ⟳ Rotate 90°
-              </button>
-              <button className={styles.action} onClick={deleteSelectedObject}>🗑 Delete</button>
-              <button className={styles.secondary} onClick={() => setSelectedObjectId(null)}>Deselect</button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Objects palette (place furniture/fixtures) ── */}
-        {editMode && drawing.status === 'ready' && (
-          <details className={styles.details}>
-            <summary className={styles.detailsSummary}>Objects</summary>
-            <div className={styles.detailsBody}>
-              {placeObjectType ? (
-                <>
-                  <span className={styles.stepHint}>
-                    Click on the plan to place “{getCatalogItem(placeObjectType)?.label ?? placeObjectType}”.
-                  </span>
-                  <button className={styles.secondary} onClick={() => setPlaceObjectType(null)}>
-                    Cancel placement
-                  </button>
-                </>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
-                  {OBJECT_CATALOG.map((item) => (
-                    <button
-                      key={item.type}
-                      className={styles.secondary}
-                      onClick={() => { setPlaceObjectType(item.type); setSelectedObjectId(null); setSelectedWallIndex(null) }}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </details>
-        )}
-
         {/* ── Overlay fine-tuning (always accessible, collapsed by default) ── */}
-        {!overlay.calibrationMode && !traceMode && drawing.status === 'ready' && (
+        {showSteps && !overlay.calibrationMode && !traceMode && drawing.status === 'ready' && (
           <details className={styles.details}>
             <summary className={styles.detailsSummary}>Overlay settings</summary>
             <div className={styles.detailsBody}>
@@ -634,6 +672,78 @@ export default function FloorplanPanel() {
           </details>
         )}
       </div>
+
+      {/* ── Property card for the selected placed object (above the tray) ── */}
+      {selectedObject && objDims && (
+        <div className={styles.propCard} style={{ bottom: trayVisible ? 96 : 16 }}>
+          <div className={styles.propHeader}>
+            <span className={styles.propTitle}>{selectedObject.label}</span>
+            <button className={styles.cardClose} onClick={() => setSelectedObjectId(null)} aria-label="Close">✕</button>
+          </div>
+          {(['W', 'D', 'H'] as const).map((axis) => {
+            const { ft, in: inch } = metresToFtIn(objDims[axis])
+            const labelMap = { W: 'Width', D: 'Depth', H: 'Height' }
+            return (
+              <div key={axis} className={styles.propRow}>
+                <span className={styles.propLabel}>{labelMap[axis]}</span>
+                <input type="number" min={0} className={styles.dimInput} value={ft}
+                  onChange={(e) => setObjectDim(axis, ftInToMetres(Number(e.target.value) || 0, inch))} />
+                <span className={styles.unit}>ft</span>
+                <input type="number" min={0} max={11} className={styles.dimInput} value={inch}
+                  onChange={(e) => setObjectDim(axis, ftInToMetres(ft, Number(e.target.value) || 0))} />
+                <span className={styles.unit}>in</span>
+              </div>
+            )
+          })}
+          <div className={styles.propRow}>
+            <span className={styles.propLabel}>Type</span>
+            {objSubtypes ? (
+              <select
+                className={styles.select}
+                value={selectedObject.subtype ?? objSubtypes[0]}
+                onChange={(e) => updatePlacedObject(selectedObject.id, { subtype: e.target.value })}
+              >
+                {objSubtypes.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            ) : (
+              <span className={styles.propVal}>{selectedObject.label}</span>
+            )}
+          </div>
+          <div className={styles.propRow}>
+            <span className={styles.propLabel}>Brand</span>
+            <input
+              type="text"
+              className={styles.brandInput}
+              placeholder="—"
+              value={selectedObject.brand ?? ''}
+              onChange={(e) => updatePlacedObject(selectedObject.id, { brand: e.target.value })}
+            />
+          </div>
+          <div className={styles.btnRow}>
+            <button className={styles.secondary} onClick={() => updatePlacedObject(selectedObject.id, { rotationY: selectedObject.rotationY + Math.PI / 2 })}>
+              ⟳ Rotate 90°
+            </button>
+            <button className={styles.action} onClick={deleteSelectedObject}>🗑 Delete</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Object catalog tray (bottom, after a build exists) ── */}
+      {trayVisible && (
+        <div className={styles.tray}>
+          {trayItems().map((item) => (
+            <button
+              key={item.type}
+              className={placeObjectType === item.type ? styles.trayItemActive : styles.trayItem}
+              onClick={() => armPlace(item.type)}
+              title={item.label}
+            >
+              <span className={styles.trayIcon}>{item.icon}</span>
+              <span className={styles.trayLabel}>{item.short}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </>
   )
 }
