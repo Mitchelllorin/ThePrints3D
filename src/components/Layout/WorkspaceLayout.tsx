@@ -376,6 +376,8 @@ export default function WorkspaceLayout() {
   const buildForMe = useAppStore((s) => s.buildForMe)
   const annotateMode = useAppStore((s) => s.annotateMode)
   const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
+  const explodeAmount = useAppStore((s) => s.explodeAmount)
+  const setExplodeAmount = useAppStore((s) => s.setExplodeAmount)
   const traceActive = useFloorplanLocalStore((s) => s.traceMode || s.activePanel === 'picker')
   const logoOpacity = useUISettingsStore((s) => s.logoOpacity)
   const logoSize    = useUISettingsStore((s) => s.logoSize)
@@ -506,6 +508,16 @@ export default function WorkspaceLayout() {
             {open === 'settings' && (
               <>
                 <SettingsContent />
+                <p className={styles.sectionTitle}>Explode view</p>
+                <label className={styles.settingRow}>
+                  <span className={styles.settingLabel}>Separation</span>
+                  <input
+                    type="range" min={0} max={1} step={0.01} value={explodeAmount}
+                    onChange={(e) => setExplodeAmount(Number(e.target.value))}
+                    className={styles.settingSlider}
+                  />
+                  <span className={styles.settingVal}>{Math.round(explodeAmount * 100)}%</span>
+                </label>
                 <p className={styles.sectionTitle}>Annotate &amp; Export</p>
                 <div className={styles.panelBtnRow}>
                   <button className={styles.panelBtn} onClick={() => setAnnotateMode(!annotateMode)}>
