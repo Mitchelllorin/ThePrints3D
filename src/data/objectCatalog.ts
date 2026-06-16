@@ -34,6 +34,10 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
   { type: 'kitchen-counter',label: 'Kitchen Counter', short: 'Counter',  icon: '🍳', defaultW: 2.4,  defaultD: 0.6,  defaultH: 0.9,  color: '#78716c' },
   { type: 'toilet',         label: 'Toilet',          short: 'Toilet',   icon: '🚽', defaultW: 0.4,  defaultD: 0.7,  defaultH: 0.8,  color: '#e2e8f0' },
   { type: 'bathtub',        label: 'Bathtub',         short: 'Bath',     icon: '🛁', defaultW: 1.7,  defaultD: 0.75, defaultH: 0.6,  color: '#38bdf8' },
+  // ── Electrical rough-in boxes (installed first, then wired) ──
+  { type: 'device-box',     label: 'Device Box (1-gang)', short: 'Dev Box',  icon: '⬛', defaultW: 0.07, defaultD: 0.06, defaultH: 0.11, color: '#64748b' },
+  { type: 'junction-box',   label: 'Junction Box',        short: 'J-Box',    icon: '⬛', defaultW: 0.10, defaultD: 0.06, defaultH: 0.10, color: '#64748b' },
+  { type: 'light-box',      label: 'Ceiling Box',         short: 'Lt Box',   icon: '⬛', defaultW: 0.10, defaultD: 0.05, defaultH: 0.10, color: '#64748b' },
   // ── Electrical fixtures (shown when the Electrical layer is active) ──
   { type: 'duplex-outlet',  label: 'Duplex Outlet (15A)', short: 'Outlet',   icon: '🔌', defaultW: 0.08, defaultD: 0.04, defaultH: 0.12, color: '#facc15' },
   { type: 'gfci-outlet',    label: 'GFCI Outlet (20A)',   short: 'GFCI',     icon: '⚡', defaultW: 0.08, defaultD: 0.04, defaultH: 0.12, color: '#f59e0b' },
@@ -46,8 +50,13 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
 
 /** Electrical fixture types (tray order when the Electrical layer is active). */
 export const ELECTRICAL_TRAY_ORDER: string[] = [
+  // Boxes first (rough-in), then the devices/fixtures that drop into them.
+  'device-box', 'junction-box', 'light-box',
   'duplex-outlet', 'gfci-outlet', 'switch', 'ceiling-light', 'recessed-light', 'exhaust-fan', 'panel-box',
 ]
+
+/** Electrical rough-in box types (installed before devices + wiring). */
+export const ELECTRICAL_BOX_TYPES = new Set(['device-box', 'junction-box', 'light-box'])
 
 /** Outlet/receptacle types (relevant to spacing/GFCI validation). */
 export const OUTLET_TYPES = new Set(['duplex-outlet', 'gfci-outlet'])
