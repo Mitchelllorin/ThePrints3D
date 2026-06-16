@@ -80,6 +80,8 @@ interface FloorplanLocalState {
   selectedObjectId: string | null
   /** Whether the pre-trace type picker drawer is open. */
   pickerOpen: boolean
+  /** Whether the electrical panel board is open. */
+  panelBoardOpen: boolean
 
   // ─── UI toggles ──────────────────────────────────────────────────
   presetOpen: boolean
@@ -109,6 +111,13 @@ interface FloorplanLocalState {
   setPlaceObjectType: (v: string | null) => void
   setSelectedObjectId: (v: string | null) => void
   setPickerOpen: (v: boolean) => void
+  // Coordinated openers — one panel at a time (each closes all others).
+  openPicker: () => void
+  openPanelBoard: () => void
+  selectObjectExclusive: (id: string) => void
+  selectWallExclusive: (i: number) => void
+  armPlaceExclusive: (type: string | null) => void
+  closeAllPanels: () => void
   setPresetOpen: (v: boolean) => void
   setPracticeMode: (v: boolean) => void
   setSeedProcessing: (v: boolean) => void
@@ -141,6 +150,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   placeObjectType: null,
   selectedObjectId: null,
   pickerOpen: false,
+  panelBoardOpen: false,
   calibrationHandledIds: [],
   distanceUnit: 'mm',
   pendingTraceAfterCalibration: false,
@@ -181,6 +191,13 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setPlaceObjectType: (v) => set({ placeObjectType: v }),
   setSelectedObjectId: (v) => set({ selectedObjectId: v }),
   setPickerOpen: (v) => set({ pickerOpen: v }),
+  // One panel at a time: every opener clears the other panels/selections.
+  openPicker: () => set({ pickerOpen: true, panelBoardOpen: false, selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
+  openPanelBoard: () => set({ panelBoardOpen: true, pickerOpen: false, selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
+  selectObjectExclusive: (id) => set({ selectedObjectId: id, selectedWallIndex: null, pickerOpen: false, panelBoardOpen: false, placeObjectType: null }),
+  selectWallExclusive: (i) => set({ selectedWallIndex: i, selectedObjectId: null, pickerOpen: false, panelBoardOpen: false, placeObjectType: null }),
+  armPlaceExclusive: (type) => set({ placeObjectType: type, pickerOpen: false, panelBoardOpen: false, selectedObjectId: null, selectedWallIndex: null }),
+  closeAllPanels: () => set({ pickerOpen: false, panelBoardOpen: false, selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),
   setSeedProcessing: (v) => set({ seedProcessing: v }),

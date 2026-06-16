@@ -6,10 +6,11 @@
  */
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
+import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm } from '../../services/unitConverter'
-import { getCatalogItem, trayItems, SUBTYPES } from '../../data/objectCatalog'
+import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import {
   TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS,
   PLUMBING_PICKER, ELECTRICAL_PICKER,
@@ -135,6 +136,11 @@ export default function FloorplanPanel() {
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
   const pickerOpen = useFloorplanLocalStore((s) => s.pickerOpen)
   const setPickerOpen = useFloorplanLocalStore((s) => s.setPickerOpen)
+  const panelBoardOpen = useFloorplanLocalStore((s) => s.panelBoardOpen)
+  const openPicker = useFloorplanLocalStore((s) => s.openPicker)
+  const openPanelBoard = useFloorplanLocalStore((s) => s.openPanelBoard)
+  const armPlaceExclusive = useFloorplanLocalStore((s) => s.armPlaceExclusive)
+  const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const userWallCount = drawing?.parsedWalls.filter((w) => w.source === 'user').length ?? 0
@@ -250,26 +256,31 @@ export default function FloorplanPanel() {
     setPendingWalls(null)
   }
 
-  // Escape: discard pending walls → end the active run → exit trace mode.
-  // Enter keeps the pending walls.
+  // Keyboard: Enter keeps pending walls; Escape closes ANY open panel/card/
+  // picker first (one-panel rule), and only then handles trace run/exit.
   useEffect(() => {
-    if (!traceMode) return
     const onKey = (e: KeyboardEvent) => {
       const local = useFloorplanLocalStore.getState()
-      if (e.key === 'Enter' && local.pendingWalls) {
+      if (e.key === 'Enter' && local.traceMode && local.pendingWalls) {
         e.preventDefault()
         keepPendingWalls()
         return
       }
       if (e.key !== 'Escape') return
-      if (local.pendingWalls) local.setPendingWalls(null)
-      else if (local.traceStart) local.setTraceStart(null)
-      else cancelTracing()
+      if (local.pickerOpen || local.panelBoardOpen || local.selectedObjectId || local.selectedWallIndex != null || local.placeObjectType) {
+        local.closeAllPanels()
+        return
+      }
+      if (local.traceMode) {
+        if (local.pendingWalls) local.setPendingWalls(null)
+        else if (local.traceStart) local.setTraceStart(null)
+        else cancelTracing()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [traceMode, pendingWalls, drawing?.id])
+  }, [pendingWalls, drawing?.id])
 
   const handleSmartRefine = async () => {
     if (!drawing) return
@@ -336,11 +347,9 @@ export default function FloorplanPanel() {
   // Arm/disarm placement from the tray. Re-tapping the active item cancels.
   // Entering place mode closes every other menu (no overlapping UI).
   const armPlace = (type: string) => {
-    if (placeObjectType === type) { setPlaceObjectType(null); return }
-    setPlaceObjectType(type)
-    setSelectedObjectId(null)
-    setSelectedWallIndex(null)
-    setPickerOpen(false)
+    // Re-tapping the armed item cancels; otherwise arm it (closing all panels).
+    if (placeObjectType === type) setPlaceObjectType(null)
+    else armPlaceExclusive(type)
   }
 
   // Set one dimension of the selected object (metres) via its scale factor.
@@ -396,8 +405,8 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Discipline layer tabs ── */}
-        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && (
+        {/* ── Discipline layer tabs (hidden while tracing — get out of the way) ── */}
+        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && !traceMode && (
           <div className={styles.layerTabs}>
             {TRACE_LAYERS.map((l) => (
               <button
@@ -428,7 +437,7 @@ export default function FloorplanPanel() {
               <button
                 className={styles.secondary}
                 style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 6 }}
-                onClick={() => setPickerOpen(true)}
+                onClick={openPicker}
                 title="Change type"
               >
                 <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
@@ -437,6 +446,7 @@ export default function FloorplanPanel() {
               <span className={styles.stepHint}>Tap a start point, then tap to extend. Esc ends the run.</span>
               <div className={styles.btnRow}>
                 {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
+                {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>⚡ Panel</button>}
                 <button className={styles.cancel} onClick={cancelTracing}>Done</button>
               </div>
             </div>
@@ -445,7 +455,10 @@ export default function FloorplanPanel() {
               <span className={styles.stepLabel}>{layerLabel}</span>
               <span className={styles.stepText}>Trace {layerLabel.toLowerCase()} runs</span>
               <span className={styles.stepHint}>{tradeIndicator}</span>
-              <button className={styles.action} onClick={() => setPickerOpen(true)}>Choose type →</button>
+              <div className={styles.btnRow}>
+                <button className={styles.action} onClick={openPicker}>Choose type →</button>
+                {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>⚡ Panel board</button>}
+              </div>
             </div>
           )
         )}
@@ -538,7 +551,7 @@ export default function FloorplanPanel() {
                   <button className={styles.action} onClick={() => buildModel()}>
                     Build 3D →
                   </button>
-                  <button className={styles.secondary} onClick={() => setPickerOpen(true)}>
+                  <button className={styles.secondary} onClick={openPicker}>
                     Trace walls
                   </button>
                   <button className={styles.secondary} onClick={startCalibration}>
@@ -551,7 +564,7 @@ export default function FloorplanPanel() {
                 <span className={styles.stepLabel}>Step 2 of 2</span>
                 <span className={styles.stepText}>Trace the walls</span>
                 <span className={styles.stepHint}>Draw over each wall on the floor plan</span>
-                <button className={styles.action} onClick={() => setPickerOpen(true)}>
+                <button className={styles.action} onClick={openPicker}>
                   Start tracing →
                 </button>
               </>
@@ -567,7 +580,7 @@ export default function FloorplanPanel() {
             <button
               className={styles.secondary}
               style={{ alignSelf: 'flex-start', fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 6 }}
-              onClick={() => setPickerOpen(true)}
+              onClick={openPicker}
               title="Change wall type"
             >
               <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
@@ -653,7 +666,10 @@ export default function FloorplanPanel() {
         {/* ── Pre-trace type picker (layer-aware; before tracing or reopened) ── */}
         {showSteps && pickerOpen && !overlay.calibrationMode && (
           <div className={styles.step}>
-            <span className={styles.stepLabel}>{layerLabel} type</span>
+            <div className={styles.propHeader}>
+              <span className={styles.stepLabel}>{layerLabel} type</span>
+              <button className={styles.cardClose} onClick={() => setPickerOpen(false)} aria-label="Close">✕</button>
+            </div>
             {framingActive && (
               <>
                 <span className={styles.stepHint}>Framing</span>
@@ -859,10 +875,15 @@ export default function FloorplanPanel() {
         </div>
       )}
 
-      {/* ── Object catalog tray (bottom, after a build exists) ── */}
+      {/* ── Electrical panel board (bottom-right) ── */}
+      {panelBoardOpen && activeTraceLayer === 'electrical' && (
+        <PanelBoard onClose={closeAllPanels} />
+      )}
+
+      {/* ── Object catalog tray (bottom). Electrical layer swaps in fixtures. ── */}
       {trayVisible && (
         <div className={styles.tray}>
-          {trayItems().map((item) => (
+          {(activeTraceLayer === 'electrical' ? electricalTrayItems() : trayItems()).map((item) => (
             <button
               key={item.type}
               className={placeObjectType === item.type ? styles.trayItemActive : styles.trayItem}

@@ -36,8 +36,7 @@ export default function PlacedObjectsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
-  const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
-  const setSelectedWallIndex = useFloorplanLocalStore((s) => s.setSelectedWallIndex)
+  const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
 
   const [drag, setDrag] = useState<DragState | null>(null)
@@ -45,8 +44,7 @@ export default function PlacedObjectsLayer() {
   if (placedObjects.length === 0) return null
 
   const select = (id: string) => {
-    setSelectedObjectId(id)
-    setSelectedWallIndex(null)
+    selectObjectExclusive(id)
   }
 
   const startDrag = (e: ThreeEvent<PointerEvent>, obj: PlacedObject, kind: 'move' | 'rotate') => {

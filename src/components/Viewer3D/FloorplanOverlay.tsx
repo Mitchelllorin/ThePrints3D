@@ -9,7 +9,7 @@
  * useFloorplanLocalStore so both reconcilers can read/write it.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
@@ -24,8 +24,19 @@ import {
   snapPointToWalls,
   snapTraceWallToExisting,
 } from '../../services/wallTraceReducer'
-import { getCatalogItem } from '../../data/objectCatalog'
+import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES } from '../../data/objectCatalog'
+import { validateElectrical } from '../../services/constructionCode'
 import { LAYER_COLORS, plumbingColorFor, electricalColorFor, plumbingColor, electricalColor } from '../../data/traceLayers'
+
+/** Perpendicular distance from point to segment, in pixels. */
+function segDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
+  const dx = x2 - x1, dy = y2 - y1
+  const len2 = dx * dx + dy * dy
+  if (len2 === 0) return Math.hypot(px - x1, py - y1)
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2
+  t = Math.max(0, Math.min(1, t))
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+}
 
 let _objectSeq = 0
 function genObjectId() {
@@ -34,6 +45,14 @@ function genObjectId() {
 let _lineSeq = 0
 function genLineId() {
   return `line-${_lineSeq++}-${Math.round(performance.now())}`
+}
+
+// Ground plane (y=0) for projecting the pointer ray to a floor point — used by
+// the placement catcher so the ghost tracks even when the 3D build is in front.
+const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+function rayToGround(e: ThreeEvent<PointerEvent>): THREE.Vector3 | null {
+  const p = new THREE.Vector3()
+  return e.ray.intersectPlane(GROUND_PLANE, p) ? p : null
 }
 
 const DEFAULT_WIDTH = 12
@@ -93,6 +112,8 @@ export default function FloorplanOverlay() {
   const addElectricalLines = useAppStore((s) => s.addElectricalLines)
   const plumbingLines = useAppStore((s) => s.plumbingLines)
   const electricalLines = useAppStore((s) => s.electricalLines)
+  const circuits = useAppStore((s) => s.circuits)
+  const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
 
   const gridSnapM = useConfigStore((s) => s.gridSnapM)
@@ -115,10 +136,11 @@ export default function FloorplanOverlay() {
   const drag = useFloorplanLocalStore((s) => s.drag)
   const setDrag = useFloorplanLocalStore((s) => s.setDrag)
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
-  const setSelectedWallIndex = useFloorplanLocalStore((s) => s.setSelectedWallIndex)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
-  const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
+  const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
+  const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
+  const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const plumbElement = useFloorplanLocalStore((s) => s.plumbElement)
   const plumbSize = useFloorplanLocalStore((s) => s.plumbSize)
@@ -399,23 +421,17 @@ export default function FloorplanOverlay() {
   // Click-target half-width for walls, ~20px of the print mapped to metres.
   const wallPickWidthM = Math.max(0.25, 20 * (width / imageWidth))
 
-  // Leaving trace/calibration clears any stale selection or armed placement.
+  // Entering trace/calibration auto-dismisses every panel/card/selection so the
+  // workspace is clear — only the bottom-left trace badge remains.
   useEffect(() => {
-    if (traceMode || overlay.calibrationMode) {
-      setSelectedWallIndex(null)
-      setSelectedObjectId(null)
-      setPlaceObjectType(null)
-    }
-  }, [traceMode, overlay.calibrationMode, setSelectedWallIndex, setSelectedObjectId, setPlaceObjectType])
+    if (traceMode || overlay.calibrationMode) closeAllPanels()
+  }, [traceMode, overlay.calibrationMode, closeAllPanels])
 
-  // Live ghost position (world X/Z) tracked while placing. Reset during render
-  // whenever the armed type changes (incl. cancel) so no stale ghost lingers.
-  const [ghost, setGhost] = useState<[number, number] | null>(null)
-  const [ghostArmed, setGhostArmed] = useState<string | null>(placeObjectType)
-  if (placeObjectType !== ghostArmed) {
-    setGhostArmed(placeObjectType)
-    setGhost(null)
-  }
+  // Ghost preview mesh — positioned by DIRECT REF MUTATION on pointermove (no
+  // React state, so no per-move re-render). Visible only after the first move
+  // over the print so it tracks the pointer immediately.
+  const ghostRef = useRef<THREE.Mesh>(null)
+  const hideGhost = () => { if (ghostRef.current) ghostRef.current.visible = false }
 
   // Escape cancels placement.
   useEffect(() => {
@@ -426,25 +442,42 @@ export default function FloorplanOverlay() {
   }, [placeObjectType, setPlaceObjectType])
 
   const handlePlaceObject = (event: ThreeEvent<PointerEvent>) => {
-    if (!placeObjectType) return
+    if (!placeObjectType || !drawing) return
     event.stopPropagation()
+    const point = rayToGround(event)
+    if (!point) return
     const item = getCatalogItem(placeObjectType)
     const id = genObjectId()
+
+    // Electrical fixtures auto-connect to the nearest circuit line within 3 ft.
+    let circuitId: string | undefined
+    if (ELECTRICAL_TRAY_ORDER.includes(placeObjectType) && electricalLines.length > 0) {
+      const [px, py] = worldToPixel(point)
+      const maxPx = (3 * 304.8) / (drawing.scaleMmPerPx ?? 8)
+      let best = maxPx
+      let nearestLineId: string | undefined
+      for (const l of electricalLines) {
+        const d = segDist(px, py, l.x1, l.y1, l.x2, l.y2)
+        if (d < best) { best = d; nearestLineId = l.id }
+      }
+      if (nearestLineId) circuitId = circuits.find((c) => c.lineIds.includes(nearestLineId!))?.id
+    }
+
     addPlacedObject({
       id,
       type: placeObjectType,
-      x: event.point.x,
-      z: event.point.z,
+      x: point.x,
+      z: point.z,
       rotationY: 0,
       scaleX: 1,
       scaleZ: 1,
       scaleY: 1,
       label: item?.label ?? placeObjectType,
+      circuitId,
     })
     setPlaceObjectType(null)
-    setGhost(null)
-    setSelectedObjectId(id)
-    setSelectedWallIndex(null)
+    hideGhost()
+    selectObjectExclusive(id)
   }
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
@@ -454,6 +487,19 @@ export default function FloorplanOverlay() {
     activeTraceLayer === 'plumbing' ? plumbingColorFor(plumbElement, plumbTemp)
     : activeTraceLayer === 'electrical' ? electricalColorFor(elecElement, elecRole)
     : LAYER_COLORS.framing
+
+  // Electrical code violations (shown as red markers while the layer is on).
+  const violations = (drawing && visibleLayers.has('electrical'))
+    ? validateElectrical({
+        userWalls: userWalls,
+        outlets: placedObjects
+          .filter((o) => OUTLET_TYPES.has(o.type))
+          .map((o) => { const [px, py] = worldToPixel(new THREE.Vector3(o.x, 0, o.z)); return { x: px, y: py, type: o.type, circuitId: o.circuitId } }),
+        circuits,
+        electricalLines,
+        mmPerPx: drawing.scaleMmPerPx,
+      })
+    : []
 
   // ─── render (Three.js only) ────────────────────────────────────────────
 
@@ -487,20 +533,6 @@ export default function FloorplanOverlay() {
             >
               <planeGeometry args={[width, depth]} />
               <meshBasicMaterial transparent opacity={0.02} color="#ffffff" side={THREE.DoubleSide} />
-            </mesh>
-          )}
-
-          {/* Object placement: a click anywhere on the print drops the armed item. */}
-          {placeObjectType && (
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              position={[0, 0.03, 0]}
-              onPointerDown={handlePlaceObject}
-              onPointerMove={(e) => { e.stopPropagation(); setGhost([e.point.x, e.point.z]) }}
-              onPointerLeave={() => setGhost(null)}
-            >
-              <planeGeometry args={[width, depth]} />
-              <meshBasicMaterial transparent opacity={0.08} color="#4ade80" side={THREE.DoubleSide} />
             </mesh>
           )}
 
@@ -596,6 +628,17 @@ export default function FloorplanOverlay() {
         />
       ))}
 
+      {/* Electrical code violations — red markers on the print. */}
+      {violations.map((v) => {
+        const p = planeLocalToWorld([v.x, v.y])
+        return (
+          <mesh key={v.id} position={[p[0], 0.12, p[2]]} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry args={[0.18, 0.3, 20]} />
+            <meshBasicMaterial color="#ef4444" side={THREE.DoubleSide} transparent opacity={0.9} />
+          </mesh>
+        )
+      })}
+
       {pendingWalls?.map((w, i) => (
         <Line
           key={`pending-${i}`}
@@ -616,17 +659,39 @@ export default function FloorplanOverlay() {
         </mesh>
       )}
 
-      {/* Ghost preview — translucent box following the pointer while placing. */}
-      {placeObjectType && ghost && ghostItem && (() => {
-        const isOpening = placeObjectType === 'door' || placeObjectType === 'window'
-        const gd = isOpening ? 0.06 : ghostItem.defaultD
-        return (
-          <mesh position={[ghost[0], ghostItem.defaultH / 2, ghost[1]]}>
-            <boxGeometry args={[ghostItem.defaultW, ghostItem.defaultH, gd]} />
-            <meshStandardMaterial color={ghostItem.color} transparent opacity={0.5} depthWrite={false} />
-          </mesh>
-        )
-      })()}
+      {/* Placement catcher — a large invisible plane ABOVE the scene so the
+          pointer always hits it (never occluded by the 3D build); the ray is
+          projected to the y=0 ground for the true floor point. */}
+      {placeObjectType && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 6, 0]}
+          onPointerDown={handlePlaceObject}
+          onPointerMove={(e) => {
+            e.stopPropagation()
+            const p = rayToGround(e)
+            if (p && ghostRef.current && ghostItem) {
+              ghostRef.current.visible = true
+              ghostRef.current.position.set(p.x, ghostItem.defaultH / 2, p.z)
+            }
+          }}
+          onPointerLeave={hideGhost}
+        >
+          <planeGeometry args={[4000, 4000]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+
+      {/* Ghost preview — translucent box following the pointer while placing.
+          Mounted (hidden) the moment a tray item is armed; positioned by direct
+          ref mutation on pointermove. position prop is only the mount default —
+          no re-render happens during a placement session, so imperative moves stick. */}
+      {placeObjectType && ghostItem && (
+        <mesh ref={ghostRef} visible={false} position={[0, ghostItem.defaultH / 2, 0]}>
+          <boxGeometry args={[ghostItem.defaultW, ghostItem.defaultH, (placeObjectType === 'door' || placeObjectType === 'window') ? 0.06 : ghostItem.defaultD]} />
+          <meshStandardMaterial color={ghostItem.color} transparent opacity={0.5} depthWrite={false} />
+        </mesh>
+      )}
 
       {/* Wall select: thin invisible click targets along each user wall. */}
       {editMode && !placeObjectType && userWalls.map((w, i) => {
@@ -642,8 +707,7 @@ export default function FloorplanOverlay() {
             rotation={[0, -ang, 0]}
             onPointerDown={(e) => {
               e.stopPropagation()
-              setSelectedWallIndex(i)
-              setSelectedObjectId(null)
+              selectWallExclusive(i)
             }}
           >
             <boxGeometry args={[len, 0.08, wallPickWidthM]} />

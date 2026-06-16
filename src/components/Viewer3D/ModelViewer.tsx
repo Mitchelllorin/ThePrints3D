@@ -457,13 +457,9 @@ export default function ModelViewer() {
         style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
         onCreated={({ gl }) => { gl.setClearColor('#060d1a') }}
         onPointerMissed={() => {
-          // Tap on empty canvas (not a wall/object) dismisses any open
-          // card/picker and clears the active selection.
-          const ls = useFloorplanLocalStore.getState()
-          ls.setSelectedObjectId(null)
-          ls.setSelectedWallIndex(null)
-          ls.setPlaceObjectType(null)
-          ls.setPickerOpen(false)
+          // Tap on empty canvas (not a wall/object) dismisses every open
+          // card/picker/panel and clears the active selection.
+          useFloorplanLocalStore.getState().closeAllPanels()
         }}
       >
         <CameraRig />
