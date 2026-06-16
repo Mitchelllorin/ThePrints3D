@@ -129,6 +129,17 @@ export default function FloorplanPanel() {
   // The ONE active unit — calibration estimate, input, and label all read it.
   const activeUnit     = useConfigStore((s) => s.activeUnit)
   const lengthFormat   = useConfigStore((s) => s.lengthFormat)
+  const setCfg         = useConfigStore((s) => s.set)
+
+  // Picking a framing type also sets the build's material/stud size, so a
+  // steel pick builds steel C-studs (not wood). CMU is masonry — left unframed.
+  const pickFraming = (key: string) => {
+    setActiveWallType(key)
+    if (key.startsWith('steel')) setCfg({ framingMaterial: 'steel' })
+    else if (key.startsWith('wood')) setCfg({ framingMaterial: 'wood' })
+    if (key === 'wood-2x6' || key === 'steel-6') setCfg({ defaultStudSize: '2x6' })
+    else if (key === 'wood-2x4' || key === 'steel-3-5-8') setCfg({ defaultStudSize: '2x4' })
+  }
   const setSeedProcessing = useFloorplanLocalStore((s) => s.setSeedProcessing)
   const setHoverPixel  = useFloorplanLocalStore((s) => s.setHoverPixel)
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
@@ -691,7 +702,7 @@ export default function FloorplanPanel() {
                 <span className={styles.stepHint}>Framing</span>
                 <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
                   {FRAMING_TYPES.map((ft) => (
-                    <button key={ft.key} className={activeWallType === ft.key ? styles.action : styles.secondary} onClick={() => setActiveWallType(ft.key)}>{ft.label}</button>
+                    <button key={ft.key} className={activeWallType === ft.key ? styles.action : styles.secondary} onClick={() => pickFraming(ft.key)}>{ft.label}</button>
                   ))}
                 </div>
                 <span className={styles.stepHint}>Role</span>

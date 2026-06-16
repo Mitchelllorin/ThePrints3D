@@ -46,11 +46,21 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, acti
   const mmPerPx = scaleMmPerPx ?? DEFAULT_THICKNESS_MM / (wall.thickness || 8)
   const thicknessM = Math.max(MIN_THICKNESS, ((wall.thickness || 8) * mmPerPx) / 1000)
 
-  // Same stud framing the built model draws — studs + plates, never a solid box.
-  const framing = useMemo(
-    () => buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, opacity: 0.7 }),
-    [length, wallHeight, thicknessM, material],
-  )
+  // Masonry (CMU/brick/concrete) is a solid block; framed walls get studs.
+  const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
+  const framing = useMemo(() => {
+    if (isMasonry) {
+      const g = new THREE.Group()
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(length, wallHeight, thicknessM),
+        new THREE.MeshStandardMaterial({ color: '#a8a8a8', roughness: 1, metalness: 0, transparent: true, opacity: 0.7 }),
+      )
+      m.position.set(0, wallHeight / 2, 0)
+      g.add(m)
+      return g
+    }
+    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, opacity: 0.7 })
+  }, [length, wallHeight, thicknessM, material, isMasonry])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {

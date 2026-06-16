@@ -17,6 +17,18 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import type { ParsedWall } from '../../types'
+import type { WallType } from '../../services/wallTypeClassifier'
+
+// Picker framing key → engine WallType. Masonry (CMU) maps to a non-framed
+// type so the engine skips studs and it renders as a solid block instead.
+const FRAMING_TO_WALLTYPE: Record<string, WallType> = {
+  'wood-2x4': 'stud-2x4',
+  'wood-2x6': 'stud-2x6',
+  'wood-2x8': 'stud-2x8',
+  'steel-3-5-8': 'stud-2x4',
+  'steel-6': 'stud-2x6',
+  'cmu': 'masonry-thick',
+}
 import {
   extendWallToNearbyWall,
   reduceStrokeToWall,
@@ -142,6 +154,8 @@ export default function FloorplanOverlay() {
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
   const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
+  const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
+  const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
   const plumbElement = useFloorplanLocalStore((s) => s.plumbElement)
   const plumbSize = useFloorplanLocalStore((s) => s.plumbSize)
   const plumbMaterial = useFloorplanLocalStore((s) => s.plumbMaterial)
@@ -363,7 +377,17 @@ export default function FloorplanOverlay() {
         return
       }
       const snappedWall = snapTraceWallToExisting(reduced, drawing.parsedWalls)
-      const wall = extendWallToNearbyWall(snappedWall, drawing.parsedWalls)
+      const base = extendWallToNearbyWall(snappedWall, drawing.parsedWalls)
+      // Stamp the picked framing/role/material onto the wall so the build frames
+      // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
+      const isMasonry = activeWallType === 'cmu'
+      const wall: ParsedWall = {
+        ...base,
+        framingType: activeWallType,
+        wallRole: activeWallRole,
+        wallType: FRAMING_TO_WALLTYPE[activeWallType] ?? base.wallType,
+        exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
+      }
       addUserTracedWall(drawing.id, wall)
       addTrace({ points: [traceStart, [wall.x2, wall.y2]], timestamp: Date.now() })
       setTraceStart([wall.x2, wall.y2])

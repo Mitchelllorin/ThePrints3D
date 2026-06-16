@@ -899,13 +899,19 @@ export default function BuildingModel({ layers }: Props) {
           }
           case 'walls': {
             const wallLayer = layerMap.get('walls')
-            if (!wallLayer?.visible) break
-            const wMat = mat(wallLayer.color, wallLayer.opacity, { roughness: 0.7 })
+            const wMat = mat(wallLayer?.color ?? '#e2e8f0', wallLayer?.opacity ?? 1, { roughness: 0.7 })
             if (wallDrawings.length > 0) {
               for (const d of wallDrawings) {
+                // Masonry (CMU/brick/concrete) has no framing, so it always
+                // renders as a solid volume — even when the Walls layer is off
+                // (which hides only the framed walls in favour of their studs).
+                const wallsToRender = wallLayer?.visible
+                  ? d.parsedWalls
+                  : d.parsedWalls.filter((w) => w.wallType === 'masonry-thick')
+                if (wallsToRender.length === 0) continue
                 buildRealWalls(
                   group,
-                  d.parsedWalls,
+                  wallsToRender,
                   transforms.get(d.id)!,
                   elev,
                   fh,
@@ -915,7 +921,7 @@ export default function BuildingModel({ layers }: Props) {
                   openingSpecs,
                 )
               }
-            } else if (conceptMode) {
+            } else if (conceptMode && wallLayer?.visible) {
               buildProceduralWalls(group, fp, elev, fh, wMat)
             }
             break
