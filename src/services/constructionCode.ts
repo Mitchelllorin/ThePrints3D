@@ -71,3 +71,119 @@ export const EXTERIOR_CLADDINGS: Array<{ label: string; key: string }> = [
   { label: 'Metal Panel', key: 'metalPanel' },
   { label: 'Fiber Cement', key: 'fiberCement' },
 ]
+
+// ── Electrical code reference ─────────────────────────────────────────────────
+
+import type { Circuit, CircuitType, ParsedWall, TracedLine } from '../types'
+
+export interface RequiredCircuitSpec {
+  amps: 15 | 20 | 30 | 50
+  type: CircuitType
+  count?: number
+  label: string
+}
+
+/** NEC-style required branch circuits by room type (for suggestions). */
+export const REQUIRED_CIRCUITS: Record<string, RequiredCircuitSpec[]> = {
+  kitchen: [
+    { amps: 20, type: 'gfci', count: 2, label: 'Small appliance' },
+    { amps: 20, type: 'dedicated', label: 'Dishwasher' },
+    { amps: 50, type: 'dedicated', label: 'Range' },
+  ],
+  bathroom: [{ amps: 20, type: 'gfci', count: 1, label: 'Bath receptacle' }],
+  bedroom: [{ amps: 15, type: 'afci', count: 1, label: 'General lighting' }],
+  garage: [{ amps: 20, type: 'gfci', count: 1, label: 'Garage receptacle' }],
+  laundry: [
+    { amps: 20, type: 'dedicated', label: 'Washer' },
+    { amps: 30, type: 'dedicated', label: 'Dryer' },
+  ],
+}
+
+export const ROOM_TYPES = Object.keys(REQUIRED_CIRCUITS)
+
+const MM_PER_FT = 304.8
+
+/** Nominal wattage by electrical fixture/outlet type (for panel load calc). */
+export const FIXTURE_WATTS: Record<string, number> = {
+  'duplex-outlet': 180,
+  'gfci-outlet': 180,
+  'switch': 0,
+  'ceiling-light': 100,
+  'recessed-light': 65,
+  'exhaust-fan': 120,
+  'panel-box': 0,
+}
+
+/** Operating voltage for a circuit (240V for 50A+ feeders, else 120V). */
+export function circuitVoltage(amperage: number): number {
+  return amperage >= 50 ? 240 : 120
+}
+
+export interface ElectricalViolation {
+  id: string
+  /** Pixel coordinates on the print (overlay converts to world). */
+  x: number
+  y: number
+  message: string
+}
+
+interface ValidateInput {
+  userWalls: ParsedWall[]
+  /** Placed outlets/fixtures in PIXEL space, with their catalog type. */
+  outlets: Array<{ x: number; y: number; type: string; circuitId?: string }>
+  circuits: Circuit[]
+  electricalLines: TracedLine[]
+  mmPerPx: number | null
+}
+
+function distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
+  const dx = x2 - x1, dy = y2 - y1
+  const len2 = dx * dx + dy * dy
+  if (len2 === 0) return Math.hypot(px - x1, py - y1)
+  let t = ((px - x1) * dx + (py - y1) * dy) / len2
+  t = Math.max(0, Math.min(1, t))
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy))
+}
+
+/**
+ * Best-effort electrical code checks, returning violation markers in pixel
+ * space. NOTE: GFCI/AFCI *room-zone* checks need room typing (not available
+ * from geometry), so those are validated by circuit/outlet consistency instead.
+ */
+export function validateElectrical(input: ValidateInput): ElectricalViolation[] {
+  const { userWalls, outlets, circuits, electricalLines, mmPerPx } = input
+  const out: ElectricalViolation[] = []
+  const pxPerFt = MM_PER_FT / (mmPerPx ?? 8)
+
+  // 1) Outlet spacing — any wall run over 12 ft with no outlet within 6 ft.
+  for (const w of userWalls) {
+    const lenPx = Math.hypot(w.x2 - w.x1, w.y2 - w.y1)
+    const lenFt = (lenPx * (mmPerPx ?? 8)) / MM_PER_FT
+    if (lenFt <= 12) continue
+    const nearest = outlets.reduce((min, o) => Math.min(min, distToSegment(o.x, o.y, w.x1, w.y1, w.x2, w.y2)), Infinity)
+    if (nearest > 6 * pxPerFt) {
+      out.push({ id: `spacing-${w.x1}-${w.y1}`, x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2, message: `${lenFt.toFixed(0)}ft wall run with no outlet within 6ft` })
+    }
+  }
+
+  // 2) GFCI consistency — outlets on a GFCI circuit must be GFCI receptacles.
+  const circuitById = new Map(circuits.map((c) => [c.id, c]))
+  for (const o of outlets) {
+    const c = o.circuitId ? circuitById.get(o.circuitId) : undefined
+    if (c && (c.type === 'gfci' || c.type === 'gfci+afci') && o.type === 'duplex-outlet') {
+      out.push({ id: `gfci-${o.x}-${o.y}`, x: o.x, y: o.y, message: 'Outlet on a GFCI circuit should be a GFCI receptacle' })
+    }
+  }
+
+  // 3) AFCI — 15/20A general circuits in dwellings require AFCI protection.
+  const lineById = new Map(electricalLines.map((l) => [l.id, l]))
+  for (const c of circuits) {
+    if (c.suggested) continue
+    if ((c.amperage === 15 || c.amperage === 20) && c.type === 'general') {
+      const l = c.lineIds.map((id) => lineById.get(id)).find(Boolean)
+      if (l) out.push({ id: `afci-${c.id}`, x: (l.x1 + l.x2) / 2, y: (l.y1 + l.y2) / 2, message: `${c.label}: general circuit should be AFCI-protected (NEC 210.12)` })
+    }
+  }
+
+  return out
+}

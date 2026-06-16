@@ -399,3 +399,55 @@
   padding: 4px 8px;
 }
 .dimInput:focus, .brandInput:focus { outline: none; border-color: var(--bp-accent, #38bdf8); }
+
+/* ── Electrical panel board (bottom-right) ─────────────────────────────────── */
+.panelBoard {
+  position: absolute;
+  right: 12px;
+  bottom: 96px;
+  width: 340px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 200px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.96));
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 12px;
+  padding: 12px 14px;
+  z-index: 32;
+  pointer-events: all;
+}
+
+.breakerCols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.breaker {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font-size: 10px;
+  color: #cbd5e1;
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.breakerOver { border-color: #ef4444; color: #fca5a5; }
+.breakerSuggested { border-style: dashed; opacity: 0.7; }
+.breakerSlot { font-weight: 700; color: #94a3b8; }
+
+.loadBar {
+  height: 4px;
+  border-radius: 2px;
+  background: #334155;
+  margin-top: 3px;
+  overflow: hidden;
+}
+.loadFill { height: 100%; background: var(--bp-accent, #38bdf8); }
+.loadFillOver { background: #ef4444; }

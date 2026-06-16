@@ -34,7 +34,29 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
   { type: 'kitchen-counter',label: 'Kitchen Counter', short: 'Counter',  icon: '🍳', defaultW: 2.4,  defaultD: 0.6,  defaultH: 0.9,  color: '#78716c' },
   { type: 'toilet',         label: 'Toilet',          short: 'Toilet',   icon: '🚽', defaultW: 0.4,  defaultD: 0.7,  defaultH: 0.8,  color: '#e2e8f0' },
   { type: 'bathtub',        label: 'Bathtub',         short: 'Bath',     icon: '🛁', defaultW: 1.7,  defaultD: 0.75, defaultH: 0.6,  color: '#38bdf8' },
+  // ── Electrical fixtures (shown when the Electrical layer is active) ──
+  { type: 'duplex-outlet',  label: 'Duplex Outlet (15A)', short: 'Outlet',   icon: '🔌', defaultW: 0.08, defaultD: 0.04, defaultH: 0.12, color: '#facc15' },
+  { type: 'gfci-outlet',    label: 'GFCI Outlet (20A)',   short: 'GFCI',     icon: '⚡', defaultW: 0.08, defaultD: 0.04, defaultH: 0.12, color: '#f59e0b' },
+  { type: 'switch',         label: 'Switch',              short: 'Switch',   icon: '🔘', defaultW: 0.08, defaultD: 0.04, defaultH: 0.12, color: '#e2e8f0' },
+  { type: 'ceiling-light',  label: 'Ceiling Light',       short: 'Ceiling',  icon: '💡', defaultW: 0.3,  defaultD: 0.3,  defaultH: 0.12, color: '#fde68a' },
+  { type: 'recessed-light', label: 'Recessed Light',      short: 'Recessed', icon: '🔆', defaultW: 0.16, defaultD: 0.16, defaultH: 0.08, color: '#fef3c7' },
+  { type: 'exhaust-fan',    label: 'Exhaust Fan',         short: 'Fan',      icon: '🌀', defaultW: 0.3,  defaultD: 0.3,  defaultH: 0.2,  color: '#cbd5e1' },
+  { type: 'panel-box',      label: 'Panel Box',           short: 'Panel',    icon: '🔋', defaultW: 0.4,  defaultD: 0.12, defaultH: 0.75, color: '#9ca3af' },
 ]
+
+/** Electrical fixture types (tray order when the Electrical layer is active). */
+export const ELECTRICAL_TRAY_ORDER: string[] = [
+  'duplex-outlet', 'gfci-outlet', 'switch', 'ceiling-light', 'recessed-light', 'exhaust-fan', 'panel-box',
+]
+
+/** Outlet/receptacle types (relevant to spacing/GFCI validation). */
+export const OUTLET_TYPES = new Set(['duplex-outlet', 'gfci-outlet'])
+
+export function electricalTrayItems(): ObjectCatalogItem[] {
+  return ELECTRICAL_TRAY_ORDER
+    .map((t) => OBJECT_CATALOG.find((o) => o.type === t))
+    .filter((o): o is ObjectCatalogItem => Boolean(o))
+}
 
 /** Tray display order (curated; one bed entry shown as "Bed"). */
 export const TRAY_ORDER: string[] = [

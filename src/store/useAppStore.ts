@@ -17,6 +17,7 @@ import type {
   Layer,
   LayerId,
   Measurement,
+  Circuit,
   Model3D,
   PlacedObject,
   TracedLine,
@@ -225,6 +226,7 @@ interface WorkspaceHistorySnapshot {
   placedObjects: PlacedObject[]
   plumbingLines: TracedLine[]
   electricalLines: TracedLine[]
+  circuits: Circuit[]
   annotations: Annotation[]
   measurements: Measurement[]
   userTraces: UserTrace[]
@@ -272,6 +274,8 @@ interface AppState {
   /** Traced trade lines by discipline */
   plumbingLines: TracedLine[]
   electricalLines: TracedLine[]
+  /** Electrical branch circuits (auto-grouped by amperage + manual). */
+  circuits: Circuit[]
   /** Which trade layers are currently shown in the 3D scene */
   visibleLayers: Set<TraceLayer>
   wizardInputs: WorkspaceWizardInputs | null
@@ -378,6 +382,9 @@ interface AppState {
   addPlumbingLines: (lines: TracedLine[]) => void
   addElectricalLines: (lines: TracedLine[]) => void
   toggleTradeLayerVisible: (layer: TraceLayer) => void
+  // Electrical circuits
+  addCircuit: (c: Circuit) => void
+  updateCircuit: (id: string, patch: Partial<Circuit>) => void
 }
 
 // ─── Store ─────────────────────────────────────────────────────────────────────
@@ -457,6 +464,7 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     placedObjects: state.placedObjects,
     plumbingLines: state.plumbingLines,
     electricalLines: state.electricalLines,
+    circuits: state.circuits,
     annotations: state.annotations,
     measurements: state.measurements,
     userTraces: state.userTraces,
@@ -497,6 +505,7 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   state.placedObjects = deepCopy(snapshot.placedObjects ?? [])
   state.plumbingLines = deepCopy(snapshot.plumbingLines ?? [])
   state.electricalLines = deepCopy(snapshot.electricalLines ?? [])
+  state.circuits = deepCopy(snapshot.circuits ?? [])
   state.annotations = deepCopy(snapshot.annotations)
   state.measurements = deepCopy(snapshot.measurements)
   state.userTraces = deepCopy(snapshot.userTraces)
@@ -541,6 +550,7 @@ export const useAppStore = create<AppState>()(
     placedObjects: [],
     plumbingLines: [],
     electricalLines: [],
+    circuits: [],
     visibleLayers: new Set<TraceLayer>(TRACE_LAYER_ORDER),
     wizardInputs: null,
     wizardState: loadWizardState(),
@@ -1402,7 +1412,30 @@ export const useAppStore = create<AppState>()(
     addElectricalLines: (lines) => {
       if (lines.length === 0) return
       pushHistory()
-      set((s) => { s.electricalLines.push(...lines) })
+      set((s) => {
+        s.electricalLines.push(...lines)
+        // Auto-group traced lines into a circuit by amperage. Append to the
+        // most recent traced circuit of that amperage, else create one.
+        const ampNum = Number.parseInt(lines[0].size, 10)
+        const amperage = ([15, 20, 30, 50].includes(ampNum) ? ampNum : 15) as Circuit['amperage']
+        const ids = lines.map((l) => l.id)
+        let circuit = [...s.circuits].reverse().find((c) => !c.suggested && c.amperage === amperage)
+        if (!circuit) {
+          const nextSlot = s.circuits.reduce((m, c) => Math.max(m, c.breaker), 0) + 1
+          const count = s.circuits.filter((c) => c.amperage === amperage && !c.suggested).length + 1
+          circuit = {
+            id: `circuit-${Date.now()}-${s.circuits.length}`,
+            label: `${amperage}A Circuit #${count}`,
+            amperage,
+            breaker: nextSlot,
+            lineIds: [],
+            type: amperage >= 50 ? 'dedicated' : 'general',
+          }
+          s.circuits.push(circuit)
+        }
+        const live = s.circuits.find((c) => c.id === circuit!.id)!
+        live.lineIds.push(...ids)
+      })
     },
 
     toggleTradeLayerVisible: (layer) => {
@@ -1411,6 +1444,19 @@ export const useAppStore = create<AppState>()(
         if (next.has(layer)) next.delete(layer)
         else next.add(layer)
         s.visibleLayers = next
+      })
+    },
+
+    addCircuit: (c) => {
+      pushHistory()
+      set((s) => { s.circuits.push(c) })
+    },
+
+    updateCircuit: (id, patch) => {
+      pushHistory()
+      set((s) => {
+        const c = s.circuits.find((x) => x.id === id)
+        if (c) Object.assign(c, patch)
       })
     },
     }

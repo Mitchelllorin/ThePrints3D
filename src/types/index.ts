@@ -88,6 +88,24 @@ export interface PlacedObject {
   subtype?: string
   /** Free-text brand/model (placeholder for product matching later) */
   brand?: string
+  /** For electrical fixtures: the circuit this fixture auto-connected to. */
+  circuitId?: string
+}
+
+export type CircuitType = 'general' | 'dedicated' | 'gfci' | 'afci' | 'gfci+afci'
+
+/** An electrical branch circuit — a breaker feeding a set of traced lines. */
+export interface Circuit {
+  id: string
+  label: string
+  amperage: 15 | 20 | 30 | 50
+  /** Panel slot number */
+  breaker: number
+  /** electricalLine ids belonging to this circuit */
+  lineIds: string[]
+  type: CircuitType
+  /** True when generated from room requirements but not yet traced. */
+  suggested?: boolean
 }
 
 /**
