@@ -449,3 +449,48 @@
   .stepText, .propTitle { font-size: 15px; }
   .stepHint, .propLabel, .unit { font-size: 13px; }
 }
+
+/* ── Object catalog — single button + scrollable popover (replaces the bar) ── */
+.catalogBtn, .catalogBtnActive {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 30;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  pointer-events: all;
+  min-height: 44px;
+  backdrop-filter: blur(6px);
+}
+.catalogBtnActive { background: rgba(255, 255, 255, 0.15); border-color: var(--bp-accent, #38bdf8); }
+
+.catalogPanel {
+  position: absolute;
+  left: 12px;
+  bottom: 64px;
+  z-index: 31;
+  width: min(340px, calc(100vw - 24px));
+  max-height: 50dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-panel-opacity, 0.96));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 12px;
+  padding: 10px;
+  pointer-events: all;
+}
+
+.catalogGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+}
+.catalogGrid .trayItem, .catalogGrid .trayItemActive { width: auto; }

@@ -104,7 +104,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   cornerInferEnabled: true,
   cornerTolerancePx: 20,
   gridSnapM: 0.25,
-  activeUnit: 'mm',
+  activeUnit: 'ft',
   buildFloorHeightM: 2.7,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,

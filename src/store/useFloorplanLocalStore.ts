@@ -83,7 +83,7 @@ interface FloorplanLocalState {
    * panel/card/picker checks this. Selection data (selectedObjectId /
    * selectedWallIndex) is the content; `activePanel` controls visibility.
    */
-  activePanel: 'picker' | 'panelBoard' | 'object' | 'wall' | null
+  activePanel: 'picker' | 'panelBoard' | 'object' | 'wall' | 'catalog' | null
 
   // ─── UI toggles ──────────────────────────────────────────────────
   presetOpen: boolean
@@ -115,6 +115,7 @@ interface FloorplanLocalState {
   // Coordinated openers — one panel at a time (each sets activePanel + clears the rest).
   openPicker: () => void
   openPanelBoard: () => void
+  toggleCatalog: () => void
   selectObjectExclusive: (id: string) => void
   selectWallExclusive: (i: number) => void
   armPlaceExclusive: (type: string | null) => void
@@ -152,7 +153,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   selectedObjectId: null,
   activePanel: null,
   calibrationHandledIds: [],
-  distanceUnit: 'mm',
+  distanceUnit: 'ft',
   pendingTraceAfterCalibration: false,
   drag: null,
   presetOpen: false,
@@ -193,6 +194,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   // One panel at a time: every opener sets activePanel and clears the rest.
   openPicker: () => set({ activePanel: 'picker', selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
   openPanelBoard: () => set({ activePanel: 'panelBoard', selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
+  toggleCatalog: () => set((s) => s.activePanel === 'catalog'
+    ? { activePanel: null }
+    : { activePanel: 'catalog', selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
   selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, placeObjectType: null }),
   selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, placeObjectType: null }),
   armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, selectedObjectId: null, selectedWallIndex: null }),

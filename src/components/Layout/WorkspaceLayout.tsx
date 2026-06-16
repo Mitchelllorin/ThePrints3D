@@ -9,7 +9,8 @@ import AnnotationPanel from '../Annotations/AnnotationPanel'
 import WallTypeLegend from '../WallTypeLegend'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
-import { useConfigStore, type WallTraceStyle, type ActiveUnit } from '../../store/useConfigStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import { useConfigStore, type ActiveUnit } from '../../store/useConfigStore'
 import styles from './WorkspaceLayout.module.css'
 
 // ── Reusable setting controls (module scope: stable component identities) ─────
@@ -154,27 +155,17 @@ function SettingsContent() {
   const toggleTradeLayerVisible = useAppStore((x) => x.toggleTradeLayerVisible)
 
   // Single-open accordion, matching the panel tab strip's toggle behaviour.
-  const [openId, setOpenId] = useState<string | null>('wall-trace')
+  const [openId, setOpenId] = useState<string | null>('appearance')
 
   const resetAll = () => { resetUI(); resetCfg() }
 
   return (
     <div className={styles.settingsBody}>
-      <CollapsibleSection id="wall-trace" title="Wall trace" openId={openId} setOpenId={setOpenId}>
-        <Select label="Style" val={cfg.wallTraceStyle} options={[{ value: 'dotted', label: 'Dotted line' }, { value: 'arrow', label: 'Arrow' }, { value: 'both', label: 'Both' }]} onChange={(v) => setCfg({ wallTraceStyle: v as WallTraceStyle })} />
-        <Slider label="Thickness" val={cfg.wallTraceThicknessPx} min={2} max={40} step={1} unit="px" onChange={(v) => setCfg({ wallTraceThicknessPx: v })} />
-        <Slider label="Min length" val={cfg.wallTraceMinLengthPx} min={4} max={60} step={1} unit="px" onChange={(v) => setCfg({ wallTraceMinLengthPx: v })} />
-        <Slider label="Snap end" val={cfg.wallTraceSnapEndpointPx} min={0} max={80} step={1} unit="px" onChange={(v) => setCfg({ wallTraceSnapEndpointPx: v })} />
-        <Slider label="Snap line" val={cfg.wallTraceSnapLinePx} min={0} max={80} step={1} unit="px" onChange={(v) => setCfg({ wallTraceSnapLinePx: v })} />
-      </CollapsibleSection>
-
-      <CollapsibleSection id="corners" title="Corners" openId={openId} setOpenId={setOpenId}>
-        <Toggle label="Infer corners" val={cfg.cornerInferEnabled} onChange={(v) => setCfg({ cornerInferEnabled: v })} />
-        <Slider label="Tolerance" val={cfg.cornerTolerancePx} min={0} max={60} step={1} unit="px" onChange={(v) => setCfg({ cornerTolerancePx: v })} />
-      </CollapsibleSection>
-
-      <CollapsibleSection id="snapping" title="Snapping" openId={openId} setOpenId={setOpenId}>
-        <Slider label="Grid step" val={cfg.gridSnapM} min={0} max={2} step={0.05} unit="m" onChange={(v) => setCfg({ gridSnapM: v })} />
+      <CollapsibleSection id="appearance" title="Appearance" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Opacity" val={Math.round(ui.panelOpacity * 100)} min={0} max={100} step={1} unit="%"
+          onChange={(v) => setUI({ topbarOpacity: v / 100, sidebarOpacity: v / 100, panelOpacity: v / 100 })} />
+        <ColorRow label="Colour" val={ui.panelColor} onChange={(v) => setUI({ panelColor: v })} />
+        <ColorRow label="Accent" val={ui.accentColor} onChange={(v) => setUI({ accentColor: v })} />
       </CollapsibleSection>
 
       <CollapsibleSection id="units" title="Units & calibration" openId={openId} setOpenId={setOpenId}>
@@ -230,13 +221,6 @@ function SettingsContent() {
         <Toggle label="HVAC" val={visibleLayers.has('hvac')} onChange={() => toggleTradeLayerVisible('hvac')} />
       </CollapsibleSection>
 
-      <CollapsibleSection id="panels" title="UI menu / toolbar / panel" openId={openId} setOpenId={setOpenId}>
-        <ColorRow label="Colour" val={ui.panelColor} onChange={(v) => setUI({ panelColor: v })} />
-        <Slider label="Top bar" val={Math.round(ui.topbarOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ topbarOpacity: v / 100 })} />
-        <Slider label="Side panel" val={Math.round(ui.sidebarOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ sidebarOpacity: v / 100 })} />
-        <Slider label="Floaters" val={Math.round(ui.panelOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ panelOpacity: v / 100 })} />
-      </CollapsibleSection>
-
       <CollapsibleSection id="wordmark" title="3D wordmark" openId={openId} setOpenId={setOpenId}>
         <Toggle label="Visible" val={ui.logo3DVisible} onChange={(v) => setUI({ logo3DVisible: v })} />
         <Slider label="Opacity" val={Math.round(ui.logo3DOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ logo3DOpacity: v / 100 })} />
@@ -244,19 +228,10 @@ function SettingsContent() {
         <Slider label="Bounce" val={ui.logo3DFloatHeight} min={0} max={2} step={0.05} unit="m" onChange={(v) => setUI({ logo3DFloatHeight: v })} />
       </CollapsibleSection>
 
-      <CollapsibleSection id="topbar-logo" title="Top bar logo" openId={openId} setOpenId={setOpenId}>
-        <Slider label="Opacity" val={Math.round(ui.logoOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ logoOpacity: v / 100 })} />
-        <Slider label="Size" val={Math.round(ui.logoSize * 100)} min={50} max={200} step={5} unit="%" onChange={(v) => setUI({ logoSize: v / 100 })} />
-      </CollapsibleSection>
-
       <CollapsibleSection id="grid" title="3D grid" openId={openId} setOpenId={setOpenId}>
         <Toggle label="Visible" val={ui.gridVisible} onChange={(v) => setUI({ gridVisible: v })} />
         <ColorRow label="Color" val={ui.gridColor} onChange={(v) => setUI({ gridColor: v })} />
         <Slider label="Cell size" val={ui.gridCellSize} min={0.5} max={10} step={0.5} unit="m" onChange={(v) => setUI({ gridCellSize: v })} />
-      </CollapsibleSection>
-
-      <CollapsibleSection id="accent" title="Accent" openId={openId} setOpenId={setOpenId}>
-        <ColorRow label="Color" val={ui.accentColor} onChange={(v) => setUI({ accentColor: v })} />
       </CollapsibleSection>
 
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>
@@ -425,7 +400,18 @@ export default function WorkspaceLayout() {
   const hasDrawings = drawings.length > 0
   const showUploadHint = !hasDrawings && !uploadDismissed
 
-  const toggle = (id: PanelId) => setOpen((prev) => (prev === id ? null : id))
+  // One menu at a time across BOTH systems: opening the left drawer dismisses
+  // any floorplan floater (property card / picker / panel board), and opening a
+  // floorplan floater (activePanel) collapses the drawer. Nothing ever stacks.
+  useEffect(() => useFloorplanLocalStore.subscribe((s, prev) => {
+    if (s.activePanel && !prev.activePanel) setOpen(null)
+  }), [])
+
+  const toggle = (id: PanelId) => setOpen((prev) => {
+    const next = prev === id ? null : id
+    if (next) useFloorplanLocalStore.getState().closeAllPanels()
+    return next
+  })
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -552,23 +538,23 @@ export default function WorkspaceLayout() {
         </div>
       </div>
 
-      {/* Onboarding card — dismissable, top-right, only when no drawings loaded */}
-      {showUploadHint && (
+      {/* Onboarding card — dismissable, top-right, only when no drawings loaded
+          and no drawer open (never stack on top of another menu). */}
+      {showUploadHint && !open && (
         <div className={styles.uploadHint}>
           <div className={styles.uploadHintHeader}>
             <span className={styles.uploadHintTitle}>Get started</span>
             <button className={styles.uploadHintDismiss} onClick={() => setUploadDismissed(true)} title="Dismiss">✕</button>
           </div>
-          <p className={styles.uploadHintSub}>Import a floor plan to begin — drag it anywhere onto the grid, or choose an option below.</p>
+          <p className={styles.uploadHintSub}>Drag a floor plan onto the grid, browse presets in the left sidebar, or choose below.</p>
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintBtn} onClick={() => fileInputRef.current?.click()}>
-              📄 Browse files
+              Browse files
             </button>
             <button className={styles.uploadHintBtnSecondary} onClick={() => fileInputRef.current?.click()}>
-              📷 Scan with camera
+              Scan with camera
             </button>
           </div>
-          <p className={styles.uploadHintSub}>Use the left sidebar to browse presets or import a floor plan to begin.</p>
         </div>
       )}
     </div>

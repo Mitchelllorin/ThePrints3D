@@ -1,7 +1,13 @@
 /* ── Root ─────────────────────────────────────────────────────────────────── */
 .root {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  /* Dynamic viewport height so mobile browser chrome (address/nav bars) never
+     hides bottom-anchored panels or their scroll. Fallbacks for old engines. */
+  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #060d1a;
 }
@@ -159,8 +165,11 @@
 
 .panelScroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 4px 0 32px;
 }
 
@@ -508,3 +517,19 @@
   transition: color 0.15s, border-color 0.15s;
 }
 .resetBtn:hover { color: #94a3b8; border-color: #334155; }
+
+/* ── Landscape phones (short viewport) — slim the drawer so it doesn't
+   swallow the workspace; keep the 42px tab strip peeking. ───────────────── */
+@media (max-height: 500px) {
+  .panelWrapper { width: 290px; transform: translateX(-248px); }
+  .panelWrapperOpen { transform: translateX(0); }
+  .panel { width: 248px; }
+}
+
+/* ── Portrait phones — the drawer nearly fills the width so menu controls are
+   readable (no cramming/overlap); the 42px tab strip stays at the edge. ──── */
+@media (max-width: 560px) {
+  .panelWrapper { width: 100vw; transform: translateX(calc(-100vw + 42px)); }
+  .panelWrapperOpen { transform: translateX(0); }
+  .panel { width: calc(100vw - 42px); }
+}
