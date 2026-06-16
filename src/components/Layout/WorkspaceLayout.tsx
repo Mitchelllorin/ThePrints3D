@@ -199,6 +199,10 @@ function SettingsContent() {
         <Toggle label="Auto framing" val={cfg.buildAutoEnableFraming} onChange={(v) => setCfg({ buildAutoEnableFraming: v })} />
       </CollapsibleSection>
 
+      <CollapsibleSection id="trades" title="Plumbing / Electrical" openId={openId} setOpenId={setOpenId}>
+        <Select label="Pipe length" val={String(cfg.pipeStickLengthFt)} options={[{ value: '10', label: "10 ft" }, { value: '12', label: "12 ft" }]} onChange={(v) => setCfg({ pipeStickLengthFt: Number(v) as 10 | 12 })} />
+      </CollapsibleSection>
+
       <CollapsibleSection id="explode" title="Explode" openId={openId} setOpenId={setOpenId}>
         <Slider label="Speed" val={cfg.explodeSpeed} min={0.5} max={12} step={0.5} onChange={(v) => setCfg({ explodeSpeed: v })} />
         <Slider label="Spread" val={cfg.explodeSpread} min={0} max={3} step={0.1} unit="×" onChange={(v) => setCfg({ explodeSpread: v })} />

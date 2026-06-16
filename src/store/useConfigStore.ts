@@ -59,6 +59,9 @@ export interface AppConfig {
   /** How measurements are written: feet-inches, feet-inches to 1/16", or the
    *  raw active unit. Defaults to feet-and-inches. */
   lengthFormat: LengthFormat
+  /** Stock length of pipe/conduit sticks (ft) — a coupling is drawn at each
+   *  joint on a straight run. Real-world stock is 10' or 12'. */
+  pipeStickLengthFt: 10 | 12
 
   // ── Build output ──────────────────────────────────────────────────────────
   /** Storey height (metres) fed to the construction engine. */
@@ -110,6 +113,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   gridSnapM: 0.25,
   activeUnit: 'ft',
   lengthFormat: 'ft-in',
+  pipeStickLengthFt: 10,
   buildFloorHeightM: 2.7,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,
