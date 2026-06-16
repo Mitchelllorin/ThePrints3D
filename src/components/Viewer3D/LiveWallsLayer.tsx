@@ -9,6 +9,7 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
+import { useConfigStore } from '../../store/useConfigStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming } from '../../services/framingGeometry'
 import type { ParsedWall } from '../../types'
@@ -21,9 +22,10 @@ interface WallMeshProps {
   pixelToWorld: (px: number, py: number) => THREE.Vector3
   scaleMmPerPx: number | null
   wallHeight: number
+  material: 'wood' | 'steel'
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material }: WallMeshProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
 
@@ -41,8 +43,8 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight }: WallMeshProp
 
   // Same stud framing the built model draws — studs + plates, never a solid box.
   const framing = useMemo(
-    () => buildWallFraming({ length, height: wallHeight, thickness: thicknessM, opacity: 0.7 }),
-    [length, wallHeight, thicknessM],
+    () => buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, opacity: 0.7 }),
+    [length, wallHeight, thicknessM, material],
   )
 
   // Free the GPU geometry/material when this segment changes or unmounts.
@@ -65,6 +67,7 @@ export default function LiveWallsLayer() {
   const model     = useAppStore((s) => s.model)
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const framingMaterial = useConfigStore((s) => s.framingMaterial)
 
   const wallHeight = useMemo(
     () => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM,
@@ -116,6 +119,7 @@ export default function LiveWallsLayer() {
           pixelToWorld={pixelToWorld}
           scaleMmPerPx={scaleMmPerPx}
           wallHeight={wallHeight}
+          material={framingMaterial}
         />
       ))}
     </group>
