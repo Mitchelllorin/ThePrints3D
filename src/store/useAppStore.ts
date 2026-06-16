@@ -522,6 +522,38 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   saveWizardState(state.wizardState)
 }
 
+/**
+ * Run the construction engine over the current drawings' walls/openings and
+ * return the framing result (or null if there's nothing to frame). Shared by
+ * buildModel (Build 3D) and buildForMe so BOTH always produce framing.
+ */
+function computeFramingResult(
+  drawings: AppState['drawings'],
+): ReturnType<typeof buildFraming> | null {
+  const allParsed = drawings.filter((d) => d.parsedWalls.length > 0)
+  if (allParsed.length === 0) return null
+  const ref = allParsed.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
+  const scaleMmPerPx = ref.scaleMmPerPx ?? 23.5
+  const allWalls = allParsed.flatMap((d) => d.parsedWalls)
+  const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
+  const cfg = useConfigStore.getState()
+  const onboardingMeta = loadOnboardingWizardState().meta
+  return buildFraming(allWalls, allOpenings, {
+    scaleMmPerPx,
+    floorHeightM: onboardingMeta.floorHeightM,
+    buildingType: onboardingMeta.buildingType === 'unknown' ? 'residential-single' : onboardingMeta.buildingType,
+    spacingMm: cfg.studSpacingIn * 25.4,
+    studSize: cfg.defaultStudSize,
+    cornerType: cfg.cornerType,
+    material: cfg.framingMaterial,
+    steelWidth: cfg.steelWidth,
+    steelGauge: cfg.steelGauge,
+    steelTrackTop: cfg.steelTrackTop,
+    steelTrackBottom: cfg.steelTrackBottom,
+    steelDeflectionGapMm: cfg.steelDeflectionGapMm,
+  })
+}
+
 export const useAppStore = create<AppState>()(
   immer((set, get) => {
     const pushHistory = () => {
@@ -854,7 +886,11 @@ export const useAppStore = create<AppState>()(
         s.model.status = status
       }),
 
-    buildModel: () =>
+    buildModel: () => {
+      // Frame the walls as part of the 3D build — Build 3D and Build-for-me now
+      // produce the same framed result; the Framing toggle controls visibility.
+      const framing = computeFramingResult(get().drawings)
+      const autoFraming = useConfigStore.getState().buildAutoEnableFraming
       set((s) => {
         s.model.status = s.drawings.length > 0 ? 'building' : 'idle'
         s.model.generatedAt = null
@@ -864,12 +900,22 @@ export const useAppStore = create<AppState>()(
         const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
         s.floorGroupingLog = floorGroupingLog
         s.model.floorLevels = levels
+
+        if (framing) {
+          s.buildResult = framing
+          s.constructionDecisions = framing.decisions
+          const framingLayer = s.layers.find((l) => l.id === 'framing')
+          if (framingLayer && autoFraming) framingLayer.visible = true
+        }
+
         logEvent('model.build.started', {
           drawingCount: s.drawings.length,
           floorCount: levels.length,
+          framed: framing !== null,
           uncalibratedCount: s.drawings.filter((d) => !d.scaleMmPerPx).length,
         })
-      }),
+      })
+    },
 
     update3DModel: (finalInputs) => {
       pushHistory()
@@ -1297,34 +1343,9 @@ export const useAppStore = create<AppState>()(
 
     // ─── Construction Engine ──────────────────────────────────────────
     buildForMe: () => {
-      const state = get()
-      const allParsed = state.drawings.filter((d) => d.parsedWalls.length > 0)
-      if (allParsed.length === 0) return
-
-      const ref = allParsed.reduce((a, b) =>
-        a.parsedWalls.length > b.parsedWalls.length ? a : b,
-      )
-      const scaleMmPerPx = ref.scaleMmPerPx ?? 23.5
-      const allWalls = allParsed.flatMap((d) => d.parsedWalls)
-      const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
-
-      const cfg = useConfigStore.getState()
-      const { buildAutoEnableFraming, studSpacingIn, defaultStudSize, cornerType } = cfg
-      const onboardingMeta = loadOnboardingWizardState().meta
-      const result = buildFraming(allWalls, allOpenings, {
-        scaleMmPerPx,
-        floorHeightM: onboardingMeta.floorHeightM,
-        buildingType: onboardingMeta.buildingType === 'unknown' ? 'residential-single' : onboardingMeta.buildingType,
-        spacingMm: studSpacingIn * 25.4,
-        studSize: defaultStudSize,
-        cornerType,
-        material: cfg.framingMaterial,
-        steelWidth: cfg.steelWidth,
-        steelGauge: cfg.steelGauge,
-        steelTrackTop: cfg.steelTrackTop,
-        steelTrackBottom: cfg.steelTrackBottom,
-        steelDeflectionGapMm: cfg.steelDeflectionGapMm,
-      })
+      const result = computeFramingResult(get().drawings)
+      if (!result) return
+      const buildAutoEnableFraming = useConfigStore.getState().buildAutoEnableFraming
 
       pushHistory()
       set((s) => {
@@ -1341,8 +1362,6 @@ export const useAppStore = create<AppState>()(
         componentCount: result.components.length,
         decisionCount: result.decisions.length,
         suggestionCount: result.suggestions.length,
-        floorHeightM: onboardingMeta.floorHeightM,
-        buildingType: onboardingMeta.buildingType,
       })
     },
 
