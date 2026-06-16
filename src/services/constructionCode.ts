@@ -31,17 +31,18 @@ export interface WallMaterialPreset {
 }
 
 export const WALL_MATERIALS: Record<string, WallMaterialPreset> = {
-  drywall:     { color: '#f5f0eb', roughness: 0.9 },
-  plaster:     { color: '#ece7df', roughness: 0.85 },
-  tile:        { color: '#e2e8f0', roughness: 0.3 },
-  brick:       { color: '#8b4513', roughness: 0.95 },
-  concrete:    { color: '#a8a29e', roughness: 0.95 },
-  stone:       { color: '#9ca3af', roughness: 1.0 },
-  vinylSiding: { color: '#e8e0d0', roughness: 0.7 },
-  woodSiding:  { color: '#c4a265', roughness: 0.95 },
-  stucco:      { color: '#d4c5a9', roughness: 0.95 },
-  metalPanel:  { color: '#94a3b8', roughness: 0.3, metalness: 0.8 },
-  fiberCement: { color: '#cbd5e1', roughness: 0.85 },
+  drywall:      { color: '#f5f0eb', roughness: 0.9,  metalness: 0 },
+  plaster:      { color: '#ede8e0', roughness: 0.85, metalness: 0 },
+  tile:         { color: '#e2e8f0', roughness: 0.3,  metalness: 0 },
+  exposedBrick: { color: '#8b4513', roughness: 0.95, metalness: 0 },
+  stucco:       { color: '#d4c5a9', roughness: 0.95, metalness: 0 },
+  vinylSiding:  { color: '#e8e0d0', roughness: 0.7,  metalness: 0 },
+  woodSiding:   { color: '#c4a265', roughness: 0.95, metalness: 0 },
+  brick:        { color: '#8b4513', roughness: 0.95, metalness: 0 },
+  stone:        { color: '#9ca3af', roughness: 1.0,  metalness: 0 },
+  metalPanel:   { color: '#94a3b8', roughness: 0.3,  metalness: 0.8 },
+  fiberCement:  { color: '#d1cfc9', roughness: 0.85, metalness: 0 },
+  concrete:     { color: '#a8a8a8', roughness: 1.0,  metalness: 0 },
 }
 
 export const DEFAULT_INTERIOR_MATERIAL = 'drywall'
@@ -56,7 +57,7 @@ export const INTERIOR_FINISHES: Array<{ label: string; key: string }> = [
   { label: 'Drywall', key: 'drywall' },
   { label: 'Plaster', key: 'plaster' },
   { label: 'Tile', key: 'tile' },
-  { label: 'Exposed Brick', key: 'brick' },
+  { label: 'Exposed Brick', key: 'exposedBrick' },
   { label: 'Concrete', key: 'concrete' },
 ]
 
