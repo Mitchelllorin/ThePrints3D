@@ -7,6 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? '/',
   server: {
+    // Bind all interfaces so the dev server is reachable on the local network.
+    host: '0.0.0.0',
     // Honor a harness-assigned port (e.g. Claude preview); default to Vite's 5173
     port: process.env.PORT ? Number(process.env.PORT) : 5173,
     strictPort: Boolean(process.env.PORT),
