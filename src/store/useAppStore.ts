@@ -534,7 +534,13 @@ function computeFramingResult(
   if (allParsed.length === 0) return null
   const ref = allParsed.reduce((a, b) => (a.parsedWalls.length > b.parsedWalls.length ? a : b))
   const scaleMmPerPx = ref.scaleMmPerPx ?? 23.5
-  const allWalls = allParsed.flatMap((d) => d.parsedWalls)
+  // If the user traced walls on a drawing, frame ONLY those (ignore the
+  // auto-detected walls so the build matches what was traced — no offset dupes).
+  const wallsFor = (d: typeof allParsed[number]) => {
+    const userW = d.parsedWalls.filter((w) => w.source === 'user')
+    return userW.length > 0 ? userW : d.parsedWalls
+  }
+  const allWalls = allParsed.flatMap(wallsFor)
   const allOpenings = allParsed.flatMap((d) => d.parsedOpenings)
   const cfg = useConfigStore.getState()
   const onboardingMeta = loadOnboardingWizardState().meta

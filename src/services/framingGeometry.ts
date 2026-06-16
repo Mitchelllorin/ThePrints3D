@@ -5,17 +5,21 @@
  * Produces a wall's stud cage centred on the origin along X (−L/2 … +L/2),
  * sitting on the floor (Y 0 … height). The caller positions/rotates the group
  * to seat it on the traced wall — exactly where the solid box used to go.
+ *
+ * Real-world detail modelled: double bottom plate + double top plate, studs at
+ * 16" OC, doubled end studs (corner/end posts, so perpendicular walls read as
+ * connected), and a mid-height row of blocking between studs.
  */
 import * as THREE from 'three'
 
-const STUD_WIDTH_M = 0.038   // 1-1/2" nominal stud face
-const PLATE_H_M = 0.038      // plate thickness
+const STUD_WIDTH_M = 0.038    // 1-1/2" nominal stud face
+const PLATE_H_M = 0.038       // one plate's thickness
 const STUD_SPACING_M = 0.4064 // 16" on-centre
 
 export interface WallFramingOpts {
   /** Wall run length, metres. */
   length: number
-  /** Wall height, metres (floor to top of top plate). */
+  /** Wall height, metres (floor to top of the upper top plate). */
   height: number
   /** Wall thickness, metres (stud depth). */
   thickness: number
@@ -28,8 +32,9 @@ export interface WallFramingOpts {
 }
 
 /**
- * Build the stud cage (bottom plate, top plate, studs at spacing) for one wall.
- * Returns a THREE.Group the caller can position and rotate.
+ * Build the stud cage for one wall: 2 bottom plates, 2 top plates, studs at
+ * spacing with doubled end posts, and a mid-height blocking row.
+ * Returns a THREE.Group the caller positions and rotates.
  */
 export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   const {
@@ -52,33 +57,55 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     opacity,
   })
   const depth = Math.max(STUD_WIDTH_M, thickness)
+  const add = (geo: THREE.BufferGeometry, x: number, y: number, z = 0) => {
+    const m = new THREE.Mesh(geo, mat)
+    m.position.set(x, y, z)
+    m.castShadow = true
+    m.receiveShadow = true
+    m.userData.layer = 'framing'
+    group.add(m)
+  }
 
-  // Top + bottom plates run the full length.
+  // Two bottom plates and two top plates (stacked).
   const plateGeo = new THREE.BoxGeometry(length, PLATE_H_M, depth)
-  const bottomPlate = new THREE.Mesh(plateGeo, mat)
-  bottomPlate.position.set(0, PLATE_H_M / 2, 0)
-  group.add(bottomPlate)
-  const topPlate = new THREE.Mesh(plateGeo, mat)
-  topPlate.position.set(0, height - PLATE_H_M / 2, 0)
-  group.add(topPlate)
+  add(plateGeo, 0, PLATE_H_M / 2, 0)                       // sole plate
+  add(plateGeo, 0, PLATE_H_M * 1.5, 0)                     // 2nd bottom plate
+  add(plateGeo, 0, height - PLATE_H_M / 2, 0)              // upper top plate
+  add(plateGeo, 0, height - PLATE_H_M * 1.5, 0)            // lower top plate
 
-  // Studs between the plates, at spacing, with a stud guaranteed at each end.
-  const studH = Math.max(0.02, height - 2 * PLATE_H_M)
+  // Studs run between the plate stacks.
+  const studBottom = PLATE_H_M * 2
+  const studTop = height - PLATE_H_M * 2
+  const studH = Math.max(0.02, studTop - studBottom)
+  const studY = studBottom + studH / 2
   const studGeo = new THREE.BoxGeometry(STUD_WIDTH_M, studH, depth)
-  const studY = PLATE_H_M + studH / 2
+
   const half = length / 2
-  const positions = new Set<number>()
-  for (let x = -half; x < half; x += spacingM) positions.add(Math.round(x * 1000) / 1000)
-  positions.add(Math.round(half * 1000) / 1000) // end stud
-  for (const x of positions) {
-    const stud = new THREE.Mesh(studGeo, mat)
-    stud.position.set(x, studY, 0)
-    group.add(stud)
+  const xs: number[] = []
+  for (let x = -half; x < half - 1e-4; x += spacingM) xs.push(Math.round(x * 1000) / 1000)
+  xs.push(half)
+  // Doubled end posts: an extra stud just inside each end (corner/end packs).
+  const endInset = STUD_WIDTH_M
+  xs.push(-half + endInset, half - endInset)
+
+  const seen = new Set<number>()
+  for (const x of xs) {
+    const key = Math.round(x * 1000)
+    if (seen.has(key)) continue
+    seen.add(key)
+    add(studGeo, Math.max(-half, Math.min(half, x)), studY)
   }
 
-  for (const child of group.children) {
-    if (child instanceof THREE.Mesh) { child.castShadow = true; child.receiveShadow = true }
-    child.userData.layer = 'framing'
+  // Mid-height blocking — short blocks between consecutive studs.
+  const ordered = [...seen].map((k) => k / 1000).sort((a, b) => a - b)
+  const blockY = studBottom + studH / 2
+  for (let i = 0; i < ordered.length - 1; i++) {
+    const gap = ordered[i + 1] - ordered[i]
+    const span = gap - STUD_WIDTH_M
+    if (span < 0.04) continue
+    const blockGeo = new THREE.BoxGeometry(span, STUD_WIDTH_M, depth)
+    add(blockGeo, (ordered[i] + ordered[i + 1]) / 2, blockY)
   }
+
   return group
 }
