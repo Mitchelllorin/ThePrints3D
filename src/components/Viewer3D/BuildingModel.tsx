@@ -630,6 +630,7 @@ const FRAMING_COLORS: Record<string, string> = {
   'header': '#a67b3d',
   'cripple-stud': '#dbb98a',
   'corner-assembly': '#c9a56c',
+  'blocking': '#b8944f',
 }
 
 /**

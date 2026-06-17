@@ -69,6 +69,7 @@ export type FramingComponentType =
   | 'header'
   | 'cripple-stud'
   | 'corner-assembly'
+  | 'blocking'
 
 export interface PlacedComponent {
   id: string

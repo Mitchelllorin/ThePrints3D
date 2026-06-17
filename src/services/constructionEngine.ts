@@ -216,6 +216,81 @@ function placeStudsAlongWall(
   return components
 }
 
+// ─── Blocking ─────────────────────────────────────────────────────────────────
+
+/**
+ * Solid mid-height blocking between consecutive studs — the same row the ghost
+ * preview shows, carried into the built model so blocking goes ghost → solid
+ * instead of vanishing on build. Wood only (steel uses bridging, modelled
+ * separately); openings are skipped.
+ */
+function placeBlockingAlongWall(
+  wg: WallGeometry,
+  spacingMm: number,
+  studSize: string,
+  openingsOnWall: ParsedOpening[],
+  scaleMmPerPx: number,
+  cx: number,
+  cy: number,
+): PlacedComponent[] {
+  const components: PlacedComponent[] = []
+  const depth = studDepthMm(studSize) / 1000
+  const width = STUD_WIDTH_MM / 1000
+  const wallLenMm = wg.lengthM * 1000
+
+  const openingIntervals: Array<[number, number]> = []
+  for (const op of openingsOnWall) {
+    const opWidthMm = op.widthMm ?? op.widthPx * scaleMmPerPx
+    const s = scaleMmPerPx / 1000
+    const opX = (op.x - cx) * s
+    const opZ = (op.y - cy) * s
+    const dx = wg.end[0] - wg.start[0]
+    const dz = wg.end[1] - wg.start[1]
+    const t = wg.lengthM > 0
+      ? ((opX - wg.start[0]) * dx + (opZ - wg.start[1]) * dz) / (wg.lengthM * wg.lengthM)
+      : 0.5
+    const centerMm = Math.max(0, Math.min(wallLenMm, t * wallLenMm))
+    const halfW = opWidthMm / 2
+    openingIntervals.push([centerMm - halfW, centerMm + halfW])
+  }
+  const insideOpening = (posMm: number) =>
+    openingIntervals.some(([lo, hi]) => posMm > lo && posMm < hi)
+
+  const cos = Math.cos(wg.angle)
+  const sin = Math.sin(wg.angle)
+  const studHeightM = wg.heightM - (3 * STUD_WIDTH_MM) / 1000
+  const y = STUD_WIDTH_MM / 1000 + studHeightM / 2
+
+  // Stud x-positions, matching placeStudsAlongWall (skip openings, add end stud).
+  const positions: number[] = []
+  for (let posMm = 0; posMm <= wallLenMm; posMm += spacingMm) {
+    if (!insideOpening(posMm)) positions.push(posMm)
+  }
+  const lastStudMm = Math.floor(wallLenMm / spacingMm) * spacingMm
+  if (wallLenMm - lastStudMm > STUD_WIDTH_MM && !insideOpening(wallLenMm)) positions.push(wallLenMm)
+  positions.sort((a, b) => a - b)
+
+  for (let i = 0; i < positions.length - 1; i++) {
+    const spanMm = positions[i + 1] - positions[i] - STUD_WIDTH_MM
+    if (spanMm < 40) continue
+    const midMm = (positions[i] + positions[i + 1]) / 2
+    if (insideOpening(midMm)) continue   // no blocking across an opening
+    const posM = midMm / 1000
+    components.push({
+      id: makeId(),
+      wallIndex: wg.wallIndex,
+      layer: 'framing',
+      componentType: 'blocking',
+      position: [wg.start[0] + posM * cos, y, wg.start[1] + posM * sin],
+      rotation: [0, -wg.angle, 0],
+      dimensions: [spanMm / 1000, width, depth],
+      label: 'Blocking',
+    })
+  }
+
+  return components
+}
+
 // ─── Plates ─────────────────────────────────────────────────────────────────
 
 function placePlates(
@@ -784,6 +859,14 @@ export function buildFraming(
     components.push(
       ...placePlates(wg, studSize, cfg.topPlates, cfg.bottomPlates),
     )
+
+    // Blocking (wood only — steel gets bridging, modelled separately). Carries
+    // the ghost's blocking row into the built model so it goes ghost → solid.
+    if (options.material !== 'steel') {
+      components.push(
+        ...placeBlockingAlongWall(wg, spacingMm, studSize, wallOpenings, scaleMmPerPx, cx, cy),
+      )
+    }
 
     // Opening framing
     for (const op of wallOpenings) {

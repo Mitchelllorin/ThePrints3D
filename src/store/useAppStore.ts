@@ -105,9 +105,12 @@ const DEFAULT_LAYERS: Layer[] = [
   },
   {
     id: 'floors',
+    // Off by default: until a real subfloor / excavation model exists, leave the
+    // floor as the traced PRINT so the user can keep tracing on it. Toggle
+    // "Floors" on in the Layers panel to drop a solid slab over the print.
     label: 'Floors',
     color: '#d4a574',
-    visible: true,
+    visible: false,
     opacity: 0.8,
     sourceTypes: ['floor-plan', 'architectural'],
     icon: '▭',
