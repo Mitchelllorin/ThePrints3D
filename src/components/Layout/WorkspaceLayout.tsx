@@ -509,9 +509,9 @@ export default function WorkspaceLayout() {
         canUndo={canUndo}
       />
 
-      {/* Explode — slider in the top-right, same language as the icons.
-          Hidden while a side panel is open (they share the corner). */}
-      {showExplode && !open && (
+      {/* Explode — always present once a plan is loaded. Lives bottom-left,
+          clear of the side panels, so it never gets covered/hidden. */}
+      {showExplode && (
         <div className={styles.explodeBar}>
           <span className={styles.explodeLabel}>Explode</span>
           <input

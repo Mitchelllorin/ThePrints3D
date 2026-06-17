@@ -558,11 +558,12 @@
 }
 .panelBtn:hover { background: rgba(255, 255, 255, 0.15); }
 
-/* ── Explode slider — top-right, just under the icon row, same language ──── */
+/* ── Explode slider — bottom-left, always visible, clear of the side panels
+   (which dock top-left/top-right), so it never gets covered. ────────────── */
 .explodeBar {
   position: absolute;
-  top: 60px;
-  right: 12px;
+  bottom: 76px;
+  left: 12px;
   z-index: 56;
   display: flex;
   align-items: center;
