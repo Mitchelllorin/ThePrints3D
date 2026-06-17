@@ -9,7 +9,7 @@
 
 import { create } from 'zustand'
 import type { ParsedWall } from '../types'
-import { PLUMBING_DEFAULTS, ELECTRICAL_DEFAULTS } from '../data/traceLayers'
+import { PLUMBING_DEFAULTS, ELECTRICAL_DEFAULTS, HVAC_DEFAULTS } from '../data/traceLayers'
 
 type CalibrationUnit = 'mm' | 'm' | 'ft' | 'in'
 
@@ -75,6 +75,10 @@ interface FloorplanLocalState {
   elecAmp: string
   elecWire: string
   elecRole: string
+  // Active HVAC selections (size = round-duct diameter).
+  hvacElement: string
+  hvacSize: string
+  hvacMaterial: string
 
   // ─── editing / selection ─────────────────────────────────────────
   /** Index (within a drawing's user walls) of the selected wall, or null. */
@@ -120,6 +124,7 @@ interface FloorplanLocalState {
   setTraceBand: (v: 'under-floor' | 'in-wall' | 'ceiling') => void
   setPlumb: (patch: Partial<{ plumbElement: string; plumbSize: string; plumbMaterial: string; plumbTemp: 'hot' | 'cold' }>) => void
   setElec: (patch: Partial<{ elecElement: string; elecAmp: string; elecWire: string; elecRole: string }>) => void
+  setHvac: (patch: Partial<{ hvacElement: string; hvacSize: string; hvacMaterial: string }>) => void
   setDrag: (v: DragState | null) => void
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
@@ -164,6 +169,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   elecAmp: ELECTRICAL_DEFAULTS.size,
   elecWire: ELECTRICAL_DEFAULTS.material,
   elecRole: ELECTRICAL_DEFAULTS.role,
+  hvacElement: HVAC_DEFAULTS.element,
+  hvacSize: HVAC_DEFAULTS.size,
+  hvacMaterial: HVAC_DEFAULTS.material,
   selectedWallIndex: null,
   placeObjectType: null,
   placeGhost: null,
@@ -209,6 +217,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setTraceBand: (v) => set({ traceBand: v }),
   setPlumb: (patch) => set(patch),
   setElec: (patch) => set(patch),
+  setHvac: (patch) => set(patch),
   setDrag: (v) => set({ drag: v }),
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v, activePanel: v != null ? 'wall' : null }),
   setPlaceObjectType: (v) => set({ placeObjectType: v, placeGhost: null }),

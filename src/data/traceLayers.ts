@@ -39,6 +39,14 @@ export const ELECTRICAL_PICKER = {
 }
 export const ELECTRICAL_DEFAULTS = { element: 'Circuit Run', size: '15A', material: '14/2 Romex', role: 'Hot (Black)' }
 
+/** Pre-trace picker rows for HVAC (size = round-duct diameter). */
+export const HVAC_PICKER = {
+  element: ['Supply Duct', 'Return Duct', 'Branch / Flex', 'Exhaust'],
+  size: ['4"', '6"', '8"', '10"', '12"', '14"'],
+  material: ['Sheet Metal', 'Flex', 'Rigid Fiberglass'],
+}
+export const HVAC_DEFAULTS = { element: 'Supply Duct', size: '6"', material: 'Sheet Metal' }
+
 // ── Field-convention colours: a plumber/sparky reads these like real plans ────
 
 /** Plumbing colour by element type (supply lines split hot/cold). */
@@ -64,6 +72,20 @@ export function electricalColorFor(element: string, role?: string): string {
                                          // slate so it reads on the dark workspace
                                          // (pure black was invisible)
   }
+}
+
+/** HVAC duct colour by element type (supply green / return sky / exhaust grey). */
+export function hvacColorFor(element: string): string {
+  switch (element) {
+    case 'Return Duct':  return '#38bdf8' // sky — cool return air
+    case 'Exhaust':      return '#a3a3a3' // grey
+    case 'Branch / Flex': return '#86efac' // light green
+    case 'Supply Duct':
+    default:             return '#4ade80' // green — HVAC theme
+  }
+}
+export function hvacColor(line: { elementType: string }): string {
+  return hvacColorFor(line.elementType)
 }
 
 export function plumbingColor(line: { elementType: string; tempType?: 'hot' | 'cold' }): string {

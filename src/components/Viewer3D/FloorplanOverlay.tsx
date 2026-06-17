@@ -39,7 +39,7 @@ import {
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, deviceMountHeightM } from '../../data/objectCatalog'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { validateElectrical } from '../../services/constructionCode'
-import { LAYER_COLORS, plumbingColorFor, electricalColorFor, plumbingColor, electricalColor } from '../../data/traceLayers'
+import { LAYER_COLORS, plumbingColorFor, electricalColorFor, hvacColorFor, plumbingColor, electricalColor } from '../../data/traceLayers'
 
 /** Perpendicular distance from point to segment, in pixels. */
 function segDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
@@ -123,6 +123,7 @@ export default function FloorplanOverlay() {
   const addPlacedObject = useAppStore((s) => s.addPlacedObject)
   const addPlumbingLines = useAppStore((s) => s.addPlumbingLines)
   const addElectricalLines = useAppStore((s) => s.addElectricalLines)
+  const addHvacLines = useAppStore((s) => s.addHvacLines)
   const plumbingLines = useAppStore((s) => s.plumbingLines)
   const electricalLines = useAppStore((s) => s.electricalLines)
   const circuits = useAppStore((s) => s.circuits)
@@ -169,6 +170,9 @@ export default function FloorplanOverlay() {
   const elecAmp = useFloorplanLocalStore((s) => s.elecAmp)
   const elecWire = useFloorplanLocalStore((s) => s.elecWire)
   const elecRole = useFloorplanLocalStore((s) => s.elecRole)
+  const hvacElement = useFloorplanLocalStore((s) => s.hvacElement)
+  const hvacSize = useFloorplanLocalStore((s) => s.hvacSize)
+  const hvacMaterial = useFloorplanLocalStore((s) => s.hvacMaterial)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageUrl = drawing ? (drawing.rasterUrl ?? drawing.previewUrl) : null
@@ -338,8 +342,8 @@ export default function FloorplanOverlay() {
     const pixel = worldToPixel(event.point)
 
     if (traceMode) {
-      // Trade layers (plumbing/electrical) trace simple lines, not walls.
-      if (activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical') {
+      // Trade layers (plumbing/electrical/HVAC) trace simple lines, not walls.
+      if (activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') {
         if (!traceStart) { setTraceStart(pixel); setHoverPixel(pixel); return }
         const a = traceStart
         if (Math.hypot(pixel[0] - a[0], pixel[1] - a[1]) < 4) { setTraceStart(null); return }
@@ -350,11 +354,17 @@ export default function FloorplanOverlay() {
             tempType: plumbElement === 'Supply Line' ? plumbTemp : undefined,
             band: traceBand,
           }])
-        } else {
+        } else if (activeTraceLayer === 'electrical') {
           addElectricalLines([{
             id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
             elementType: elecElement, size: elecAmp, material: elecWire,
             wireRole: elecElement === 'Low Voltage' ? undefined : elecRole,
+            band: traceBand,
+          }])
+        } else {
+          addHvacLines([{
+            id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
+            elementType: hvacElement, size: hvacSize, material: hvacMaterial,
             band: traceBand,
           }])
         }
@@ -642,6 +652,7 @@ export default function FloorplanOverlay() {
   const activeLineColor =
     activeTraceLayer === 'plumbing' ? plumbingColorFor(plumbElement, plumbTemp)
     : activeTraceLayer === 'electrical' ? electricalColorFor(elecElement, elecRole)
+    : activeTraceLayer === 'hvac' ? hvacColorFor(hvacElement)
     : LAYER_COLORS.framing
 
   // Electrical code violations (shown as red markers while the layer is on).

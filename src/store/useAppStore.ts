@@ -234,6 +234,7 @@ interface WorkspaceHistorySnapshot {
   placedObjects: PlacedObject[]
   plumbingLines: TracedLine[]
   electricalLines: TracedLine[]
+  hvacLines: TracedLine[]
   circuits: Circuit[]
   annotations: Annotation[]
   measurements: Measurement[]
@@ -282,6 +283,7 @@ interface AppState {
   /** Traced trade lines by discipline */
   plumbingLines: TracedLine[]
   electricalLines: TracedLine[]
+  hvacLines: TracedLine[]
   /** Electrical branch circuits (auto-grouped by amperage + manual). */
   circuits: Circuit[]
   /** Which trade layers are currently shown in the 3D scene */
@@ -389,6 +391,7 @@ interface AppState {
   // Trade trace lines
   addPlumbingLines: (lines: TracedLine[]) => void
   addElectricalLines: (lines: TracedLine[]) => void
+  addHvacLines: (lines: TracedLine[]) => void
   toggleTradeLayerVisible: (layer: TraceLayer) => void
   // Electrical circuits
   addCircuit: (c: Circuit) => void
@@ -472,6 +475,7 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     placedObjects: state.placedObjects,
     plumbingLines: state.plumbingLines,
     electricalLines: state.electricalLines,
+    hvacLines: state.hvacLines,
     circuits: state.circuits,
     annotations: state.annotations,
     measurements: state.measurements,
@@ -513,6 +517,7 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   state.placedObjects = deepCopy(snapshot.placedObjects ?? [])
   state.plumbingLines = deepCopy(snapshot.plumbingLines ?? [])
   state.electricalLines = deepCopy(snapshot.electricalLines ?? [])
+  state.hvacLines = deepCopy(snapshot.hvacLines ?? [])
   state.circuits = deepCopy(snapshot.circuits ?? [])
   state.annotations = deepCopy(snapshot.annotations)
   state.measurements = deepCopy(snapshot.measurements)
@@ -607,6 +612,7 @@ export const useAppStore = create<AppState>()(
     placedObjects: [],
     plumbingLines: [],
     electricalLines: [],
+    hvacLines: [],
     circuits: [],
     visibleLayers: new Set<TraceLayer>(TRACE_LAYER_ORDER),
     wizardInputs: null,
@@ -1464,6 +1470,12 @@ export const useAppStore = create<AppState>()(
       if (lines.length === 0) return
       pushHistory()
       set((s) => { s.plumbingLines.push(...lines) })
+    },
+
+    addHvacLines: (lines) => {
+      if (lines.length === 0) return
+      pushHistory()
+      set((s) => { s.hvacLines.push(...lines) })
     },
 
     addElectricalLines: (lines) => {

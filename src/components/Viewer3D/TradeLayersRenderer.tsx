@@ -10,7 +10,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import { plumbingColor, electricalColor } from '../../data/traceLayers'
+import { plumbingColor, electricalColor, hvacColor } from '../../data/traceLayers'
 import type { TracedLine } from '../../types'
 
 const UP = new THREE.Vector3(0, 1, 0)
@@ -85,6 +85,7 @@ export default function TradeLayersRenderer() {
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const plumbingLines = useAppStore((s) => s.plumbingLines)
   const electricalLines = useAppStore((s) => s.electricalLines)
+  const hvacLines = useAppStore((s) => s.hvacLines)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const pipeStickLengthFt = useConfigStore((s) => s.pipeStickLengthFt)
   const stickM = pipeStickLengthFt * 0.3048
@@ -104,11 +105,13 @@ export default function TradeLayersRenderer() {
 
   const plumbRisers = useMemo(() => computeRisers(plumbingLines, 'under-floor', plumbingColor), [plumbingLines])
   const elecRisers = useMemo(() => computeRisers(electricalLines, 'in-wall', electricalColor), [electricalLines])
+  const hvacRisers = useMemo(() => computeRisers(hvacLines, 'ceiling', hvacColor), [hvacLines])
 
   const showPlumb = visibleLayers.has('plumbing')
   const showElec = visibleLayers.has('electrical')
-  if (!drawing || (!showPlumb && !showElec)) return null
-  if (plumbingLines.length === 0 && electricalLines.length === 0) return null
+  const showHvac = visibleLayers.has('hvac')
+  if (!drawing || (!showPlumb && !showElec && !showHvac)) return null
+  if (plumbingLines.length === 0 && electricalLines.length === 0 && hvacLines.length === 0) return null
 
   const RiserMesh = ({ r, radius, glow = 0 }: { r: Riser; radius: number; glow?: number }) => {
     const c = toWorld(r.px, r.py, (r.lo + r.hi) / 2)
@@ -134,6 +137,12 @@ export default function TradeLayersRenderer() {
           color={electricalColor(l)} radius={0.013} stickM={stickM} coupling={false} glow={0.45} />
       ))}
       {showElec && elecRisers.map((r, i) => <RiserMesh key={`er-${i}`} r={r} radius={0.013} glow={0.45} />)}
+      {/* HVAC ducts — fat round ducts at the ceiling band; a seam at each joint. */}
+      {showHvac && hvacLines.map((l) => (
+        <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'ceiling'))} b={toWorld(l.x2, l.y2, bandY(l, 'ceiling'))}
+          color={hvacColor(l)} radius={0.09} stickM={1.5} coupling />
+      ))}
+      {showHvac && hvacRisers.map((r, i) => <RiserMesh key={`hr-${i}`} r={r} radius={0.09} />)}
     </group>
   )
 }

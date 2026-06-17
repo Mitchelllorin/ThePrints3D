@@ -13,7 +13,7 @@ import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../servic
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import {
   TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS,
-  PLUMBING_PICKER, ELECTRICAL_PICKER,
+  PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER,
 } from '../../data/traceLayers'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
 import styles from './AmbientGuide.module.css'
@@ -123,6 +123,10 @@ export default function FloorplanPanel() {
   const plumbMaterial = useFloorplanLocalStore((s) => s.plumbMaterial)
   const plumbTemp = useFloorplanLocalStore((s) => s.plumbTemp)
   const setPlumb = useFloorplanLocalStore((s) => s.setPlumb)
+  const hvacElement = useFloorplanLocalStore((s) => s.hvacElement)
+  const hvacSize = useFloorplanLocalStore((s) => s.hvacSize)
+  const hvacMaterial = useFloorplanLocalStore((s) => s.hvacMaterial)
+  const setHvac = useFloorplanLocalStore((s) => s.setHvac)
   const elecElement = useFloorplanLocalStore((s) => s.elecElement)
   const elecAmp = useFloorplanLocalStore((s) => s.elecAmp)
   const elecWire = useFloorplanLocalStore((s) => s.elecWire)
@@ -386,7 +390,7 @@ export default function FloorplanPanel() {
   // workspace is fully visible — the tray and property card carry the UI.
   const showSteps = !placeObjectType && !selectedObject
   const framingActive = activeTraceLayer === 'framing'
-  const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical'
+  const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac'
   const layerLabel = LAYER_LABELS[activeTraceLayer]
   // Devices-first nudge: how many electrical devices are already placed. The
   // gentle prompt shows only until the first one is placed, then steps aside.
@@ -397,7 +401,9 @@ export default function FloorplanPanel() {
     ? `${plumbElement}${plumbElement === 'Supply Line' ? ` (${plumbTemp})` : ''} · ${plumbSize} · ${plumbMaterial}`
     : activeTraceLayer === 'electrical'
       ? `${elecElement} · ${elecAmp} · ${elecElement === 'Low Voltage' ? 'LV' : elecRole}`
-      : ''
+      : activeTraceLayer === 'hvac'
+        ? `${hvacElement} · ${hvacSize} · ${hvacMaterial}`
+        : ''
   // Object placement is part of the edit-anytime flow: the catalog is available
   // whenever a plan is loaded and you're not mid-calibration/trace (those own
   // the workspace). Not gated to post-build anymore.
@@ -458,13 +464,6 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* HVAC is a placeholder for now. */}
-        {showSteps && activeTraceLayer === 'hvac' && drawing.status === 'ready' && (
-          <div className={styles.step}>
-            <span className={styles.stepLabel}>HVAC</span>
-            <span className={styles.stepHint}>Coming soon.</span>
-          </div>
-        )}
 
         {/* Trade layers (plumbing/electrical): trace runs as coloured lines. */}
         {showSteps && tradeActive && drawing.status === 'ready' && !pickerOpen && (
@@ -824,6 +823,28 @@ export default function FloorplanPanel() {
                     </div>
                   </>
                 )}
+              </>
+            )}
+            {activeTraceLayer === 'hvac' && (
+              <>
+                <span className={styles.stepHint}>Element</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {HVAC_PICKER.element.map((e) => (
+                    <button key={e} className={hvacElement === e ? styles.action : styles.secondary} onClick={() => setHvac({ hvacElement: e })}>{e}</button>
+                  ))}
+                </div>
+                <span className={styles.stepHint}>Size</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {HVAC_PICKER.size.map((s) => (
+                    <button key={s} className={hvacSize === s ? styles.action : styles.secondary} onClick={() => setHvac({ hvacSize: s })}>{s}</button>
+                  ))}
+                </div>
+                <span className={styles.stepHint}>Material</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {HVAC_PICKER.material.map((m) => (
+                    <button key={m} className={hvacMaterial === m ? styles.action : styles.secondary} onClick={() => setHvac({ hvacMaterial: m })}>{m}</button>
+                  ))}
+                </div>
               </>
             )}
             <div className={styles.btnRow}>
