@@ -78,6 +78,9 @@ export interface WallFramingOpts {
   /** Heavy-duty / exterior steel: threads a cold-rolled carrying channel
    *  through the knockouts. Interior 25ga steel leaves the knockouts empty. */
   heavyDuty?: boolean
+  /** Steel gauge ('25'|'20'|'18'|'16'|'12'). Lower = heavier steel → a visibly
+   *  beefier stud. Ignored for wood. */
+  steelGauge?: string
   /** Lumber colour override. */
   color?: string
   /** 0–1; < 1 renders translucent (used for the ghost preview). */
@@ -97,6 +100,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     spacingM = STUD_SPACING_M,
     material = 'wood',
     heavyDuty = false,
+    steelGauge = '25',
     opacity = 1,
   } = opts
 
@@ -104,6 +108,9 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   if (length < 0.02 || height < 0.05) return group
 
   const steel = material === 'steel'
+  // Heavier gauge (lower number) → a visibly beefier stud face.
+  const GAUGE_SCALE: Record<string, number> = { '25': 1, '20': 1.06, '18': 1.14, '16': 1.24, '12': 1.42 }
+  const studW = steel ? STUD_WIDTH_M * (GAUGE_SCALE[steelGauge] ?? 1) : STUD_WIDTH_M
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(opts.color ?? (steel ? '#9aa6b2' : '#c9a56c')),
     roughness: steel ? 0.35 : 0.75,
@@ -145,14 +152,14 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
 
   const studH = Math.max(0.02, studTop - studBottom)
   const studY = studBottom + studH / 2
-  const studGeo = new THREE.BoxGeometry(STUD_WIDTH_M, studH, depth)
+  const studGeo = new THREE.BoxGeometry(studW, studH, depth)
 
   const half = length / 2
   const xs: number[] = []
   for (let x = -half; x < half - 1e-4; x += spacingM) xs.push(Math.round(x * 1000) / 1000)
   xs.push(half)
   // Doubled end posts: an extra stud just inside each end (corner/end packs).
-  const endInset = STUD_WIDTH_M
+  const endInset = studW
   xs.push(-half + endInset, half - endInset)
 
   const seen = new Set<number>()
@@ -173,7 +180,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       color: new THREE.Color('#0b0f17'), roughness: 1, metalness: 0,
       transparent: opacity < 1, opacity,
     })
-    const koGeo = new THREE.CylinderGeometry(STUD_WIDTH_M * 0.32, STUD_WIDTH_M * 0.32, depth + 0.006, 10)
+    const koGeo = new THREE.CylinderGeometry(studW * 0.32, studW * 0.32, depth + 0.006, 10)
     const koHeights = [0.610, 1.219, 1.829].filter((h) => h > studBottom + 0.05 && h < studTop - 0.05)
     for (const x of ordered) {
       for (const h of koHeights) {
@@ -185,7 +192,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       }
     }
     if (heavyDuty) {
-      add(new THREE.BoxGeometry(length, STUD_WIDTH_M * 0.7, depth * 0.55), 0, midY, 0)
+      add(new THREE.BoxGeometry(length, studW * 0.7, depth * 0.55), 0, midY, 0)
     }
   } else {
     // Wood: solid blocking between consecutive studs at mid-height.

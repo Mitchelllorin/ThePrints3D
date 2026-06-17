@@ -26,11 +26,12 @@ interface WallMeshProps {
   scaleMmPerPx: number | null
   wallHeight: number
   material: 'wood' | 'steel'
+  steelGauge: string
   activeUnit: ActiveUnit
   lengthFormat: LengthFormat
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, activeUnit, lengthFormat }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, activeUnit, lengthFormat }: WallMeshProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
 
@@ -57,8 +58,8 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, acti
       return g
     }
     const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, opacity: 0.7 })
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole])
+    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, opacity: 0.7 })
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {
@@ -89,6 +90,7 @@ export default function LiveWallsLayer() {
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const framingMaterial = useConfigStore((s) => s.framingMaterial)
+  const steelGauge = useConfigStore((s) => s.steelGauge)
   const activeUnit = useConfigStore((s) => s.activeUnit)
   const lengthFormat = useConfigStore((s) => s.lengthFormat)
 
@@ -143,6 +145,7 @@ export default function LiveWallsLayer() {
           scaleMmPerPx={scaleMmPerPx}
           wallHeight={wallHeight}
           material={framingMaterial}
+          steelGauge={steelGauge}
           activeUnit={activeUnit}
           lengthFormat={lengthFormat}
         />
