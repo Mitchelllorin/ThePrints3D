@@ -81,6 +81,12 @@ export interface WallFramingOpts {
   /** Steel gauge ('25'|'20'|'18'|'16'|'12'). Lower = heavier steel → a visibly
    *  beefier stud. Ignored for wood. */
   steelGauge?: string
+  /** Top track profile: 'shallow' | 'deep' | 'slotted' (deep slotted-deflection)
+   *  | 'double'. The bottom track is always a shallow floor track. Steel only. */
+  topTrackStyle?: 'shallow' | 'deep' | 'slotted' | 'double'
+  /** Slotted-deflection gap (mm) left between the stud top and the top-track web
+   *  so the structure can deflect without loading the wall. Steel only. */
+  deflectionGapMm?: number
   /** Lumber colour override. */
   color?: string
   /** 0–1; < 1 renders translucent (used for the ghost preview). */
@@ -101,6 +107,8 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     material = 'wood',
     heavyDuty = false,
     steelGauge = '25',
+    topTrackStyle = 'deep',
+    deflectionGapMm = 0,
     opacity = 1,
   } = opts
 
@@ -129,13 +137,32 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   }
 
   // Plates/track differ by material:
-  //   Wood  → double bottom plate + double top plate.
-  //   Steel → single shallow track at the bottom, deep track at the top.
+  //   Wood  → double bottom plate + double top plate (studs run full height).
+  //   Steel → real U-shaped tracks the studs NEST INTO: a shallow floor track
+  //           at the bottom (opens up) and a deep / slotted-deflection track at
+  //           the top (opens down). The track legs wrap the OUTSIDE of the studs.
+  const SHEET_T = 0.012   // rendered sheet thickness of track web + legs
+  const studDepth = steel ? Math.max(0.02, depth - 2 * SHEET_T) : depth
+  let studBottom = 0
+  let studTop = height
   if (steel) {
-    const botH = PLATE_H_M          // shallow bottom track
-    const topH = PLATE_H_M * 1.8    // deep top track
-    add(new THREE.BoxGeometry(length, botH, depth), 0, botH / 2, 0)
-    add(new THREE.BoxGeometry(length, topH, depth), 0, height - topH / 2, 0)
+    const botLegH = 0.032   // shallow floor track legs (~1-1/4")
+    const topLegH = topTrackStyle === 'shallow' ? 0.032
+      : topTrackStyle === 'slotted' ? 0.076   // deep slotted-deflection track
+      : 0.064                                  // standard deep-leg track
+    const legZ = depth / 2 - SHEET_T / 2
+    // Bottom track — web on the floor, two legs rising (channel opens up).
+    add(new THREE.BoxGeometry(length, SHEET_T, depth), 0, SHEET_T / 2, 0)
+    add(new THREE.BoxGeometry(length, botLegH, SHEET_T), 0, SHEET_T + botLegH / 2, legZ)
+    add(new THREE.BoxGeometry(length, botLegH, SHEET_T), 0, SHEET_T + botLegH / 2, -legZ)
+    // Top track — web at the ceiling, two legs descending (channel opens down).
+    add(new THREE.BoxGeometry(length, SHEET_T, depth), 0, height - SHEET_T / 2, 0)
+    add(new THREE.BoxGeometry(length, topLegH, SHEET_T), 0, height - SHEET_T - topLegH / 2, legZ)
+    add(new THREE.BoxGeometry(length, topLegH, SHEET_T), 0, height - SHEET_T - topLegH / 2, -legZ)
+    // Studs seat on the bottom-track web and rise to just under the top-track
+    // web; a slotted track leaves a deflection gap so the stud isn't pinned.
+    studBottom = SHEET_T
+    studTop = height - SHEET_T - deflectionGapMm / 1000
   } else {
     const plateGeo = new THREE.BoxGeometry(length, PLATE_H_M, depth)
     add(plateGeo, 0, PLATE_H_M / 2, 0)            // sole plate
@@ -143,14 +170,10 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     add(plateGeo, 0, height - PLATE_H_M / 2, 0)   // upper top plate
     add(plateGeo, 0, height - PLATE_H_M * 1.5, 0) // lower top plate
   }
-  // Studs run the FULL height, flush with the top/bottom — the plates/track wrap
-  // their ends (steel nests into the track; the wood top plate caps the studs).
-  const studBottom = 0
-  const studTop = height
 
   const studH = Math.max(0.02, studTop - studBottom)
   const studY = studBottom + studH / 2
-  const studGeo = new THREE.BoxGeometry(studW, studH, depth)
+  const studGeo = new THREE.BoxGeometry(studW, studH, studDepth)
 
   const half = length / 2
   const xs: number[] = []
@@ -178,7 +201,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       color: new THREE.Color('#0b0f17'), roughness: 1, metalness: 0,
       transparent: opacity < 1, opacity,
     })
-    const koGeo = new THREE.CylinderGeometry(studW * 0.32, studW * 0.32, depth + 0.006, 10)
+    const koGeo = new THREE.CylinderGeometry(studW * 0.32, studW * 0.32, studDepth + 0.006, 10)
     const koHeights = [0.610, 1.219, 1.829, 2.438].filter((h) => h > studBottom + 0.05 && h < studTop - 0.05)
     for (const x of ordered) {
       for (const h of koHeights) {
@@ -192,7 +215,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     if (heavyDuty) {
       // Cold-rolled carrying channel runs through the knockouts at 4' and 8'.
       for (const h of [1.219, 2.438].filter((y) => y > studBottom + 0.05 && y < studTop - 0.05)) {
-        add(new THREE.BoxGeometry(length, studW * 0.7, depth * 0.55), 0, h, 0)
+        add(new THREE.BoxGeometry(length, studW * 0.7, studDepth * 0.55), 0, h, 0)
       }
     }
   } else {

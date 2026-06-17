@@ -27,11 +27,13 @@ interface WallMeshProps {
   wallHeight: number
   material: 'wood' | 'steel'
   steelGauge: string
+  topTrackStyle: 'shallow' | 'deep' | 'slotted' | 'double'
+  deflectionGapMm: number
   activeUnit: ActiveUnit
   lengthFormat: LengthFormat
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, activeUnit, lengthFormat }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, activeUnit, lengthFormat }: WallMeshProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
 
@@ -58,8 +60,8 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       return g
     }
     const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, opacity: 0.7 })
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge])
+    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, opacity: 0.7 })
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge, topTrackStyle, deflectionGapMm])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {
@@ -91,6 +93,8 @@ export default function LiveWallsLayer() {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const framingMaterial = useConfigStore((s) => s.framingMaterial)
   const steelGauge = useConfigStore((s) => s.steelGauge)
+  const steelTrackTop = useConfigStore((s) => s.steelTrackTop)
+  const steelDeflectionGapMm = useConfigStore((s) => s.steelDeflectionGapMm)
   const activeUnit = useConfigStore((s) => s.activeUnit)
   const lengthFormat = useConfigStore((s) => s.lengthFormat)
 
@@ -146,6 +150,8 @@ export default function LiveWallsLayer() {
           wallHeight={wallHeight}
           material={framingMaterial}
           steelGauge={steelGauge}
+          topTrackStyle={steelTrackTop === 'double' ? 'deep' : steelTrackTop}
+          deflectionGapMm={steelTrackTop === 'slotted' ? steelDeflectionGapMm : 0}
           activeUnit={activeUnit}
           lengthFormat={lengthFormat}
         />
