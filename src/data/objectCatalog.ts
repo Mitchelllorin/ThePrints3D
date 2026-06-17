@@ -61,6 +61,39 @@ export const ELECTRICAL_BOX_TYPES = new Set(['device-box', 'junction-box', 'ligh
 /** Outlet/receptacle types (relevant to spacing/GFCI validation). */
 export const OUTLET_TYPES = new Set(['duplex-outlet', 'gfci-outlet'])
 
+/** Devices that mount ON a wall (snap to the nearest wall + stand at a standard
+ *  height) rather than sitting on the floor. Ceiling fixtures are separate. */
+export const WALL_MOUNTED_DEVICES = new Set([
+  'duplex-outlet', 'gfci-outlet', 'device-box', 'junction-box', 'switch', 'panel-box',
+])
+
+/** Ceiling-mounted electrical fixtures (boxes/lights/fans up at the ceiling). */
+export const CEILING_DEVICES = new Set([
+  'light-box', 'ceiling-light', 'recessed-light', 'exhaust-fan',
+])
+
+/**
+ * Standard rough-in mounting height for a device — the centre Y in metres above
+ * the finished floor. Wall devices use code-typical heights (receptacles ~12",
+ * switches ~48"); ceiling fixtures hang just below the ceiling. Returns null for
+ * furniture, which just sits on the floor (caller renders at height/2).
+ */
+export function deviceMountHeightM(type: string, ceilingM = 2.4): number | null {
+  switch (type) {
+    case 'duplex-outlet':
+    case 'gfci-outlet':
+    case 'device-box':   return 0.35   // ~12-14" to box centre
+    case 'junction-box': return 1.20
+    case 'switch':       return 1.22   // ~48" to switch centre
+    case 'panel-box':    return 1.40
+    case 'light-box':
+    case 'ceiling-light':
+    case 'recessed-light':
+    case 'exhaust-fan':  return Math.max(0.5, ceilingM - 0.06)
+    default:             return null
+  }
+}
+
 export function electricalTrayItems(): ObjectCatalogItem[] {
   return ELECTRICAL_TRAY_ORDER
     .map((t) => OBJECT_CATALOG.find((o) => o.type === t))

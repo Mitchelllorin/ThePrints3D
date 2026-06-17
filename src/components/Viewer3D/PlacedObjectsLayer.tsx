@@ -11,7 +11,8 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { Edges } from '@react-three/drei'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { getCatalogItem } from '../../data/objectCatalog'
+import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
+import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import type { PlacedObject } from '../../types'
 
 interface DragState {
@@ -35,9 +36,12 @@ function dims(obj: PlacedObject) {
 export default function PlacedObjectsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
+  const wizardInputs = useAppStore((s) => s.wizardInputs)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
+
+  const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
 
   const [drag, setDrag] = useState<DragState | null>(null)
 
@@ -100,10 +104,13 @@ export default function PlacedObjectsLayer() {
         // marker that stays selectable/draggable to reposition the cut.
         const isOpening = obj.type === 'door' || obj.type === 'window'
         const boxD = isOpening ? 0.06 : d
+        // Electrical devices mount on the wall/ceiling at a standard height;
+        // everything else sits on the floor (centre at height/2).
+        const mountY = deviceMountHeightM(obj.type, ceilingM) ?? h / 2
         return (
           <group key={obj.id} position={[live.x, 0, live.z]} rotation={[0, live.rotationY, 0]}>
             <mesh
-              position={[0, h / 2, 0]}
+              position={[0, mountY, 0]}
               castShadow={!isOpening}
               receiveShadow={!isOpening}
               onPointerDown={(e) => {
@@ -127,7 +134,7 @@ export default function PlacedObjectsLayer() {
             {/* Rotate handle — a small knob in front of the object. */}
             {selected && !placeObjectType && (
               <mesh
-                position={[0, h / 2, d / 2 + 0.4]}
+                position={[0, mountY, d / 2 + 0.4]}
                 onPointerDown={(e) => startDrag(e, obj, 'rotate')}
               >
                 <sphereGeometry args={[0.14, 16, 16]} />

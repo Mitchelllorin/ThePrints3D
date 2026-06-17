@@ -36,7 +36,8 @@ import {
   snapPointToWalls,
   snapTraceWallToExisting,
 } from '../../services/wallTraceReducer'
-import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES } from '../../data/objectCatalog'
+import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, deviceMountHeightM } from '../../data/objectCatalog'
+import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { validateElectrical } from '../../services/constructionCode'
 import { LAYER_COLORS, plumbingColorFor, electricalColorFor, plumbingColor, electricalColor } from '../../data/traceLayers'
 
@@ -127,6 +128,8 @@ export default function FloorplanOverlay() {
   const circuits = useAppStore((s) => s.circuits)
   const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
+  const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
 
   const gridSnapM = useConfigStore((s) => s.gridSnapM)
   const wallTraceStyle = useConfigStore((s) => s.wallTraceStyle)
@@ -536,6 +539,38 @@ export default function FloorplanOverlay() {
     return best < 1.2 ? yaw : 0
   }
 
+  // Snap a point onto the nearest user wall (projected onto the wall centreline)
+  // so wall devices sit IN the wall — boxes attach to the studs. Returns the tap
+  // point unchanged when no wall is within reach.
+  const snapToWall = (x: number, z: number): { x: number; z: number } => {
+    let best = 1.2, sx = x, sz = z
+    for (const w of userWalls) {
+      const a = planeLocalToWorld([w.x1, w.y1])
+      const b = planeLocalToWorld([w.x2, w.y2])
+      const ax = a[0], az = a[2], bx = b[0], bz = b[2]
+      const dx = bx - ax, dz = bz - az
+      const len2 = dx * dx + dz * dz
+      if (len2 < 1e-6) continue
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2))
+      const px = ax + t * dx, pz = az + t * dz
+      const d = Math.hypot(x - px, z - pz)
+      if (d < best) { best = d; sx = px; sz = pz }
+    }
+    return { x: sx, z: sz }
+  }
+
+  // Final pose for a device tap: wall devices snap onto the wall; everything else
+  // drops where tapped. Both auto-orient to the nearest wall.
+  const devicePose = (x: number, z: number) => {
+    const snapped = WALL_MOUNTED_DEVICES.has(placeObjectType ?? '') ? snapToWall(x, z) : { x, z }
+    return { x: snapped.x, z: snapped.z, rotationY: autoOrientYaw(snapped.x, snapped.z) }
+  }
+
+  // Standing height for the placement ghost, so it previews at the real mount
+  // height (wall devices / ceiling fixtures) instead of on the floor.
+  const ghostY = (type: string, fallbackH: number) =>
+    deviceMountHeightM(type, ceilingM) ?? fallbackH / 2
+
   // Hover/drag moves the ghost (imperative — no re-render, so the ghost stays
   // visible). The camera is locked while placing, so the print never drifts.
   const moveGhost = (event: ThreeEvent<PointerEvent>) => {
@@ -544,8 +579,9 @@ export default function FloorplanOverlay() {
     const p = rayToGround(event)
     if (!p || !ghostRef.current) return
     ghostRef.current.visible = true
-    ghostRef.current.position.set(p.x, ghostItem.defaultH / 2, p.z)
-    ghostRef.current.rotation.y = autoOrientYaw(p.x, p.z)
+    const pose = devicePose(p.x, p.z)
+    ghostRef.current.position.set(pose.x, ghostY(placeObjectType, ghostItem.defaultH), pose.z)
+    ghostRef.current.rotation.y = pose.rotationY
   }
 
   // Tap on the print places the object right there (map is locked → precise),
@@ -555,7 +591,7 @@ export default function FloorplanOverlay() {
     event.stopPropagation()
     const p = rayToGround(event)
     if (!p) return
-    commitPlacement({ x: p.x, z: p.z, rotationY: autoOrientYaw(p.x, p.z) })
+    commitPlacement(devicePose(p.x, p.z))
   }
 
   const commitPlacement = (pose: { x: number; z: number; rotationY: number }) => {
