@@ -131,24 +131,22 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // Plates/track differ by material:
   //   Wood  → double bottom plate + double top plate.
   //   Steel → single shallow track at the bottom, deep track at the top.
-  let studBottom: number
-  let studTop: number
   if (steel) {
     const botH = PLATE_H_M          // shallow bottom track
     const topH = PLATE_H_M * 1.8    // deep top track
     add(new THREE.BoxGeometry(length, botH, depth), 0, botH / 2, 0)
     add(new THREE.BoxGeometry(length, topH, depth), 0, height - topH / 2, 0)
-    studBottom = botH
-    studTop = height - topH
   } else {
     const plateGeo = new THREE.BoxGeometry(length, PLATE_H_M, depth)
     add(plateGeo, 0, PLATE_H_M / 2, 0)            // sole plate
     add(plateGeo, 0, PLATE_H_M * 1.5, 0)          // 2nd bottom plate
     add(plateGeo, 0, height - PLATE_H_M / 2, 0)   // upper top plate
     add(plateGeo, 0, height - PLATE_H_M * 1.5, 0) // lower top plate
-    studBottom = PLATE_H_M * 2
-    studTop = height - PLATE_H_M * 2
   }
+  // Studs run the FULL height, flush with the top/bottom — the plates/track wrap
+  // their ends (steel nests into the track; the wood top plate caps the studs).
+  const studBottom = 0
+  const studTop = height
 
   const studH = Math.max(0.02, studTop - studBottom)
   const studY = studBottom + studH / 2
