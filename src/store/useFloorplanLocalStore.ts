@@ -32,6 +32,9 @@ interface DragState {
 interface FloorplanLocalState {
   // ─── tracing ─────────────────────────────────────────────────────
   traceMode: boolean
+  /** Paused mid-run: the run/anchor is kept, but the camera unlocks so you can
+   *  orbit to find the best route (and switch trades), then resume. */
+  tracePaused: boolean
   traceStyle: TraceStyle
   /** Anchor of the active rubber-band segment (line style only) */
   traceStart: [number, number] | null
@@ -99,6 +102,7 @@ interface FloorplanLocalState {
 
   // ─── actions ─────────────────────────────────────────────────────
   setTraceMode: (v: boolean) => void
+  setTracePaused: (v: boolean) => void
   setTraceStyle: (v: TraceStyle) => void
   setTraceStart: (v: [number, number] | null) => void
   setTraceStroke: (v: [number, number][] | ((prev: [number, number][]) => [number, number][])) => void
@@ -139,6 +143,7 @@ export type { CalibrationUnit, DragKind, DragState, TraceStyle }
 
 export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => ({
   traceMode: false,
+  tracePaused: false,
   traceStyle: 'line',
   traceStart: null,
   traceStroke: [],
@@ -173,7 +178,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   practiceMode: true,
   seedProcessing: false,
 
-  setTraceMode: (v) => set(v ? { traceMode: true } : { traceMode: false, traceStart: null, traceStroke: [], pendingWalls: null }),
+  setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
+  setTracePaused: (v) => set({ tracePaused: v }),
   setTraceStyle: (v) => set({ traceStyle: v, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTraceStart: (v) => set({ traceStart: v }),
   setPendingWalls: (v) => set({ pendingWalls: v }),
@@ -197,7 +203,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setPendingTraceAfterCalibration: (v) => set({ pendingTraceAfterCalibration: v }),
   setActiveWallType: (v) => set({ activeWallType: v }),
   setActiveWallRole: (v) => set({ activeWallRole: v }),
-  setActiveTraceLayer: (v) => set({ activeTraceLayer: v }),
+  // Switching discipline drops any in-progress run anchor, so a resumed/new run
+  // starts fresh in the newly selected trade instead of chaining from the old.
+  setActiveTraceLayer: (v) => set({ activeTraceLayer: v, traceStart: null }),
   setTraceBand: (v) => set({ traceBand: v }),
   setPlumb: (patch) => set(patch),
   setElec: (patch) => set(patch),

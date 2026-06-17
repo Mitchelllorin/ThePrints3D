@@ -84,6 +84,8 @@ export default function FloorplanPanel() {
 
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
   const setTraceMode   = useFloorplanLocalStore((s) => s.setTraceMode)
+  const tracePaused    = useFloorplanLocalStore((s) => s.tracePaused)
+  const setTracePaused = useFloorplanLocalStore((s) => s.setTracePaused)
   const traceStyle     = useFloorplanLocalStore((s) => s.traceStyle)
   const setTraceStyle  = useFloorplanLocalStore((s) => s.setTraceStyle)
   const traceStart     = useFloorplanLocalStore((s) => s.traceStart)
@@ -439,8 +441,9 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Discipline layer tabs (hidden while tracing — get out of the way) ── */}
-        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && !traceMode && (
+        {/* ── Discipline layer tabs (hidden while actively tracing, but shown
+              again when paused so you can switch trades mid-flow). ── */}
+        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && (!traceMode || tracePaused) && (
           <div className={styles.layerTabs}>
             {TRACE_LAYERS.map((l) => (
               <button
@@ -466,6 +469,16 @@ export default function FloorplanPanel() {
         {/* Trade layers (plumbing/electrical): trace runs as coloured lines. */}
         {showSteps && tradeActive && drawing.status === 'ready' && !pickerOpen && (
           traceMode ? (
+            tracePaused ? (
+              <div className={styles.step}>
+                <span className={styles.stepLabel}>Paused</span>
+                <span className={styles.stepHint}>Orbit/pan to line up the best route — or switch trades above — then resume. Your run is kept.</span>
+                <div className={styles.btnRow}>
+                  <button className={styles.action} onClick={() => setTracePaused(false)}>Resume</button>
+                  <button className={styles.cancel} onClick={cancelTracing}>Done</button>
+                </div>
+              </div>
+            ) : (
             <div className={styles.step}>
               <span className={styles.stepLabel}>Tracing {layerLabel}</span>
               <button
@@ -487,11 +500,13 @@ export default function FloorplanPanel() {
                 ))}
               </div>
               <div className={styles.btnRow}>
+                <button className={styles.secondary} onClick={() => setTracePaused(true)} title="Free the camera to orbit, then resume">Pause / move view</button>
                 {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}
                 <button className={styles.cancel} onClick={cancelTracing}>Done</button>
               </div>
             </div>
+            )
           ) : (
             <div className={styles.step}>
               <span className={styles.stepLabel}>{layerLabel}</span>
@@ -699,6 +714,9 @@ export default function FloorplanPanel() {
                       Build 3D →
                     </button>
                   )}
+                  <button className={tracePaused ? styles.action : styles.secondary} onClick={() => setTracePaused(!tracePaused)} title="Free the camera to orbit, then resume — your trace is kept">
+                    {tracePaused ? 'Resume' : 'Pause / move view'}
+                  </button>
                   {traceStyle === 'line' && traceStart && (
                     <button className={styles.secondary} onClick={() => setTraceStart(null)}>
                       End run

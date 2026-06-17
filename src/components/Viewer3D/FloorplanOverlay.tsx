@@ -135,6 +135,7 @@ export default function FloorplanOverlay() {
   const wallTraceStyle = useConfigStore((s) => s.wallTraceStyle)
 
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
+  const tracePaused = useFloorplanLocalStore((s) => s.tracePaused)
   const traceStyle = useFloorplanLocalStore((s) => s.traceStyle)
   const traceStart = useFloorplanLocalStore((s) => s.traceStart)
   const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
@@ -199,9 +200,11 @@ export default function FloorplanOverlay() {
   // the controls directly). Pan/orbit resumes when you leave these modes.
   useEffect(() => {
     updateOverlay({
-      orbitLocked: drag !== null || traceMode || overlay.calibrationMode || placeObjectType !== null,
+      // Paused tracing unlocks the camera so you can orbit to find the best
+      // route, then resume — the run/anchor is preserved meanwhile.
+      orbitLocked: drag !== null || (traceMode && !tracePaused) || overlay.calibrationMode || placeObjectType !== null,
     }, false)
-  }, [drag, traceMode, overlay.calibrationMode, placeObjectType, updateOverlay])
+  }, [drag, traceMode, tracePaused, overlay.calibrationMode, placeObjectType, updateOverlay])
 
   const estimatedScale = useMemo<[number, number]>(() => {
     if (!drawing) return overlay.scale
@@ -260,10 +263,10 @@ export default function FloorplanOverlay() {
 
   // Rubber-band trace preview — same stretchy interaction as calibration
   const tracePreviewPoints = useMemo(() => {
-    if (!traceMode || traceStyle !== 'line' || !traceStart || !hoverPixel) return null
+    if (!traceMode || tracePaused || traceStyle !== 'line' || !traceStart || !hoverPixel) return null
     return [planeLocalToWorld(traceStart), planeLocalToWorld(hoverPixel)] as
       [[number, number, number], [number, number, number]]
-  }, [traceMode, traceStyle, traceStart, hoverPixel, planeLocalToWorld])
+  }, [traceMode, tracePaused, traceStyle, traceStart, hoverPixel, planeLocalToWorld])
 
   // ─── drag handlers ─────────────────────────────────────────────────────
 
@@ -674,7 +677,9 @@ export default function FloorplanOverlay() {
             />
           </mesh>
 
-          {(traceMode || overlay.calibrationMode) && (
+          {/* While paused the catcher is removed so drags orbit the camera
+              instead of placing points; the anchor/run is kept for resume. */}
+          {((traceMode && !tracePaused) || overlay.calibrationMode) && (
             <mesh
               rotation={[-Math.PI / 2, 0, 0]}
               position={[0, 0.02, 0]}
