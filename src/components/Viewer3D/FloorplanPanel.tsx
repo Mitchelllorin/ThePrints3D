@@ -386,6 +386,10 @@ export default function FloorplanPanel() {
   const framingActive = activeTraceLayer === 'framing'
   const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical'
   const layerLabel = LAYER_LABELS[activeTraceLayer]
+  // Devices-first nudge: how many electrical devices are already placed. The
+  // gentle prompt shows only until the first one is placed, then steps aside.
+  const elecTypes = electricalTrayItems().map((i) => i.type)
+  const placedElecCount = placedObjects.filter((o) => elecTypes.includes(o.type)).length
   // Compact indicator of what a trade trace will stamp.
   const tradeIndicator = activeTraceLayer === 'plumbing'
     ? `${plumbElement}${plumbElement === 'Supply Line' ? ` (${plumbTemp})` : ''} · ${plumbSize} · ${plumbMaterial}`
@@ -491,7 +495,18 @@ export default function FloorplanPanel() {
           ) : (
             <div className={styles.step}>
               <span className={styles.stepLabel}>{layerLabel}</span>
-              <span className={styles.stepText}>Trace {layerLabel.toLowerCase()} runs</span>
+              {activeTraceLayer === 'electrical' && placedElecCount === 0 ? (
+                <>
+                  <span className={styles.stepText}>Start with the boxes</span>
+                  <span className={styles.stepHint}>
+                    Place your outlets, switches & boxes from the tray below — they
+                    mount to the studs — then wire them together. (Optional: you can
+                    wire first if you'd rather.)
+                  </span>
+                </>
+              ) : (
+                <span className={styles.stepText}>Trace {layerLabel.toLowerCase()} runs</span>
+              )}
               <span className={styles.stepHint}>{tradeIndicator}</span>
               <div className={styles.btnRow}>
                 <button className={styles.action} onClick={openPicker}>Choose type →</button>
