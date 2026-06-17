@@ -27,6 +27,9 @@ export interface WallFramingOpts {
   spacingM?: number
   /** Framing material — drives colour/finish: tan lumber vs silvery steel. */
   material?: 'wood' | 'steel'
+  /** Heavy-duty / exterior steel: threads a cold-rolled carrying channel
+   *  through the knockouts. Interior 25ga steel leaves the knockouts empty. */
+  heavyDuty?: boolean
   /** Lumber colour override. */
   color?: string
   /** 0–1; < 1 renders translucent (used for the ghost preview). */
@@ -45,6 +48,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     thickness,
     spacingM = STUD_SPACING_M,
     material = 'wood',
+    heavyDuty = false,
     opacity = 1,
   } = opts
 
@@ -111,15 +115,32 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     add(studGeo, Math.max(-half, Math.min(half, x)), studY)
   }
 
+  const ordered = [...seen].map((k) => k / 1000).sort((a, b) => a - b)
   const midY = studBottom + studH / 2
   if (steel) {
-    // Steel studs have knockouts every ~2' and a continuous carrying channel
-    // (cold-rolled channel) threaded through them — NO wood blocking.
-    const channelH = STUD_WIDTH_M * 0.7
-    add(new THREE.BoxGeometry(length, channelH, depth * 0.55), 0, midY, 0)
+    // Steel studs are punched with knockouts at 2', 4' and 6'. A cold-rolled
+    // carrying channel runs through them ONLY on heavy-duty / exterior walls;
+    // typical interior 25ga leaves them empty. No wood blocking.
+    const koMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#0b0f17'), roughness: 1, metalness: 0,
+      transparent: opacity < 1, opacity,
+    })
+    const koGeo = new THREE.CylinderGeometry(STUD_WIDTH_M * 0.32, STUD_WIDTH_M * 0.32, depth + 0.006, 10)
+    const koHeights = [0.610, 1.219, 1.829].filter((h) => h > studBottom + 0.05 && h < studTop - 0.05)
+    for (const x of ordered) {
+      for (const h of koHeights) {
+        const m = new THREE.Mesh(koGeo, koMat)
+        m.position.set(x, h, 0)
+        m.rotation.x = Math.PI / 2  // bore through the web (along depth)
+        m.userData.layer = 'framing'
+        group.add(m)
+      }
+    }
+    if (heavyDuty) {
+      add(new THREE.BoxGeometry(length, STUD_WIDTH_M * 0.7, depth * 0.55), 0, midY, 0)
+    }
   } else {
     // Wood: solid blocking between consecutive studs at mid-height.
-    const ordered = [...seen].map((k) => k / 1000).sort((a, b) => a - b)
     for (let i = 0; i < ordered.length - 1; i++) {
       const gap = ordered[i + 1] - ordered[i]
       const span = gap - STUD_WIDTH_M
