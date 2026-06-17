@@ -56,11 +56,13 @@ export function plumbingColorFor(element: string, temp?: 'hot' | 'cold'): string
 export function electricalColorFor(element: string, role?: string): string {
   if (element === 'Low Voltage') return '#a855f7' // purple
   switch (role) {
-    case 'Hot (Red)': return '#ef4444'
-    case 'Neutral':   return '#ffffff'
-    case 'Ground':    return '#22c55e'
+    case 'Hot (Red)': return '#f87171'   // bright red
+    case 'Neutral':   return '#f8fafc'   // bright white
+    case 'Ground':    return '#4ade80'   // bright green
     case 'Hot (Black)':
-    default:          return '#111111' // near-black (visible on dark bg)
+    default:          return '#94a3b8'   // black conductor, lifted to a visible
+                                         // slate so it reads on the dark workspace
+                                         // (pure black was invisible)
   }
 }
 

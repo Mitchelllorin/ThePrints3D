@@ -23,9 +23,9 @@ const BAND_Y: Record<string, number> = {
 const bandY = (l: TracedLine, fallback: string) => BAND_Y[l.band ?? fallback] ?? BAND_Y['in-wall']
 
 /** A straight run as a single pipe with couplings at each stock joint. */
-function PipeRun({ a, b, color, radius, stickM, coupling }: {
+function PipeRun({ a, b, color, radius, stickM, coupling, glow = 0 }: {
   a: THREE.Vector3; b: THREE.Vector3; color: string
-  radius: number; stickM: number; coupling: boolean
+  radius: number; stickM: number; coupling: boolean; glow?: number
 }) {
   const dir = new THREE.Vector3().subVectors(b, a)
   const len = dir.length()
@@ -37,7 +37,7 @@ function PipeRun({ a, b, color, radius, stickM, coupling }: {
     <group>
       <mesh position={mid} quaternion={quat} castShadow>
         <cylinderGeometry args={[radius, radius, len, 10]} />
-        <meshStandardMaterial color={color} roughness={0.5} metalness={0.15} />
+        <meshStandardMaterial color={color} roughness={0.5} metalness={0.15} emissive={color} emissiveIntensity={glow} />
       </mesh>
       {Array.from({ length: joints }, (_, i) => {
         const t = Math.min(1, ((i + 1) * stickM) / len)
@@ -110,12 +110,12 @@ export default function TradeLayersRenderer() {
   if (!drawing || (!showPlumb && !showElec)) return null
   if (plumbingLines.length === 0 && electricalLines.length === 0) return null
 
-  const RiserMesh = ({ r, radius }: { r: Riser; radius: number }) => {
+  const RiserMesh = ({ r, radius, glow = 0 }: { r: Riser; radius: number; glow?: number }) => {
     const c = toWorld(r.px, r.py, (r.lo + r.hi) / 2)
     return (
       <mesh position={c} castShadow>
         <cylinderGeometry args={[radius, radius, r.hi - r.lo, 10]} />
-        <meshStandardMaterial color={r.color} roughness={0.5} metalness={0.15} />
+        <meshStandardMaterial color={r.color} roughness={0.5} metalness={0.15} emissive={r.color} emissiveIntensity={glow} />
       </mesh>
     )
   }
@@ -127,11 +127,13 @@ export default function TradeLayersRenderer() {
           color={plumbingColor(l)} radius={0.013} stickM={stickM} coupling />
       ))}
       {showPlumb && plumbRisers.map((r, i) => <RiserMesh key={`pr-${i}`} r={r} radius={0.013} />)}
+      {/* Electrical wires are exaggerated (thicker + a soft glow) so the runs
+          stay readable while routing — you can orbit to find the best path. */}
       {showElec && electricalLines.map((l) => (
         <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'in-wall'))} b={toWorld(l.x2, l.y2, bandY(l, 'in-wall'))}
-          color={electricalColor(l)} radius={0.007} stickM={stickM} coupling={false} />
+          color={electricalColor(l)} radius={0.013} stickM={stickM} coupling={false} glow={0.45} />
       ))}
-      {showElec && elecRisers.map((r, i) => <RiserMesh key={`er-${i}`} r={r} radius={0.007} />)}
+      {showElec && elecRisers.map((r, i) => <RiserMesh key={`er-${i}`} r={r} radius={0.013} glow={0.45} />)}
     </group>
   )
 }
