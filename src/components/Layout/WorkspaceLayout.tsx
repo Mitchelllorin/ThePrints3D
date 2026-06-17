@@ -173,6 +173,15 @@ function SettingsContent() {
         <ColorRow label="Accent" val={ui.accentColor} onChange={(v) => setUI({ accentColor: v })} />
       </CollapsibleSection>
 
+      <CollapsibleSection id="lighting" title="Lighting & background" openId={openId} setOpenId={setOpenId}>
+        <ColorRow label="Background" val={ui.bgColor} onChange={(v) => setUI({ bgColor: v })} />
+        <Slider label="Brightness" val={Math.round(ui.dirIntensity * 100)} min={0} max={300} step={5} unit="%"
+          onChange={(v) => setUI({ dirIntensity: v / 100 })} />
+        <Slider label="Ambient fill" val={Math.round(ui.ambientIntensity * 100)} min={0} max={300} step={5} unit="%"
+          onChange={(v) => setUI({ ambientIntensity: v / 100 })} />
+        <ColorRow label="Light colour" val={ui.lightColor} onChange={(v) => setUI({ lightColor: v })} />
+      </CollapsibleSection>
+
       <CollapsibleSection id="units" title="Units & calibration" openId={openId} setOpenId={setOpenId}>
         <Select label="Active unit" val={cfg.activeUnit} options={UNIT_OPTIONS} onChange={(v) => setCfg({ activeUnit: v as ActiveUnit })} />
         <Select label="Format" val={cfg.lengthFormat} options={LENGTH_FORMAT_OPTIONS} onChange={(v) => setCfg({ lengthFormat: v as LengthFormat })} />
@@ -234,6 +243,7 @@ function SettingsContent() {
       <CollapsibleSection id="grid" title="3D grid" openId={openId} setOpenId={setOpenId}>
         <Toggle label="Visible" val={ui.gridVisible} onChange={(v) => setUI({ gridVisible: v })} />
         <ColorRow label="Color" val={ui.gridColor} onChange={(v) => setUI({ gridColor: v })} />
+        <Slider label="Opacity" val={Math.round(ui.gridOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ gridOpacity: v / 100 })} />
         <Slider label="Cell size" val={ui.gridCellSize} min={0.5} max={10} step={0.5} unit="m" onChange={(v) => setUI({ gridCellSize: v })} />
       </CollapsibleSection>
 

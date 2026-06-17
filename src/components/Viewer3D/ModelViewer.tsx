@@ -189,10 +189,16 @@ export default function ModelViewer() {
     color: s.gridColor,
     cellSize: s.gridCellSize,
   })))
+  const scene = useUISettingsStore(useShallow((s) => ({
+    bg: s.bgColor,
+    lightColor: s.lightColor,
+    dir: s.dirIntensity,
+    ambient: s.ambientIntensity,
+  })))
 
   // drei's Grid has no opacity prop — fade by blending the line colour
   // toward the canvas background instead.
-  const gridColor = new THREE.Color('#060d1a').lerp(
+  const gridColor = new THREE.Color(scene.bg).lerp(
     new THREE.Color(gridSettings.color),
     gridSettings.opacity,
   )
@@ -500,7 +506,6 @@ export default function ModelViewer() {
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
         style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
-        onCreated={({ gl }) => { gl.setClearColor('#060d1a') }}
         onPointerMissed={() => {
           // Tap on empty canvas (not a wall/object) dismisses every open
           // card/picker/panel and clears the active selection.
@@ -508,8 +513,10 @@ export default function ModelViewer() {
         }}
       >
         <CameraRig />
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[10, 20, 10]} intensity={1.0} />
+        {/* Live workspace background — drives the canvas clear colour. */}
+        <color attach="background" args={[scene.bg]} />
+        <ambientLight intensity={scene.ambient} color={scene.lightColor} />
+        <directionalLight position={[10, 20, 10]} intensity={scene.dir} color={scene.lightColor} />
 
         {gridSettings.visible && (
           <Grid

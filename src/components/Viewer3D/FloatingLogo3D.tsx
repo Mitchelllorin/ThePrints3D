@@ -12,7 +12,8 @@ import { useUISettingsStore } from '../../store/useUISettingsStore'
 
 const FONT_URL = '/fonts/helvetiker_bold.typeface.json'
 
-const BOUNDS = { x: 7, yMin: 1.5, yMax: 5.5, z: 3.5 }
+const BOUNDS = { x: 7, z: 3.5 }
+const Y_CENTER = 3.5
 
 function randomSign() { return Math.random() > 0.5 ? 1 : -1 }
 const initVel = () => new THREE.Vector3(
@@ -78,9 +79,10 @@ export default function FloatingLogo3D() {
   const groupRef = useRef<THREE.Group>(null)
   const velocity = useRef(initVel())
 
-  const visible    = useUISettingsStore((s) => s.logo3DVisible)
-  const opacity    = useUISettingsStore((s) => s.logo3DOpacity)
-  const floatSpeed = useUISettingsStore((s) => s.logo3DFloatSpeed)
+  const visible     = useUISettingsStore((s) => s.logo3DVisible)
+  const opacity     = useUISettingsStore((s) => s.logo3DOpacity)
+  const floatSpeed  = useUISettingsStore((s) => s.logo3DFloatSpeed)
+  const floatHeight = useUISettingsStore((s) => s.logo3DFloatHeight)
 
   useFrame((_, delta) => {
     if (!groupRef.current || !visible) return
@@ -88,16 +90,21 @@ export default function FloatingLogo3D() {
     const v = velocity.current
     const dt = delta * floatSpeed
 
+    // Bounce slider widens the vertical travel band around Y_CENTER.
+    const yHalf = 0.5 + floatHeight * 1.8
+    const yMin = Y_CENTER - yHalf
+    const yMax = Y_CENTER + yHalf
+
     p.x += v.x * dt
     p.y += v.y * dt
     p.z += v.z * dt
 
-    if (p.x >  BOUNDS.x)    v.x = -Math.abs(v.x)
-    if (p.x < -BOUNDS.x)    v.x =  Math.abs(v.x)
-    if (p.y >  BOUNDS.yMax) v.y = -Math.abs(v.y)
-    if (p.y <  BOUNDS.yMin) v.y =  Math.abs(v.y)
-    if (p.z >  BOUNDS.z)    v.z = -Math.abs(v.z)
-    if (p.z < -BOUNDS.z)    v.z =  Math.abs(v.z)
+    if (p.x >  BOUNDS.x) v.x = -Math.abs(v.x)
+    if (p.x < -BOUNDS.x) v.x =  Math.abs(v.x)
+    if (p.y >  yMax)     v.y = -Math.abs(v.y)
+    if (p.y <  yMin)     v.y =  Math.abs(v.y)
+    if (p.z >  BOUNDS.z) v.z = -Math.abs(v.z)
+    if (p.z < -BOUNDS.z) v.z =  Math.abs(v.z)
 
     // Slow natural spin on all axes — no moon-lock
     groupRef.current.rotation.y += delta * 0.35

@@ -20,6 +20,13 @@ export interface UISettings {
   gridOpacity: number
   gridColor: string
   gridCellSize: number
+  // Workspace lighting / background
+  bgColor: string
+  lightColor: string
+  /** Directional (sun) light intensity — the main "brightness" control. */
+  dirIntensity: number
+  /** Ambient fill light intensity — lifts the shadows. */
+  ambientIntensity: number
   // Accent
   accentColor: string
 }
@@ -39,6 +46,10 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   gridOpacity: 0.8,
   gridColor: '#1a4a7a',
   gridCellSize: 1,
+  bgColor: '#060d1a',
+  lightColor: '#ffffff',
+  dirIntensity: 1.0,
+  ambientIntensity: 0.6,
   accentColor: '#38bdf8',
 }
 
