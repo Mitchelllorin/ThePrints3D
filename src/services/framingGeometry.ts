@@ -16,6 +16,54 @@ const STUD_WIDTH_M = 0.038    // 1-1/2" nominal stud face
 const PLATE_H_M = 0.038       // one plate's thickness
 const STUD_SPACING_M = 0.4064 // 16" on-centre
 
+/** Block face size on the wall (~16") — texture tile size. */
+export const BLOCK_TILE_M = 0.4
+
+// A running-bond block/mortar pattern, drawn once and tiled across masonry
+// walls (ghost + built) so they read as block courses, not a flat slab.
+let _blockTex: THREE.Texture | null = null
+export function blockTexture(): THREE.Texture | null {
+  if (_blockTex) return _blockTex
+  if (typeof document === 'undefined') return null
+  const c = document.createElement('canvas')
+  c.width = 128; c.height = 128
+  const ctx = c.getContext('2d')
+  if (!ctx) return null
+  ctx.fillStyle = '#b4b0aa'
+  ctx.fillRect(0, 0, 128, 128)
+  ctx.strokeStyle = '#6b6f76'
+  ctx.lineWidth = 6
+  ctx.beginPath()
+  ctx.moveTo(0, 2); ctx.lineTo(128, 2)
+  ctx.moveTo(0, 64); ctx.lineTo(128, 64)
+  ctx.moveTo(0, 126); ctx.lineTo(128, 126)
+  ctx.moveTo(2, 0); ctx.lineTo(2, 64)
+  ctx.moveTo(126, 0); ctx.lineTo(126, 64)
+  ctx.moveTo(64, 64); ctx.lineTo(64, 128)
+  ctx.stroke()
+  const tex = new THREE.CanvasTexture(c)
+  tex.wrapS = THREE.RepeatWrapping
+  tex.wrapT = THREE.RepeatWrapping
+  _blockTex = tex
+  return tex
+}
+
+/** Block-faced material tiled to a wall face of the given size. */
+export function blockMaterial(faceLengthM: number, faceHeightM: number, opacity = 1): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#cdc8c0'), roughness: 1, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const tex = blockTexture()
+  if (tex) {
+    const t = tex.clone(); t.needsUpdate = true
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.repeat.set(Math.max(1, faceLengthM / BLOCK_TILE_M), Math.max(1, faceHeightM / BLOCK_TILE_M))
+    m.map = t
+  }
+  return m
+}
+
 export interface WallFramingOpts {
   /** Wall run length, metres. */
   length: number

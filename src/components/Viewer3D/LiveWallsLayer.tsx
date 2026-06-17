@@ -12,45 +12,13 @@ import { Billboard, Text } from '@react-three/drei'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallFraming } from '../../services/framingGeometry'
+import { buildWallFraming, blockMaterial } from '../../services/framingGeometry'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import type { ActiveUnit } from '../../store/useConfigStore'
 import type { ParsedWall } from '../../types'
 
 const MIN_THICKNESS = 0.1     // metres — minimum visible thickness
 const DEFAULT_THICKNESS_MM = 140  // 2×4 stud + drywall both sides
-const BLOCK_M = 0.4           // ~16" block face — texture tile size on the wall
-
-// A running-bond block/mortar pattern, drawn once and tiled across masonry
-// walls so they read as block courses instead of a flat grey slab.
-let _blockTex: THREE.Texture | null = null
-function blockTexture(): THREE.Texture | null {
-  if (_blockTex) return _blockTex
-  if (typeof document === 'undefined') return null
-  const c = document.createElement('canvas')
-  c.width = 128; c.height = 128
-  const ctx = c.getContext('2d')
-  if (!ctx) return null
-  ctx.fillStyle = '#b4b0aa'                 // block face
-  ctx.fillRect(0, 0, 128, 128)
-  ctx.strokeStyle = '#6b6f76'               // mortar joints
-  ctx.lineWidth = 6
-  // Horizontal course joints (top, middle, bottom of the 2-course tile).
-  ctx.beginPath()
-  ctx.moveTo(0, 2); ctx.lineTo(128, 2)
-  ctx.moveTo(0, 64); ctx.lineTo(128, 64)
-  ctx.moveTo(0, 126); ctx.lineTo(128, 126)
-  // Head joints — offset half a block between courses (running bond).
-  ctx.moveTo(2, 0); ctx.lineTo(2, 64)
-  ctx.moveTo(126, 0); ctx.lineTo(126, 64)
-  ctx.moveTo(64, 64); ctx.lineTo(64, 128)
-  ctx.stroke()
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = THREE.RepeatWrapping
-  tex.wrapT = THREE.RepeatWrapping
-  _blockTex = tex
-  return tex
-}
 
 interface WallMeshProps {
   wall: ParsedWall
@@ -83,17 +51,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, acti
   const framing = useMemo(() => {
     if (isMasonry) {
       const g = new THREE.Group()
-      const tex = blockTexture()
-      const blockMat = new THREE.MeshStandardMaterial({ color: '#cdc8c0', roughness: 1, metalness: 0, transparent: true, opacity: 0.85 })
-      if (tex) {
-        // Clone so each wall sets its own repeat without sharing state.
-        const t = tex.clone()
-        t.needsUpdate = true
-        t.wrapS = t.wrapT = THREE.RepeatWrapping
-        t.repeat.set(Math.max(1, length / BLOCK_M), Math.max(1, wallHeight / BLOCK_M))
-        blockMat.map = t
-      }
-      const m = new THREE.Mesh(new THREE.BoxGeometry(length, wallHeight, thicknessM), blockMat)
+      const m = new THREE.Mesh(new THREE.BoxGeometry(length, wallHeight, thicknessM), blockMaterial(length, wallHeight, 0.85))
       m.position.set(0, wallHeight / 2, 0)
       g.add(m)
       return g

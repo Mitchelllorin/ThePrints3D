@@ -9,6 +9,10 @@ import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
+import { blockMaterial } from '../../services/framingGeometry'
+
+/** Wall finishes that should render as block courses, not a flat colour. */
+const MASONRY_FINISHES = new Set(['brick', 'exposedBrick', 'stone', 'concrete'])
 
 interface Props {
   layers: Layer[]
@@ -216,6 +220,8 @@ function buildRealWalls(
     // cladding on the other. Materials come from the wall's chosen presets,
     // inheriting the wall layer's opacity.
     const finishMaterial = (key: string) => {
+      // Masonry finishes get the tiled block/mortar texture sized to this face.
+      if (MASONRY_FINISHES.has(key)) return blockMaterial(len, floorHeight, wallMat.opacity)
       const p = wallMaterialPreset(key)
       return new THREE.MeshStandardMaterial({
         color: new THREE.Color(p.color),
