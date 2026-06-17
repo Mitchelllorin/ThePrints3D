@@ -1,10 +1,10 @@
 /**
  * TradeLayersRenderer — draws traced trade runs in the 3D scene as real pipe/
- * cable: plumbing & electrical render as 3D cylinders coloured by field
- * convention, and straight runs get a coupling at every stock-length joint
- * (10' or 12', per the pipe-stick setting). Visibility is gated per layer by
- * the store's visibleLayers set; runs are placed with the same overlay
- * transform as the walls so they sit exactly on the print.
+ * cable. Each run lives in a height band (under-floor / in-wall / ceiling) and
+ * renders at that elevation; straight runs get a coupling at every stock-length
+ * joint (10'/12'). Auto-risers connect bands where runs meet and drop open ends
+ * down to the floor — so runs go vertical + horizontal, not just along the base.
+ * Runs are placed with the same overlay transform as the walls.
  */
 import { useMemo } from 'react'
 import * as THREE from 'three'
@@ -13,11 +13,16 @@ import { useConfigStore } from '../../store/useConfigStore'
 import { plumbingColor, electricalColor } from '../../data/traceLayers'
 import type { TracedLine } from '../../types'
 
-const PLUMB_Y = 0.08
-const ELEC_Y = 0.14
 const UP = new THREE.Vector3(0, 1, 0)
+const FLOOR_Y = 0.06
+const BAND_Y: Record<string, number> = {
+  'under-floor': -0.25,  // in the joist space below the floor
+  'in-wall': 1.2,        // mid-wall
+  'ceiling': 2.5,        // near the top plate
+}
+const bandY = (l: TracedLine, fallback: string) => BAND_Y[l.band ?? fallback] ?? BAND_Y['in-wall']
 
-/** A straight run rendered as a single pipe with couplings at each stock joint. */
+/** A straight run as a single pipe with couplings at each stock joint. */
 function PipeRun({ a, b, color, radius, stickM, coupling }: {
   a: THREE.Vector3; b: THREE.Vector3; color: string
   radius: number; stickM: number; coupling: boolean
@@ -48,6 +53,33 @@ function PipeRun({ a, b, color, radius, stickM, coupling }: {
   )
 }
 
+interface Riser { px: number; py: number; lo: number; hi: number; color: string }
+
+/** Vertical connectors: where runs of different bands meet, and where an open
+ *  end sits above the floor (a drop/stub). Keyed by shared pixel endpoint. */
+function computeRisers(lines: TracedLine[], fallback: string, colorOf: (l: TracedLine) => string): Riser[] {
+  const nodes = new Map<string, { px: number; py: number; ys: Set<number>; deg: number; color: string }>()
+  for (const l of lines) {
+    const y = bandY(l, fallback)
+    for (const [px, py] of [[l.x1, l.y1], [l.x2, l.y2]] as const) {
+      const key = `${Math.round(px)},${Math.round(py)}`
+      let n = nodes.get(key)
+      if (!n) { n = { px, py, ys: new Set(), deg: 0, color: colorOf(l) }; nodes.set(key, n) }
+      n.ys.add(y); n.deg++
+    }
+  }
+  const risers: Riser[] = []
+  for (const n of nodes.values()) {
+    const ys = [...n.ys]
+    let lo = Math.min(...ys)
+    const hi = Math.max(...ys)
+    // Open end above the floor → drop a riser to the floor.
+    if (n.deg === 1 && lo > FLOOR_Y + 0.02) lo = FLOOR_Y
+    if (hi - lo > 0.06) risers.push({ px: n.px, py: n.py, lo, hi, color: n.color })
+  }
+  return risers
+}
+
 export default function TradeLayersRenderer() {
   const drawings = useAppStore((s) => s.drawings)
   const overlay = useAppStore((s) => s.floorplanOverlay)
@@ -63,7 +95,6 @@ export default function TradeLayersRenderer() {
   const [overlayW, overlayD] = overlay.scale
   const rotRad = THREE.MathUtils.degToRad(overlay.rotationDeg)
 
-  // Same transform as FloorplanOverlay/LiveWallsLayer so runs land on the print.
   const toWorld = useMemo(() => (px: number, py: number, y: number): THREE.Vector3 => {
     const localX = ((px / imageWidth) - 0.5) * overlayW
     const localZ = ((py / imageHeight) - 0.5) * overlayD
@@ -71,35 +102,36 @@ export default function TradeLayersRenderer() {
     return new THREE.Vector3(overlay.position[0] + v.x, y, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
+  const plumbRisers = useMemo(() => computeRisers(plumbingLines, 'under-floor', plumbingColor), [plumbingLines])
+  const elecRisers = useMemo(() => computeRisers(electricalLines, 'in-wall', electricalColor), [electricalLines])
+
   const showPlumb = visibleLayers.has('plumbing')
   const showElec = visibleLayers.has('electrical')
   if (!drawing || (!showPlumb && !showElec)) return null
   if (plumbingLines.length === 0 && electricalLines.length === 0) return null
 
+  const RiserMesh = ({ r, radius }: { r: Riser; radius: number }) => {
+    const c = toWorld(r.px, r.py, (r.lo + r.hi) / 2)
+    return (
+      <mesh position={c} castShadow>
+        <cylinderGeometry args={[radius, radius, r.hi - r.lo, 10]} />
+        <meshStandardMaterial color={r.color} roughness={0.5} metalness={0.15} />
+      </mesh>
+    )
+  }
+
   return (
     <group name="trade-layers">
-      {showPlumb && plumbingLines.map((l: TracedLine) => (
-        <PipeRun
-          key={l.id}
-          a={toWorld(l.x1, l.y1, PLUMB_Y)}
-          b={toWorld(l.x2, l.y2, PLUMB_Y)}
-          color={plumbingColor(l)}
-          radius={0.013}
-          stickM={stickM}
-          coupling
-        />
+      {showPlumb && plumbingLines.map((l) => (
+        <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'under-floor'))} b={toWorld(l.x2, l.y2, bandY(l, 'under-floor'))}
+          color={plumbingColor(l)} radius={0.013} stickM={stickM} coupling />
       ))}
-      {showElec && electricalLines.map((l: TracedLine) => (
-        <PipeRun
-          key={l.id}
-          a={toWorld(l.x1, l.y1, ELEC_Y)}
-          b={toWorld(l.x2, l.y2, ELEC_Y)}
-          color={electricalColor(l)}
-          radius={0.007}
-          stickM={stickM}
-          coupling={false}
-        />
+      {showPlumb && plumbRisers.map((r, i) => <RiserMesh key={`pr-${i}`} r={r} radius={0.013} />)}
+      {showElec && electricalLines.map((l) => (
+        <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'in-wall'))} b={toWorld(l.x2, l.y2, bandY(l, 'in-wall'))}
+          color={electricalColor(l)} radius={0.007} stickM={stickM} coupling={false} />
       ))}
+      {showElec && elecRisers.map((r, i) => <RiserMesh key={`er-${i}`} r={r} radius={0.007} />)}
     </group>
   )
 }

@@ -114,6 +114,8 @@ export default function FloorplanPanel() {
   const setActiveWallRole = useFloorplanLocalStore((s) => s.setActiveWallRole)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
+  const traceBand = useFloorplanLocalStore((s) => s.traceBand)
+  const setTraceBand = useFloorplanLocalStore((s) => s.setTraceBand)
   const plumbElement = useFloorplanLocalStore((s) => s.plumbElement)
   const plumbSize = useFloorplanLocalStore((s) => s.plumbSize)
   const plumbMaterial = useFloorplanLocalStore((s) => s.plumbMaterial)
@@ -472,6 +474,14 @@ export default function FloorplanPanel() {
                 {tradeIndicator}
               </button>
               <span className={styles.stepHint}>Tap a start point, then tap to extend. Esc ends the run.</span>
+              <span className={styles.stepHint}>Height</span>
+              <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                {(['under-floor', 'in-wall', 'ceiling'] as const).map((band) => (
+                  <button key={band} className={traceBand === band ? styles.action : styles.secondary} onClick={() => setTraceBand(band)}>
+                    {band === 'under-floor' ? 'Under-floor' : band === 'in-wall' ? 'In-wall' : 'Ceiling'}
+                  </button>
+                ))}
+              </div>
               <div className={styles.btnRow}>
                 {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}

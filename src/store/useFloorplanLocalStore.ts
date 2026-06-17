@@ -60,6 +60,8 @@ interface FloorplanLocalState {
   activeWallRole: string
   /** Active discipline tab. */
   activeTraceLayer: 'framing' | 'plumbing' | 'electrical' | 'hvac'
+  /** Height band applied to new trade runs (under-floor / in-wall / ceiling). */
+  traceBand: 'under-floor' | 'in-wall' | 'ceiling'
   // Active plumbing selections (stamped on each plumbing line traced).
   plumbElement: string
   plumbSize: string
@@ -111,6 +113,7 @@ interface FloorplanLocalState {
   setActiveWallType: (v: string) => void
   setActiveWallRole: (v: string) => void
   setActiveTraceLayer: (v: 'framing' | 'plumbing' | 'electrical' | 'hvac') => void
+  setTraceBand: (v: 'under-floor' | 'in-wall' | 'ceiling') => void
   setPlumb: (patch: Partial<{ plumbElement: string; plumbSize: string; plumbMaterial: string; plumbTemp: 'hot' | 'cold' }>) => void
   setElec: (patch: Partial<{ elecElement: string; elecAmp: string; elecWire: string; elecRole: string }>) => void
   setDrag: (v: DragState | null) => void
@@ -147,6 +150,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   activeWallType: 'wood-2x6',
   activeWallRole: 'exterior-bearing',
   activeTraceLayer: 'framing',
+  traceBand: 'under-floor',
   plumbElement: PLUMBING_DEFAULTS.element,
   plumbSize: PLUMBING_DEFAULTS.size,
   plumbMaterial: PLUMBING_DEFAULTS.material,
@@ -194,6 +198,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setActiveWallType: (v) => set({ activeWallType: v }),
   setActiveWallRole: (v) => set({ activeWallRole: v }),
   setActiveTraceLayer: (v) => set({ activeTraceLayer: v }),
+  setTraceBand: (v) => set({ traceBand: v }),
   setPlumb: (patch) => set(patch),
   setElec: (patch) => set(patch),
   setDrag: (v) => set({ drag: v }),

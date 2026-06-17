@@ -156,6 +156,7 @@ export default function FloorplanOverlay() {
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
+  const traceBand = useFloorplanLocalStore((s) => s.traceBand)
   const plumbElement = useFloorplanLocalStore((s) => s.plumbElement)
   const plumbSize = useFloorplanLocalStore((s) => s.plumbSize)
   const plumbMaterial = useFloorplanLocalStore((s) => s.plumbMaterial)
@@ -341,12 +342,14 @@ export default function FloorplanOverlay() {
             id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
             elementType: plumbElement, size: plumbSize, material: plumbMaterial,
             tempType: plumbElement === 'Supply Line' ? plumbTemp : undefined,
+            band: traceBand,
           }])
         } else {
           addElectricalLines([{
             id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
             elementType: elecElement, size: elecAmp, material: elecWire,
             wireRole: elecElement === 'Low Voltage' ? undefined : elecRole,
+            band: traceBand,
           }])
         }
         setTraceStart(pixel) // chain: B becomes the next A

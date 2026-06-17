@@ -130,6 +130,9 @@ export interface TracedLine {
   tempType?: 'hot' | 'cold'
   /** Electrical conductor role (Hot (Black)/Hot (Red)/Neutral/Ground). */
   wireRole?: string
+  /** Height band the run lives in — drives its 3D elevation; risers connect
+   *  bands and drop open ends to the floor. */
+  band?: 'under-floor' | 'in-wall' | 'ceiling'
 }
 
 /** A room (enclosed region) detected by flood-filling the rasterized image. */
