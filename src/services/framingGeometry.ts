@@ -69,16 +69,28 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     group.add(m)
   }
 
-  // Two bottom plates and two top plates (stacked).
-  const plateGeo = new THREE.BoxGeometry(length, PLATE_H_M, depth)
-  add(plateGeo, 0, PLATE_H_M / 2, 0)                       // sole plate
-  add(plateGeo, 0, PLATE_H_M * 1.5, 0)                     // 2nd bottom plate
-  add(plateGeo, 0, height - PLATE_H_M / 2, 0)              // upper top plate
-  add(plateGeo, 0, height - PLATE_H_M * 1.5, 0)            // lower top plate
+  // Plates/track differ by material:
+  //   Wood  → double bottom plate + double top plate.
+  //   Steel → single shallow track at the bottom, deep track at the top.
+  let studBottom: number
+  let studTop: number
+  if (steel) {
+    const botH = PLATE_H_M          // shallow bottom track
+    const topH = PLATE_H_M * 1.8    // deep top track
+    add(new THREE.BoxGeometry(length, botH, depth), 0, botH / 2, 0)
+    add(new THREE.BoxGeometry(length, topH, depth), 0, height - topH / 2, 0)
+    studBottom = botH
+    studTop = height - topH
+  } else {
+    const plateGeo = new THREE.BoxGeometry(length, PLATE_H_M, depth)
+    add(plateGeo, 0, PLATE_H_M / 2, 0)            // sole plate
+    add(plateGeo, 0, PLATE_H_M * 1.5, 0)          // 2nd bottom plate
+    add(plateGeo, 0, height - PLATE_H_M / 2, 0)   // upper top plate
+    add(plateGeo, 0, height - PLATE_H_M * 1.5, 0) // lower top plate
+    studBottom = PLATE_H_M * 2
+    studTop = height - PLATE_H_M * 2
+  }
 
-  // Studs run between the plate stacks.
-  const studBottom = PLATE_H_M * 2
-  const studTop = height - PLATE_H_M * 2
   const studH = Math.max(0.02, studTop - studBottom)
   const studY = studBottom + studH / 2
   const studGeo = new THREE.BoxGeometry(STUD_WIDTH_M, studH, depth)
@@ -99,15 +111,21 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     add(studGeo, Math.max(-half, Math.min(half, x)), studY)
   }
 
-  // Mid-height blocking — short blocks between consecutive studs.
-  const ordered = [...seen].map((k) => k / 1000).sort((a, b) => a - b)
-  const blockY = studBottom + studH / 2
-  for (let i = 0; i < ordered.length - 1; i++) {
-    const gap = ordered[i + 1] - ordered[i]
-    const span = gap - STUD_WIDTH_M
-    if (span < 0.04) continue
-    const blockGeo = new THREE.BoxGeometry(span, STUD_WIDTH_M, depth)
-    add(blockGeo, (ordered[i] + ordered[i + 1]) / 2, blockY)
+  const midY = studBottom + studH / 2
+  if (steel) {
+    // Steel studs have knockouts every ~2' and a continuous carrying channel
+    // (cold-rolled channel) threaded through them — NO wood blocking.
+    const channelH = STUD_WIDTH_M * 0.7
+    add(new THREE.BoxGeometry(length, channelH, depth * 0.55), 0, midY, 0)
+  } else {
+    // Wood: solid blocking between consecutive studs at mid-height.
+    const ordered = [...seen].map((k) => k / 1000).sort((a, b) => a - b)
+    for (let i = 0; i < ordered.length - 1; i++) {
+      const gap = ordered[i + 1] - ordered[i]
+      const span = gap - STUD_WIDTH_M
+      if (span < 0.04) continue
+      add(new THREE.BoxGeometry(span, STUD_WIDTH_M, depth), (ordered[i] + ordered[i + 1]) / 2, midY)
+    }
   }
 
   return group
