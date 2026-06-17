@@ -91,6 +91,17 @@ export interface WallFramingOpts {
   color?: string
   /** 0–1; < 1 renders translucent (used for the ghost preview). */
   opacity?: number
+  /** Door/window rough openings to frame into this wall. `centerM` is the
+   *  opening centre measured from the wall START (0..length); `widthM` is the
+   *  rough-opening width. Studs are dropped through the opening and replaced with
+   *  king + jack studs, a header, cripples (and a sill for windows). */
+  openings?: WallOpening[]
+}
+
+export interface WallOpening {
+  centerM: number
+  widthM: number
+  type: 'door' | 'window'
 }
 
 /**
@@ -110,6 +121,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     topTrackStyle = 'deep',
     deflectionGapMm = 0,
     opacity = 1,
+    openings = [],
   } = opts
 
   const group = new THREE.Group()
@@ -176,6 +188,16 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   const studGeo = new THREE.BoxGeometry(studW, studH, studDepth)
 
   const half = length / 2
+
+  // Rough openings, mapped to local-centred X and clamped to the wall. Only
+  // openings that fully fit (with a stud-pack margin at each end) are framed.
+  const ops = openings
+    .map((o) => ({ type: o.type, x: o.centerM - half, w: Math.min(o.widthM, length - 0.2) }))
+    .filter((o) => o.w > 0.1 && o.x - o.w / 2 > -half + studW * 2 && o.x + o.w / 2 < half - studW * 2)
+  // A regular stud / blocking span is "in the clear" (dropped) if it falls inside
+  // an opening's rough span — king/jack studs are added back at the edges.
+  const inClear = (x: number) => ops.some((o) => x > o.x - o.w / 2 - studW * 0.5 && x < o.x + o.w / 2 + studW * 0.5)
+
   const xs: number[] = []
   for (let x = -half; x < half - 1e-4; x += spacingM) xs.push(Math.round(x * 1000) / 1000)
   xs.push(half)
@@ -188,6 +210,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     const key = Math.round(x * 1000)
     if (seen.has(key)) continue
     seen.add(key)
+    if (inClear(x)) continue   // no studs through a rough opening
     add(studGeo, Math.max(-half, Math.min(half, x)), studY)
   }
 
@@ -224,7 +247,51 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       const gap = ordered[i + 1] - ordered[i]
       const span = gap - STUD_WIDTH_M
       if (span < 0.04) continue
-      add(new THREE.BoxGeometry(span, STUD_WIDTH_M, depth), (ordered[i] + ordered[i + 1]) / 2, midY)
+      const mid = (ordered[i] + ordered[i + 1]) / 2
+      if (inClear(mid)) continue   // no blocking across a rough opening
+      add(new THREE.BoxGeometry(span, STUD_WIDTH_M, depth), mid, midY)
+    }
+  }
+
+  // ── Rough-opening framing: king + jack studs, header, cripples, sill ────────
+  // Modelled like a real rough opening so placing a door/window reads as "frame
+  // the opening first" — exactly how it'd be built on site.
+  for (const op of ops) {
+    const isDoor = op.type === 'door'
+    const hw = op.w / 2
+    // Rough-opening top (bottom of header) and bottom (floor for doors, sill for
+    // windows), clamped to the wall so low ceilings still produce sane framing.
+    const roTop = Math.min(isDoor ? 2.06 : 2.03, studTop - studW)
+    const roBot = isDoor ? studBottom : Math.min(0.9, roTop - 0.3)
+    const headerDepth = 0.18
+
+    // King studs — full height, just outside the opening.
+    for (const s of [-1, 1]) add(studGeo, op.x + s * (hw + studW * 1.5), studY)
+
+    // Jack studs — carry the header, from the floor up to the header.
+    const jackH = Math.max(0.05, roTop - studBottom)
+    const jackGeo = new THREE.BoxGeometry(studW, jackH, studDepth)
+    for (const s of [-1, 1]) add(jackGeo, op.x + s * (hw + studW * 0.5), studBottom + jackH / 2)
+
+    // Header spanning the opening, sitting on the jacks.
+    add(new THREE.BoxGeometry(op.w + studW * 2, headerDepth, studDepth), op.x, roTop + headerDepth / 2)
+
+    // Cripple studs above the header up to the top plate/track.
+    const cripBot = roTop + headerDepth
+    if (studTop - cripBot > 0.05) {
+      const ch = studTop - cripBot
+      const cripGeo = new THREE.BoxGeometry(studW, ch, studDepth)
+      for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(cripGeo, cx, cripBot + ch / 2)
+    }
+
+    // Windows also get a sill + cripples down to the bottom plate.
+    if (!isDoor) {
+      add(new THREE.BoxGeometry(op.w + studW * 2, studW, studDepth), op.x, roBot - studW / 2)
+      const sbH = roBot - studW - studBottom
+      if (sbH > 0.05) {
+        const sillGeo = new THREE.BoxGeometry(studW, sbH, studDepth)
+        for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(sillGeo, cx, studBottom + sbH / 2)
+      }
     }
   }
 

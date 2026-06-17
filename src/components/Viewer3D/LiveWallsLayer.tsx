@@ -12,10 +12,11 @@ import { Billboard, Text } from '@react-three/drei'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallFraming, blockMaterial } from '../../services/framingGeometry'
+import { buildWallFraming, blockMaterial, type WallOpening } from '../../services/framingGeometry'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
+import { getCatalogItem } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
-import type { ParsedWall } from '../../types'
+import type { ParsedWall, PlacedObject } from '../../types'
 
 const MIN_THICKNESS = 0.1     // metres — minimum visible thickness
 const DEFAULT_THICKNESS_MM = 140  // 2×4 stud + drywall both sides
@@ -29,11 +30,13 @@ interface WallMeshProps {
   steelGauge: string
   topTrackStyle: 'shallow' | 'deep' | 'slotted' | 'double'
   deflectionGapMm: number
+  /** Door/window openings on this wall, as {t along wall 0..1, width m, type}. */
+  openings: Array<{ t: number; widthM: number; type: 'door' | 'window' }>
   activeUnit: ActiveUnit
   lengthFormat: LengthFormat
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, activeUnit, lengthFormat }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, activeUnit, lengthFormat }: WallMeshProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
 
@@ -60,8 +63,9 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       return g
     }
     const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, opacity: 0.7 })
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge, topTrackStyle, deflectionGapMm])
+    const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type }))
+    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity: 0.7 })
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge, topTrackStyle, deflectionGapMm, openings])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {
@@ -89,6 +93,7 @@ export default function LiveWallsLayer() {
   const drawings  = useAppStore((s) => s.drawings)
   const overlay   = useAppStore((s) => s.floorplanOverlay)
   const model     = useAppStore((s) => s.model)
+  const placedObjects = useAppStore((s) => s.placedObjects)
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const framingMaterial = useConfigStore((s) => s.framingMaterial)
@@ -132,6 +137,35 @@ export default function LiveWallsLayer() {
     return out
   }, [drawings])
 
+  // Assign each placed door/window to its nearest wall (in pixel space) and
+  // record its position (t, 0..1) and rough-opening width — so the live framing
+  // frames the opening exactly where the door/window sits, just like on site.
+  const openingsByWall = useMemo(() => {
+    const out: Array<Array<{ t: number; widthM: number; type: 'door' | 'window' }>> = userWalls.map(() => [])
+    const doors = placedObjects.filter(
+      (o: PlacedObject) => (o.type === 'door' || o.type === 'window') && o.pxX != null && o.pxY != null,
+    )
+    for (const o of doors) {
+      const px = o.pxX as number, py = o.pxY as number
+      let best = -1, bestPerp = Infinity, bestT = 0
+      userWalls.forEach(({ wall: w }, i) => {
+        const dx = w.x2 - w.x1, dy = w.y2 - w.y1
+        const len2 = dx * dx + dy * dy
+        if (len2 < 1e-6) return
+        const t = ((px - w.x1) * dx + (py - w.y1) * dy) / len2
+        if (t < -0.02 || t > 1.02) return
+        const perp = Math.hypot(px - (w.x1 + t * dx), py - (w.y1 + t * dy))
+        const threshPx = Math.max((w.thickness || 8) * 2.5, 28)
+        if (perp < threshPx && perp < bestPerp) { best = i; bestPerp = perp; bestT = Math.max(0, Math.min(1, t)) }
+      })
+      if (best < 0) continue
+      const item = getCatalogItem(o.type)
+      const widthM = (item?.defaultW ?? 0.9) * o.scaleX
+      out[best].push({ t: bestT, widthM, type: o.type as 'door' | 'window' })
+    }
+    return out
+  }, [userWalls, placedObjects])
+
   // Once a build exists, BuildingModel exclusively owns the 3D wall volume —
   // the live preview boxes must disappear entirely (no double geometry / z-fight).
   // buildResult covers "Build for me"; model status covers the "Build 3D" path.
@@ -152,6 +186,7 @@ export default function LiveWallsLayer() {
           steelGauge={steelGauge}
           topTrackStyle={steelTrackTop === 'double' ? 'deep' : steelTrackTop}
           deflectionGapMm={steelTrackTop === 'slotted' ? steelDeflectionGapMm : 0}
+          openings={openingsByWall[i] ?? []}
           activeUnit={activeUnit}
           lengthFormat={lengthFormat}
         />
