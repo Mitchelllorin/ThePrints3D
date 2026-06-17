@@ -112,9 +112,9 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   const GAUGE_SCALE: Record<string, number> = { '25': 1, '20': 1.06, '18': 1.14, '16': 1.24, '12': 1.42 }
   const studW = steel ? STUD_WIDTH_M * (GAUGE_SCALE[steelGauge] ?? 1) : STUD_WIDTH_M
   const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(opts.color ?? (steel ? '#9aa6b2' : '#c9a56c')),
-    roughness: steel ? 0.35 : 0.75,
-    metalness: steel ? 0.85 : 0.05,
+    color: new THREE.Color(opts.color ?? (steel ? '#d2d6dc' : '#c9a56c')),  // bright galvanized silver
+    roughness: steel ? 0.22 : 0.75,
+    metalness: steel ? 0.95 : 0.05,
     transparent: opacity < 1,
     opacity,
   })
@@ -181,7 +181,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       transparent: opacity < 1, opacity,
     })
     const koGeo = new THREE.CylinderGeometry(studW * 0.32, studW * 0.32, depth + 0.006, 10)
-    const koHeights = [0.610, 1.219, 1.829].filter((h) => h > studBottom + 0.05 && h < studTop - 0.05)
+    const koHeights = [0.610, 1.219, 1.829, 2.438].filter((h) => h > studBottom + 0.05 && h < studTop - 0.05)
     for (const x of ordered) {
       for (const h of koHeights) {
         const m = new THREE.Mesh(koGeo, koMat)
@@ -192,7 +192,10 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       }
     }
     if (heavyDuty) {
-      add(new THREE.BoxGeometry(length, studW * 0.7, depth * 0.55), 0, midY, 0)
+      // Cold-rolled carrying channel runs through the knockouts at 4' and 8'.
+      for (const h of [1.219, 2.438].filter((y) => y > studBottom + 0.05 && y < studTop - 0.05)) {
+        add(new THREE.BoxGeometry(length, studW * 0.7, depth * 0.55), 0, h, 0)
+      }
     }
   } else {
     // Wood: solid blocking between consecutive studs at mid-height.

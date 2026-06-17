@@ -156,15 +156,16 @@ export function validateElectrical(input: ValidateInput): ElectricalViolation[] 
   const pxPerFt = MM_PER_FT / (mmPerPx ?? 8)
 
   // 1) Outlet spacing — any wall run over 12 ft with no outlet within 6 ft.
-  for (const w of userWalls) {
+  userWalls.forEach((w, i) => {
     const lenPx = Math.hypot(w.x2 - w.x1, w.y2 - w.y1)
     const lenFt = (lenPx * (mmPerPx ?? 8)) / MM_PER_FT
-    if (lenFt <= 12) continue
+    if (lenFt <= 12) return
     const nearest = outlets.reduce((min, o) => Math.min(min, distToSegment(o.x, o.y, w.x1, w.y1, w.x2, w.y2)), Infinity)
     if (nearest > 6 * pxPerFt) {
-      out.push({ id: `spacing-${w.x1}-${w.y1}`, x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2, message: `${lenFt.toFixed(0)}ft wall run with no outlet within 6ft` })
+      // Key by wall index too — two walls can share a start point (corners).
+      out.push({ id: `spacing-${i}-${w.x1}-${w.y1}`, x: (w.x1 + w.x2) / 2, y: (w.y1 + w.y2) / 2, message: `${lenFt.toFixed(0)}ft wall run with no outlet within 6ft` })
     }
-  }
+  })
 
   // 2) GFCI consistency — outlets on a GFCI circuit must be GFCI receptacles.
   const circuitById = new Map(circuits.map((c) => [c.id, c]))
