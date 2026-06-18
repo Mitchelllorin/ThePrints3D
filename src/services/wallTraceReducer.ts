@@ -160,6 +160,63 @@ export function reduceStrokeToWalls(
   return walls
 }
 
+// ── Snap a traced segment onto the nearest print line ───────────────────────────
+
+/** Acute angle (deg, 0..90) between two directions given as (dx,dy). */
+function lineAngleDiffDeg(ax: number, ay: number, bx: number, by: number): number {
+  const a = Math.atan2(ay, ax)
+  const b = Math.atan2(by, bx)
+  let d = Math.abs(a - b) * (180 / Math.PI)
+  d = d % 180
+  if (d > 90) d = 180 - d
+  return d
+}
+
+/**
+ * Snap a freshly traced segment onto the nearest detected wall ("print line")
+ * that runs roughly parallel and close by — so tracing a hair off the printed
+ * wall lands exactly ON it, at whatever angle the print line actually is (not
+ * forced to square). Returns the segment projected onto that line, or null when
+ * no print line qualifies (caller then falls back to ortho angle-snapping).
+ */
+export function snapWallToPrintLine(
+  x1: number, y1: number, x2: number, y2: number,
+  walls: ParsedWall[],
+  parallelToleranceDeg = 22,
+  distanceTolerancePx = 22,
+): { x1: number; y1: number; x2: number; y2: number } | null {
+  const dx = x2 - x1, dy = y2 - y1
+  const len = Math.hypot(dx, dy)
+  if (len < 1e-3) return null
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+
+  let best: ParsedWall | null = null
+  let bestD = distanceTolerancePx
+  for (const w of walls) {
+    const wdx = w.x2 - w.x1, wdy = w.y2 - w.y1
+    if (Math.hypot(wdx, wdy) < 1e-3) continue
+    if (lineAngleDiffDeg(dx, dy, wdx, wdy) > parallelToleranceDeg) continue // not parallel
+    // Perpendicular distance of the traced midpoint to the print line's infinite line.
+    const len2 = wdx * wdx + wdy * wdy
+    const t = ((mx - w.x1) * wdx + (my - w.y1) * wdy) / len2
+    const cx = w.x1 + t * wdx, cy = w.y1 + t * wdy
+    const d = Math.hypot(mx - cx, my - cy)
+    if (d < bestD) { bestD = d; best = w }
+  }
+  if (!best) return null
+
+  // Project both endpoints onto the chosen print line's *infinite* line, so the
+  // traced wall lies on it while keeping the user's extent along the line.
+  const wdx = best.x2 - best.x1, wdy = best.y2 - best.y1
+  const wlen2 = wdx * wdx + wdy * wdy
+  const proj = (px: number, py: number) => {
+    const t = ((px - best!.x1) * wdx + (py - best!.y1) * wdy) / wlen2
+    return { x: best!.x1 + t * wdx, y: best!.y1 + t * wdy }
+  }
+  const a = proj(x1, y1), b = proj(x2, y2)
+  return { x1: a.x, y1: a.y, x2: b.x, y2: b.y }
+}
+
 // ── Tie-in extension ───────────────────────────────────────────────────────────
 
 /**

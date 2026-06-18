@@ -35,6 +35,7 @@ import {
   reduceStrokeToWalls,
   snapPointToWalls,
   snapTraceWallToExisting,
+  snapWallToPrintLine,
 } from '../../services/wallTraceReducer'
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, deviceMountHeightM } from '../../data/objectCatalog'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
@@ -406,11 +407,17 @@ export default function FloorplanOverlay() {
         setHoverPixel(pixel)
         return
       }
-      const reduced = reduceStrokeToWall([
-        { x: traceStart[0], y: traceStart[1] },
-        { x: snapped.x, y: snapped.y },
-      ])
-      if (!reduced) {
+      // Prefer snapping the whole segment ONTO the nearest parallel print line
+      // (so a trace a hair off the printed wall lands exactly on it, at the
+      // print's real angle). Only fall back to ortho squaring when none is near.
+      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, drawing.parsedWalls)
+      const reduced = printLine
+        ? { x1: printLine.x1, y1: printLine.y1, x2: printLine.x2, y2: printLine.y2, thickness: 8, source: 'user' as const, detectionConfidence: 1 }
+        : reduceStrokeToWall([
+            { x: traceStart[0], y: traceStart[1] },
+            { x: snapped.x, y: snapped.y },
+          ])
+      if (!reduced || Math.hypot(reduced.x2 - reduced.x1, reduced.y2 - reduced.y1) < 12) {
         // Tap landed on the anchor — treat as "end this wall run"
         setTraceStart(null)
         return
