@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# BluePrint3D Android Build Script
+# ThePrints3D Android Build Script
 # This script builds the web app and creates a signed Android App Bundle (AAB)
 
 set -e  # Exit on error
 
 echo "=================================="
-echo "BluePrint3D Android Build Script"
+echo "ThePrints3D Android Build Script"
 echo "=================================="
 echo ""
 
@@ -108,8 +108,8 @@ if [ -f "$AAB_PATH" ]; then
     echo ""
     
     # Copy AAB to root directory for easy access
-    cp "$AAB_PATH" "blueprint3d-release.aab"
-    echo -e "${GREEN}AAB copied to: blueprint3d-release.aab${NC}"
+    cp "$AAB_PATH" "theprints3d-release.aab"
+    echo -e "${GREEN}AAB copied to: theprints3d-release.aab${NC}"
     echo ""
     
     # Verify signing
@@ -131,7 +131,7 @@ if [ -f "$AAB_PATH" ]; then
     echo ""
     echo "Next steps:"
     echo "1. Review the Play Store submission guide: PLAY_STORE_SUBMISSION_GUIDE.md"
-    echo "2. Upload blueprint3d-release.aab to Google Play Console"
+    echo "2. Upload theprints3d-release.aab to Google Play Console"
     echo "3. Complete store listing with assets from play-store-assets/"
     echo ""
 else

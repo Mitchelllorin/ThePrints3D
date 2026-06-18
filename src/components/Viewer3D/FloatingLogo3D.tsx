@@ -1,7 +1,7 @@
 /**
  * FloatingLogo3D — extruded 3D wordmark bouncing around the workspace.
- * Blue(blue) Print(orange) 3D(green) — laid out with the font's own glyph
- * advance widths, exactly as the font would space "BluePrint3D" typed as a
+ * The(white) PRINTS(orange) 3D(green) — laid out with the font's own glyph
+ * advance widths, exactly as the font would space "ThePRINTS3D" typed as a
  * single word. No hand-tuned offsets.
  */
 import { useRef, useMemo, Suspense } from 'react'
@@ -27,9 +27,9 @@ const initVel = () => new THREE.Vector3(
 const BASE_SIZE = 0.52
 
 const WORDS = [
-  { text: 'Blue',  color: '#60a5fa', scale: 1,    yOffset: 0,                metalness: 0.2 },
-  { text: 'Print', color: '#f97316', scale: 1,    yOffset: 0,                metalness: 0.2 },
-  { text: '3D',    color: '#4ade80', scale: 0.68, yOffset: BASE_SIZE * 0.42, metalness: 0.3 },
+  { text: 'The',    color: '#ffffff', scale: 1,    yOffset: 0,                metalness: 0.2 },
+  { text: 'PRINTS', color: '#f97316', scale: 1,    yOffset: 0,                metalness: 0.2 },
+  { text: '3D',     color: '#4ade80', scale: 0.68, yOffset: BASE_SIZE * 0.42, metalness: 0.3 },
 ] as const
 
 interface TypefaceData {

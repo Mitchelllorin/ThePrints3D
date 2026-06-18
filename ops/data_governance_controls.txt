@@ -1,4 +1,4 @@
-BluePrint3D Data Governance Controls Baseline
+ThePrints3D Data Governance Controls Baseline
 
 Purpose
 - Define minimum governance controls for pilot/test/training data handling.

@@ -1,4 +1,4 @@
-BluePrint3D Day 1 Setup Checklist
+ThePrints3D Day 1 Setup Checklist
 
 Goal
 Stand up the minimum business + engineering operating system so pilot testing can run safely and consistently.
@@ -11,13 +11,13 @@ Owner Roles
 
 Day 1 Actions
 1. Create code repository
-- Repo name: blueprint3d-app
+- Repo name: theprints3d-app
 - Enable branch protection on main
 - Require pull request reviews for main
 - Enable issue tracking
 
 2. Create secure data repository/storage
-- Name: blueprint3d-testdata (private)
+- Name: theprints3d-testdata (private)
 - Restrict access to approved team only
 - Turn on audit logs if available
 - Store raw drawings separate from labels

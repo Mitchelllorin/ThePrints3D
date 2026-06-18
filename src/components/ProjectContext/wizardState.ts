@@ -5,7 +5,7 @@ import {
   type ProjectContextData,
 } from './wizardGroups'
 
-const STORAGE_KEY = 'blueprint3d-project-context-wizard-v2'
+const STORAGE_KEY = 'theprints3d-project-context-wizard-v2'
 
 export interface ProjectContextWizardState {
   currentGroup: WizardGroupId

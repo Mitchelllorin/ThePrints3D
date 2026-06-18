@@ -1,4 +1,4 @@
-package com.blueprint3d.app;
+package com.theprints3d.app;
 
 import com.getcapacitor.BridgeActivity;
 

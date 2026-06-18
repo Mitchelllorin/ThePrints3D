@@ -17,7 +17,7 @@ export default function PrivacyPolicy({ onClose }: Props) {
 
           <h3>Overview</h3>
           <p>
-            BluePrint3D ("the App") converts architectural drawing files into interactive 3D models.
+            ThePrints3D ("the App") converts architectural drawing files into interactive 3D models.
             Your privacy matters to us. This policy explains what data the App collects and how it is used.
           </p>
 
@@ -65,8 +65,8 @@ export default function PrivacyPolicy({ onClose }: Props) {
           <h3>Contact</h3>
           <p>
             Questions? Contact us at{' '}
-            <a href="mailto:privacy@blueprint3d.app" className={styles.link}>
-              privacy@blueprint3d.app
+            <a href="mailto:privacy@theprints3d.app" className={styles.link}>
+              privacy@theprints3d.app
             </a>
           </p>
         </div>

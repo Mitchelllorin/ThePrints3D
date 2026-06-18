@@ -130,7 +130,7 @@ export default function AnnotationPanel() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `blueprint3d-annotations-${new Date().toISOString().slice(0, 10)}.json`
+    a.download = `theprints3d-annotations-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(url)
   }

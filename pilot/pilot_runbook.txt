@@ -1,4 +1,4 @@
-BluePrint3D 2-Week Pilot Runbook
+ThePrints3D 2-Week Pilot Runbook
 
 Objective
 Validate real-world readiness and collect correction data for parser improvement.

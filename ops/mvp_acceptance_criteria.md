@@ -1,4 +1,4 @@
-# BluePrint3D MVP Acceptance Criteria
+# ThePrints3D MVP Acceptance Criteria
 
 This MVP acceptance definition is aligned to pilot artifacts in `pilot/pilot_runbook.txt` and `pilot/pilot_metrics_template.csv`.
 

@@ -7,7 +7,7 @@
 import { openDB, type IDBPDatabase } from 'idb'
 import type { Drawing, Layer, Measurement, Model3D } from '../types'
 
-const DB_NAME = 'blueprint3d'
+const DB_NAME = 'theprints3d'
 const DB_VERSION = 1
 const STORE = 'projects'
 

@@ -1,6 +1,6 @@
-# BluePrint3D
+# ThePrints3D
 
-[![CI](https://github.com/Mitchelllorin/BluePrint3D/actions/workflows/ci.yml/badge.svg)](https://github.com/Mitchelllorin/BluePrint3D/actions/workflows/ci.yml)
+[![CI](https://github.com/Mitchelllorin/ThePrints3D/actions/workflows/ci.yml/badge.svg)](https://github.com/Mitchelllorin/ThePrints3D/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)](https://react.dev/)
 [![Three.js](https://img.shields.io/badge/Three.js-0.184-black?logo=threedotjs)](https://threejs.org/)
@@ -9,9 +9,9 @@
 
 **Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely in the browser.**
 
-BluePrint3D is a React + TypeScript web application that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. All processing happens client-side — no drawings ever leave your device.
+ThePrints3D is a React + TypeScript web application that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. All processing happens client-side — no drawings ever leave your device.
 
-🌐 **[Landing page](https://mitchelllorin.github.io/BluePrint3D/landing.html)** &nbsp;|&nbsp; 🚀 **[Launch the app](https://mitchelllorin.github.io/BluePrint3D/)**
+🌐 **[Landing page](https://mitchelllorin.github.io/ThePrints3D/landing.html)** &nbsp;|&nbsp; 🚀 **[Launch the app](https://mitchelllorin.github.io/ThePrints3D/)**
 
 ---
 
@@ -41,8 +41,8 @@ BluePrint3D is a React + TypeScript web application that ingests architectural d
 ## 🚀 Quick start
 
 ```bash
-git clone https://github.com/Mitchelllorin/BluePrint3D.git
-cd BluePrint3D
+git clone https://github.com/Mitchelllorin/ThePrints3D.git
+cd ThePrints3D
 npm ci
 npm run dev
 ```

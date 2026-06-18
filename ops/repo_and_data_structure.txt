@@ -1,6 +1,6 @@
-Blueprint3D Recommended Repo and Data Structure
+ThePrints3D Recommended Repo and Data Structure
 
-1) Code Repository (blueprint3d-app)
+1) Code Repository (theprints3d-app)
 - src/
 - public/
 - pilot/
@@ -22,7 +22,7 @@ Release Tags
 - v0.2.0-beta
 - v1.0.0-production
 
-2) Data Repository or Secure Bucket (blueprint3d-testdata)
+2) Data Repository or Secure Bucket (theprints3d-testdata)
 - raw/
   - customer_name_or_id/
     - project_001/

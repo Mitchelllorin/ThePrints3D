@@ -361,7 +361,7 @@ export default function ModelViewer() {
                       const dataUrl = canvas.toDataURL('image/png')
                       const a = document.createElement('a')
                       a.href = dataUrl
-                      a.download = `blueprint3d-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`
+                      a.download = `theprints3d-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`
                       a.click()
                     } catch (err) {
                       console.error('Snapshot failed:', err)

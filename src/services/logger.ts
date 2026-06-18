@@ -7,7 +7,7 @@ interface LogRecord {
   context?: Record<string, unknown>
 }
 
-const LOG_STORAGE_KEY = 'blueprint3d.logs'
+const LOG_STORAGE_KEY = 'theprints3d.logs'
 const MAX_LOG_RECORDS = 1000
 
 function appendRecord(record: LogRecord) {
@@ -31,9 +31,9 @@ export function logEvent(event: string, context?: Record<string, unknown>, level
   }
   appendRecord(record)
 
-  if (level === 'error') console.error('[BluePrint3D]', record)
-  else if (level === 'warn') console.warn('[BluePrint3D]', record)
-  else console.info('[BluePrint3D]', record)
+  if (level === 'error') console.error('[ThePrints3D]', record)
+  else if (level === 'warn') console.warn('[ThePrints3D]', record)
+  else console.info('[ThePrints3D]', record)
 }
 
 export function logError(event: string, error: unknown, context?: Record<string, unknown>) {

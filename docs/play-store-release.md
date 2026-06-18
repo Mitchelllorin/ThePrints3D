@@ -30,12 +30,12 @@ npm run cap:assets
 
 ```bash
 keytool -genkey -v \
-  -keystore blueprint3d-release.jks \
+  -keystore theprints3d-release.jks \
   -keyalg RSA \
   -keysize 2048 \
   -validity 10000 \
-  -alias blueprint3d \
-  -dname "CN=BluePrint3D, OU=Mobile, O=YourOrg, L=City, S=State, C=US"
+  -alias theprints3d \
+  -dname "CN=ThePrints3D, OU=Mobile, O=YourOrg, L=City, S=State, C=US"
 ```
 
 Store the `.jks` file in a secure location (password manager or secrets vault). **Back it up — losing it means you can never update your Play Store app.**
@@ -47,8 +47,8 @@ Store the `.jks` file in a secure location (password manager or secrets vault). 
 ### Option A: Using environment variables (CI/CD)
 
 ```bash
-export ANDROID_KEYSTORE_PATH=/path/to/blueprint3d-release.jks
-export ANDROID_KEY_ALIAS=blueprint3d
+export ANDROID_KEYSTORE_PATH=/path/to/theprints3d-release.jks
+export ANDROID_KEY_ALIAS=theprints3d
 export ANDROID_KEYSTORE_PASSWORD=<your-store-password>
 export ANDROID_KEY_PASSWORD=<your-key-password>
 
@@ -93,7 +93,7 @@ Suggested screenshots:
 
 ### Full description
 ```
-BluePrint3D turns your architectural drawing sets into an interactive 3D
+ThePrints3D turns your architectural drawing sets into an interactive 3D
 building model right on your device — no account, no cloud, no internet
 required.
 
@@ -121,7 +121,7 @@ PDF, PNG, JPG, TIFF, WebP
 ## 5. Play Console Submission Checklist
 
 - [ ] Google Play developer account registered ($25 one-time fee)
-- [ ] App created in Play Console (package: `com.blueprint3d.app`)
+- [ ] App created in Play Console (package: `com.theprints3d.app`)
 - [ ] Signed AAB uploaded to **Internal testing** track first
 - [ ] Store listing filled in (title, description, screenshots, feature graphic)
 - [ ] Privacy policy URL added to store listing (host `public/manifest.json` privacy policy or a standalone page)

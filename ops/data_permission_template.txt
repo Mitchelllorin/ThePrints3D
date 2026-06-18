@@ -1,4 +1,4 @@
-Blueprint3D Data Permission and Use Record Template
+ThePrints3D Data Permission and Use Record Template
 
 Purpose
 Record permission and data rights for each drawing set used in pilot/testing/training.
@@ -33,7 +33,7 @@ Legal Confirmation
 - Signature:
 - Date:
 
-Blueprint3D Internal Review
+ThePrints3D Internal Review
 - Reviewed by:
 - Approved for pilot: Yes / No
 - Approved for training: Yes / No

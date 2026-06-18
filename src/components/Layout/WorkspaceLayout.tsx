@@ -3,7 +3,6 @@ import { listPresetDefinitions, type PresetDifficulty } from '../../services/pre
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
-import TopbarLogo3D from './TopbarLogo3D'
 import TopIcons from './TopIcons'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import { useAppStore } from '../../store/useAppStore'
@@ -525,7 +524,7 @@ export default function WorkspaceLayout() {
     try {
       const a = document.createElement('a')
       a.href = canvas.toDataURL('image/png')
-      a.download = `blueprint3d-${Date.now()}.png`
+      a.download = `theprints3d-${Date.now()}.png`
       a.click()
     } catch (e) {
       console.error('Snapshot failed', e)
@@ -644,7 +643,11 @@ export default function WorkspaceLayout() {
 
       {/* Brand mark — small, floating, top-left; never blocks the canvas. */}
       <div className={styles.logoFloat} style={{ opacity: logoOpacity, transform: `scale(${logoSize})` }}>
-        <TopbarLogo3D />
+        <span className={styles.logo}>
+          <span className={styles.logoThe}>The</span>
+          <span className={styles.logoPrints}>PRINTS</span>
+          <span className={styles.logo3D}>3D</span>
+        </span>
       </div>
 
       {/* The only persistent chrome: five icon buttons, fixed top-right. */}

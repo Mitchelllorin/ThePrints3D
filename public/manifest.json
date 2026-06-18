@@ -1,6 +1,6 @@
 {
-  "name": "BluePrint3D",
-  "short_name": "BluePrint3D",
+  "name": "ThePrints3D",
+  "short_name": "ThePrints3D",
   "description": "Convert architectural drawing sets (PDF/image sheets) into an interactive 3D building model with layer toggles and distance measurement.",
   "start_url": "/",
   "scope": "/",

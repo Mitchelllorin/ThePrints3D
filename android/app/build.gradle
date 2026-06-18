@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.blueprint3d.app"
+    namespace = "com.theprints3d.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.blueprint3d.app"
+        applicationId "com.theprints3d.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -22,7 +22,7 @@ android {
             // ANDROID_KEYSTORE_PATH, ANDROID_KEY_ALIAS, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD
             if (System.getenv("ANDROID_KEYSTORE_PATH")) {
                 storeFile file(System.getenv("ANDROID_KEYSTORE_PATH"))
-                keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "blueprint3d"
+                keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "theprints3d"
                 storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
                 keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: ""
             }

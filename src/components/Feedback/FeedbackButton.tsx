@@ -26,7 +26,7 @@ Version:  ${v}
 Time:     ${new Date().toISOString()}
 URL:      ${window.location.href}`,
     )
-    const subject = encodeURIComponent(`[BluePrint3D ${kind}] `)
+    const subject = encodeURIComponent(`[ThePrints3D ${kind}] `)
     window.location.href = `mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${body}`
     setOpen(false)
   }

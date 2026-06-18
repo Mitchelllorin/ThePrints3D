@@ -64,7 +64,7 @@ export interface CameraPreset {
 
 // ─── Annotation persistence ────────────────────────────────────────────────────
 
-const ANNOTATIONS_KEY = 'blueprint3d-annotations'
+const ANNOTATIONS_KEY = 'theprints3d-annotations'
 
 function loadPersistedAnnotations(): Annotation[] {
   try {

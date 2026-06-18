@@ -1,11 +1,11 @@
-# BluePrint3D autosave — commits and pushes any changes every 15 minutes.
+# ThePrints3D autosave — commits and pushes any changes every 15 minutes.
 # Run this in a separate PowerShell window: .\autosave.ps1
 # Press Ctrl+C to stop.
 
 $repo = "C:\Users\mitch\Documents\BluePrint3D-fresh"
 $interval = 900  # seconds (15 min)
 
-Write-Host "BluePrint3D autosave running — saving every $($interval/60) minutes. Ctrl+C to stop." -ForegroundColor Cyan
+Write-Host "ThePrints3D autosave running — saving every $($interval/60) minutes. Ctrl+C to stop." -ForegroundColor Cyan
 
 while ($true) {
     Start-Sleep -Seconds $interval

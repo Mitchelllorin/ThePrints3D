@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.blueprint3d.app',
-  appName: 'BluePrint3D',
+  appId: 'com.theprints3d.app',
+  appName: 'ThePrints3D',
   webDir: 'dist',
   plugins: {
     SplashScreen: {

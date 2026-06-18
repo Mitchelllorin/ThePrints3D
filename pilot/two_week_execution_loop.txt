@@ -1,4 +1,4 @@
-BluePrint3D Two-Week Pilot Execution Loop
+ThePrints3D Two-Week Pilot Execution Loop
 
 Objective
 - Run pilot batches quickly, identify recurring blockers, and close the highest-impact issues first.
