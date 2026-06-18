@@ -12,14 +12,16 @@ import { useUISettingsStore } from '../../store/useUISettingsStore'
 
 const FONT_URL = '/fonts/helvetiker_bold.typeface.json'
 
-const BOUNDS = { x: 7, z: 3.5 }
+// Roam a wide volume so the wordmark genuinely travels the workspace, not just
+// hovers near the middle.
+const BOUNDS = { x: 13, z: 7 }
 const Y_CENTER = 3.5
 
 function randomSign() { return Math.random() > 0.5 ? 1 : -1 }
 const initVel = () => new THREE.Vector3(
-  randomSign() * (1.2 + Math.random() * 0.4),
-  randomSign() * (0.6 + Math.random() * 0.3),
-  randomSign() * (0.4 + Math.random() * 0.2),
+  randomSign() * (2.4 + Math.random() * 1.0),
+  randomSign() * (1.2 + Math.random() * 0.6),
+  randomSign() * (1.4 + Math.random() * 0.6),
 )
 
 const BASE_SIZE = 0.52
@@ -91,7 +93,7 @@ export default function FloatingLogo3D() {
     const dt = delta * floatSpeed
 
     // Bounce slider widens the vertical travel band around Y_CENTER.
-    const yHalf = 0.5 + floatHeight * 1.8
+    const yHalf = 0.8 + floatHeight * 2.6
     const yMin = Y_CENTER - yHalf
     const yMax = Y_CENTER + yHalf
 
