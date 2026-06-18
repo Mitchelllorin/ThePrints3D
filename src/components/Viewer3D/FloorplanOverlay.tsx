@@ -238,6 +238,10 @@ export default function FloorplanOverlay() {
   const halfD = depth / 2
   const rotationRad = THREE.MathUtils.degToRad(overlay.rotationDeg)
   const canEdit = overlay.calibrationMode && !overlay.locked
+  // Edit handles scale up so they're visible/tappable — much larger on phones,
+  // and a touch larger on a big overlay so the dots don't get lost on the print.
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
+  const hScale = (isMobile ? 2.6 : 1.3) * Math.max(1, Math.min(2.5, Math.max(width, depth) / 8))
 
   const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width
@@ -751,7 +755,7 @@ export default function FloorplanOverlay() {
                 onPointerMove={onDragMove}
                 onPointerUp={onDragEnd}
               >
-                <circleGeometry args={[0.22, 24]} />
+                <circleGeometry args={[0.22 * hScale, 24]} />
                 <meshBasicMaterial color="#facc15" />
               </mesh>
 
@@ -768,7 +772,7 @@ export default function FloorplanOverlay() {
                   onPointerMove={onDragMove}
                   onPointerUp={onDragEnd}
                 >
-                  <sphereGeometry args={[0.16, 16, 16]} />
+                  <sphereGeometry args={[0.16 * hScale, 16, 16]} />
                   <meshBasicMaterial color="#38bdf8" />
                 </mesh>
               ))}
@@ -786,7 +790,7 @@ export default function FloorplanOverlay() {
                   onPointerMove={onDragMove}
                   onPointerUp={onDragEnd}
                 >
-                  <boxGeometry args={[0.22, 0.08, 0.22]} />
+                  <boxGeometry args={[0.22 * hScale, 0.08 * hScale, 0.22 * hScale]} />
                   <meshBasicMaterial color="#22d3ee" />
                 </mesh>
               ))}
@@ -797,7 +801,7 @@ export default function FloorplanOverlay() {
                 onPointerMove={onDragMove}
                 onPointerUp={onDragEnd}
               >
-                <torusGeometry args={[0.2, 0.05, 12, 24]} />
+                <torusGeometry args={[0.2 * hScale, 0.05 * hScale, 12, 24]} />
                 <meshBasicMaterial color="#f472b6" />
               </mesh>
             </>
