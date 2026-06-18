@@ -35,9 +35,11 @@ export interface UISettings {
 }
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
-  topbarOpacity: 0.95,
-  sidebarOpacity: 0.95,
-  panelOpacity: 0.92,
+  // Menus/panels/toolbars default to mostly see-through so the workspace shows
+  // through them (raise via Settings → Appearance → Opacity for a solid look).
+  topbarOpacity: 0.35,
+  sidebarOpacity: 0.35,
+  panelOpacity: 0.35,
   panelColor: '#0f172a',
   logoOpacity: 1,
   logoSize: 1,
