@@ -9,7 +9,7 @@
 import { useState, useRef } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
-import { Edges } from '@react-three/drei'
+import { Edges, Line } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -136,6 +136,28 @@ export default function PlacedObjectsLayer() {
               />
               {selected && <Edges color="#facc15" lineWidth={2} />}
             </mesh>
+
+            {/* Door swing arc — quarter circle from the hinge (LH/RH) plus the
+                open leaf, drawn on the floor so it reads like a plan symbol. */}
+            {obj.type === 'door' && (() => {
+              const swing = obj.swing ?? 'left'
+              const hinge = swing === 'left' ? -w / 2 : w / 2
+              const sign = swing === 'left' ? 1 : -1
+              const y = 0.06
+              const N = 18
+              const arc: [number, number, number][] = []
+              for (let i = 0; i <= N; i++) {
+                const t = (i / N) * (Math.PI / 2)
+                arc.push([hinge + sign * w * Math.cos(t), y, w * Math.sin(t)])
+              }
+              const leaf: [number, number, number][] = [[hinge, y, 0], [hinge, y, w]]
+              return (
+                <>
+                  <Line points={arc} color={color} lineWidth={2} />
+                  <Line points={leaf} color={color} lineWidth={2.5} />
+                </>
+              )
+            })()}
 
             {/* Rotate handle — a small knob in front of the object. */}
             {selected && !placeObjectType && (

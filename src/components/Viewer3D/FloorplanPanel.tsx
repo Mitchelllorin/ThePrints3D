@@ -988,6 +988,17 @@ export default function FloorplanPanel() {
               </div>
             )
           })()}
+          {selectedObject.type === 'door' && (
+            <div className={styles.propRow}>
+              <span className={styles.propLabel}>Swing</span>
+              <div className={styles.btnRow}>
+                <button className={(selectedObject.swing ?? 'left') === 'left' ? styles.action : styles.secondary}
+                  onClick={() => updatePlacedObject(selectedObject.id, { swing: 'left' })}>LH</button>
+                <button className={selectedObject.swing === 'right' ? styles.action : styles.secondary}
+                  onClick={() => updatePlacedObject(selectedObject.id, { swing: 'right' })}>RH</button>
+              </div>
+            </div>
+          )}
           <div className={styles.propRow}>
             <span className={styles.propLabel}>Type</span>
             {objSubtypes ? (

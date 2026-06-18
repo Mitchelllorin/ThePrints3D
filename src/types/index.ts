@@ -97,6 +97,9 @@ export interface PlacedObject {
   /** Window sill height (metres above finished floor). Windows default to ~0.9m;
    *  doors ignore this (they start at the floor). Adjustable per window. */
   sillM?: number
+  /** Door swing hand — 'left' (LH) or 'right' (RH) hinge. Drives the swing arc.
+   *  Doors only; defaults to 'left'. */
+  swing?: 'left' | 'right'
 }
 
 export type CircuitType = 'general' | 'dedicated' | 'gfci' | 'afci' | 'gfci+afci'
