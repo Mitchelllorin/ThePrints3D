@@ -83,7 +83,7 @@
 .historyBtn {
   background: none;
   border: 1px solid rgba(51, 65, 85, 0.5);
-  color: #94a3b8;
+  color: var(--bp-text, #94a3b8);
   font-size: 16px;
   line-height: 1;
   padding: 5px 9px;
@@ -301,9 +301,9 @@
 
 .uploadHintBtnSecondary {
   width: 100%;
-  background: rgba(30, 41, 59, 0.8);
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
   border: 1px solid rgba(51, 65, 85, 0.5);
-  color: #94a3b8;
+  color: var(--bp-text, #94a3b8);
   border-radius: 8px;
   padding: 8px 14px;
   font-size: 12px;
@@ -344,9 +344,9 @@
 
 .presetBtn {
   flex: 1;
-  background: rgba(15, 23, 42, 0.8);
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
   border: 1px solid rgba(30, 41, 59, 0.7);
-  color: #64748b;
+  color: var(--bp-text, #94a3b8);
   border-radius: 7px;
   padding: 6px 4px;
   font-size: 11px;
@@ -453,7 +453,7 @@
 .convSwap {
   background: none;
   border: 1px solid #1e293b;
-  color: #64748b;
+  color: var(--bp-text, #64748b);
   border-radius: 6px;
   width: 30px;
   height: 22px;
@@ -515,9 +515,9 @@
 .resetBtn {
   margin: 16px 16px 0;
   width: calc(100% - 32px);
-  background: #0f172a;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
   border: 1px solid #1e293b;
-  color: #475569;
+  color: var(--bp-text, #475569);
   font-size: 11px;
   padding: 7px;
   border-radius: 6px;
@@ -551,9 +551,9 @@
 
 .panelBtn {
   flex: 1;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #ffffff;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--bp-text, #ffffff);
   font-size: 14px;
   font-weight: 500;
   padding: 10px 12px;
@@ -562,7 +562,7 @@
   min-height: 44px;
   transition: background 0.15s;
 }
-.panelBtn:hover { background: rgba(255, 255, 255, 0.15); }
+.panelBtn:hover { background: color-mix(in srgb, #ffffff 14%, rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35))); }
 
 /* ── Explode slider — bottom-left, always visible, clear of the side panels
    (which dock top-left/top-right), so it never gets covered. ────────────── */

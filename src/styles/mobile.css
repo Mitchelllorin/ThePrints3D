@@ -31,6 +31,13 @@ textarea {
   touch-action: manipulation;
 }
 
+/* App-wide font colour follows the Text colour setting. Buttons inherit it by
+   default; components that need a specific colour (e.g. accent/selected, or dark
+   text on an accent button) still override via their own class. */
+button {
+  color: var(--bp-text, #f1f5f9);
+}
+
 @media (max-width: 768px) {
   button,
   [role="button"] {
