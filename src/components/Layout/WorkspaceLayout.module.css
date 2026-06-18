@@ -536,10 +536,10 @@
   transform-origin: left center;
 }
 
-/* On phones the big extruded logo overflows and overlaps the icons — the phone
-   needs the space, so hide it (desktop keeps it). */
+/* On phones, scale the logo down a touch so it stays clear of the top icons
+   instead of overflowing — but keep it visible. */
 @media (max-width: 767px) {
-  .logoFloat { display: none; }
+  .logoFloat { transform: scale(0.6); }
 }
 
 /* ── Panel action buttons (Annotate / Share, in Settings) ────────────────── */
