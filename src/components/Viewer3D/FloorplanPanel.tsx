@@ -526,10 +526,21 @@ export default function FloorplanPanel() {
                 <>
                   <span className={styles.stepText}>Start with the boxes</span>
                   <span className={styles.stepHint}>
-                    Place your outlets, switches & boxes from the tray below — they
-                    mount to the studs — then wire them together. (Optional: you can
-                    wire first if you'd rather.)
+                    Tap one to place it — boxes/outlets/switches mount to the studs.
+                    Then wire them together. (Optional: you can wire first.)
                   </span>
+                  <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                    {electricalTrayItems().map((item) => (
+                      <button
+                        key={item.type}
+                        className={placeObjectType === item.type ? styles.action : styles.secondary}
+                        onClick={() => armPlace(item.type)}
+                        title={item.label}
+                      >
+                        {item.short}
+                      </button>
+                    ))}
+                  </div>
                 </>
               ) : (
                 <span className={styles.stepText}>Trace {layerLabel.toLowerCase()} runs</span>
