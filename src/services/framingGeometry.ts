@@ -19,49 +19,59 @@ const STUD_SPACING_M = 0.4064 // 16" on-centre
 /** Block face size on the wall (~16") — texture tile size. */
 export const BLOCK_TILE_M = 0.4
 
-// A running-bond block/mortar pattern, drawn once and tiled across masonry
-// walls (ghost + built) so they read as block courses, not a flat slab.
-let _blockTex: THREE.Texture | null = null
-export function blockTexture(): THREE.Texture | null {
-  if (_blockTex) return _blockTex
+export type MasonryKind = 'brick' | 'cmu' | 'stone'
+
+// Per-kind running-bond texture with per-unit colour variation + thin mortar so
+// it reads like real masonry, not a flat cartoon. One tile ≈ 0.8m × 0.4m.
+const _masonryTex: Partial<Record<MasonryKind, THREE.Texture>> = {}
+const clamp255 = (v: number) => Math.max(0, Math.min(255, Math.round(v)))
+
+function masonryTexture(kind: MasonryKind): THREE.Texture | null {
+  if (_masonryTex[kind]) return _masonryTex[kind]!
   if (typeof document === 'undefined') return null
-  const c = document.createElement('canvas')
-  c.width = 256; c.height = 256
-  const ctx = c.getContext('2d')
-  if (!ctx) return null
-  // One tile = two CMU courses in running bond (block ~16"×8" → 2 wide, 2 tall),
-  // high-contrast mortar so the blocks read clearly even on a big built wall.
-  ctx.fillStyle = '#9a958c'              // concrete block
-  ctx.fillRect(0, 0, 256, 256)
-  ctx.strokeStyle = '#2f3236'            // dark mortar
-  ctx.lineWidth = 10
-  ctx.beginPath()
-  // Horizontal bed joints (3 courses across the tile)
-  for (const y of [4, 128, 252]) { ctx.moveTo(0, y); ctx.lineTo(256, y) }
-  // Head joints — offset every other course (running bond)
-  ctx.moveTo(128, 4);   ctx.lineTo(128, 128)   // upper course: joint at centre
-  ctx.moveTo(4, 128);   ctx.lineTo(4, 252)     // lower course: joints at edges (half-offset)
-  ctx.moveTo(252, 128); ctx.lineTo(252, 252)
-  ctx.stroke()
+  const W = 512, H = 256
+  const c = document.createElement('canvas'); c.width = W; c.height = H
+  const ctx = c.getContext('2d'); if (!ctx) return null
+  // Unit grid, base colour, colour jitter, mortar colour + joint width by kind.
+  const cfg = kind === 'brick'
+    ? { cols: 4, rows: 6, base: [0x9c, 0x4a, 0x38], jit: 20, mortar: '#cabfa8', gap: 5 }
+    : kind === 'stone'
+      ? { cols: 3, rows: 4, base: [0x8c, 0x88, 0x7e], jit: 34, mortar: '#b8b1a3', gap: 6 }
+      : { cols: 2, rows: 2, base: [0x95, 0x91, 0x88], jit: 16, mortar: '#73726f', gap: 9 } // cmu
+  ctx.fillStyle = cfg.mortar
+  ctx.fillRect(0, 0, W, H)
+  const uw = W / cfg.cols, uh = H / cfg.rows
+  for (let r = 0; r < cfg.rows; r++) {
+    const off = (r % 2) ? uw / 2 : 0               // running bond
+    for (let i = -1; i < cfg.cols; i++) {
+      const j = (Math.random() * 2 - 1) * cfg.jit
+      ctx.fillStyle = `rgb(${clamp255(cfg.base[0] + j)},${clamp255(cfg.base[1] + j)},${clamp255(cfg.base[2] + j)})`
+      ctx.fillRect(i * uw + off + cfg.gap / 2, r * uh + cfg.gap / 2, uw - cfg.gap, uh - cfg.gap)
+    }
+  }
   const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = THREE.RepeatWrapping
-  tex.wrapT = THREE.RepeatWrapping
-  _blockTex = tex
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  _masonryTex[kind] = tex
   return tex
 }
 
-/** Block-faced material tiled to a wall face of the given size. */
-export function blockMaterial(faceLengthM: number, faceHeightM: number, opacity = 1): THREE.MeshStandardMaterial {
+/** Back-compat: the default masonry texture (CMU). */
+export function blockTexture(): THREE.Texture | null { return masonryTexture('cmu') }
+
+const MASONRY_BASE: Record<MasonryKind, string> = { brick: '#8a4636', cmu: '#8f8b82', stone: '#8a867c' }
+const TILE_W_M = 0.8, TILE_H_M = 0.4
+
+/** Masonry-faced material (brick/CMU/stone) tiled to a wall face's size. */
+export function blockMaterial(faceLengthM: number, faceHeightM: number, opacity = 1, kind: MasonryKind = 'cmu'): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#a9a59d'), roughness: 1, metalness: 0,
+    color: new THREE.Color(MASONRY_BASE[kind]), roughness: 0.95, metalness: 0,
     transparent: opacity < 1, opacity,
   })
-  const tex = blockTexture()
+  const tex = masonryTexture(kind)
   if (tex) {
     const t = tex.clone(); t.needsUpdate = true
     t.wrapS = t.wrapT = THREE.RepeatWrapping
-    // One tile spans two courses (~0.4m tall) and two blocks (~0.8m wide).
-    t.repeat.set(Math.max(1, faceLengthM / (BLOCK_TILE_M * 2)), Math.max(1, faceHeightM / BLOCK_TILE_M))
+    t.repeat.set(Math.max(1, faceLengthM / TILE_W_M), Math.max(1, faceHeightM / TILE_H_M))
     m.map = t
   }
   return m
@@ -320,16 +330,16 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
  */
 export function buildMasonryWall(opts: {
   length: number; height: number; thickness: number
-  openings?: WallOpening[]; opacity?: number
+  openings?: WallOpening[]; opacity?: number; kind?: MasonryKind
 }): THREE.Group {
-  const { length, height, thickness, openings = [], opacity = 1 } = opts
+  const { length, height, thickness, openings = [], opacity = 1, kind = 'cmu' } = opts
   const g = new THREE.Group()
   if (length < 0.05 || height < 0.05) return g
   const depth = Math.max(0.05, thickness)
   const half = length / 2
   const add = (w: number, h: number, cx: number, cy: number) => {
     if (w < 0.02 || h < 0.02) return
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, depth), blockMaterial(w, h, opacity))
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, depth), blockMaterial(w, h, opacity, kind))
     m.position.set(cx, cy, 0)
     m.castShadow = true
     m.receiveShadow = true

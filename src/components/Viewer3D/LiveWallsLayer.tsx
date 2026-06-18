@@ -63,11 +63,13 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
     const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
     if (isMasonry) {
       // Block/brick has no studs — doors/windows cut a real hole, with a lintel.
-      return buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity })
+      const ext = wall.exteriorMaterial
+      const kind = ext === 'brick' || ext === 'exposedBrick' ? 'brick' : ext === 'stone' ? 'stone' : 'cmu'
+      return buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity, kind })
     }
     const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
     return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity })
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity])
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {

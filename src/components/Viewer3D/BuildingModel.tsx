@@ -220,9 +220,11 @@ function buildRealWalls(
     // Two-material wall body: interior finish on one broad face, exterior
     // cladding on the other. Materials come from the wall's chosen presets,
     // inheriting the wall layer's opacity.
+    const masonryKind = (key: string): 'brick' | 'cmu' | 'stone' =>
+      key === 'brick' || key === 'exposedBrick' ? 'brick' : key === 'stone' ? 'stone' : 'cmu'
     const finishMaterial = (key: string) => {
       // Masonry finishes get the tiled block/mortar texture sized to this face.
-      if (MASONRY_FINISHES.has(key)) return blockMaterial(len, floorHeight, wallMat.opacity)
+      if (MASONRY_FINISHES.has(key)) return blockMaterial(len, floorHeight, wallMat.opacity, masonryKind(key))
       const p = wallMaterialPreset(key)
       return new THREE.MeshStandardMaterial({
         color: new THREE.Color(p.color),
@@ -238,8 +240,9 @@ function buildRealWalls(
     // uses its chosen interior/exterior finish presets.
     const masonryWall = seg.w.wallType === 'masonry-thick' || seg.w.framingType === 'cmu'
     const extKey = seg.w.exteriorMaterial ?? (seg.w.wallRole === 'exterior-bearing' ? 'stucco' : 'drywall')
+    const mKind = masonryKind(seg.w.exteriorMaterial ?? 'concrete')
     const bodyMats: THREE.MeshStandardMaterial[] = masonryWall
-      ? [blockMaterial(len, floorHeight, wallMat.opacity), blockMaterial(len, floorHeight, wallMat.opacity)]
+      ? [blockMaterial(len, floorHeight, wallMat.opacity, mKind), blockMaterial(len, floorHeight, wallMat.opacity, mKind)]
       : [
           finishMaterial(seg.w.interiorMaterial ?? 'drywall'), // index 0 — interior
           finishMaterial(extKey),                              // index 1 — exterior
