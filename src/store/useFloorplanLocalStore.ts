@@ -35,6 +35,9 @@ interface FloorplanLocalState {
   /** Paused mid-run: the run/anchor is kept, but the camera unlocks so you can
    *  orbit to find the best route (and switch trades), then resume. */
   tracePaused: boolean
+  /** Set true right after a wall is traced OFF the print (outside the plan) so a
+   *  gentle "did you mean to?" prompt can offer to undo it. */
+  offPrintWarn: boolean
   traceStyle: TraceStyle
   /** Anchor of the active rubber-band segment (line style only) */
   traceStart: [number, number] | null
@@ -109,6 +112,7 @@ interface FloorplanLocalState {
   // ─── actions ─────────────────────────────────────────────────────
   setTraceMode: (v: boolean) => void
   setTracePaused: (v: boolean) => void
+  setOffPrintWarn: (v: boolean) => void
   setTraceStyle: (v: TraceStyle) => void
   setTraceStart: (v: [number, number] | null) => void
   setTraceStroke: (v: [number, number][] | ((prev: [number, number][]) => [number, number][])) => void
@@ -152,6 +156,7 @@ export type { CalibrationUnit, DragKind, DragState, TraceStyle }
 export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => ({
   traceMode: false,
   tracePaused: false,
+  offPrintWarn: false,
   traceStyle: 'line',
   traceStart: null,
   traceStroke: [],
@@ -192,6 +197,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
+  setOffPrintWarn: (v) => set({ offPrintWarn: v }),
   setTraceStyle: (v) => set({ traceStyle: v, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTraceStart: (v) => set({ traceStart: v }),
   setPendingWalls: (v) => set({ pendingWalls: v }),

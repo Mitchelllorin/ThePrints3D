@@ -86,6 +86,8 @@ export default function FloorplanPanel() {
   const setTraceMode   = useFloorplanLocalStore((s) => s.setTraceMode)
   const tracePaused    = useFloorplanLocalStore((s) => s.tracePaused)
   const setTracePaused = useFloorplanLocalStore((s) => s.setTracePaused)
+  const offPrintWarn   = useFloorplanLocalStore((s) => s.offPrintWarn)
+  const setOffPrintWarn = useFloorplanLocalStore((s) => s.setOffPrintWarn)
   const traceStyle     = useFloorplanLocalStore((s) => s.traceStyle)
   const setTraceStyle  = useFloorplanLocalStore((s) => s.setTraceStyle)
   const traceStart     = useFloorplanLocalStore((s) => s.traceStart)
@@ -442,6 +444,18 @@ export default function FloorplanPanel() {
         <div className={styles.measureHud}>
           <span className={styles.measureHudLabel}>Length</span>
           <span className={styles.measureHudValue}>{formatMeasureMm(liveTraceMm, activeUnit, lengthFormat)}</span>
+        </div>
+      )}
+
+      {/* Off-print nudge — a wall landed outside the plan; offer a quick undo. */}
+      {offPrintWarn && (
+        <div className={styles.offPrintToast}>
+          <span className={styles.stepText}>Traced off the plan</span>
+          <span className={styles.stepHint}>That wall landed outside the floor plan. Keep it?</span>
+          <div className={styles.btnRow}>
+            <button className={styles.secondary} onClick={() => setOffPrintWarn(false)}>Keep it</button>
+            <button className={styles.action} onClick={() => { undoAction(); setOffPrintWarn(false) }}>Undo</button>
+          </div>
         </div>
       )}
 

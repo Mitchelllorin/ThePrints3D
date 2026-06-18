@@ -473,6 +473,25 @@
   display: none;  /* desktop: no tab, the guide just shows */
 }
 
+/* Off-print nudge — centred toast near the top of the workspace. */
+.offPrintToast {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: min(86vw, 320px);
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.92);
+  border: 1px solid var(--bp-accent, #38bdf8);
+  backdrop-filter: blur(8px);
+  pointer-events: all;
+}
+
 @media (max-width: 767px) {
   /* The guide is a retractable drawer: slides off-screen leaving only the tab,
      so the workspace is clear. Content scrolls — any amount of menu fits. */

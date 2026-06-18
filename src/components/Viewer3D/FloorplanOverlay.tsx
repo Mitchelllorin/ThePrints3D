@@ -142,6 +142,7 @@ export default function FloorplanOverlay() {
   const traceStyle = useFloorplanLocalStore((s) => s.traceStyle)
   const traceStart = useFloorplanLocalStore((s) => s.traceStart)
   const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
+  const setOffPrintWarn = useFloorplanLocalStore((s) => s.setOffPrintWarn)
   const traceStroke = useFloorplanLocalStore((s) => s.traceStroke)
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
   const pendingWalls = useFloorplanLocalStore((s) => s.pendingWalls)
@@ -409,8 +410,9 @@ export default function FloorplanOverlay() {
       }
       // Prefer snapping the whole segment ONTO the nearest parallel print line
       // (so a trace a hair off the printed wall lands exactly on it, at the
-      // print's real angle). Only fall back to ortho squaring when none is near.
-      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, drawing.parsedWalls)
+      // print's real angle). Generous tolerances so you don't have to be exact;
+      // only fall back to ortho squaring when nothing parallel is reasonably near.
+      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, drawing.parsedWalls, 28, 42)
       const reduced = printLine
         ? { x1: printLine.x1, y1: printLine.y1, x2: printLine.x2, y2: printLine.y2, thickness: 8, source: 'user' as const, detectionConfidence: 1 }
         : reduceStrokeToWall([
@@ -436,6 +438,15 @@ export default function FloorplanOverlay() {
       }
       addUserTracedWall(drawing.id, wall)
       addTrace({ points: [traceStart, [wall.x2, wall.y2]], timestamp: Date.now() })
+      // Off the print? If the wall's midpoint lands outside the plan image and it
+      // didn't snap to a print line, gently ask whether that was intended.
+      const rw = drawing.rasterWidth ?? 1400
+      const rh = drawing.rasterHeight ?? 900
+      const mx = (wall.x1 + wall.x2) / 2, my = (wall.y1 + wall.y2) / 2
+      const m = 24
+      if (!printLine && (mx < -m || my < -m || mx > rw + m || my > rh + m)) {
+        setOffPrintWarn(true)
+      }
       setTraceStart([wall.x2, wall.y2])
       return
     }
