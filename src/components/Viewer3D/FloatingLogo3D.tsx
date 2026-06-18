@@ -113,7 +113,9 @@ export default function FloatingLogo3D() {
     groupRef.current.rotation.x += delta * 0.08
   })
 
-  if (!visible) return null
+  // On phones the roaming wordmark just eats the scarce workspace — hide it.
+  const mobile = typeof window !== 'undefined' && window.innerWidth < 768
+  if (!visible || mobile) return null
 
   return (
     <group ref={groupRef} position={[0, 3, 0]}>

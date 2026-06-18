@@ -4,7 +4,7 @@
  * Shows exactly one contextual prompt at a time. No panels, no headers,
  * no dense button grids — just the next action the user needs to take.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
@@ -156,6 +156,8 @@ export default function FloorplanPanel() {
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Mobile: the guide is a retractable drawer — collapse it to clear the canvas.
+  const [guideCollapsed, setGuideCollapsed] = useState(false)
   // The wall-type picker shows before tracing begins, and can be reopened
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
   const pickerOpen = useFloorplanLocalStore((s) => s.activePanel === 'picker')
@@ -443,7 +445,17 @@ export default function FloorplanPanel() {
         </div>
       )}
 
-      <div className={styles.guide}>
+      {/* Mobile toggle tab — retracts the guide drawer so the workspace is clear. */}
+      <button
+        className={styles.guideTab}
+        onClick={() => setGuideCollapsed((v) => !v)}
+        aria-label={guideCollapsed ? 'Show menu' : 'Hide menu'}
+        title={guideCollapsed ? 'Show menu' : 'Hide menu'}
+      >
+        {guideCollapsed ? '☰' : '◂'}
+      </button>
+
+      <div className={`${styles.guide} ${guideCollapsed ? styles.guideCollapsed : ''}`}>
 
         {/* Drawing switcher — only shown when multiple drawings */}
         {drawings.length > 1 && !overlay.calibrationMode && !traceMode && (

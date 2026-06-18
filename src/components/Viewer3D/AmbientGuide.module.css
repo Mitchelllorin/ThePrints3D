@@ -468,11 +468,47 @@
 .loadFill { height: 100%; background: var(--bp-accent, #38bdf8); }
 .loadFillOver { background: #ef4444; }
 
-/* ── Mobile landscape (phones) — caps + tap targets ───────────────────────── */
+/* ── Retractable guide drawer toggle tab (mobile only) ───────────────────── */
+.guideTab {
+  display: none;  /* desktop: no tab, the guide just shows */
+}
+
 @media (max-width: 767px) {
-  .guide { max-height: 50vh; width: 190px; }
-  .panelBoard { max-height: 50vh; }
-  .propCard { max-height: 50vh; }
+  /* The guide is a retractable drawer: slides off-screen leaving only the tab,
+     so the workspace is clear. Content scrolls — any amount of menu fits. */
+  .guide {
+    top: 52px;
+    left: 46px;                 /* leave room for the toggle tab at the edge */
+    width: min(82vw, 300px);
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+    transform: translateX(0);
+  }
+  .guideCollapsed {
+    transform: translateX(-130%);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .guideTab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 52px;
+    left: 6px;
+    z-index: 31;
+    width: 34px;
+    min-height: 56px;
+    border-radius: 10px;
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.92);
+    color: var(--bp-accent, #38bdf8);
+    font-size: 18px;
+    pointer-events: all;
+  }
+  .panelBoard { max-height: 60vh; }
+  .propCard { max-height: 60vh; }
   .tray { max-height: 80px; padding: 8px 10px; }
   .trayItem, .trayItemActive { min-height: 44px; }
   .action, .secondary { min-height: 44px; font-size: 14px; }
