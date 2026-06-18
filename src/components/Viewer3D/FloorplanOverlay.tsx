@@ -16,7 +16,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import type { ParsedWall } from '../../types'
+import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
 
 // Picker framing key → engine WallType. Masonry (CMU) maps to a non-framed
@@ -39,7 +39,7 @@ import {
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, deviceMountHeightM } from '../../data/objectCatalog'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { validateElectrical } from '../../services/constructionCode'
-import { LAYER_COLORS, plumbingColorFor, electricalColorFor, hvacColorFor, plumbingColor, electricalColor } from '../../data/traceLayers'
+import { LAYER_COLORS, plumbingColorFor, electricalColorFor, hvacColorFor, plumbingColor, electricalColor, hvacColor } from '../../data/traceLayers'
 
 /** Perpendicular distance from point to segment, in pixels. */
 function segDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
@@ -126,6 +126,7 @@ export default function FloorplanOverlay() {
   const addHvacLines = useAppStore((s) => s.addHvacLines)
   const plumbingLines = useAppStore((s) => s.plumbingLines)
   const electricalLines = useAppStore((s) => s.electricalLines)
+  const hvacLines = useAppStore((s) => s.hvacLines)
   const circuits = useAppStore((s) => s.circuits)
   const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
@@ -157,6 +158,8 @@ export default function FloorplanOverlay() {
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
+  const selectedLine = useFloorplanLocalStore((s) => s.selectedLine)
+  const selectLineExclusive = useFloorplanLocalStore((s) => s.selectLineExclusive)
   const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
@@ -335,6 +338,23 @@ export default function FloorplanOverlay() {
     }
   }
 
+  // Snap a fresh trade run's start onto the nearest existing node of the same
+  // trade, so you can BRANCH/split off an existing run (e.g. tap by the panel or
+  // a junction box and circuit a room back to it). No node nearby → tap as-is.
+  const snapTradeStart = (pixel: [number, number]): [number, number] => {
+    const lines = activeTraceLayer === 'plumbing' ? plumbingLines
+      : activeTraceLayer === 'electrical' ? electricalLines
+      : activeTraceLayer === 'hvac' ? hvacLines : []
+    let best = 14, snapped = pixel   // px snap radius
+    for (const l of lines) {
+      for (const [nx, ny] of [[l.x1, l.y1], [l.x2, l.y2]] as const) {
+        const d = Math.hypot(pixel[0] - nx, pixel[1] - ny)
+        if (d < best) { best = d; snapped = [nx, ny] }
+      }
+    }
+    return snapped
+  }
+
   // Drop a trace/calibration point — called only on a genuine tap (pointer-up
   // with no meaningful drag), so the camera is free to move between points.
   const commitTraceOrCalibrationPoint = (event: ThreeEvent<PointerEvent>) => {
@@ -344,7 +364,7 @@ export default function FloorplanOverlay() {
     if (traceMode) {
       // Trade layers (plumbing/electrical/HVAC) trace simple lines, not walls.
       if (activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') {
-        if (!traceStart) { setTraceStart(pixel); setHoverPixel(pixel); return }
+        if (!traceStart) { const s = snapTradeStart(pixel); setTraceStart(s); setHoverPixel(s); return }
         const a = traceStart
         if (Math.hypot(pixel[0] - a[0], pixel[1] - a[1]) < 4) { setTraceStart(null); return }
         if (activeTraceLayer === 'plumbing') {
@@ -779,23 +799,31 @@ export default function FloorplanOverlay() {
         <Line points={tracePreviewPoints} color={activeLineColor} lineWidth={4} />
       )}
 
-      {/* Committed trade lines drawn on the print, coloured by field convention. */}
-      {visibleLayers.has('plumbing') && plumbingLines.map((l) => (
-        <Line
-          key={l.id}
-          points={[planeLocalToWorld([l.x1, l.y1]), planeLocalToWorld([l.x2, l.y2])]}
-          color={plumbingColor(l)}
-          lineWidth={4}
-        />
-      ))}
-      {visibleLayers.has('electrical') && electricalLines.map((l) => (
-        <Line
-          key={l.id}
-          points={[planeLocalToWorld([l.x1, l.y1]), planeLocalToWorld([l.x2, l.y2])]}
-          color={electricalColor(l)}
-          lineWidth={4}
-        />
-      ))}
+      {/* Committed trade lines drawn on the print, coloured by field convention.
+          When not tracing/placing, tapping a run selects it (edit-on-the-fly →
+          the panel's Delete). The selected run is highlighted. */}
+      {(() => {
+        const editable = !traceMode && !placeObjectType
+        const renderRun = (trade: 'plumbing' | 'electrical' | 'hvac', l: TracedLine, color: string) => {
+          const sel = selectedLine?.trade === trade && selectedLine.id === l.id
+          return (
+            <Line
+              key={`${trade}-${l.id}`}
+              points={[planeLocalToWorld([l.x1, l.y1]), planeLocalToWorld([l.x2, l.y2])]}
+              color={sel ? '#fde047' : color}
+              lineWidth={sel ? 7 : 4}
+              onClick={editable ? (e) => { e.stopPropagation(); selectLineExclusive(trade, l.id) } : undefined}
+            />
+          )
+        }
+        return (
+          <>
+            {visibleLayers.has('plumbing') && plumbingLines.map((l) => renderRun('plumbing', l, plumbingColor(l)))}
+            {visibleLayers.has('electrical') && electricalLines.map((l) => renderRun('electrical', l, electricalColor(l)))}
+            {visibleLayers.has('hvac') && hvacLines.map((l) => renderRun('hvac', l, hvacColor(l)))}
+          </>
+        )
+      })()}
 
       {/* Electrical code violations — red markers on the print. */}
       {violations.map((v) => {

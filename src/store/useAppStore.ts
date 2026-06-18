@@ -392,6 +392,9 @@ interface AppState {
   addPlumbingLines: (lines: TracedLine[]) => void
   addElectricalLines: (lines: TracedLine[]) => void
   addHvacLines: (lines: TracedLine[]) => void
+  removePlumbingLine: (id: string) => void
+  removeElectricalLine: (id: string) => void
+  removeHvacLine: (id: string) => void
   toggleTradeLayerVisible: (layer: TraceLayer) => void
   // Electrical circuits
   addCircuit: (c: Circuit) => void
@@ -1476,6 +1479,25 @@ export const useAppStore = create<AppState>()(
       if (lines.length === 0) return
       pushHistory()
       set((s) => { s.hvacLines.push(...lines) })
+    },
+
+    removePlumbingLine: (id) => {
+      pushHistory()
+      set((s) => { s.plumbingLines = s.plumbingLines.filter((l) => l.id !== id) })
+    },
+
+    removeElectricalLine: (id) => {
+      pushHistory()
+      set((s) => {
+        s.electricalLines = s.electricalLines.filter((l) => l.id !== id)
+        // Keep circuits consistent — drop the line from any circuit it belonged to.
+        for (const c of s.circuits) c.lineIds = c.lineIds.filter((lid) => lid !== id)
+      })
+    },
+
+    removeHvacLine: (id) => {
+      pushHistory()
+      set((s) => { s.hvacLines = s.hvacLines.filter((l) => l.id !== id) })
     },
 
     addElectricalLines: (lines) => {

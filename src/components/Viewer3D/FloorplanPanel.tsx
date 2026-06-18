@@ -123,6 +123,10 @@ export default function FloorplanPanel() {
   const plumbMaterial = useFloorplanLocalStore((s) => s.plumbMaterial)
   const plumbTemp = useFloorplanLocalStore((s) => s.plumbTemp)
   const setPlumb = useFloorplanLocalStore((s) => s.setPlumb)
+  const selectedLine = useFloorplanLocalStore((s) => s.selectedLine)
+  const removePlumbingLine = useAppStore((s) => s.removePlumbingLine)
+  const removeElectricalLine = useAppStore((s) => s.removeElectricalLine)
+  const removeHvacLine = useAppStore((s) => s.removeHvacLine)
   const hvacElement = useFloorplanLocalStore((s) => s.hvacElement)
   const hvacSize = useFloorplanLocalStore((s) => s.hvacSize)
   const hvacMaterial = useFloorplanLocalStore((s) => s.hvacMaterial)
@@ -368,6 +372,15 @@ export default function FloorplanPanel() {
     if (!selectedObject) return
     removePlacedObject(selectedObject.id)
     setSelectedObjectId(null)
+  }
+
+  // Edit-on-the-fly: delete the selected traced run (pipe / wire / duct).
+  const deleteSelectedLine = () => {
+    if (!selectedLine) return
+    if (selectedLine.trade === 'plumbing') removePlumbingLine(selectedLine.id)
+    else if (selectedLine.trade === 'electrical') removeElectricalLine(selectedLine.id)
+    else removeHvacLine(selectedLine.id)
+    closeAllPanels()
   }
 
   // Arm/disarm placement from the tray. Re-tapping the active item cancels.
@@ -852,6 +865,18 @@ export default function FloorplanPanel() {
                 {traceMode ? 'Apply' : 'Start Tracing →'}
               </button>
               <button className={styles.secondary} onClick={() => closeAllPanels()}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Selected trade run (edit-on-the-fly delete) ── */}
+        {selectedLine && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>{LAYER_LABELS[selectedLine.trade]} run selected</span>
+            <span className={styles.stepHint}>Remove this run, or tap another to select it.</span>
+            <div className={styles.btnRow}>
+              <button className={styles.cancel} onClick={deleteSelectedLine}>Delete run</button>
+              <button className={styles.secondary} onClick={() => closeAllPanels()}>Deselect</button>
             </div>
           </div>
         )}

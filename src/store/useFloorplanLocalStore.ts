@@ -92,12 +92,14 @@ interface FloorplanLocalState {
   placeCommitNonce: number
   /** Id of the currently selected placed object, or null. */
   selectedObjectId: string | null
+  /** Currently selected traced trade run (for edit-on-the-fly delete), or null. */
+  selectedLine: { trade: 'plumbing' | 'electrical' | 'hvac'; id: string } | null
   /**
    * THE single global panel gate — only one overlay UI shows at a time. Every
    * panel/card/picker checks this. Selection data (selectedObjectId /
    * selectedWallIndex) is the content; `activePanel` controls visibility.
    */
-  activePanel: 'picker' | 'panelBoard' | 'object' | 'wall' | 'catalog' | null
+  activePanel: 'picker' | 'panelBoard' | 'object' | 'wall' | 'catalog' | 'line' | null
 
   // ─── UI toggles ──────────────────────────────────────────────────
   presetOpen: boolean
@@ -137,6 +139,7 @@ interface FloorplanLocalState {
   toggleCatalog: () => void
   selectObjectExclusive: (id: string) => void
   selectWallExclusive: (i: number) => void
+  selectLineExclusive: (trade: 'plumbing' | 'electrical' | 'hvac', id: string) => void
   armPlaceExclusive: (type: string | null) => void
   closeAllPanels: () => void
   setPresetOpen: (v: boolean) => void
@@ -177,6 +180,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   placeGhost: null,
   placeCommitNonce: 0,
   selectedObjectId: null,
+  selectedLine: null,
   activePanel: null,
   calibrationHandledIds: [],
   distanceUnit: 'ft',
@@ -225,15 +229,16 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   requestPlaceCommit: () => set((s) => ({ placeCommitNonce: s.placeCommitNonce + 1 })),
   setSelectedObjectId: (v) => set({ selectedObjectId: v, activePanel: v ? 'object' : null }),
   // One panel at a time: every opener sets activePanel and clears the rest.
-  openPicker: () => set({ activePanel: 'picker', selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
-  openPanelBoard: () => set({ activePanel: 'panelBoard', selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
+  openPicker: () => set({ activePanel: 'picker', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
+  openPanelBoard: () => set({ activePanel: 'panelBoard', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
   toggleCatalog: () => set((s) => s.activePanel === 'catalog'
     ? { activePanel: null }
-    : { activePanel: 'catalog', selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
-  selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, placeObjectType: null }),
-  selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, placeObjectType: null }),
-  armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null }),
-  closeAllPanels: () => set({ activePanel: null, selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
+    : { activePanel: 'catalog', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
+  selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
+  selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, placeObjectType: null }),
+  selectLineExclusive: (trade, id) => set({ activePanel: 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
+  armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null }),
+  closeAllPanels: () => set({ activePanel: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),
   setSeedProcessing: (v) => set({ seedProcessing: v }),
