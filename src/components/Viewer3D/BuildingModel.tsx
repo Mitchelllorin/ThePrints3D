@@ -232,16 +232,18 @@ function buildRealWalls(
         opacity: wallMat.opacity,
       })
     }
-    // Masonry walls (CMU/brick) are solid block through-and-through — both faces
-    // get the block/mortar texture, so they go ghost → real instead of showing a
-    // blank drywall interior face.
+    // Masonry walls (CMU/brick) are solid block through-and-through — force the
+    // block/mortar texture on BOTH faces (not via finish-key lookup, so it can't
+    // fall back to a flat/blank material), matching the ghost. Everything else
+    // uses its chosen interior/exterior finish presets.
     const masonryWall = seg.w.wallType === 'masonry-thick' || seg.w.framingType === 'cmu'
-    const extKey = seg.w.exteriorMaterial ?? (masonryWall ? 'concrete' : seg.w.wallRole === 'exterior-bearing' ? 'stucco' : 'drywall')
-    const intKey = seg.w.interiorMaterial ?? (masonryWall ? extKey : 'drywall')
-    const bodyMats: THREE.MeshStandardMaterial[] = [
-      finishMaterial(intKey),  // index 0 — interior
-      finishMaterial(extKey),  // index 1 — exterior
-    ]
+    const extKey = seg.w.exteriorMaterial ?? (seg.w.wallRole === 'exterior-bearing' ? 'stucco' : 'drywall')
+    const bodyMats: THREE.MeshStandardMaterial[] = masonryWall
+      ? [blockMaterial(len, floorHeight, wallMat.opacity), blockMaterial(len, floorHeight, wallMat.opacity)]
+      : [
+          finishMaterial(seg.w.interiorMaterial ?? 'drywall'), // index 0 — interior
+          finishMaterial(extKey),                              // index 1 — exterior
+        ]
 
     // Place a box oriented along this wall. `tCenter` is the distance along the
     // wall from `a`; the box spans `lengthAlong` and rises `height` from `yBottom`.
