@@ -272,7 +272,8 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     const oh = op.heightM ?? (isDoor ? 2.06 : 1.13)
     const roBot = isDoor ? studBottom : Math.min(studBottom + sill, studTop - studW - 0.3)
     const roTop = Math.min(roBot + oh, studTop - studW)
-    const headerDepth = 0.18
+    // Wood openings get a beefy LVL header; steel keeps the slimmer box beam.
+    const headerDepth = steel ? 0.18 : 0.235
 
     // King studs — full height, just outside the opening.
     for (const s of [-1, 1]) add(studGeo, op.x + s * (hw + studW * 1.5), studY)
