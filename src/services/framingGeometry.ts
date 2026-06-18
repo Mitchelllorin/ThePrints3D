@@ -26,20 +26,22 @@ export function blockTexture(): THREE.Texture | null {
   if (_blockTex) return _blockTex
   if (typeof document === 'undefined') return null
   const c = document.createElement('canvas')
-  c.width = 128; c.height = 128
+  c.width = 256; c.height = 256
   const ctx = c.getContext('2d')
   if (!ctx) return null
-  ctx.fillStyle = '#b4b0aa'
-  ctx.fillRect(0, 0, 128, 128)
-  ctx.strokeStyle = '#6b6f76'
-  ctx.lineWidth = 6
+  // One tile = two CMU courses in running bond (block ~16"×8" → 2 wide, 2 tall),
+  // high-contrast mortar so the blocks read clearly even on a big built wall.
+  ctx.fillStyle = '#9a958c'              // concrete block
+  ctx.fillRect(0, 0, 256, 256)
+  ctx.strokeStyle = '#2f3236'            // dark mortar
+  ctx.lineWidth = 10
   ctx.beginPath()
-  ctx.moveTo(0, 2); ctx.lineTo(128, 2)
-  ctx.moveTo(0, 64); ctx.lineTo(128, 64)
-  ctx.moveTo(0, 126); ctx.lineTo(128, 126)
-  ctx.moveTo(2, 0); ctx.lineTo(2, 64)
-  ctx.moveTo(126, 0); ctx.lineTo(126, 64)
-  ctx.moveTo(64, 64); ctx.lineTo(64, 128)
+  // Horizontal bed joints (3 courses across the tile)
+  for (const y of [4, 128, 252]) { ctx.moveTo(0, y); ctx.lineTo(256, y) }
+  // Head joints — offset every other course (running bond)
+  ctx.moveTo(128, 4);   ctx.lineTo(128, 128)   // upper course: joint at centre
+  ctx.moveTo(4, 128);   ctx.lineTo(4, 252)     // lower course: joints at edges (half-offset)
+  ctx.moveTo(252, 128); ctx.lineTo(252, 252)
   ctx.stroke()
   const tex = new THREE.CanvasTexture(c)
   tex.wrapS = THREE.RepeatWrapping
@@ -51,14 +53,15 @@ export function blockTexture(): THREE.Texture | null {
 /** Block-faced material tiled to a wall face of the given size. */
 export function blockMaterial(faceLengthM: number, faceHeightM: number, opacity = 1): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#cdc8c0'), roughness: 1, metalness: 0,
+    color: new THREE.Color('#a9a59d'), roughness: 1, metalness: 0,
     transparent: opacity < 1, opacity,
   })
   const tex = blockTexture()
   if (tex) {
     const t = tex.clone(); t.needsUpdate = true
     t.wrapS = t.wrapT = THREE.RepeatWrapping
-    t.repeat.set(Math.max(1, faceLengthM / BLOCK_TILE_M), Math.max(1, faceHeightM / BLOCK_TILE_M))
+    // One tile spans two courses (~0.4m tall) and two blocks (~0.8m wide).
+    t.repeat.set(Math.max(1, faceLengthM / (BLOCK_TILE_M * 2)), Math.max(1, faceHeightM / BLOCK_TILE_M))
     m.map = t
   }
   return m

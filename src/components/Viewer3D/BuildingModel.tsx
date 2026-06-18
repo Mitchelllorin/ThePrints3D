@@ -873,6 +873,13 @@ export default function BuildingModel({ layers }: Props) {
       (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0,
     )
 
+    // When the user has traced walls, the live wall layer persists them as the
+    // built walls (ghost → solid) with full detail — steel channel/knockouts,
+    // block courses, framed openings. So the engine wall/framing rendering is
+    // skipped to avoid a duplicate, lower-detail version. Auto-only plans (no
+    // traced walls) still build through the engine path below.
+    const hasUserWalls = drawings.some((d) => d.parsedWalls.some((w) => w.source === 'user'))
+
     // User-placed doors/windows become real openings cut into the wall meshes.
     const openingSpecs: OpeningSpec[] = placedObjects
       .filter((o) => o.type === 'door' || o.type === 'window')
@@ -913,6 +920,9 @@ export default function BuildingModel({ layers }: Props) {
             break
           }
           case 'walls': {
+            // The persisted ghost owns user-traced walls (ghost → solid). Only
+            // build engine walls for auto-only plans.
+            if (hasUserWalls) break
             const wallLayer = layerMap.get('walls')
             const wMat = mat(wallLayer?.color ?? '#e2e8f0', wallLayer?.opacity ?? 1, { roughness: 0.7 })
             if (wallDrawings.length > 0) {
@@ -990,10 +1000,11 @@ export default function BuildingModel({ layers }: Props) {
       }
     }
 
-    // Framing from construction engine. Align it to the overlay space (same
-    // mapping the wall volumes/ghost use) so the built studs sit on the trace.
+    // Framing from construction engine. Skipped when user walls exist — the
+    // persisted ghost framing (with steel channel/knockouts, blocking, framed
+    // openings) is the built framing. Auto-only plans still use the engine.
     const framingLayer = layerMap.get('framing')
-    if (framingLayer?.visible && buildResult && buildResult.components.length > 0) {
+    if (!hasUserWalls && framingLayer?.visible && buildResult && buildResult.components.length > 0) {
       let align: FramingAlign | undefined
       const od = drawings.find((d) => d.id === overlayDrawingId)
       // Use the EXACT centroid + scale the engine placed components in — never

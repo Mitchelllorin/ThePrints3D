@@ -6,9 +6,10 @@
  * same transform as FloorplanOverlay (overlay position/scale/rotation) to
  * place them correctly in the world.
  */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard, Text } from '@react-three/drei'
+import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
@@ -32,11 +33,15 @@ interface WallMeshProps {
   deflectionGapMm: number
   /** Door/window openings on this wall, as {t along wall 0..1, width m, type}. */
   openings: Array<{ t: number; widthM: number; type: 'door' | 'window' }>
+  /** 0.7 while tracing (ghost), 1 once built (solid/real). */
+  opacity: number
+  /** True once the model is built — hides the tracing nameplate. */
+  built: boolean
   activeUnit: ActiveUnit
   lengthFormat: LengthFormat
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, activeUnit, lengthFormat }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat }: WallMeshProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
 
@@ -57,15 +62,15 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   const framing = useMemo(() => {
     if (isMasonry) {
       const g = new THREE.Group()
-      const m = new THREE.Mesh(new THREE.BoxGeometry(length, wallHeight, thicknessM), blockMaterial(length, wallHeight, 0.85))
+      const m = new THREE.Mesh(new THREE.BoxGeometry(length, wallHeight, thicknessM), blockMaterial(length, wallHeight, opacity))
       m.position.set(0, wallHeight / 2, 0)
       g.add(m)
       return g
     }
     const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
     const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type }))
-    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity: 0.7 })
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge, topTrackStyle, deflectionGapMm, openings])
+    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity })
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {
@@ -79,12 +84,14 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   return (
     <>
       <primitive object={framing} position={[cx, 0, cz]} rotation={[0, -angle, 0]} />
-      {/* Nameplate — the wall's real length, always facing the camera. */}
-      <Billboard position={[cx, wallHeight + 0.28, cz]}>
-        <Text fontSize={0.32} color="#ffffff" anchorX="center" anchorY="middle" outlineWidth={0.025} outlineColor="#0b1120">
-          {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
-        </Text>
-      </Billboard>
+      {/* Nameplate — the wall's real length while tracing; hidden once built. */}
+      {!built && (
+        <Billboard position={[cx, wallHeight + 0.28, cz]}>
+          <Text fontSize={0.32} color="#ffffff" anchorX="center" anchorY="middle" outlineWidth={0.025} outlineColor="#0b1120">
+            {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
+          </Text>
+        </Billboard>
+      )}
     </>
   )
 }
@@ -102,6 +109,9 @@ export default function LiveWallsLayer() {
   const steelDeflectionGapMm = useConfigStore((s) => s.steelDeflectionGapMm)
   const activeUnit = useConfigStore((s) => s.activeUnit)
   const lengthFormat = useConfigStore((s) => s.lengthFormat)
+
+  const groupRef = useRef<THREE.Group>(null)
+  useExplodeChildren(groupRef, 'framing')
 
   const wallHeight = useMemo(
     () => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM,
@@ -166,15 +176,17 @@ export default function LiveWallsLayer() {
     return out
   }, [userWalls, placedObjects])
 
-  // Once a build exists, BuildingModel exclusively owns the 3D wall volume —
-  // the live preview boxes must disappear entirely (no double geometry / z-fight).
-  // buildResult covers "Build for me"; model status covers the "Build 3D" path.
-  const modelOwnsWalls = buildResult !== null || model.status === 'ready' || model.status === 'building'
+  // The traced walls ARE the build: instead of BuildingModel re-rendering them
+  // through a different (engine) path that drops detail, the ghost walls persist
+  // and simply go from semi-transparent (tracing) to solid (built). They keep
+  // all their detail — steel channel/knockouts, block courses, blocking, framed
+  // openings. BuildingModel skips walls when user walls exist (see there).
+  const built = buildResult !== null || model.status === 'ready' || model.status === 'building'
 
-  if (userWalls.length === 0 || modelOwnsWalls) return null
+  if (userWalls.length === 0) return null
 
   return (
-    <group name="live-walls">
+    <group name="live-walls" ref={groupRef}>
       {userWalls.map(({ wall, scaleMmPerPx }, i) => (
         <WallMesh
           key={i}
@@ -187,6 +199,8 @@ export default function LiveWallsLayer() {
           topTrackStyle={steelTrackTop === 'double' ? 'deep' : steelTrackTop}
           deflectionGapMm={steelTrackTop === 'slotted' ? steelDeflectionGapMm : 0}
           openings={openingsByWall[i] ?? []}
+          opacity={built ? 1 : 0.7}
+          built={built}
           activeUnit={activeUnit}
           lengthFormat={lengthFormat}
         />
