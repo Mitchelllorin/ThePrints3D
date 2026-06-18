@@ -24,7 +24,7 @@ interface WallBoardProps {
   scaleMmPerPx: number | null
   wallHeight: number
   orientation: 'vertical' | 'horizontal'
-  openings: Array<{ t: number; widthM: number; type: 'door' | 'window' }>
+  openings: Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>
 }
 
 function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, openings }: WallBoardProps) {
@@ -44,7 +44,7 @@ function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, 
 
   const board = useMemo(() => {
     if (isMasonry) return new THREE.Group()
-    const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type }))
+    const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
     return buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, opacity: 0.96 })
   }, [length, wallHeight, thicknessM, orientation, isMasonry, openings])
 
@@ -95,7 +95,7 @@ export default function DrywallLayer() {
   // Assign placed doors/windows to their nearest wall (pixel space) so the board
   // is cut around them — same logic the framing uses.
   const openingsByWall = useMemo(() => {
-    const out: Array<Array<{ t: number; widthM: number; type: 'door' | 'window' }>> = userWalls.map(() => [])
+    const out: Array<Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>> = userWalls.map(() => [])
     const doors = placedObjects.filter(
       (o: PlacedObject) => (o.type === 'door' || o.type === 'window') && o.pxX != null && o.pxY != null,
     )
@@ -114,7 +114,8 @@ export default function DrywallLayer() {
       })
       if (best < 0) continue
       const item = getCatalogItem(o.type)
-      out[best].push({ t: bestT, widthM: (item?.defaultW ?? 0.9) * o.scaleX, type: o.type as 'door' | 'window' })
+      const heightM = (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY
+      out[best].push({ t: bestT, widthM: (item?.defaultW ?? 0.9) * o.scaleX, type: o.type as 'door' | 'window', sillM: o.sillM, heightM })
     }
     return out
   }, [userWalls, placedObjects])

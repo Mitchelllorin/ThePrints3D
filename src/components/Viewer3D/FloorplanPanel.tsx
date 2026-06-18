@@ -937,6 +937,20 @@ export default function FloorplanPanel() {
               </div>
             )
           })}
+          {selectedObject.type === 'window' && (() => {
+            const { ft, in: inch } = metresToFtIn(selectedObject.sillM ?? 0.9)
+            return (
+              <div className={styles.propRow}>
+                <span className={styles.propLabel}>Sill height</span>
+                <input type="number" min={0} className={styles.dimInput} value={ft}
+                  onChange={(e) => updatePlacedObject(selectedObject.id, { sillM: ftInToMetres(Number(e.target.value) || 0, inch) })} />
+                <span className={styles.unit}>ft</span>
+                <input type="number" min={0} max={11} className={styles.dimInput} value={inch}
+                  onChange={(e) => updatePlacedObject(selectedObject.id, { sillM: ftInToMetres(ft, Number(e.target.value) || 0) })} />
+                <span className={styles.unit}>in</span>
+              </div>
+            )
+          })()}
           <div className={styles.propRow}>
             <span className={styles.propLabel}>Type</span>
             {objSubtypes ? (

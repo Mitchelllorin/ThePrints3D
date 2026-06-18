@@ -32,7 +32,7 @@ interface WallMeshProps {
   topTrackStyle: 'shallow' | 'deep' | 'slotted' | 'double'
   deflectionGapMm: number
   /** Door/window openings on this wall, as {t along wall 0..1, width m, type}. */
-  openings: Array<{ t: number; widthM: number; type: 'door' | 'window' }>
+  openings: Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>
   /** 0.7 while tracing (ghost), 1 once built (solid/real). */
   opacity: number
   /** True once the model is built — hides the tracing nameplate. */
@@ -68,7 +68,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       return g
     }
     const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-    const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type }))
+    const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
     return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity })
   }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity])
 
@@ -151,7 +151,7 @@ export default function LiveWallsLayer() {
   // record its position (t, 0..1) and rough-opening width — so the live framing
   // frames the opening exactly where the door/window sits, just like on site.
   const openingsByWall = useMemo(() => {
-    const out: Array<Array<{ t: number; widthM: number; type: 'door' | 'window' }>> = userWalls.map(() => [])
+    const out: Array<Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>> = userWalls.map(() => [])
     const doors = placedObjects.filter(
       (o: PlacedObject) => (o.type === 'door' || o.type === 'window') && o.pxX != null && o.pxY != null,
     )
@@ -171,7 +171,8 @@ export default function LiveWallsLayer() {
       if (best < 0) continue
       const item = getCatalogItem(o.type)
       const widthM = (item?.defaultW ?? 0.9) * o.scaleX
-      out[best].push({ t: bestT, widthM, type: o.type as 'door' | 'window' })
+      const heightM = (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY
+      out[best].push({ t: bestT, widthM, type: o.type as 'door' | 'window', sillM: o.sillM, heightM })
     }
     return out
   }, [userWalls, placedObjects])

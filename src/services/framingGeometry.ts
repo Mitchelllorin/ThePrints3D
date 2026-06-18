@@ -105,6 +105,10 @@ export interface WallOpening {
   centerM: number
   widthM: number
   type: 'door' | 'window'
+  /** Window sill height (m AFF). Doors ignore it. Defaults to ~0.9m. */
+  sillM?: number
+  /** Opening height (m). Door ≈ 2.06, window ≈ 1.13 by default. */
+  heightM?: number
 }
 
 /**
@@ -195,7 +199,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // Rough openings, mapped to local-centred X and clamped to the wall. Only
   // openings that fully fit (with a stud-pack margin at each end) are framed.
   const ops = openings
-    .map((o) => ({ type: o.type, x: o.centerM - half, w: Math.min(o.widthM, length - 0.2) }))
+    .map((o) => ({ type: o.type, x: o.centerM - half, w: Math.min(o.widthM, length - 0.2), sillM: o.sillM, heightM: o.heightM }))
     .filter((o) => o.w > 0.1 && o.x - o.w / 2 > -half + studW * 2 && o.x + o.w / 2 < half - studW * 2)
   // A regular stud / blocking span is "in the clear" (dropped) if it falls inside
   // an opening's rough span — king/jack studs are added back at the edges.
@@ -262,10 +266,12 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   for (const op of ops) {
     const isDoor = op.type === 'door'
     const hw = op.w / 2
-    // Rough-opening top (bottom of header) and bottom (floor for doors, sill for
-    // windows), clamped to the wall so low ceilings still produce sane framing.
-    const roTop = Math.min(isDoor ? 2.06 : 2.03, studTop - studW)
-    const roBot = isDoor ? studBottom : Math.min(0.9, roTop - 0.3)
+    // Rough-opening bottom (floor for doors, sill for windows) and top, from the
+    // opening's own sill/height, clamped so low ceilings still frame sanely.
+    const sill = isDoor ? 0 : (op.sillM ?? 0.9)
+    const oh = op.heightM ?? (isDoor ? 2.06 : 1.13)
+    const roBot = isDoor ? studBottom : Math.min(studBottom + sill, studTop - studW - 0.3)
+    const roTop = Math.min(roBot + oh, studTop - studW)
     const headerDepth = 0.18
 
     // King studs — full height, just outside the opening.
@@ -342,12 +348,14 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
     transparent: opacity < 1, opacity,
   })
 
-  // Opening rectangles in local (x, y): x from start − half; height by type.
+  // Opening rectangles in local (x, y): x from start − half; sill/height by type.
   const rects = openings.map((o) => {
     const cx = o.centerM - half
     const isDoor = o.type === 'door'
-    const yHi = Math.min(isDoor ? 2.06 : 2.03, height)
-    const yLo = isDoor ? 0 : Math.min(0.9, yHi - 0.3)
+    const sill = isDoor ? 0 : (o.sillM ?? 0.9)
+    const oh = o.heightM ?? (isDoor ? 2.06 : 1.13)
+    const yLo = isDoor ? 0 : Math.min(sill, height - 0.3)
+    const yHi = Math.min(yLo + oh, height)
     return { x0: cx - o.widthM / 2, x1: cx + o.widthM / 2, y0: yLo, y1: yHi }
   })
   const overlapsOpening = (x0: number, x1: number, y0: number, y1: number) =>

@@ -108,9 +108,11 @@ export default function PlacedObjectsLayer() {
         // marker that stays selectable/draggable to reposition the cut.
         const isOpening = obj.type === 'door' || obj.type === 'window'
         const boxD = isOpening ? 0.06 : d
-        // Electrical devices mount on the wall/ceiling at a standard height;
-        // everything else sits on the floor (centre at height/2).
-        const mountY = deviceMountHeightM(obj.type, ceilingM) ?? h / 2
+        // Windows sit at their sill height; electrical devices mount on the
+        // wall/ceiling at a standard height; everything else sits on the floor.
+        const mountY = obj.type === 'window'
+          ? (obj.sillM ?? 0.9) + h / 2
+          : deviceMountHeightM(obj.type, ceilingM) ?? h / 2
         return (
           <group key={obj.id} position={[live.x, 0, live.z]} rotation={[0, live.rotationY, 0]}>
             <mesh
