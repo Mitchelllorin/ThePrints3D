@@ -5,12 +5,13 @@
  * the walls whether or not the model has been built (drywall is a finish over
  * the studs). Openings (doors/windows) are left unboarded.
  */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, type WallOpening } from '../../services/framingGeometry'
+import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem } from '../../data/objectCatalog'
 import type { ParsedWall, PlacedObject } from '../../types'
 
@@ -62,6 +63,9 @@ export default function DrywallLayer() {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const visible = useUISettingsStore((s) => s.drywallVisible)
   const orientation = useUISettingsStore((s) => s.drywallOrientation)
+
+  const groupRef = useRef<THREE.Group>(null)
+  useExplodeChildren(groupRef, 'walls')
 
   const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
 
@@ -118,7 +122,7 @@ export default function DrywallLayer() {
   if (!visible || userWalls.length === 0) return null
 
   return (
-    <group name="drywall">
+    <group name="drywall" ref={groupRef}>
       {userWalls.map(({ wall, scaleMmPerPx }, i) => (
         <WallBoard
           key={i}

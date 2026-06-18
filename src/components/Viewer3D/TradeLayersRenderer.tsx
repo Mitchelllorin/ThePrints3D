@@ -6,11 +6,12 @@
  * down to the floor — so runs go vertical + horizontal, not just along the base.
  * Runs are placed with the same overlay transform as the walls.
  */
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { plumbingColor, electricalColor, hvacColor } from '../../data/traceLayers'
+import { useExplodeChildren } from './explodeRuntime'
 import type { TracedLine } from '../../types'
 
 const UP = new THREE.Vector3(0, 1, 0)
@@ -107,6 +108,9 @@ export default function TradeLayersRenderer() {
   const elecRisers = useMemo(() => computeRisers(electricalLines, 'in-wall', electricalColor), [electricalLines])
   const hvacRisers = useMemo(() => computeRisers(hvacLines, 'ceiling', hvacColor), [hvacLines])
 
+  const groupRef = useRef<THREE.Group>(null)
+  useExplodeChildren(groupRef, 'mep')
+
   const showPlumb = visibleLayers.has('plumbing')
   const showElec = visibleLayers.has('electrical')
   const showHvac = visibleLayers.has('hvac')
@@ -124,7 +128,7 @@ export default function TradeLayersRenderer() {
   }
 
   return (
-    <group name="trade-layers">
+    <group name="trade-layers" ref={groupRef}>
       {showPlumb && plumbingLines.map((l) => (
         <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'under-floor'))} b={toWorld(l.x2, l.y2, bandY(l, 'under-floor'))}
           color={plumbingColor(l)} radius={0.013} stickM={stickM} coupling />

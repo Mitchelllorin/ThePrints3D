@@ -10,6 +10,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 import { blockMaterial } from '../../services/framingGeometry'
+import { explodeRuntime } from './explodeRuntime'
 
 /** Wall finishes that should render as block courses, not a flat colour. */
 const MASONRY_FINISHES = new Set(['brick', 'exposedBrick', 'stone', 'concrete'])
@@ -1046,6 +1047,7 @@ export default function BuildingModel({ layers }: Props) {
           if (base) child.position.copy(base)
         }
       }
+      explodeRuntime.eased = 0   // let the other layers settle too
       return
     }
 
@@ -1055,6 +1057,11 @@ export default function BuildingModel({ layers }: Props) {
     const t = explodeCurrentRef.current
     const eased = t * t * (3 - 2 * t) // smoothstep
     const center = explodeCenterRef.current
+
+    // Publish so MEP runs, ducts, devices and drywall fan from the same centre.
+    explodeRuntime.eased = eased
+    explodeRuntime.spread = explodeSpread
+    explodeRuntime.center.copy(center)
 
     for (const child of group.children) {
       const base = child.userData.basePos as THREE.Vector3 | undefined

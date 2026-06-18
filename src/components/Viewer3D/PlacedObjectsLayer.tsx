@@ -6,9 +6,11 @@
  * Dragging uses transient local state and only commits to the store (one
  * undoable step) on pointer-up, so a drag doesn't flood the history stack.
  */
-import { useState } from 'react'
+import { useState, useRef } from 'react'
+import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Edges } from '@react-three/drei'
+import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
@@ -44,6 +46,8 @@ export default function PlacedObjectsLayer() {
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
 
   const [drag, setDrag] = useState<DragState | null>(null)
+  const groupRef = useRef<THREE.Group>(null)
+  useExplodeChildren(groupRef, 'mep')
 
   if (placedObjects.length === 0) return null
 
@@ -79,7 +83,7 @@ export default function PlacedObjectsLayer() {
   }
 
   return (
-    <group name="placed-objects">
+    <group name="placed-objects" ref={groupRef}>
       {/* Invisible ground catcher — only active while dragging, so moves/rotates
           continue even when the pointer leaves the object box. */}
       {drag && (
