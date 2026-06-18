@@ -310,6 +310,61 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
 
 // ── Drywall boarding ─────────────────────────────────────────────────────────
 
+// ── Masonry (CMU/brick) wall with openings ──────────────────────────────────
+
+/**
+ * Solid block/brick wall built as segments AROUND any door/window openings —
+ * full-height piers between openings, a lintel course above each opening, and a
+ * sill course below windows — so doors/windows cut a real hole through masonry
+ * (which has no studs to frame). Centred on origin along X like buildWallFraming.
+ */
+export function buildMasonryWall(opts: {
+  length: number; height: number; thickness: number
+  openings?: WallOpening[]; opacity?: number
+}): THREE.Group {
+  const { length, height, thickness, openings = [], opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (length < 0.05 || height < 0.05) return g
+  const depth = Math.max(0.05, thickness)
+  const half = length / 2
+  const add = (w: number, h: number, cx: number, cy: number) => {
+    if (w < 0.02 || h < 0.02) return
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, depth), blockMaterial(w, h, opacity))
+    m.position.set(cx, cy, 0)
+    m.castShadow = true
+    m.receiveShadow = true
+    m.userData.layer = 'walls'
+    g.add(m)
+  }
+
+  const ops = openings
+    .map((o) => {
+      const x = o.centerM - half
+      const w = Math.min(o.widthM, length)
+      const isDoor = o.type === 'door'
+      const sill = isDoor ? 0 : (o.sillM ?? 0.9)
+      const oh = o.heightM ?? (isDoor ? 2.06 : 1.13)
+      const roBot = isDoor ? 0 : Math.min(sill, height - 0.3)
+      const roTop = Math.min(roBot + oh, height - 0.05)
+      return { x0: x - w / 2, x1: x + w / 2, roBot, roTop }
+    })
+    .filter((o) => o.x1 > -half + 0.02 && o.x0 < half - 0.02 && o.roTop > o.roBot)
+    .sort((a, b) => a.x0 - b.x0)
+
+  if (ops.length === 0) { add(length, height, 0, height / 2); return g }
+
+  let cursor = -half
+  for (const o of ops) {
+    const lo = Math.max(-half, o.x0), hi = Math.min(half, o.x1)
+    if (lo - cursor > 0.02) add(lo - cursor, height, (cursor + lo) / 2, height / 2)  // pier before
+    if (height - o.roTop > 0.02) add(hi - lo, height - o.roTop, (lo + hi) / 2, (o.roTop + height) / 2)  // lintel above
+    if (o.roBot > 0.02) add(hi - lo, o.roBot, (lo + hi) / 2, o.roBot / 2)  // sill course below (windows)
+    cursor = Math.max(cursor, hi)
+  }
+  if (half - cursor > 0.02) add(half - cursor, height, (cursor + half) / 2, height / 2)  // pier after
+  return g
+}
+
 export interface WallDrywallOpts {
   length: number
   height: number

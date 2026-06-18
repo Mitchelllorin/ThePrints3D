@@ -13,7 +13,7 @@ import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallFraming, blockMaterial, type WallOpening } from '../../services/framingGeometry'
+import { buildWallFraming, buildMasonryWall, type WallOpening } from '../../services/framingGeometry'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import { getCatalogItem } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
@@ -60,15 +60,12 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   // Masonry (CMU/brick/concrete) is a solid block; framed walls get studs.
   const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
   const framing = useMemo(() => {
+    const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
     if (isMasonry) {
-      const g = new THREE.Group()
-      const m = new THREE.Mesh(new THREE.BoxGeometry(length, wallHeight, thicknessM), blockMaterial(length, wallHeight, opacity))
-      m.position.set(0, wallHeight / 2, 0)
-      g.add(m)
-      return g
+      // Block/brick has no studs — doors/windows cut a real hole, with a lintel.
+      return buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity })
     }
     const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-    const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
     return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity })
   }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity])
 
