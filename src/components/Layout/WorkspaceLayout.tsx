@@ -171,6 +171,7 @@ function SettingsContent() {
           onChange={(v) => setUI({ topbarOpacity: v / 100, sidebarOpacity: v / 100, panelOpacity: v / 100 })} />
         <ColorRow label="Colour" val={ui.panelColor} onChange={(v) => setUI({ panelColor: v })} />
         <ColorRow label="Text colour" val={ui.textColor} onChange={(v) => setUI({ textColor: v })} />
+        <ColorRow label="Text (secondary)" val={ui.textColorDim} onChange={(v) => setUI({ textColorDim: v })} />
         <ColorRow label="Accent" val={ui.accentColor} onChange={(v) => setUI({ accentColor: v })} />
       </CollapsibleSection>
 

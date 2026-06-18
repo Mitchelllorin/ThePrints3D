@@ -155,7 +155,7 @@
 .panelTitle {
   font-size: 11px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--bp-text-dim, #64748b);
   text-transform: uppercase;
   letter-spacing: 0.6px;
 }
@@ -169,7 +169,7 @@
   padding: 2px 6px;
   border-radius: 4px;
 }
-.panelClose:hover { color: #94a3b8; }
+.panelClose:hover { color: var(--bp-text-dim, #94a3b8); }
 
 .panelScroll {
   flex: 1;
@@ -221,7 +221,7 @@
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
-.tab:hover { background: rgba(30, 41, 59, 0.7); color: #94a3b8; }
+.tab:hover { background: rgba(30, 41, 59, 0.7); color: var(--bp-text-dim, #94a3b8); }
 
 .tabActive {
   color: var(--bp-accent, #38bdf8);
@@ -273,7 +273,7 @@
 
 .uploadHintSub {
   font-size: 11px;
-  color: #64748b;
+  color: var(--bp-text-dim, #64748b);
   line-height: 1.5;
   margin: 0;
 }
@@ -324,7 +324,7 @@
   border-radius: 4px;
   line-height: 1;
 }
-.uploadHintDismiss:hover { color: #94a3b8; }
+.uploadHintDismiss:hover { color: var(--bp-text-dim, #94a3b8); }
 
 .uploadHintDivider {
   font-size: 10px;
@@ -355,7 +355,7 @@
   text-align: center;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.presetBtn:hover { background: #1e293b; color: #94a3b8; border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 30%, transparent); }
+.presetBtn:hover { background: #1e293b; color: var(--bp-text-dim, #94a3b8); border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 30%, transparent); }
 
 /* ── Settings content ────────────────────────────────────────────────────── */
 .settingsBody { padding: 4px 0 16px; }
@@ -380,7 +380,7 @@
 
 .settingLabel {
   font-size: 11px;
-  color: #64748b;
+  color: var(--bp-text-dim, #64748b);
   width: 90px;
   flex-shrink: 0;
 }
@@ -420,7 +420,7 @@
   background: #0f172a;
   border: 1px solid #1e293b;
   border-radius: 4px;
-  color: #94a3b8;
+  color: var(--bp-text-dim, #94a3b8);
   font-size: 11px;
   padding: 0 6px;
   cursor: pointer;
@@ -471,8 +471,8 @@
   padding: 3px 16px;
   font-size: 11px;
 }
-.convListUnit { color: #64748b; }
-.convListVal { color: #94a3b8; font-variant-numeric: tabular-nums; }
+.convListUnit { color: var(--bp-text-dim, #64748b); }
+.convListVal { color: var(--bp-text-dim, #94a3b8); font-variant-numeric: tabular-nums; }
 
 /* ── Collapsible settings sections (retractable toggle-tab pattern) ─────────
    Mirrors the panel tab strip: one section open at a time, click to retract. */
@@ -493,7 +493,7 @@
   color: #334155;
   transition: color 0.15s, background 0.15s;
 }
-.collapsibleHeader:hover { color: #94a3b8; background: rgba(30, 41, 59, 0.35); }
+.collapsibleHeader:hover { color: var(--bp-text-dim, #94a3b8); background: rgba(30, 41, 59, 0.35); }
 
 .collapsibleHeaderOpen { color: var(--bp-accent, #38bdf8); }
 
@@ -524,7 +524,7 @@
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
-.resetBtn:hover { color: #94a3b8; border-color: #334155; }
+.resetBtn:hover { color: var(--bp-text-dim, #94a3b8); border-color: #334155; }
 
 /* ── Floating brand mark — top-left, never intercepts canvas input ───────── */
 .logoFloat {

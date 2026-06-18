@@ -15,6 +15,7 @@ export default function CSSVarInjector() {
   const panelOpacity   = useUISettingsStore((s) => s.panelOpacity)
   const panelColor     = useUISettingsStore((s) => s.panelColor)
   const textColor      = useUISettingsStore((s) => s.textColor)
+  const textColorDim   = useUISettingsStore((s) => s.textColorDim)
   const logoOpacity    = useUISettingsStore((s) => s.logoOpacity)
   const logoSize       = useUISettingsStore((s) => s.logoSize)
   const accentColor    = useUISettingsStore((s) => s.accentColor)
@@ -27,10 +28,11 @@ export default function CSSVarInjector() {
     const rgb = hexToRgbTriplet(panelColor)
     if (rgb) r.style.setProperty('--bp-panel-rgb', rgb)
     r.style.setProperty('--bp-text', textColor)
+    r.style.setProperty('--bp-text-dim', textColorDim)
     r.style.setProperty('--bp-logo-opacity',    String(logoOpacity))
     r.style.setProperty('--bp-logo-scale',      String(logoSize))
     r.style.setProperty('--bp-accent',          accentColor)
-  }, [topbarOpacity, sidebarOpacity, panelOpacity, panelColor, textColor, logoOpacity, logoSize, accentColor])
+  }, [topbarOpacity, sidebarOpacity, panelOpacity, panelColor, textColor, textColorDim, logoOpacity, logoSize, accentColor])
 
   return null
 }

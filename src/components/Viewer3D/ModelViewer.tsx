@@ -29,10 +29,11 @@ function CameraRig() {
   const initialized = useRef(false)
   useEffect(() => {
     if (!initialized.current) {
-      // On phones (<768px) start ~40% closer so the floorplan fills the viewport.
+      // On phones start closer AND steeper (more top-down) so the print on the
+      // ground is clearly visible instead of edge-on/flat.
       const mobile = typeof window !== 'undefined' && window.innerWidth < 768
-      const d = mobile ? 0.6 : 1
-      camera.position.set(12 * d, 10 * d, 12 * d)
+      if (mobile) camera.position.set(6, 12, 6)
+      else camera.position.set(12, 10, 12)
       camera.lookAt(0, 0, 0)
       initialized.current = true
     }

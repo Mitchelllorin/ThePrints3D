@@ -23,7 +23,7 @@
   border-radius: 10px;
   padding: 10px 14px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--bp-text-dim, #94a3b8);
   backdrop-filter: blur(calc(var(--bp-panel-opacity, 0.88) * 8px));
 }
 
@@ -67,7 +67,7 @@
 
 .stepHint {
   font-size: 11px;
-  color: #64748b;
+  color: var(--bp-text-dim, #64748b);
   line-height: 1.4;
   margin-bottom: 2px;
 }
@@ -125,7 +125,7 @@
 }
 
 .cancel:hover {
-  color: #94a3b8;
+  color: var(--bp-text-dim, #94a3b8);
 }
 
 /* Calibration distance row */
@@ -175,7 +175,7 @@
   flex: 1;
   background: rgba(15, 23, 42, 0.8);
   border: 1px solid #334155;
-  color: #94a3b8;
+  color: var(--bp-text-dim, #94a3b8);
   border-radius: 7px;
   padding: 5px 8px;
   font-size: 11px;
@@ -201,7 +201,7 @@
 }
 
 .detailsSummary:hover {
-  color: #64748b;
+  color: var(--bp-text-dim, #64748b);
 }
 
 .detailsBody {
@@ -216,7 +216,7 @@
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--bp-text-dim, #64748b);
 }
 
 .sliderRow input[type="range"] {
@@ -229,7 +229,7 @@
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--bp-text-dim, #64748b);
   cursor: pointer;
 }
 
@@ -375,7 +375,7 @@
 .cardClose {
   background: none;
   border: none;
-  color: #94a3b8;
+  color: var(--bp-text-dim, #94a3b8);
   font-size: 15px;
   cursor: pointer;
   padding: 2px 6px;
@@ -391,9 +391,9 @@
   color: #cbd5e1;
 }
 
-.propLabel { width: 56px; flex-shrink: 0; color: #94a3b8; }
+.propLabel { width: 56px; flex-shrink: 0; color: var(--bp-text-dim, #94a3b8); }
 .propVal { color: #e2e8f0; }
-.unit { color: #64748b; font-size: 11px; }
+.unit { color: var(--bp-text-dim, #64748b); font-size: 11px; }
 
 .dimInput {
   width: 46px;
