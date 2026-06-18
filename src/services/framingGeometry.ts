@@ -297,3 +297,76 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
 
   return group
 }
+
+// ── Drywall boarding ─────────────────────────────────────────────────────────
+
+export interface WallDrywallOpts {
+  length: number
+  height: number
+  thickness: number
+  /** Sheet orientation: 'vertical' (4'w × 8'h) or 'horizontal' (8'w × 4'h). */
+  orientation?: 'vertical' | 'horizontal'
+  /** Openings to leave unboarded (centreM from wall start, widthM, type). */
+  openings?: WallOpening[]
+  /** Board both faces, or just the interior (default both). */
+  bothSides?: boolean
+  opacity?: number
+}
+
+const SHEET_LONG = 2.438   // 8'
+const SHEET_SHORT = 1.219  // 4'
+const DRYWALL_T = 0.0127   // 1/2"
+const SHEET_GAP = 0.004    // visible joint between sheets
+
+/**
+ * Board a wall with real 4×8 drywall sheets, tiled in the chosen orientation so
+ * the joints read, with sheets that overlap a door/window opening left off (the
+ * opening stays open). Centred on origin along X like buildWallFraming.
+ */
+export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
+  const { length, height, thickness, orientation = 'vertical', openings = [], bothSides = true, opacity = 1 } = opts
+  const group = new THREE.Group()
+  if (length < 0.05 || height < 0.05) return group
+
+  const cellW = orientation === 'horizontal' ? SHEET_LONG : SHEET_SHORT
+  const cellH = orientation === 'horizontal' ? SHEET_SHORT : SHEET_LONG
+  const depth = Math.max(STUD_WIDTH_M, thickness)
+  const half = length / 2
+  const faceZ = depth / 2 + DRYWALL_T / 2
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#e8e6e1'), roughness: 0.95, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+
+  // Opening rectangles in local (x, y): x from start − half; height by type.
+  const rects = openings.map((o) => {
+    const cx = o.centerM - half
+    const isDoor = o.type === 'door'
+    const yHi = Math.min(isDoor ? 2.06 : 2.03, height)
+    const yLo = isDoor ? 0 : Math.min(0.9, yHi - 0.3)
+    return { x0: cx - o.widthM / 2, x1: cx + o.widthM / 2, y0: yLo, y1: yHi }
+  })
+  const overlapsOpening = (x0: number, x1: number, y0: number, y1: number) =>
+    rects.some((r) => x0 < r.x1 && x1 > r.x0 && y0 < r.y1 && y1 > r.y0)
+
+  const zs = bothSides ? [faceZ, -faceZ] : [faceZ]
+  for (let x = -half; x < half - 0.02; x += cellW + SHEET_GAP) {
+    const w = Math.min(cellW, half - x)
+    if (w < 0.05) continue
+    for (let y = 0; y < height - 0.02; y += cellH + SHEET_GAP) {
+      const h = Math.min(cellH, height - y)
+      if (h < 0.05) continue
+      if (overlapsOpening(x, x + w, y, y + h)) continue   // leave the opening open
+      for (const z of zs) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w - SHEET_GAP, h - SHEET_GAP, DRYWALL_T), mat)
+        m.position.set(x + w / 2, y + h / 2, z)
+        m.castShadow = true
+        m.receiveShadow = true
+        m.userData.layer = 'drywall'
+        group.add(m)
+      }
+    }
+  }
+  return group
+}

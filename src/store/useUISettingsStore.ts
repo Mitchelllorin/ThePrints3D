@@ -20,6 +20,9 @@ export interface UISettings {
   gridOpacity: number
   gridColor: string
   gridCellSize: number
+  // Drywall boarding
+  drywallVisible: boolean
+  drywallOrientation: 'vertical' | 'horizontal'
   // Workspace lighting / background
   bgColor: string
   lightColor: string
@@ -46,6 +49,8 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   gridOpacity: 0.8,
   gridColor: '#1a4a7a',
   gridCellSize: 1,
+  drywallVisible: false,
+  drywallOrientation: 'vertical',
   bgColor: '#060d1a',
   lightColor: '#ffffff',
   dirIntensity: 1.0,

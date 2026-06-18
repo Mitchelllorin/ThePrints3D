@@ -18,6 +18,7 @@ import ConstructionWizard from '../ConstructionWizard/ConstructionWizard'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
+import DrywallLayer from './DrywallLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
 import FloatingLogo3D from './FloatingLogo3D'
@@ -536,6 +537,7 @@ export default function ModelViewer() {
         <FloatingLogo3D />
         <FloorplanOverlay />
         <LiveWallsLayer />
+        <DrywallLayer />
         <PlacedObjectsLayer />
         <TradeLayersRenderer />
 

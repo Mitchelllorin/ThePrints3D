@@ -247,6 +247,13 @@ function SettingsContent() {
         <Slider label="Cell size" val={ui.gridCellSize} min={0.5} max={10} step={0.5} unit="m" onChange={(v) => setUI({ gridCellSize: v })} />
       </CollapsibleSection>
 
+      <CollapsibleSection id="drywall" title="Drywall" openId={openId} setOpenId={setOpenId}>
+        <Toggle label="Board walls" val={ui.drywallVisible} onChange={(v) => setUI({ drywallVisible: v })} />
+        <Select label="Sheet orientation" val={ui.drywallOrientation}
+          options={[{ value: 'vertical', label: 'Vertical (4×8 standing)' }, { value: 'horizontal', label: 'Horizontal (laid down)' }]}
+          onChange={(v) => setUI({ drywallOrientation: v as 'vertical' | 'horizontal' })} />
+      </CollapsibleSection>
+
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>
     </div>
   )
