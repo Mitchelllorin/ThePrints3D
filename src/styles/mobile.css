@@ -15,7 +15,7 @@ body {
   margin: 0;
   padding: 0;
   background: #0f172a;
-  color: #f1f5f9;
+  color: var(--bp-text, #f1f5f9);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
   touch-action: manipulation; /* eliminates the 300ms tap delay + double-tap zoom on buttons */

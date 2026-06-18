@@ -94,7 +94,7 @@
 
 .historyBtn:hover:not(:disabled) {
   background: #1e293b;
-  color: #f1f5f9;
+  color: var(--bp-text, #f1f5f9);
 }
 
 .historyBtn:disabled {
@@ -268,7 +268,7 @@
 .uploadHintTitle {
   font-size: 13px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--bp-text, #f1f5f9);
 }
 
 .uploadHintSub {
@@ -312,7 +312,7 @@
   text-align: left;
   transition: background 0.15s, color 0.15s;
 }
-.uploadHintBtnSecondary:hover { background: #1e293b; color: #f1f5f9; }
+.uploadHintBtnSecondary:hover { background: #1e293b; color: var(--bp-text, #f1f5f9); }
 
 .uploadHintDismiss {
   background: transparent;
@@ -434,7 +434,7 @@
   background: #0f172a;
   border: 1px solid #1e293b;
   border-radius: 4px;
-  color: #f1f5f9;
+  color: var(--bp-text, #f1f5f9);
   font-size: 12px;
   padding: 0 6px;
 }

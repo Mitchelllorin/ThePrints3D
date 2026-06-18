@@ -7,6 +7,8 @@ export interface UISettings {
   panelOpacity: number
   /** Surface colour shared by the top bar, side panel, toolbars and floaters. */
   panelColor: string
+  /** App-wide font / text colour. */
+  textColor: string
   // Logo (2D topbar)
   logoOpacity: number
   logoSize: number
@@ -41,6 +43,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   sidebarOpacity: 0.35,
   panelOpacity: 0.35,
   panelColor: '#0f172a',
+  textColor: '#f1f5f9',
   logoOpacity: 1,
   logoSize: 1,
   logo3DVisible: true,

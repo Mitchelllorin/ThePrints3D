@@ -170,6 +170,7 @@ function SettingsContent() {
         <Slider label="Opacity" val={Math.round(ui.panelOpacity * 100)} min={0} max={100} step={1} unit="%"
           onChange={(v) => setUI({ topbarOpacity: v / 100, sidebarOpacity: v / 100, panelOpacity: v / 100 })} />
         <ColorRow label="Colour" val={ui.panelColor} onChange={(v) => setUI({ panelColor: v })} />
+        <ColorRow label="Text colour" val={ui.textColor} onChange={(v) => setUI({ textColor: v })} />
         <ColorRow label="Accent" val={ui.accentColor} onChange={(v) => setUI({ accentColor: v })} />
       </CollapsibleSection>
 
