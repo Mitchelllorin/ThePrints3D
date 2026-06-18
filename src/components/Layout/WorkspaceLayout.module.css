@@ -595,3 +595,181 @@
   accent-color: var(--bp-accent, #38bdf8);
   cursor: pointer;
 }
+
+/* ── Spec chrome panels (Trace / Layers / Settings) ──────────────────────────
+   One at a time, slide in from an edge, vertically centered, always an X. */
+.specPanel {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(var(--bp-panel-rgb, 8, 12, 24), var(--bp-panel-opacity, 0.96));
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px;
+  width: min(300px, 88vw);
+  max-height: 65vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  z-index: 200;
+}
+
+.specPanelLeft { left: 12px; }
+.specPanelRight { right: 12px; }
+
+.specClose {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: var(--bp-text, #f1f5f9);
+  font-size: 16px;
+  cursor: pointer;
+}
+.specClose:hover { background: rgba(255, 255, 255, 0.14); }
+
+.specScroll { display: flex; flex-direction: column; gap: 8px; }
+
+.specTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bp-text, #f1f5f9);
+  margin: 0 32px 4px 0;
+}
+
+.specDivider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 8px 0;
+}
+
+/* Settings action buttons (Load Preset / Recalibrate / Annotate / etc.) */
+.specBtn {
+  width: 100%;
+  min-height: 44px;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--bp-text, #f1f5f9);
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.specBtn:hover { background: rgba(255, 255, 255, 0.14); }
+
+.specSlider {
+  width: 100%;
+  accent-color: var(--bp-accent, #38bdf8);
+  cursor: pointer;
+}
+
+/* ── Trace panel — framing/role pills + Start Tracing ───────────────────────── */
+.pillLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bp-text, #f1f5f9);
+  margin: 4px 0 0;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pill {
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: var(--bp-text, #f1f5f9);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.pill:hover { background: rgba(255, 255, 255, 0.14); }
+
+.pillActive {
+  border-color: var(--bp-accent, #38bdf8);
+  color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 18%, transparent);
+}
+
+.startTraceBtn {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 8px;
+  background: var(--bp-accent, #38bdf8);
+  color: #0f172a;
+  border: none;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.startTraceBtn:hover { opacity: 0.88; }
+
+/* ── Layers panel — four trade-layer rows ───────────────────────────────────── */
+.layerList { display: flex; flex-direction: column; gap: 8px; }
+
+.layerRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+.layerRowActive { border-color: var(--bp-accent, #38bdf8); }
+
+.layerDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.layerName {
+  flex: 1;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--bp-text, #f1f5f9);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+
+.layerToggle {
+  min-width: 52px;
+  min-height: 36px;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.layerToggleOn {
+  border-color: var(--bp-accent, #38bdf8);
+  color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 18%, transparent);
+}

@@ -228,7 +228,9 @@ export default function ModelViewer() {
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
-  const [showWizard, setShowWizard]     = useState(false)
+  // Construction wizard is opened from Settings → "Re-run Wizard" via the store.
+  const wizardOpen     = useFloorplanLocalStore((s) => s.wizardOpen)
+  const setWizardOpen  = useFloorplanLocalStore((s) => s.setWizardOpen)
   const [exportOpen, setExportOpen]     = useState(false)
   const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
@@ -377,7 +379,7 @@ export default function ModelViewer() {
             <>
               <button
                 className={styles.toolBtn}
-                onClick={() => { buildForMe(); setShowWizard(false) }}
+                onClick={() => { buildForMe(); setWizardOpen(false) }}
                 title="Auto-build framing from detected walls — takes all defaults"
                 data-testid="build-for-me-btn"
               >
@@ -386,10 +388,10 @@ export default function ModelViewer() {
               {/* Wizard only while setup is incomplete (before a build exists). */}
               {!buildResult && (
                 <button
-                  className={`${styles.toolBtn} ${showWizard ? styles.toolBtnActive : ''}`}
+                  className={`${styles.toolBtn} ${wizardOpen ? styles.toolBtnActive : ''}`}
                   onClick={() => {
                     if (!buildResult) buildForMe()
-                    setShowWizard(!showWizard)
+                    setWizardOpen(!wizardOpen)
                   }}
                   title="Walk construction decisions step by step"
                   data-testid="wizard-btn"
@@ -494,8 +496,14 @@ export default function ModelViewer() {
         />
       )}
 
-      {/* Construction Wizard — step-through decisions panel */}
-      {showWizard && <ConstructionWizard />}
+      {/* Construction Wizard — step-through decisions panel (opened from Settings).
+          Wrapped with a fixed close button so it's dismissable in the 5-button model. */}
+      {wizardOpen && (
+        <>
+          <button className={styles.wizardClose} onClick={() => setWizardOpen(false)} aria-label="Close wizard">✕</button>
+          <ConstructionWizard />
+        </>
+      )}
 
       {/* FloorplanPanel renders DOM controls (inputs, buttons) outside the
          Canvas so they stay in the react-dom reconciler. */}

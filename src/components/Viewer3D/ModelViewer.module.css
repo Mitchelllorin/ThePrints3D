@@ -1,3 +1,29 @@
+/* Close button for the construction wizard panel — sits just left of the
+   wizard's top edge, clear of the fixed top-right icon column. */
+.wizardClose {
+  position: absolute;
+  top: 56px;
+  right: 336px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 21;
+}
+.wizardClose:hover { background: rgba(0, 0, 0, 0.85); }
+
+@media (max-width: 767px) {
+  /* On phones the wizard is full-width-ish; pin the close to the top-left. */
+  .wizardClose { right: auto; left: 8px; top: 8px; }
+}
+
 .viewer {
   position: relative;
   width: 100%;

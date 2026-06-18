@@ -102,12 +102,14 @@ interface FloorplanLocalState {
    * panel/card/picker checks this. Selection data (selectedObjectId /
    * selectedWallIndex) is the content; `activePanel` controls visibility.
    */
-  activePanel: 'picker' | 'panelBoard' | 'object' | 'wall' | 'catalog' | 'line' | null
+  activePanel: 'picker' | 'panelBoard' | 'object' | 'wall' | 'catalog' | 'line' | 'trace' | 'layers' | 'settings' | null
 
   // ─── UI toggles ──────────────────────────────────────────────────
   presetOpen: boolean
   practiceMode: boolean
   seedProcessing: boolean
+  /** Construction wizard panel (re-run from Settings) — mounted by ModelViewer. */
+  wizardOpen: boolean
 
   // ─── actions ─────────────────────────────────────────────────────
   setTraceMode: (v: boolean) => void
@@ -145,10 +147,14 @@ interface FloorplanLocalState {
   selectWallExclusive: (i: number) => void
   selectLineExclusive: (trade: 'plumbing' | 'electrical' | 'hvac', id: string) => void
   armPlaceExclusive: (type: string | null) => void
+  /** Opens one of the chrome panels (trace/layers/settings); clears any
+   *  selection/floater so only one overlay UI shows at a time. */
+  setActivePanel: (v: FloorplanLocalState['activePanel']) => void
   closeAllPanels: () => void
   setPresetOpen: (v: boolean) => void
   setPracticeMode: (v: boolean) => void
   setSeedProcessing: (v: boolean) => void
+  setWizardOpen: (v: boolean) => void
 }
 
 export type { CalibrationUnit, DragKind, DragState, TraceStyle }
@@ -194,6 +200,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   presetOpen: false,
   practiceMode: true,
   seedProcessing: false,
+  wizardOpen: false,
 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
@@ -244,8 +251,14 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, placeObjectType: null }),
   selectLineExclusive: (trade, id) => set({ activePanel: 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
   armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null }),
+  // Toggling the same panel closes it; opening a different one clears every
+  // selection/floater so the single-panel rule holds across both UI systems.
+  setActivePanel: (v) => set((s) => v && s.activePanel === v
+    ? { activePanel: null }
+    : { activePanel: v, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
   closeAllPanels: () => set({ activePanel: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),
   setSeedProcessing: (v) => set({ seedProcessing: v }),
+  setWizardOpen: (v) => set({ wizardOpen: v }),
 }))
