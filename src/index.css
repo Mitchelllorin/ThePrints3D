@@ -1,11 +1,41 @@
 :root {
-  --bp-topbar-opacity: 0.95;
-  --bp-sidebar-opacity: 0.95;
-  --bp-panel-opacity: 0.92;
+  /* ─────────────────────────────────────────────────────────────────────────
+     APP THEME — the single source of truth for how the whole UI looks.
+     These are driven live by Settings → Appearance (see CSSVarInjector).
+     Components must NEVER hardcode chrome colours; they reference the derived
+     surface / text / accent variables below so one setting changes everything.
+     ──────────────────────────────────────────────────────────────────────── */
+
+  /* The ONE UI colour (menus, toolbars, panels, buttons) as an "r, g, b" body. */
   --bp-panel-rgb: 15, 23, 42;
+  /* The ONE UI opacity: 0 = fully clear, 1 = fully solid. */
+  --bp-panel-opacity: 0.92;
+
+  /* Per-region opacities are kept in sync with the single UI opacity. */
+  --bp-topbar-opacity: 0.92;
+  --bp-sidebar-opacity: 0.92;
+
+  /* Text */
+  --bp-text: #f1f5f9;       /* primary  — main labels, button text */
+  --bp-text-dim: #94a3b8;   /* secondary — hints, dim/secondary text */
+
+  /* Accent — used ONLY to highlight the active / selected / hovered item. */
+  --bp-accent: #38bdf8;
+
   --bp-logo-opacity: 1;
   --bp-logo-scale: 1;
-  --bp-accent: #38bdf8;
+
+  /* ── Derived surfaces — components reference THESE, never raw hex ──────────
+     All are built from the single UI colour + opacity, so raising/lowering the
+     opacity (incl. all the way to clear) affects every surface uniformly. */
+  --bp-surface:       rgba(var(--bp-panel-rgb), var(--bp-panel-opacity));
+  --bp-surface-2:     rgba(var(--bp-panel-rgb), calc(var(--bp-panel-opacity) + 0.12));
+  --bp-hover:         rgba(var(--bp-panel-rgb), calc(var(--bp-panel-opacity) + 0.22));
+  --bp-surface-solid: rgb(var(--bp-panel-rgb));
+  /* Hairline + blur that fade out with the surface, so "clear" menus are truly clear. */
+  --bp-border:        rgba(255, 255, 255, calc(var(--bp-panel-opacity) * 0.18));
+  --bp-border-strong: rgba(255, 255, 255, calc(var(--bp-panel-opacity) * 0.36));
+  --bp-blur:          calc(var(--bp-panel-opacity) * 12px);
 }
 
 *, *::before, *::after {
@@ -22,7 +52,7 @@ html, body, #root {
 
 body {
   background: #0f172a;
-  color: #f1f5f9;
+  color: var(--bp-text);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -33,14 +63,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: var(--bp-border-strong);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--bp-accent);
 }

@@ -4,8 +4,8 @@
   justify-content: space-between;
   height: 48px;
   padding: 0 20px;
-  background: rgba(15, 23, 42, var(--bp-topbar-opacity, 0.95));
-  border-bottom: 1px solid rgba(30, 41, 59, 0.6);
+  background: var(--bp-surface);
+  border-bottom: 1px solid var(--bp-border);
   flex-shrink: 0;
   z-index: 10;
   backdrop-filter: blur(8px);
@@ -20,7 +20,7 @@
 .menuBtn {
   background: none;
   border: none;
-  color: #475569;
+  color: var(--bp-text-dim);
   font-size: 16px;
   cursor: pointer;
   padding: 5px 7px;
@@ -30,8 +30,8 @@
 }
 
 .menuBtn:hover {
-  background: #1e293b;
-  color: #94a3b8;
+  background: var(--bp-hover);
+  color: var(--bp-accent);
 }
 
 .brand {
@@ -45,7 +45,7 @@
   font-weight: 800;
   font-style: italic;
   letter-spacing: 0;
-  color: #f1f5f9;
+  color: var(--bp-text);
   white-space: nowrap;
 }
 
@@ -59,7 +59,7 @@
 .brandSub {
   font-size: 10px;
   font-weight: 500;
-  color: #475569;
+  color: var(--bp-text-dim);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -73,7 +73,7 @@
 .settingsBtn {
   background: none;
   border: none;
-  color: #475569;
+  color: var(--bp-text-dim);
   font-size: 16px;
   cursor: pointer;
   padding: 6px 8px;
@@ -83,11 +83,11 @@
 }
 
 .settingsBtn:hover {
-  background: #1e293b;
-  color: #94a3b8;
+  background: var(--bp-hover);
+  color: var(--bp-accent);
 }
 
 .settingsBtnActive {
-  background: #1e293b;
-  color: #f1f5f9;
+  background: var(--bp-hover);
+  color: var(--bp-accent);
 }

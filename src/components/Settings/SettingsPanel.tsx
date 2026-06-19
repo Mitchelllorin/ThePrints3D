@@ -4,6 +4,7 @@ import styles from './SettingsPanel.module.css'
 
 interface SliderProps {
   label: string
+  hint?: string
   value: number
   min: number
   max: number
@@ -12,10 +13,13 @@ interface SliderProps {
   onChange: (v: number) => void
 }
 
-function Slider({ label, value, min, max, step, unit = '', onChange }: SliderProps) {
+function Slider({ label, hint, value, min, max, step, unit = '', onChange }: SliderProps) {
   return (
     <label className={styles.row}>
-      <span className={styles.rowLabel}>{label}</span>
+      <span className={styles.rowLabel}>
+        {label}
+        {hint && <span className={styles.rowHint}>{hint}</span>}
+      </span>
       <input
         type="range"
         min={min}
@@ -32,14 +36,18 @@ function Slider({ label, value, min, max, step, unit = '', onChange }: SliderPro
 
 interface ColorRowProps {
   label: string
+  hint?: string
   value: string
   onChange: (v: string) => void
 }
 
-function ColorRow({ label, value, onChange }: ColorRowProps) {
+function ColorRow({ label, hint, value, onChange }: ColorRowProps) {
   return (
     <label className={styles.row}>
-      <span className={styles.rowLabel}>{label}</span>
+      <span className={styles.rowLabel}>
+        {label}
+        {hint && <span className={styles.rowHint}>{hint}</span>}
+      </span>
       <input
         type="color"
         value={value}
@@ -63,6 +71,13 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 export default function SettingsPanel({ onClose }: { onClose: () => void }) {
   const s = useUISettingsStore()
 
+  // The single "UI opacity" drives every chrome surface at once.
+  const uiOpacityPct = Math.round(s.panelOpacity * 100)
+  const setUiOpacity = (pct: number) => {
+    const v = pct / 100
+    s.set({ panelOpacity: v, topbarOpacity: v, sidebarOpacity: v })
+  }
+
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.panel} onClick={(e) => e.stopPropagation()}>
@@ -72,24 +87,37 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className={styles.body}>
-          <Group title="Panels &amp; Toolbars">
-            <Slider
-              label="Top bar"
-              value={Math.round(s.topbarOpacity * 100)}
-              min={20} max={100} step={1} unit="%"
-              onChange={(v) => s.set({ topbarOpacity: v / 100 })}
+          <Group title="Appearance">
+            <ColorRow
+              label="UI colour"
+              hint="Menus, toolbars, panels & buttons"
+              value={s.panelColor}
+              onChange={(v) => s.set({ panelColor: v })}
             />
             <Slider
-              label="Sidebar"
-              value={Math.round(s.sidebarOpacity * 100)}
-              min={20} max={100} step={1} unit="%"
-              onChange={(v) => s.set({ sidebarOpacity: v / 100 })}
+              label="UI opacity"
+              hint="0% = fully see-through · 100% = solid"
+              value={uiOpacityPct}
+              min={0} max={100} step={1} unit="%"
+              onChange={setUiOpacity}
             />
-            <Slider
-              label="Floating panels"
-              value={Math.round(s.panelOpacity * 100)}
-              min={20} max={100} step={1} unit="%"
-              onChange={(v) => s.set({ panelOpacity: v / 100 })}
+            <ColorRow
+              label="Text — primary"
+              hint="Main labels & button text"
+              value={s.textColor}
+              onChange={(v) => s.set({ textColor: v })}
+            />
+            <ColorRow
+              label="Text — secondary"
+              hint="Hints & dimmed text"
+              value={s.textColorDim}
+              onChange={(v) => s.set({ textColorDim: v })}
+            />
+            <ColorRow
+              label="Accent"
+              hint="Highlights the active / selected item"
+              value={s.accentColor}
+              onChange={(v) => s.set({ accentColor: v })}
             />
           </Group>
 
@@ -110,14 +138,6 @@ export default function SettingsPanel({ onClose }: { onClose: () => void }) {
               value={s.gridCellSize}
               min={0.5} max={10} step={0.5} unit=" m"
               onChange={(v) => s.set({ gridCellSize: v })}
-            />
-          </Group>
-
-          <Group title="Accent Color">
-            <ColorRow
-              label="Highlight color"
-              value={s.accentColor}
-              onChange={(v) => s.set({ accentColor: v })}
             />
           </Group>
         </div>
