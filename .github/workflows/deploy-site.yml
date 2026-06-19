@@ -1,0 +1,59 @@
+name: Deploy marketing site
+
+# Publishes the public marketing website to theprints3d.com (GitHub Pages).
+# The site is static — just the landing + privacy pages. The app itself is NOT
+# served here; it ships through the Play / Microsoft / Apple stores.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/landing.html'
+      - 'public/privacy.html'
+      - 'public/favicon.svg'
+      - 'public/CNAME'
+      - '.github/workflows/deploy-site.yml'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; let a newer run supersede an in-progress one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assemble static marketing site
+        run: |
+          mkdir -p _site
+          # Landing page is the homepage; also keep /landing.html for existing links.
+          cp public/landing.html _site/index.html
+          cp public/landing.html _site/landing.html
+          cp public/privacy.html _site/privacy.html
+          cp public/favicon.svg  _site/favicon.svg
+          cp public/CNAME         _site/CNAME
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

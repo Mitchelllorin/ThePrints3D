@@ -11,7 +11,7 @@
 
 ThePrints3D is a React + TypeScript web application that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. All processing happens client-side — no drawings ever leave your device.
 
-🌐 **[Landing page](https://theprints3d.com/landing.html)** &nbsp;|&nbsp; 🚀 **[Launch the app](https://theprints3d.com/)**
+🌐 **[Website](https://theprints3d.com)** &nbsp;|&nbsp; 📱 **[Get it on Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app)**
 
 ---
 
