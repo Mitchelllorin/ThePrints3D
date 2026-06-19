@@ -13,7 +13,7 @@
   width: 44px;
   height: 44px;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.7));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--bp-border);
   border-radius: 8px;
   color: var(--bp-text, #ffffff);
   font-size: 18px;
@@ -27,7 +27,7 @@
 
 .btn:hover:not(:disabled) {
   background: color-mix(in srgb, #ffffff 14%, rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.7)));
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: var(--bp-border-strong);
 }
 
 /* Plain-text tooltip to the LEFT of the button on hover. */

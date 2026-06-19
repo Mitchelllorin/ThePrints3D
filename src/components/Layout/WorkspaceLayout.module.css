@@ -129,7 +129,7 @@
   max-height: 60dvh;
   background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-sidebar-opacity, 0.95));
   backdrop-filter: blur(calc(var(--bp-sidebar-opacity, 0.95) * 14px));
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--bp-border);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
@@ -546,7 +546,7 @@
 .panelBtn {
   flex: 1;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--bp-border);
   color: var(--bp-text, #ffffff);
   font-size: 14px;
   font-weight: 500;
@@ -571,7 +571,7 @@
   height: 40px;
   padding: 0 12px;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--bp-border);
   border-radius: 8px;
   backdrop-filter: blur(4px);
   pointer-events: all;
@@ -597,8 +597,8 @@
   top: 50%;
   transform: translateY(-50%);
   background: rgba(var(--bp-panel-rgb, 8, 12, 24), var(--bp-panel-opacity, 0.96));
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(var(--bp-blur, 10px));
+  border: 1px solid var(--bp-border);
   border-radius: 12px;
   padding: 16px;
   width: min(300px, 88vw);
@@ -622,7 +622,7 @@
   align-items: center;
   justify-content: center;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--bp-border);
   border-radius: 8px;
   color: var(--bp-text, #f1f5f9);
   font-size: 16px;
@@ -641,7 +641,7 @@
 
 .specDivider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--bp-border);
   margin: 8px 0;
 }
 
@@ -650,7 +650,7 @@
   width: 100%;
   min-height: 44px;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--bp-border);
   color: var(--bp-text, #f1f5f9);
   font-size: 14px;
   font-weight: 500;
@@ -688,7 +688,7 @@
   font-size: 14px;
   font-weight: 500;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--bp-border);
   border-radius: 8px;
   color: var(--bp-text, #f1f5f9);
   cursor: pointer;
@@ -726,7 +726,7 @@
   gap: 10px;
   min-height: 44px;
   padding: 4px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--bp-border);
   border-radius: 8px;
 }
 .layerRowActive { border-color: var(--bp-accent, #38bdf8); }
@@ -755,7 +755,7 @@
   min-width: 52px;
   min-height: 36px;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--bp-border);
   color: #94a3b8;
   font-size: 14px;
   font-weight: 600;

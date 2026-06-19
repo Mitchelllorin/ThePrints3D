@@ -1,9 +1,9 @@
 .sidebar {
   width: 260px;
   flex-shrink: 0;
-  background: rgba(15, 23, 42, var(--bp-sidebar-opacity, 0.95));
+  background: var(--bp-surface);
   backdrop-filter: blur(8px);
-  border-right: 1px solid #1e293b;
+  border-right: 1px solid var(--bp-border);
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px 0;
@@ -26,7 +26,7 @@
     width: 100vw;
     max-height: 60vh;
     border-right: none;
-    border-top: 1px solid #1e293b;
+    border-top: 1px solid var(--bp-border);
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
@@ -44,7 +44,7 @@
     width: 40px;
     height: 4px;
     border-radius: 2px;
-    background: #475569;
+    background: var(--bp-border-strong);
   }
   .sidebar:focus-within,
   .sidebar:hover {
@@ -61,13 +61,13 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #475569;
+  color: var(--bp-text-dim);
   margin: 0 0 12px;
 }
 
 .hint {
   font-size: 12px;
-  color: #64748b;
+  color: var(--bp-text-dim);
   margin: 0;
 }
 
@@ -81,6 +81,6 @@
 
 .steps li {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--bp-text-dim);
   line-height: 1.4;
 }
