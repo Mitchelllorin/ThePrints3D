@@ -14,6 +14,7 @@ import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
+import ObjectModel from './ObjectModels'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import type { PlacedObject } from '../../types'
 
@@ -113,13 +114,12 @@ export default function PlacedObjectsLayer() {
         const mountY = obj.type === 'window'
           ? (obj.sillM ?? 0.9) + h / 2
           : deviceMountHeightM(obj.type, ceilingM) ?? h / 2
+        const model = isOpening ? null : <ObjectModel type={obj.type} w={w} h={h} d={d} color={color} />
         return (
           <group key={obj.id} position={[live.x, 0, live.z]} rotation={[0, live.rotationY, 0]}>
-            <mesh
+            <group
               position={[0, mountY, 0]}
               userData={{ info: obj.label ?? obj.type }}
-              castShadow={!isOpening}
-              receiveShadow={!isOpening}
               onPointerDown={(e) => {
                 // In place mode the floorplan handles the next click — don't steal it.
                 if (placeObjectType) return
@@ -127,16 +127,31 @@ export default function PlacedObjectsLayer() {
                 else { e.stopPropagation(); select(obj.id) }
               }}
             >
-              <boxGeometry args={[w, h, boxD]} />
-              <meshStandardMaterial
-                color={color}
-                roughness={0.6}
-                metalness={0.05}
-                transparent={isOpening}
-                opacity={isOpening ? 0.35 : 1}
-              />
-              {selected && <Edges color="#facc15" lineWidth={2} />}
-            </mesh>
+              {/* Procedural product model when we have a shape for this type;
+                  openings and unmodelled types fall back to a plain box. */}
+              {!isOpening && model ? (
+                model
+              ) : (
+                <mesh castShadow={!isOpening} receiveShadow={!isOpening}>
+                  <boxGeometry args={[w, h, boxD]} />
+                  <meshStandardMaterial
+                    color={color}
+                    roughness={0.6}
+                    metalness={0.05}
+                    transparent={isOpening}
+                    opacity={isOpening ? 0.35 : 1}
+                  />
+                </mesh>
+              )}
+              {/* Selection outline — an invisible bounding box carrying the edges. */}
+              {selected && (
+                <mesh>
+                  <boxGeometry args={[w, h, boxD]} />
+                  <meshBasicMaterial visible={false} />
+                  <Edges color="#facc15" lineWidth={2} />
+                </mesh>
+              )}
+            </group>
 
             {/* Door swing arc — quarter circle from the hinge (LH/RH) plus the
                 open leaf, drawn on the floor so it reads like a plan symbol. */}
