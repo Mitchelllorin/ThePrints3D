@@ -899,7 +899,11 @@ export default function BuildingModel({ layers }: Props) {
         }
       })
 
-    buildFoundation(group, fp, sceneConfig.foundationType)
+    // Skip the auto foundation slab when the user traced their own floor — it
+    // sits in the joist zone and reads as a redundant slab under the joists.
+    if (floorsAreas.length === 0) {
+      buildFoundation(group, fp, sceneConfig.foundationType)
+    }
 
     for (const level of floorLevels) {
       const elev = level.elevation

@@ -533,15 +533,12 @@
   z-index: 50;
   pointer-events: none;
   transform-origin: left center;
-  perspective: 600px;   /* gives the float a real 3D turn */
 }
-.logo {
-  animation: logoFloat 5s ease-in-out infinite;
-  transform-style: preserve-3d;
-}
-@keyframes logoFloat {
-  0%, 100% { transform: translateY(0) rotateY(-10deg); }
-  50%      { transform: translateY(-4px) rotateY(10deg); }
+/* Gentle vertical bob only — no rotateY (that was turning it edge-on/invisible). */
+.logo { animation: logoBob 4.5s ease-in-out infinite; }
+@keyframes logoBob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
 }
 
 /* On phones, scale the logo down a touch so it stays clear of the top icons
