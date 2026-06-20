@@ -8,7 +8,7 @@
  * deck is modelled as individual 4'×8' sheets with visible joints, and each area
  * carries a sheet COUNT nameplate for material takeoff.
  */
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
@@ -25,6 +25,34 @@ import type { TracedLine } from '../../types'
 
 const DECK_LIFT = 0.9    // metres the sheets rise at full explode
 const JOIST_DROP = 0.35  // metres the joists sink at full explode
+
+// "Watch it build" install animation: joists pop in one-by-one, then the sheets.
+const JOIST_PHASE = 0.8   // seconds to install all joists
+const SHEET_PHASE = 0.8   // seconds to install all sheets
+const DECK_DELAY  = 1.0   // sheets start after the joists are in
+const INSTALL_RAMP = 0.25 // each member scales up over this long
+
+/** Reveal a group's children one-by-one (scale 0→1) over `phase` seconds, after
+ *  `delay`. Plays once per build; resets when the geometry is rebuilt. */
+function useInstallReveal(group: THREE.Group, phase: number, delay = 0) {
+  const start = useRef<number | null>(null)
+  const done = useRef(false)
+  useLayoutEffect(() => {
+    start.current = null; done.current = false
+    group.children.forEach((c) => c.scale.setScalar(0))
+  }, [group])
+  useFrame((state) => {
+    if (done.current) return
+    if (start.current === null) start.current = state.clock.elapsedTime
+    const t = state.clock.elapsedTime - start.current - delay
+    const kids = group.children
+    const stagger = kids.length > 1 ? phase / kids.length : 0
+    for (let i = 0; i < kids.length; i++) {
+      kids[i].scale.setScalar(THREE.MathUtils.clamp((t - i * stagger) / INSTALL_RAMP, 0, 1))
+    }
+    if (t > phase + INSTALL_RAMP + 0.2) { kids.forEach((c) => c.scale.setScalar(1)); done.current = true }
+  })
+}
 
 function disposeGroup(group: THREE.Group) {
   group.traverse((o) => {
@@ -61,6 +89,7 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
     [lenX, lenZ, area.elementType, area.size],
   )
   useEffect(() => () => disposeGroup(joists), [joists])
+  useInstallReveal(joists, JOIST_PHASE)
   if (lenX < 0.1 || lenZ < 0.1) return null
   // Deck top sits at this storey's elevation; the structure hangs below it.
   const baseY = (area.level ?? 0) * storeyHeight
@@ -75,6 +104,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
   useEffect(() => () => disposeGroup(deck), [deck])
+  useInstallReveal(deck, SHEET_PHASE, DECK_DELAY)
   if (lenX < 0.1 || lenZ < 0.1) return null
   const sheetCount = (deck.userData.sheetCount as number) ?? 0
   const baseY = (area.level ?? 0) * storeyHeight
