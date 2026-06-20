@@ -551,9 +551,9 @@ export default function FloorplanPanel() {
               </button>
               <span className={styles.stepHint}>
                 {floorsActive
-                  ? 'Tap one corner, then the opposite corner — the rectangle lays a joist field. Esc cancels.'
+                  ? 'Tap one corner, then the opposite corner to lay the joist field. Esc cancels.'
                   : roofActive
-                    ? 'Tap one corner, then the opposite corner — the rectangle builds a gable roof. Esc cancels.'
+                    ? 'Tap one corner, then the opposite corner to build the gable roof. Esc cancels.'
                     : 'Tap a start point, then tap to extend. Esc ends the run.'}
               </span>
               {floorsActive && (

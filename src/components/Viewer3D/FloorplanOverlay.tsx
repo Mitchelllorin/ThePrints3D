@@ -39,8 +39,9 @@ import {
 } from '../../services/wallTraceReducer'
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, deviceMountHeightM } from '../../data/objectCatalog'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { validateElectrical } from '../../services/constructionCode'
-import { LAYER_COLORS, plumbingColorFor, electricalColorFor, hvacColorFor, plumbingColor, electricalColor, hvacColor } from '../../data/traceLayers'
+import { LAYER_COLORS, plumbingColorFor, electricalColorFor, hvacColorFor, plumbingColor, electricalColor, hvacColor, CEILING_TYPES } from '../../data/traceLayers'
 
 /** Perpendicular distance from point to segment, in pixels. */
 function segDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number) {
@@ -251,6 +252,20 @@ export default function FloorplanOverlay() {
   // and a touch larger on a big overlay so the dots don't get lost on the print.
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const hScale = (isMobile ? 2.6 : 1.3) * Math.max(1, Math.min(2.5, Math.max(width, depth) / 8))
+
+  // Multi-floor: raise the trace plane + previews so you pull the rectangle where
+  // it lands — floors on their storey deck; roofs and ceilings up on the wall top.
+  const storeyHeight = ceilingM + FLOOR_ASSEMBLY_H
+  const wallTop = ceilingM
+  const areaElevation = (level: number, atWallTop: boolean) =>
+    level * storeyHeight + (atWallTop ? wallTop : 0)
+  const activeIsRoof = activeTraceLayer === 'roof'
+  const activeIsCeiling = activeTraceLayer === 'floors' && CEILING_TYPES.has(floorsElement)
+  const traceY = (activeTraceLayer === 'floors' || activeIsRoof)
+    ? areaElevation(activeLevel, activeIsRoof || activeIsCeiling)
+    : 0
+  const raiseRect = (pts: [number, number, number][], dy: number): [number, number, number][] =>
+    dy ? pts.map(([x, y, z]) => [x, y + dy, z] as [number, number, number]) : pts
 
   const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width
@@ -774,7 +789,7 @@ export default function FloorplanOverlay() {
           {((traceMode && !tracePaused) || overlay.calibrationMode) && (
             <mesh
               rotation={[-Math.PI / 2, 0, 0]}
-              position={[0, 0.02, 0]}
+              position={[0, 0.02 + traceY, 0]}
               onPointerDown={handleWorkspacePointerDown}
               onPointerMove={handleWorkspacePointerMove}
               onPointerUp={handleWorkspacePointerUp}
@@ -860,26 +875,26 @@ export default function FloorplanOverlay() {
         <Line points={tracePreviewPoints} color={activeLineColor} lineWidth={4} />
       )}
 
-      {/* Floor/roof area being pulled — rectangle outline on the print. */}
+      {/* Floor/roof area being pulled — rectangle outline, raised to the level. */}
       {floorsPreviewRect && (
-        <Line points={floorsPreviewRect} color={activeTraceLayer === 'roof' ? LAYER_COLORS.roof : LAYER_COLORS.floors} lineWidth={3} dashed dashSize={0.25} gapSize={0.15} />
+        <Line points={raiseRect(floorsPreviewRect, traceY)} color={activeTraceLayer === 'roof' ? LAYER_COLORS.roof : LAYER_COLORS.floors} lineWidth={3} dashed dashSize={0.25} gapSize={0.15} />
       )}
 
-      {/* Committed floor areas — rectangle outlines on the print. */}
+      {/* Committed floor areas — outlines at each area's storey elevation. */}
       {visibleLayers.has('floors') && floorsAreas.map((a) => (
         <Line
           key={`floor-${a.id}`}
-          points={floorsRectWorld(a.x1, a.y1, a.x2, a.y2)}
+          points={raiseRect(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, CEILING_TYPES.has(a.elementType)))}
           color={LAYER_COLORS.floors}
           lineWidth={2.5}
         />
       ))}
 
-      {/* Committed roof areas — rectangle outlines on the print. */}
+      {/* Committed roof areas — outlines at each area's storey elevation. */}
       {visibleLayers.has('roof') && roofAreas.map((a) => (
         <Line
           key={`roof-${a.id}`}
-          points={floorsRectWorld(a.x1, a.y1, a.x2, a.y2)}
+          points={raiseRect(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, true))}
           color={LAYER_COLORS.roof}
           lineWidth={2.5}
         />
