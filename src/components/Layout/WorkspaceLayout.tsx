@@ -522,8 +522,6 @@ export default function WorkspaceLayout() {
     closePanels()
   }
   const traceActive = useFloorplanLocalStore((s) => s.traceMode || s.activePanel === 'trace' || s.activePanel === 'picker')
-  const logoOpacity = useUISettingsStore((s) => s.logoOpacity)
-  const logoSize    = useUISettingsStore((s) => s.logoSize)
 
   const sharePng = () => {
     const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
@@ -648,15 +646,8 @@ export default function WorkspaceLayout() {
         <ModelViewer />
       </div>
 
-      {/* Brand mark — flat top-left wordmark. ALWAYS shown so the workspace
-          never loses its logo; the 3D floating logo is a bonus on top of it. */}
-      <div className={styles.logoFloat} style={{ opacity: logoOpacity, transform: `scale(${logoSize})` }}>
-        <span className={styles.logo}>
-          <span className={styles.logoThe}>The</span>
-          <span className={styles.logoPrints}>PRINTS</span>
-          <span className={styles.logo3D}>3D</span>
-        </span>
-      </div>
+      {/* The flat 2D wordmark was removed — the 3D floating wordmark
+          (FloatingLogo3D, top-left) is now the only logo. */}
 
       {/* The only persistent chrome: five icon buttons, fixed top-right. */}
       <TopIcons
