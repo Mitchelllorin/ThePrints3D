@@ -11,7 +11,22 @@
   max-width: calc(100% - 24px);
   max-height: calc(100% - 150px);
   overflow-y: auto;
-  pointer-events: all;
+  /* The menu is see-through, so let clicks/orbit fall through its frame, gaps and
+     card backgrounds to the model behind it — only the actual controls below
+     re-capture pointer input. You can work the scene right "through" the menu. */
+  pointer-events: none;
+}
+
+/* Re-enable input only on the things you actually operate, so the rest of the
+   transparent menu stays click-through to the workspace. */
+.guide button,
+.guide select,
+.guide input,
+.guide textarea,
+.guide a,
+.guide label,
+.guide [role='button'] {
+  pointer-events: auto;
 }
 
 .hint {
