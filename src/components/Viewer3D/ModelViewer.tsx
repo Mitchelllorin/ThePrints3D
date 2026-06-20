@@ -26,7 +26,6 @@ import ExplodeDriver from './ExplodeDriver'
 import DrywallLayer from './DrywallLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
-import FloatingLogo3D from './FloatingLogo3D'
 import styles from './ModelViewer.module.css'
 
 function CameraRig() {
@@ -568,7 +567,6 @@ export default function ModelViewer() {
           />
         )}
 
-        <FloatingLogo3D />
         <FloorplanOverlay />
         <ExplodeDriver />
         <LiveWallsLayer />

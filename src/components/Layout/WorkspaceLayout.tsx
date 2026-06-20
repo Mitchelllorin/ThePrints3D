@@ -646,8 +646,15 @@ export default function WorkspaceLayout() {
         <ModelViewer />
       </div>
 
-      {/* The flat 2D wordmark was removed — the 3D floating wordmark
-          (FloatingLogo3D, top-left) is now the only logo. */}
+      {/* Brand mark — the floating wordmark, top-left. 3D-extruded look (via the
+          text-shadow stack in .logo) + a gentle float; reliable + always visible. */}
+      <div className={styles.logoFloat}>
+        <span className={styles.logo}>
+          <span className={styles.logoThe}>The</span>
+          <span className={styles.logoPrints}>PRINTS</span>
+          <span className={styles.logo3D}>3D</span>
+        </span>
+      </div>
 
       {/* The only persistent chrome: five icon buttons, fixed top-right. */}
       <TopIcons
