@@ -78,17 +78,20 @@ function WordmarkMesh({ opacity }: { opacity: number }) {
 
 export default function FloatingLogo3D() {
   const groupRef = useRef<THREE.Group>(null)
-  const visible    = useUISettingsStore((s) => s.logo3DVisible)
-  const opacity    = useUISettingsStore((s) => s.logo3DOpacity)
+  const opacityRaw = useUISettingsStore((s) => s.logo3DOpacity)
   const floatSpeed = useUISettingsStore((s) => s.logo3DFloatSpeed)
+  const opacity = Math.max(0.6, opacityRaw)   // never let it vanish
 
-  // Track the camera so the logo stays pinned to the top-left corner of the view.
+  // ALWAYS rendered (no visibility gate) — this floating wordmark is the ONLY
+  // logo now, so a stale setting must never hide it. Pinned to the top-left and
+  // rocking gently to show its depth.
   useFrame((state) => {
     const g = groupRef.current
-    if (!g || !visible) return
+    if (!g) return
     const cam = state.camera as THREE.PerspectiveCamera
+    const fov = cam.fov ?? 55
     const dist = 6
-    const halfH = Math.tan((cam.fov * Math.PI / 180) / 2) * dist
+    const halfH = Math.tan((fov * Math.PI / 180) / 2) * dist
     const halfW = halfH * (state.size.width / Math.max(1, state.size.height))
     const inset = 0.5
     const local = new THREE.Vector3(-halfW + inset + 0.7, halfH - inset - 0.12, -dist)
@@ -97,8 +100,6 @@ export default function FloatingLogo3D() {
     g.quaternion.copy(cam.quaternion)
     g.rotateY(Math.sin(state.clock.elapsedTime * (0.5 + floatSpeed * 0.5)) * 0.4)
   })
-
-  if (!visible) return null
 
   return (
     <group ref={groupRef} scale={0.42}>
