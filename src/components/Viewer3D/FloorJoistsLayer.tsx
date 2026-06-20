@@ -23,8 +23,9 @@ import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
 
-const DECK_LIFT = 0.9    // metres the sheets rise at full explode
-const JOIST_DROP = 0.35  // metres the joists sink at full explode
+const DECK_LIFT = 1.6     // metres the sheets rise at full explode
+const JOIST_DROP = 0.7    // metres the joists sink at full explode
+const FLOOR_SEP = 3.2     // extra rise PER STOREY at full explode (floor-by-floor)
 
 // "Watch it build" install animation: joists pop in one-by-one, then the sheets.
 const JOIST_PHASE = 0.8   // seconds to install all joists
@@ -80,6 +81,17 @@ interface PartProps {
   storeyHeight: number
 }
 
+/** Vertical explode for one floor part: the within-floor PEEL (deck up / joists
+ *  down) plus a per-storey lift so upper floors separate floor-by-floor. The
+ *  group's Y is driven entirely here (never via a prop) to avoid a render race. */
+function useFloorExplode(ref: React.RefObject<THREE.Group | null>, baseY: number, level: number, peel: number) {
+  useFrame(() => {
+    if (!ref.current) return
+    const t = explodeRuntime.eased * explodeRuntime.spread
+    ref.current.position.y = baseY + t * peel + level * t * FLOOR_SEP
+  })
+}
+
 /** The structure: joist field, or a concrete slab. */
 function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
@@ -88,13 +100,19 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
     () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size) }),
     [lenX, lenZ, area.elementType, area.size],
   )
+  const ref = useRef<THREE.Group>(null)
+  // Deck top sits at this storey's elevation; the structure hangs below it.
+  const level = area.level ?? 0
+  const structureY = (isSlab ? -SLAB_T / 2 : -(SUBFLOOR_T + joistProfile(area.elementType).depth / 2))
+  useFloorExplode(ref, level * storeyHeight + structureY, level, -JOIST_DROP)
   useEffect(() => () => disposeGroup(joists), [joists])
   useInstallReveal(joists, JOIST_PHASE)
   if (lenX < 0.1 || lenZ < 0.1) return null
-  // Deck top sits at this storey's elevation; the structure hangs below it.
-  const baseY = (area.level ?? 0) * storeyHeight
-  const structureY = baseY + (isSlab ? -SLAB_T / 2 : -(SUBFLOOR_T + joistProfile(area.elementType).depth / 2))
-  return <primitive object={joists} position={[centre.x, structureY, centre.z]} rotation={[0, rotRad, 0]} />
+  return (
+    <group ref={ref}>
+      <primitive object={joists} position={[centre.x, 0, centre.z]} rotation={[0, rotRad, 0]} />
+    </group>
+  )
 }
 
 /** The plywood subfloor deck (individual sheets) + a sheet-count nameplate. */
@@ -103,22 +121,24 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   const deck = useMemo(() => buildFloorDeck({ lenX, lenZ }), [lenX, lenZ])
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
+  const ref = useRef<THREE.Group>(null)
+  const level = area.level ?? 0
+  useFloorExplode(ref, level * storeyHeight, level, DECK_LIFT)
   useEffect(() => () => disposeGroup(deck), [deck])
   useInstallReveal(deck, SHEET_PHASE, DECK_DELAY)
   if (lenX < 0.1 || lenZ < 0.1) return null
   const sheetCount = (deck.userData.sheetCount as number) ?? 0
-  const baseY = (area.level ?? 0) * storeyHeight
   return (
-    <>
-      <primitive object={deck} position={[centre.x, baseY - SUBFLOOR_T / 2, centre.z]} rotation={[0, rotRad, 0]} />
+    <group ref={ref}>
+      <primitive object={deck} position={[centre.x, -SUBFLOOR_T / 2, centre.z]} rotation={[0, rotRad, 0]} />
       {sheetCount > 0 && (
-        <Billboard position={[centre.x, baseY + 0.5, centre.z]}>
+        <Billboard position={[centre.x, 0.5, centre.z]}>
           <Text fontSize={0.26 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.02 * labelScale} outlineColor="#0b1120">
             {`${sheetCount} sheets · 4×8`}
           </Text>
         </Billboard>
       )}
-    </>
+    </group>
   )
 }
 
@@ -135,16 +155,6 @@ export default function FloorJoistsLayer() {
     () => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM + FLOOR_ASSEMBLY_H,
     [wizardInputs],
   )
-
-  const joistsRef = useRef<THREE.Group>(null)
-  const deckRef = useRef<THREE.Group>(null)
-
-  // Vertical explode peel: sheets rise, joists sink with the explode slider.
-  useFrame(() => {
-    const t = explodeRuntime.eased * explodeRuntime.spread
-    if (deckRef.current) deckRef.current.position.y = t * DECK_LIFT
-    if (joistsRef.current) joistsRef.current.position.y = -t * JOIST_DROP
-  })
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageWidth = drawing?.rasterWidth ?? 1400
@@ -169,10 +179,10 @@ export default function FloorJoistsLayer() {
 
   return (
     <>
-      <group name="floor-joists" ref={joistsRef}>
+      <group name="floor-joists">
         {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} />)}
       </group>
-      <group name="floor-sheeting" ref={deckRef}>
+      <group name="floor-sheeting">
         {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} />)}
       </group>
     </>

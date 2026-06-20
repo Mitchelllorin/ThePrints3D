@@ -74,15 +74,19 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
   const framing = useMemo(() => {
     const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
+    let f: THREE.Group
     if (isMasonry) {
       // Block/brick has no studs — doors/windows cut a real hole, with a lintel.
       const ext = wall.exteriorMaterial
       const kind = ext === 'brick' || ext === 'exposedBrick' ? 'brick' : ext === 'stone' ? 'stone' : 'cmu'
-      return buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity, kind })
+      f = buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity, kind })
+    } else {
+      const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
+      f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity })
     }
-    const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-    return buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity })
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity])
+    f.userData.level = wall.level ?? 0  // so the shared explode lifts it floor-by-floor
+    return f
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {

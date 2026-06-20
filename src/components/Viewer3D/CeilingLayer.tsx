@@ -5,9 +5,10 @@
  * Ceilings are pulled with the same rectangle flow as floors (they're a floor
  * "type"), but they sit at wall-top height with the joist bottoms on the plate.
  */
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard, Text } from '@react-three/drei'
+import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
@@ -33,7 +34,11 @@ function CeilingMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, ov
   const lenX = (Math.abs(area.x2 - area.x1) / imageWidth) * overlayW
   const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
   const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
-  const ceiling = useMemo(() => buildCeiling({ lenX, lenZ, ocM: ocToM(area.size) }), [lenX, lenZ, area.size])
+  const ceiling = useMemo(() => {
+    const c = buildCeiling({ lenX, lenZ, ocM: ocToM(area.size) })
+    c.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
+    return c
+  }, [lenX, lenZ, area.size, area.level])
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
   useEffect(() => () => disposeGroup(ceiling), [ceiling])
@@ -60,6 +65,9 @@ export default function CeilingLayer() {
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
 
+  const groupRef = useRef<THREE.Group>(null)
+  useExplodeChildren(groupRef, 'framing')
+
   const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
   const storeyHeight = wallHeight + FLOOR_ASSEMBLY_H
 
@@ -81,7 +89,7 @@ export default function CeilingLayer() {
   if (!visibleLayers.has('floors') || ceilings.length === 0) return null
 
   return (
-    <group name="ceilings">
+    <group name="ceilings" ref={groupRef}>
       {ceilings.map((area) => (
         <CeilingMesh
           key={area.id}

@@ -33,10 +33,11 @@ function RoofAreaMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, o
   const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
   const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
 
-  const roof = useMemo(
-    () => buildGableRoof({ lenX, lenZ, pitch: pitchToRatio(area.size), ocM: RAFTER_OC_M }),
-    [lenX, lenZ, area.size],
-  )
+  const roof = useMemo(() => {
+    const r = buildGableRoof({ lenX, lenZ, pitch: pitchToRatio(area.size), ocM: RAFTER_OC_M })
+    r.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
+    return r
+  }, [lenX, lenZ, area.size, area.level])
 
   useEffect(() => () => {
     roof.traverse((o) => {
