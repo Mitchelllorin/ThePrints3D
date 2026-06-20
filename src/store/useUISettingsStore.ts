@@ -36,17 +36,21 @@ export interface UISettings {
   ambientIntensity: number
   // Accent
   accentColor: string
+  // 3D labels / metric nameplates (floating in the model — own colour & size,
+  // separate from UI text because they sit on the workspace, not on a panel).
+  labelColor: string
+  labelScale: number
 }
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
   // Menus/panels/toolbars default to mostly see-through so the workspace shows
   // through them (raise via Settings → Appearance → Opacity for a solid look).
-  topbarOpacity: 0.35,
-  sidebarOpacity: 0.35,
-  panelOpacity: 0.35,
-  panelColor: '#0f172a',
-  textColor: '#f1f5f9',
-  textColorDim: '#94a3b8',
+  topbarOpacity: 0.62,
+  sidebarOpacity: 0.62,
+  panelOpacity: 0.62,
+  panelColor: '#12161f',
+  textColor: '#f5f7fa',
+  textColorDim: '#97a4b6',
   logoOpacity: 1,
   logoSize: 1,
   logo3DVisible: true,
@@ -54,16 +58,18 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   logo3DFloatSpeed: 0.7,
   logo3DFloatHeight: 0.25,
   gridVisible: true,
-  gridOpacity: 0.8,
-  gridColor: '#1a4a7a',
+  gridOpacity: 0.75,
+  gridColor: '#2b3b5c',
   gridCellSize: 1,
   drywallVisible: false,
   drywallOrientation: 'vertical',
-  bgColor: '#060d1a',
+  bgColor: '#0b0e14',
   lightColor: '#ffffff',
   dirIntensity: 1.0,
   ambientIntensity: 0.6,
-  accentColor: '#38bdf8',
+  accentColor: '#2f80ff',
+  labelColor: '#ffffff',
+  labelScale: 1,
 }
 
 const STORAGE_KEY = 'bp3d-ui-settings'

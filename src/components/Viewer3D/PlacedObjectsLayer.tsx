@@ -117,6 +117,7 @@ export default function PlacedObjectsLayer() {
           <group key={obj.id} position={[live.x, 0, live.z]} rotation={[0, live.rotationY, 0]}>
             <mesh
               position={[0, mountY, 0]}
+              userData={{ info: obj.label ?? obj.type }}
               castShadow={!isOpening}
               receiveShadow={!isOpening}
               onPointerDown={(e) => {

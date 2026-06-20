@@ -236,6 +236,8 @@
 /* ── Discipline layer tabs ─────────────────────────────────────────────────── */
 .layerTabs {
   display: flex;
+  flex-wrap: wrap;        /* wrap to a 2nd row so every tab is reachable — never
+                             let the last discipline (e.g. HVAC) overflow off-edge */
   gap: 4px;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.88));
   border-radius: 8px;
@@ -245,7 +247,8 @@
 
 .layerTab,
 .layerTabActive {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: max-content;  /* keep the label intact; wrap rather than clip */
   border: 1px solid transparent;
   background: none;
   color: var(--bp-text, #94a3b8);

@@ -13,7 +13,7 @@ import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../servic
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import {
   TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS,
-  PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER,
+  PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER, FLOORS_PICKER, ROOF_PICKER, LEVEL_OPTIONS,
 } from '../../data/traceLayers'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
 import styles from './AmbientGuide.module.css'
@@ -129,10 +129,19 @@ export default function FloorplanPanel() {
   const removePlumbingLine = useAppStore((s) => s.removePlumbingLine)
   const removeElectricalLine = useAppStore((s) => s.removeElectricalLine)
   const removeHvacLine = useAppStore((s) => s.removeHvacLine)
+  const floorsAreas = useAppStore((s) => s.floorsAreas)
   const hvacElement = useFloorplanLocalStore((s) => s.hvacElement)
   const hvacSize = useFloorplanLocalStore((s) => s.hvacSize)
   const hvacMaterial = useFloorplanLocalStore((s) => s.hvacMaterial)
   const setHvac = useFloorplanLocalStore((s) => s.setHvac)
+  const floorsElement = useFloorplanLocalStore((s) => s.floorsElement)
+  const floorsSize = useFloorplanLocalStore((s) => s.floorsSize)
+  const setFloors = useFloorplanLocalStore((s) => s.setFloors)
+  const roofElement = useFloorplanLocalStore((s) => s.roofElement)
+  const roofSize = useFloorplanLocalStore((s) => s.roofSize)
+  const setRoof = useFloorplanLocalStore((s) => s.setRoof)
+  const activeLevel = useFloorplanLocalStore((s) => s.activeLevel)
+  const setActiveLevel = useFloorplanLocalStore((s) => s.setActiveLevel)
   const elecElement = useFloorplanLocalStore((s) => s.elecElement)
   const elecAmp = useFloorplanLocalStore((s) => s.elecAmp)
   const elecWire = useFloorplanLocalStore((s) => s.elecWire)
@@ -407,7 +416,15 @@ export default function FloorplanPanel() {
   // workspace is fully visible — the tray and property card carry the UI.
   const showSteps = !placeObjectType && !selectedObject
   const framingActive = activeTraceLayer === 'framing'
-  const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac'
+  const floorsActive = activeTraceLayer === 'floors'
+  const roofActive = activeTraceLayer === 'roof'
+  // Floors & roofs are "area" layers: pull a rectangle instead of tracing a line.
+  const areaActive = floorsActive || roofActive
+  // Construction order in the guided flow: floor goes in before the walls.
+  const hasFloor = floorsAreas.length > 0
+  // Floors/roofs reuse the same trace flow as the trades (start/pause/picker/done),
+  // just committing rectangles instead of lines.
+  const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac' || areaActive
   const layerLabel = LAYER_LABELS[activeTraceLayer]
   // Devices-first nudge: how many electrical devices are already placed. The
   // gentle prompt shows only until the first one is placed, then steps aside.
@@ -420,7 +437,11 @@ export default function FloorplanPanel() {
       ? `${elecElement} · ${elecAmp} · ${elecElement === 'Low Voltage' ? 'LV' : elecRole}`
       : activeTraceLayer === 'hvac'
         ? `${hvacElement} · ${hvacSize} · ${hvacMaterial}`
-        : ''
+        : activeTraceLayer === 'floors'
+          ? `${LEVEL_OPTIONS.find((l) => l.value === activeLevel)?.label ?? 'Ground'} · ${floorsElement === 'Concrete Slab' ? floorsElement : `${floorsElement} · ${floorsSize} OC`}`
+          : activeTraceLayer === 'roof'
+            ? `${roofElement} · ${roofSize} pitch`
+            : ''
   // Object placement is part of the edit-anytime flow: the catalog is available
   // whenever a plan is loaded and you're not mid-calibration/trace (those own
   // the workspace). Not gated to post-build anymore.
@@ -528,19 +549,43 @@ export default function FloorplanPanel() {
                 <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
                 {tradeIndicator}
               </button>
-              <span className={styles.stepHint}>Tap a start point, then tap to extend. Esc ends the run.</span>
-              <span className={styles.stepHint}>Height</span>
-              <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
-                {(['under-floor', 'in-wall', 'ceiling'] as const).map((band) => (
-                  <button key={band} className={traceBand === band ? styles.action : styles.secondary} onClick={() => setTraceBand(band)}>
-                    {band === 'under-floor' ? 'Under-floor' : band === 'in-wall' ? 'In-wall' : 'Ceiling'}
-                  </button>
-                ))}
-              </div>
+              <span className={styles.stepHint}>
+                {floorsActive
+                  ? 'Tap one corner, then the opposite corner — the rectangle lays a joist field. Esc cancels.'
+                  : roofActive
+                    ? 'Tap one corner, then the opposite corner — the rectangle builds a gable roof. Esc cancels.'
+                    : 'Tap a start point, then tap to extend. Esc ends the run.'}
+              </span>
+              {floorsActive && (
+                <>
+                  <span className={styles.stepHint}>Level — which storey this floor sits on</span>
+                  <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                    {LEVEL_OPTIONS.map((lv) => (
+                      <button key={lv.value} className={activeLevel === lv.value ? styles.action : styles.secondary} onClick={() => setActiveLevel(lv.value)}>{lv.label}</button>
+                    ))}
+                  </div>
+                </>
+              )}
+              {!areaActive && (
+                <>
+                  <span className={styles.stepHint}>Height</span>
+                  <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                    {(['under-floor', 'in-wall', 'ceiling'] as const).map((band) => (
+                      <button key={band} className={traceBand === band ? styles.action : styles.secondary} onClick={() => setTraceBand(band)}>
+                        {band === 'under-floor' ? 'Under-floor' : band === 'in-wall' ? 'In-wall' : 'Ceiling'}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
               <div className={styles.btnRow}>
                 <button className={styles.secondary} onClick={() => setTracePaused(true)} title="Free the camera to orbit, then resume">Pause / move view</button>
                 {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}
+                {/* Make this step real — e.g. the poured slab becomes the built floor. */}
+                {floorsActive && hasFloor && (
+                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+                )}
                 <button className={styles.cancel} onClick={cancelTracing}>Done</button>
               </div>
             </div>
@@ -568,6 +613,10 @@ export default function FloorplanPanel() {
                     ))}
                   </div>
                 </>
+              ) : floorsActive ? (
+                <span className={styles.stepText}>Pull a floor — tap opposite corners to lay joists</span>
+              ) : roofActive ? (
+                <span className={styles.stepText}>Pull a roof — tap opposite corners for a gable</span>
               ) : (
                 <span className={styles.stepText}>Trace {layerLabel.toLowerCase()} runs</span>
               )}
@@ -601,7 +650,7 @@ export default function FloorplanPanel() {
         {/* ── Step 1: calibrate ── */}
         {!isAnalysing && !isPending && !calibrationCleared && !overlay.calibrationMode && !traceMode && (
           <div className={styles.step}>
-            <span className={styles.stepLabel}>Step 1 of 2</span>
+            <span className={styles.stepLabel}>Step 1 of 3</span>
             <span className={styles.stepText}>Set the scale</span>
             <span className={styles.stepHint}>Tap two points on a dimension you know the length of</span>
             <button className={styles.action} onClick={startCalibration}>
@@ -656,43 +705,57 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Step 2: trace walls ── */}
+        {/* ── Step 2: lay the floor, then Step 3: walls (real construction order) ── */}
         {!isAnalysing && !isPending && calibrationCleared && !overlay.calibrationMode && !traceMode && !pickerOpen && (
-          <div className={styles.step}>
-            {hasWalls ? (
-              <>
-                <span className={styles.stepLabel}>{userWallCount > 0 ? 'Walls' : 'Step 2 of 2'}</span>
-                <span className={styles.stepText}>
-                  {userWallCount > 0
-                    ? `${userWallCount} wall${userWallCount === 1 ? '' : 's'} traced`
-                    : `${drawing.parsedWalls.length} walls detected`}
-                </span>
-                <span className={styles.stepHint}>
-                  {userWallCount > 0 ? 'Build, or trace more' : 'Trace manually to correct, or build now'}
-                </span>
-                <div className={styles.btnRow}>
-                  <button className={styles.action} onClick={() => buildModel()}>
-                    Build 3D →
-                  </button>
-                  <button className={styles.secondary} onClick={openPicker}>
-                    {userWallCount > 0 ? 'Trace more' : 'Trace walls'}
-                  </button>
-                  <button className={styles.secondary} onClick={startCalibration}>
-                    Re-calibrate
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <span className={styles.stepLabel}>Step 2 of 2</span>
-                <span className={styles.stepText}>Trace the walls</span>
-                <span className={styles.stepHint}>Draw over each wall on the floor plan</span>
-                <button className={styles.action} onClick={openPicker}>
-                  Start tracing →
+          !hasFloor ? (
+            <div className={styles.step}>
+              <span className={styles.stepLabel}>Step 2 of 3</span>
+              <span className={styles.stepText}>Lay the floor</span>
+              <span className={styles.stepHint}>Concrete slab or wood-frame floor — pull the floor area, then the walls frame on top of it.</span>
+              <div className={styles.btnRow}>
+                <button className={styles.action} onClick={() => { setActiveTraceLayer('floors'); openPicker() }}>
+                  Lay the floor →
                 </button>
-              </>
-            )}
-          </div>
+                <button className={styles.secondary} onClick={openPicker}>Skip to walls</button>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.step}>
+              {hasWalls ? (
+                <>
+                  <span className={styles.stepLabel}>{userWallCount > 0 ? 'Walls' : 'Step 3 of 3'}</span>
+                  <span className={styles.stepText}>
+                    {userWallCount > 0
+                      ? `${userWallCount} wall${userWallCount === 1 ? '' : 's'} traced`
+                      : `${drawing.parsedWalls.length} walls detected`}
+                  </span>
+                  <span className={styles.stepHint}>
+                    {userWallCount > 0 ? 'Build, or trace more' : 'Trace manually to correct, or build now'}
+                  </span>
+                  <div className={styles.btnRow}>
+                    <button className={styles.action} onClick={() => buildModel()}>
+                      Build 3D →
+                    </button>
+                    <button className={styles.secondary} onClick={openPicker}>
+                      {userWallCount > 0 ? 'Trace more' : 'Trace walls'}
+                    </button>
+                    <button className={styles.secondary} onClick={startCalibration}>
+                      Re-calibrate
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className={styles.stepLabel}>Step 3 of 3</span>
+                  <span className={styles.stepText}>Trace the walls</span>
+                  <span className={styles.stepHint}>Draw over each wall — they frame on top of the floor</span>
+                  <button className={styles.action} onClick={openPicker}>
+                    Start tracing →
+                  </button>
+                </>
+              )}
+            </div>
+          )
         )}
 
         {/* ── Active tracing ── */}
@@ -893,6 +956,48 @@ export default function FloorplanPanel() {
                 <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
                   {HVAC_PICKER.material.map((m) => (
                     <button key={m} className={hvacMaterial === m ? styles.action : styles.secondary} onClick={() => setHvac({ hvacMaterial: m })}>{m}</button>
+                  ))}
+                </div>
+              </>
+            )}
+            {activeTraceLayer === 'floors' && (
+              <>
+                <span className={styles.stepHint}>Level</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {LEVEL_OPTIONS.map((lv) => (
+                    <button key={lv.value} className={activeLevel === lv.value ? styles.action : styles.secondary} onClick={() => setActiveLevel(lv.value)}>{lv.label}</button>
+                  ))}
+                </div>
+                <span className={styles.stepHint}>Floor type</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {FLOORS_PICKER.element.map((e) => (
+                    <button key={e} className={floorsElement === e ? styles.action : styles.secondary} onClick={() => setFloors({ floorsElement: e })}>{e}</button>
+                  ))}
+                </div>
+                {floorsElement !== 'Concrete Slab' && (
+                  <>
+                    <span className={styles.stepHint}>On-centre spacing</span>
+                    <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                      {FLOORS_PICKER.size.map((s) => (
+                        <button key={s} className={floorsSize === s ? styles.action : styles.secondary} onClick={() => setFloors({ floorsSize: s })}>{s}</button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+            {activeTraceLayer === 'roof' && (
+              <>
+                <span className={styles.stepHint}>Roof type</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {ROOF_PICKER.element.map((e) => (
+                    <button key={e} className={roofElement === e ? styles.action : styles.secondary} onClick={() => setRoof({ roofElement: e })}>{e}</button>
+                  ))}
+                </div>
+                <span className={styles.stepHint}>Pitch</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {ROOF_PICKER.size.map((s) => (
+                    <button key={s} className={roofSize === s ? styles.action : styles.secondary} onClick={() => setRoof({ roofSize: s })}>{s}</button>
                   ))}
                 </div>
               </>

@@ -9,7 +9,8 @@
 
 import { create } from 'zustand'
 import type { ParsedWall } from '../types'
-import { PLUMBING_DEFAULTS, ELECTRICAL_DEFAULTS, HVAC_DEFAULTS } from '../data/traceLayers'
+import { PLUMBING_DEFAULTS, ELECTRICAL_DEFAULTS, HVAC_DEFAULTS, FLOORS_DEFAULTS, ROOF_DEFAULTS } from '../data/traceLayers'
+import type { TraceLayer } from '../data/traceLayers'
 
 type CalibrationUnit = 'mm' | 'm' | 'ft' | 'in'
 
@@ -65,7 +66,7 @@ interface FloorplanLocalState {
   /** Structural role key, e.g. 'exterior-bearing'. */
   activeWallRole: string
   /** Active discipline tab. */
-  activeTraceLayer: 'framing' | 'plumbing' | 'electrical' | 'hvac'
+  activeTraceLayer: TraceLayer
   /** Height band applied to new trade runs (under-floor / in-wall / ceiling). */
   traceBand: 'under-floor' | 'in-wall' | 'ceiling'
   // Active plumbing selections (stamped on each plumbing line traced).
@@ -82,6 +83,14 @@ interface FloorplanLocalState {
   hvacElement: string
   hvacSize: string
   hvacMaterial: string
+  // Active floor selections (element = joist type, size = on-centre spacing).
+  floorsElement: string
+  floorsSize: string
+  /** Storey the next floor/roof area is placed on (0 = ground, 1 = 2nd, …). */
+  activeLevel: number
+  // Active roof selections (element = roof type, size = pitch e.g. '6:12').
+  roofElement: string
+  roofSize: string
 
   // ─── editing / selection ─────────────────────────────────────────
   /** Index (within a drawing's user walls) of the selected wall, or null. */
@@ -128,11 +137,14 @@ interface FloorplanLocalState {
   setPendingTraceAfterCalibration: (v: boolean) => void
   setActiveWallType: (v: string) => void
   setActiveWallRole: (v: string) => void
-  setActiveTraceLayer: (v: 'framing' | 'plumbing' | 'electrical' | 'hvac') => void
+  setActiveTraceLayer: (v: TraceLayer) => void
   setTraceBand: (v: 'under-floor' | 'in-wall' | 'ceiling') => void
   setPlumb: (patch: Partial<{ plumbElement: string; plumbSize: string; plumbMaterial: string; plumbTemp: 'hot' | 'cold' }>) => void
   setElec: (patch: Partial<{ elecElement: string; elecAmp: string; elecWire: string; elecRole: string }>) => void
   setHvac: (patch: Partial<{ hvacElement: string; hvacSize: string; hvacMaterial: string }>) => void
+  setFloors: (patch: Partial<{ floorsElement: string; floorsSize: string }>) => void
+  setRoof: (patch: Partial<{ roofElement: string; roofSize: string }>) => void
+  setActiveLevel: (v: number) => void
   setDrag: (v: DragState | null) => void
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
@@ -186,6 +198,11 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   hvacElement: HVAC_DEFAULTS.element,
   hvacSize: HVAC_DEFAULTS.size,
   hvacMaterial: HVAC_DEFAULTS.material,
+  floorsElement: FLOORS_DEFAULTS.element,
+  floorsSize: FLOORS_DEFAULTS.size,
+  roofElement: ROOF_DEFAULTS.element,
+  roofSize: ROOF_DEFAULTS.size,
+  activeLevel: 0,
   selectedWallIndex: null,
   placeObjectType: null,
   placeGhost: null,
@@ -235,6 +252,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setPlumb: (patch) => set(patch),
   setElec: (patch) => set(patch),
   setHvac: (patch) => set(patch),
+  setFloors: (patch) => set(patch),
+  setRoof: (patch) => set(patch),
+  setActiveLevel: (v) => set({ activeLevel: v }),
   setDrag: (v) => set({ drag: v }),
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v, activePanel: v != null ? 'wall' : null }),
   setPlaceObjectType: (v) => set({ placeObjectType: v, placeGhost: null }),

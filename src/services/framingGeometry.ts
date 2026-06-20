@@ -11,6 +11,7 @@
  * connected), and a mid-height row of blocking between studs.
  */
 import * as THREE from 'three'
+import { joistProfile } from '../data/traceLayers'
 
 const STUD_WIDTH_M = 0.038    // 1-1/2" nominal stud face
 const PLATE_H_M = 0.038       // one plate's thickness
@@ -154,14 +155,21 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     metalness: steel ? 0.95 : 0.05,
     transparent: opacity < 1,
     opacity,
+    // Ghost (semi-transparent) studs must NOT write depth, or the many
+    // overlapping thin boxes z-fight and the opening framing "falls apart"
+    // depending on camera angle. Opaque (built) walls keep depth writes.
+    depthWrite: opacity >= 1,
   })
   const depth = Math.max(STUD_WIDTH_M, thickness)
+  const sizeLabel = thickness >= 0.18 ? '2×8' : thickness >= 0.13 ? '2×6' : '2×4'
+  const framingInfo = steel ? `${steelGauge}ga steel stud` : `${sizeLabel} wood stud`
   const add = (geo: THREE.BufferGeometry, x: number, y: number, z = 0) => {
     const m = new THREE.Mesh(geo, mat)
     m.position.set(x, y, z)
     m.castShadow = true
     m.receiveShadow = true
     m.userData.layer = 'framing'
+    m.userData.info = framingInfo
     group.add(m)
   }
 
@@ -372,6 +380,221 @@ export function buildMasonryWall(opts: {
     cursor = Math.max(cursor, hi)
   }
   if (half - cursor > 0.02) add(half - cursor, height, (cursor + half) / 2, height / 2)  // pier after
+  return g
+}
+
+// ── Floor joists ─────────────────────────────────────────────────────────────
+
+/**
+ * A floor's joist field for a traced rectangle: common joists spanning the
+ * SHORTER side, repeated at on-centre spacing along the longer side, plus an
+ * outer joist flush to each long edge and a rim/band joist capping each end.
+ *
+ * Built centred on origin in the XZ plane; joists hang just below y=0 so their
+ * tops sit at the floor plane. The caller positions/rotates the group onto the
+ * traced floor area (centre + overlay yaw), exactly like the wall layers.
+ */
+/** Floor-element names that build a concrete slab instead of a joist field. */
+export const FLOOR_SLAB_TYPES = new Set(['Concrete Slab'])
+export const SUBFLOOR_T = 0.019   // 3/4" plywood subfloor sheathing
+export const SLAB_T = 0.102       // 4" concrete slab-on-grade
+/** Floor-assembly height (joists + subfloor) — the rise a floor adds on top of
+ *  the walls below, so a 2nd-floor deck rests ON the lower wall's top plate. */
+export const FLOOR_ASSEMBLY_H = 0.32
+
+/**
+ * Joist field (or concrete slab) for a traced floor rectangle, built centred on
+ * the ORIGIN in Y (members straddle y=0). The caller seats it at the right
+ * height and renders the joists and the subfloor DECK as SEPARATE children, so
+ * the explode view lifts the sheets cleanly off the joists.
+ */
+export function buildFloorJoists(opts: {
+  lenX: number; lenZ: number; element: string; ocM: number; opacity?: number
+}): THREE.Group {
+  const { lenX, lenZ, element, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.1 || lenZ < 0.1) return g
+
+  // Concrete slab-on-grade — one slab centred on y=0 (caller drops it so the top
+  // sits at grade). Rebar + in-floor radiant PEX are later detail.
+  if (FLOOR_SLAB_TYPES.has(element)) {
+    const slab = new THREE.Mesh(
+      new THREE.BoxGeometry(lenX, SLAB_T, lenZ),
+      new THREE.MeshStandardMaterial({ color: new THREE.Color('#b9bcc2'), roughness: 0.95, metalness: 0, transparent: opacity < 1, opacity }),
+    )
+    slab.castShadow = true; slab.receiveShadow = true
+    slab.userData.layer = 'floors'
+    slab.userData.info = 'Concrete slab · 4"'
+    g.add(slab)
+    return g
+  }
+
+  const { width, depth, color } = joistProfile(element)
+  const oc = Math.max(0.2, ocM)
+  const ocIn = Math.round(oc / 0.0254)
+  const joistInfo = `${element} · ${ocIn}" OC`
+  const joistMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color), roughness: 0.72, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const addJoist = (w: number, d: number, x: number, z: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, depth, d), joistMat)
+    m.position.set(x, 0, z)
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'floors'
+    m.userData.info = joistInfo
+    g.add(m)
+  }
+  // Joists span the shorter dimension; the row of them runs along the longer.
+  const spanAlongX = lenX <= lenZ
+  const spanLen = spanAlongX ? lenX : lenZ   // each joist's length
+  const runLen  = spanAlongX ? lenZ : lenX   // span the row of joists covers
+  const halfRun = runLen / 2
+  // Common joists at OC, plus an outer joist flush to each long edge.
+  const positions: number[] = [-halfRun + width / 2, halfRun - width / 2]
+  for (let p = -halfRun + width / 2; p < halfRun - width / 2; p += oc) positions.push(p)
+  for (const p of positions) {
+    if (spanAlongX) addJoist(spanLen, width, 0, p)
+    else            addJoist(width, spanLen, p, 0)
+  }
+  // Rim/band joists capping the joist ends (perpendicular to the joists).
+  for (const s of [-1, 1]) {
+    const e = s * (spanLen / 2 - width / 2)
+    if (spanAlongX) addJoist(width, runLen, e, 0)
+    else            addJoist(runLen, width, 0, e)
+  }
+
+  // Galvanised joist hangers — a shiny metal saddle at each joist-to-rim
+  // connection (bottom seat + two side flanges hugging the joist end).
+  const hangerMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#cdd2d9'), roughness: 0.25, metalness: 0.9,
+    transparent: opacity < 1, opacity,
+  })
+  const HSEAT = 0.008, HFLANGE = 0.005, HDEPTH = 0.05
+  const half = spanLen / 2
+  const addHanger = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hangerMat)
+    m.position.set(x, y, z)
+    m.castShadow = true
+    m.userData.layer = 'floors'
+    m.userData.info = 'Joist hanger (galv.)'
+    g.add(m)
+  }
+  for (const p of positions) {
+    for (const s of [-1, 1]) {
+      const end = s * half
+      if (spanAlongX) {
+        addHanger(HDEPTH, HSEAT, width + 2 * HFLANGE, end - s * HDEPTH / 2, -depth / 2 - HSEAT / 2, p)
+        for (const sj of [-1, 1]) addHanger(HDEPTH, depth * 0.8, HFLANGE, end - s * HDEPTH / 2, -depth * 0.1, p + sj * (width / 2 + HFLANGE / 2))
+      } else {
+        addHanger(width + 2 * HFLANGE, HSEAT, HDEPTH, p, -depth / 2 - HSEAT / 2, end - s * HDEPTH / 2)
+        for (const sj of [-1, 1]) addHanger(HFLANGE, depth * 0.8, HDEPTH, p + sj * (width / 2 + HFLANGE / 2), -depth * 0.1, end - s * HDEPTH / 2)
+      }
+    }
+  }
+  return g
+}
+
+/**
+ * The plywood subfloor DECK for a traced floor rectangle, as individual 4'×8'
+ * sheets with visible joints — staggered (running-bond) courses with the long
+ * side running across the joists, partial cut sheets at the edges. Centred on
+ * y=0; the caller seats it just above the joists. The sheet COUNT is stashed on
+ * `group.userData.sheetCount` for the material takeoff / nameplate.
+ */
+export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: number }): THREE.Group {
+  const g = new THREE.Group()
+  const { lenX, lenZ, opacity = 1 } = opts
+  if (lenX < 0.1 || lenZ < 0.1) { g.userData.sheetCount = 0; return g }
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#caa66e'), roughness: 0.85, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  // 8' (long) side runs along the longer dimension; 4' (short) across it.
+  const longAlongX = lenX >= lenZ
+  const sw = longAlongX ? SHEET_LONG : SHEET_SHORT
+  const sl = longAlongX ? SHEET_SHORT : SHEET_LONG
+  const halfX = lenX / 2, halfZ = lenZ / 2
+  let count = 0, row = 0
+  for (let z = -halfZ; z < halfZ - 0.02; z += sl + SHEET_GAP, row++) {
+    const d = Math.min(sl, halfZ - z)
+    const stagger = (row % 2 === 1) ? -sw / 2 : 0   // running-bond stagger
+    for (let x = -halfX + stagger; x < halfX - 0.02; x += sw + SHEET_GAP) {
+      const x0 = Math.max(-halfX, x)
+      const w = Math.min(x + sw, halfX) - x0
+      if (w < 0.05 || d < 0.05) continue
+      const sheet = new THREE.Mesh(new THREE.BoxGeometry(w - SHEET_GAP, SUBFLOOR_T, d - SHEET_GAP), mat)
+      sheet.position.set(x0 + w / 2, 0, z + d / 2)
+      sheet.castShadow = true; sheet.receiveShadow = true
+      sheet.userData.layer = 'floor-sheeting'
+      sheet.userData.info = 'Subfloor · 3/4" ply · 4×8'
+      g.add(sheet); count++
+    }
+  }
+  g.userData.sheetCount = count
+  return g
+}
+
+// ── Gable roof (common rafters + ridge) ──────────────────────────────────────
+
+/**
+ * A gable roof over a traced rectangle: common rafters at on-centre spacing
+ * sloping from each eave up to a ridge board, with the gable ends on the short
+ * sides. Built centred on origin with the EAVES at y=0 (the caller seats the
+ * group on the wall top plate); the ridge rises by half-span × pitch.
+ *
+ * Same pull-to-place flow as floors; hip/valley/shed are future profiles that
+ * reuse this builder with different rafter geometry.
+ */
+export function buildGableRoof(opts: {
+  lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+}): THREE.Group {
+  const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.2 || lenZ < 0.2) return g
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#c79a5e'), roughness: 0.75, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const RT = 0.184   // rafter depth (≈ 2×8)
+  const RW = 0.038   // rafter width
+  const spanAlongX = lenX <= lenZ      // ridge runs along the LONGER side
+  const span = spanAlongX ? lenX : lenZ
+  const runLen = spanAlongX ? lenZ : lenX
+  const half = span / 2
+  const rise = Math.max(0.1, half * pitch)
+  const rafterLen = Math.hypot(half, rise)
+  const angle = Math.atan2(rise, half)
+
+  const rafterInfo = `Rafter · ${Math.round(pitch * 12)}:12`
+  const addBox = (w: number, h: number, d: number, x: number, y: number, z: number, rx: number, ry: number, rz: number, info: string) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
+    m.position.set(x, y, z)
+    m.rotation.set(rx, ry, rz)
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'roof'
+    m.userData.info = info
+    g.add(m)
+  }
+
+  // Rafter pairs at OC along the ridge run, plus one flush to each gable end.
+  const halfRun = runLen / 2
+  const ps: number[] = [-halfRun + RW / 2, halfRun - RW / 2]
+  for (let p = -halfRun + RW / 2 + Math.max(0.3, ocM); p < halfRun - RW / 2; p += Math.max(0.3, ocM)) ps.push(p)
+
+  if (spanAlongX) {
+    for (const p of ps) {
+      addBox(rafterLen, RT, RW, -half / 2, rise / 2, p, 0, 0, angle, rafterInfo)   // left slope
+      addBox(rafterLen, RT, RW, half / 2, rise / 2, p, 0, 0, -angle, rafterInfo)   // right slope
+    }
+    addBox(RW, RT, runLen, 0, rise, 0, 0, 0, 0, 'Ridge board')                     // ridge board
+  } else {
+    for (const p of ps) {
+      addBox(RW, RT, rafterLen, p, rise / 2, -half / 2, -angle, 0, 0, rafterInfo)
+      addBox(RW, RT, rafterLen, p, rise / 2, half / 2, angle, 0, 0, rafterInfo)
+    }
+    addBox(runLen, RT, RW, 0, rise, 0, 0, 0, 0, 'Ridge board')
+  }
   return g
 }
 

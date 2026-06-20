@@ -235,6 +235,8 @@ interface WorkspaceHistorySnapshot {
   plumbingLines: TracedLine[]
   electricalLines: TracedLine[]
   hvacLines: TracedLine[]
+  floorsAreas: TracedLine[]
+  roofAreas: TracedLine[]
   circuits: Circuit[]
   annotations: Annotation[]
   measurements: Measurement[]
@@ -284,6 +286,12 @@ interface AppState {
   plumbingLines: TracedLine[]
   electricalLines: TracedLine[]
   hvacLines: TracedLine[]
+  /** Traced floor areas (rectangles) that lay a joist field. Reuses TracedLine:
+   *  (x1,y1)-(x2,y2) are opposite corners; elementType=joist type, size=OC. */
+  floorsAreas: TracedLine[]
+  /** Traced roof areas (rectangles) that build a gable roof. Reuses TracedLine:
+   *  (x1,y1)-(x2,y2) are opposite corners; elementType=roof type, size=pitch. */
+  roofAreas: TracedLine[]
   /** Electrical branch circuits (auto-grouped by amperage + manual). */
   circuits: Circuit[]
   /** Which trade layers are currently shown in the 3D scene */
@@ -395,6 +403,12 @@ interface AppState {
   removePlumbingLine: (id: string) => void
   removeElectricalLine: (id: string) => void
   removeHvacLine: (id: string) => void
+  // Floor areas (joist fields)
+  addFloorsAreas: (areas: TracedLine[]) => void
+  removeFloorsArea: (id: string) => void
+  // Roof areas (gable roofs)
+  addRoofAreas: (areas: TracedLine[]) => void
+  removeRoofArea: (id: string) => void
   toggleTradeLayerVisible: (layer: TraceLayer) => void
   // Electrical circuits
   addCircuit: (c: Circuit) => void
@@ -479,6 +493,8 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     plumbingLines: state.plumbingLines,
     electricalLines: state.electricalLines,
     hvacLines: state.hvacLines,
+    floorsAreas: state.floorsAreas,
+    roofAreas: state.roofAreas,
     circuits: state.circuits,
     annotations: state.annotations,
     measurements: state.measurements,
@@ -521,6 +537,8 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   state.plumbingLines = deepCopy(snapshot.plumbingLines ?? [])
   state.electricalLines = deepCopy(snapshot.electricalLines ?? [])
   state.hvacLines = deepCopy(snapshot.hvacLines ?? [])
+  state.floorsAreas = deepCopy(snapshot.floorsAreas ?? [])
+  state.roofAreas = deepCopy(snapshot.roofAreas ?? [])
   state.circuits = deepCopy(snapshot.circuits ?? [])
   state.annotations = deepCopy(snapshot.annotations)
   state.measurements = deepCopy(snapshot.measurements)
@@ -616,6 +634,8 @@ export const useAppStore = create<AppState>()(
     plumbingLines: [],
     electricalLines: [],
     hvacLines: [],
+    floorsAreas: [],
+    roofAreas: [],
     circuits: [],
     visibleLayers: new Set<TraceLayer>(TRACE_LAYER_ORDER),
     wizardInputs: null,
@@ -1498,6 +1518,28 @@ export const useAppStore = create<AppState>()(
     removeHvacLine: (id) => {
       pushHistory()
       set((s) => { s.hvacLines = s.hvacLines.filter((l) => l.id !== id) })
+    },
+
+    addFloorsAreas: (areas) => {
+      if (areas.length === 0) return
+      pushHistory()
+      set((s) => { s.floorsAreas.push(...areas) })
+    },
+
+    removeFloorsArea: (id) => {
+      pushHistory()
+      set((s) => { s.floorsAreas = s.floorsAreas.filter((a) => a.id !== id) })
+    },
+
+    addRoofAreas: (areas) => {
+      if (areas.length === 0) return
+      pushHistory()
+      set((s) => { s.roofAreas.push(...areas) })
+    },
+
+    removeRoofArea: (id) => {
+      pushHistory()
+      set((s) => { s.roofAreas = s.roofAreas.filter((a) => a.id !== id) })
     },
 
     addElectricalLines: (lines) => {

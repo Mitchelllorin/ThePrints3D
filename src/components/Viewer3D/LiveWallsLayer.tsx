@@ -12,6 +12,7 @@ import { Billboard, Text } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming, buildMasonryWall, type WallOpening } from '../../services/framingGeometry'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
@@ -39,23 +40,33 @@ interface WallMeshProps {
   built: boolean
   activeUnit: ActiveUnit
   lengthFormat: LengthFormat
+  /** This end meets another wall — extend it so the corner joins (no gap). */
+  startCorner: boolean
+  endCorner: boolean
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat }: WallMeshProps) {
-  const p1 = pixelToWorld(wall.x1, wall.y1)
-  const p2 = pixelToWorld(wall.x2, wall.y2)
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner }: WallMeshProps) {
+  const labelColor = useUISettingsStore((s) => s.labelColor)
+  const labelScale = useUISettingsStore((s) => s.labelScale)
 
-  const dx = p2.x - p1.x
-  const dz = p2.z - p1.z
-  const length = Math.hypot(dx, dz)
-
-  const cx = (p1.x + p2.x) / 2
-  const cz = (p1.z + p2.z) / 2
-  const angle = Math.atan2(dz, dx)
-
-  // Thickness: use scale if known, otherwise fall back to standard 140mm
+  // Thickness first — it sets how far to extend ends into a corner.
   const mmPerPx = scaleMmPerPx ?? DEFAULT_THICKNESS_MM / (wall.thickness || 8)
   const thicknessM = Math.max(MIN_THICKNESS, ((wall.thickness || 8) * mmPerPx) / 1000)
+
+  const a = pixelToWorld(wall.x1, wall.y1)
+  const b = pixelToWorld(wall.x2, wall.y2)
+  // Extend any end that meets another wall by half the thickness, so adjacent
+  // stud cages overlap and the corner reads as joined instead of leaving a gap.
+  const rawLen = Math.hypot(b.x - a.x, b.z - a.z) || 1
+  const ux = (b.x - a.x) / rawLen, uz = (b.z - a.z) / rawLen
+  const ext = thicknessM / 2
+  const ax = a.x - (startCorner ? ux * ext : 0), az = a.z - (startCorner ? uz * ext : 0)
+  const bx = b.x + (endCorner ? ux * ext : 0),   bz = b.z + (endCorner ? uz * ext : 0)
+
+  const length = Math.hypot(bx - ax, bz - az)
+  const cx = (ax + bx) / 2
+  const cz = (az + bz) / 2
+  const angle = Math.atan2(bz - az, bx - ax)
 
   // Masonry (CMU/brick/concrete) is a solid block; framed walls get studs.
   const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
@@ -86,7 +97,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       {/* Nameplate — the wall's real length while tracing; hidden once built. */}
       {!built && (
         <Billboard position={[cx, wallHeight + 0.28, cz]}>
-          <Text fontSize={0.32} color="#ffffff" anchorX="center" anchorY="middle" outlineWidth={0.025} outlineColor="#0b1120">
+          <Text fontSize={0.32 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.025 * labelScale} outlineColor="#0b1120">
             {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
           </Text>
         </Billboard>
@@ -146,6 +157,22 @@ export default function LiveWallsLayer() {
     return out
   }, [drawings])
 
+  // Which wall ends meet another wall (shared endpoint, ~4px tolerance) — those
+  // are corners, and get extended so the framing joins instead of gapping.
+  const cornerEnds = useMemo(() => {
+    const key = (x: number, y: number) => `${Math.round(x / 4)},${Math.round(y / 4)}`
+    const counts = new Map<string, number>()
+    for (const { wall } of userWalls) {
+      const k1 = key(wall.x1, wall.y1), k2 = key(wall.x2, wall.y2)
+      counts.set(k1, (counts.get(k1) ?? 0) + 1)
+      counts.set(k2, (counts.get(k2) ?? 0) + 1)
+    }
+    return userWalls.map(({ wall }) => ({
+      start: (counts.get(key(wall.x1, wall.y1)) ?? 0) > 1,
+      end: (counts.get(key(wall.x2, wall.y2)) ?? 0) > 1,
+    }))
+  }, [userWalls])
+
   // Assign each placed door/window to its nearest wall (in pixel space) and
   // record its position (t, 0..1) and rough-opening width — so the live framing
   // frames the opening exactly where the door/window sits, just like on site.
@@ -203,6 +230,8 @@ export default function LiveWallsLayer() {
           built={built}
           activeUnit={activeUnit}
           lengthFormat={lengthFormat}
+          startCorner={cornerEnds[i]?.start ?? false}
+          endCorner={cornerEnds[i]?.end ?? false}
         />
       ))}
     </group>

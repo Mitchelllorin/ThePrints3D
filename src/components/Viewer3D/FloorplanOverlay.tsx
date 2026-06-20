@@ -125,6 +125,10 @@ export default function FloorplanOverlay() {
   const addPlumbingLines = useAppStore((s) => s.addPlumbingLines)
   const addElectricalLines = useAppStore((s) => s.addElectricalLines)
   const addHvacLines = useAppStore((s) => s.addHvacLines)
+  const addFloorsAreas = useAppStore((s) => s.addFloorsAreas)
+  const floorsAreas = useAppStore((s) => s.floorsAreas)
+  const addRoofAreas = useAppStore((s) => s.addRoofAreas)
+  const roofAreas = useAppStore((s) => s.roofAreas)
   const plumbingLines = useAppStore((s) => s.plumbingLines)
   const electricalLines = useAppStore((s) => s.electricalLines)
   const hvacLines = useAppStore((s) => s.hvacLines)
@@ -178,6 +182,11 @@ export default function FloorplanOverlay() {
   const hvacElement = useFloorplanLocalStore((s) => s.hvacElement)
   const hvacSize = useFloorplanLocalStore((s) => s.hvacSize)
   const hvacMaterial = useFloorplanLocalStore((s) => s.hvacMaterial)
+  const floorsElement = useFloorplanLocalStore((s) => s.floorsElement)
+  const floorsSize = useFloorplanLocalStore((s) => s.floorsSize)
+  const roofElement = useFloorplanLocalStore((s) => s.roofElement)
+  const roofSize = useFloorplanLocalStore((s) => s.roofSize)
+  const activeLevel = useFloorplanLocalStore((s) => s.activeLevel)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageUrl = drawing ? (drawing.rasterUrl ?? drawing.previewUrl) : null
@@ -274,12 +283,25 @@ export default function FloorplanOverlay() {
     return [start, end] as [[number, number, number], [number, number, number]]
   }, [calibrationA, calibrationB, hoverPixel, overlay.calibrationMode, planeLocalToWorld])
 
-  // Rubber-band trace preview — same stretchy interaction as calibration
+  // Rubber-band trace preview — same stretchy interaction as calibration.
+  // Floors preview as a rectangle (below), not a diagonal line, so it's skipped here.
   const tracePreviewPoints = useMemo(() => {
-    if (!traceMode || tracePaused || traceStyle !== 'line' || !traceStart || !hoverPixel) return null
+    if (!traceMode || tracePaused || traceStyle !== 'line' || activeTraceLayer === 'floors' || activeTraceLayer === 'roof' || !traceStart || !hoverPixel) return null
     return [planeLocalToWorld(traceStart), planeLocalToWorld(hoverPixel)] as
       [[number, number, number], [number, number, number]]
-  }, [traceMode, tracePaused, traceStyle, traceStart, hoverPixel, planeLocalToWorld])
+  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToWorld])
+
+  // A floor area's 4 pixel corners → a closed world-space rectangle loop.
+  const floorsRectWorld = useCallback((x1: number, y1: number, x2: number, y2: number) =>
+    ([[x1, y1], [x2, y1], [x2, y2], [x1, y2], [x1, y1]] as [number, number][])
+      .map(planeLocalToWorld) as [number, number, number][],
+  [planeLocalToWorld])
+
+  // Live rectangle preview while pulling a floor or roof area (corner A → cursor).
+  const floorsPreviewRect = useMemo(() => {
+    if (!traceMode || tracePaused || (activeTraceLayer !== 'floors' && activeTraceLayer !== 'roof') || !traceStart || !hoverPixel) return null
+    return floorsRectWorld(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
+  }, [traceMode, tracePaused, activeTraceLayer, traceStart, hoverPixel, floorsRectWorld])
 
   // ─── drag handlers ─────────────────────────────────────────────────────
 
@@ -368,6 +390,20 @@ export default function FloorplanOverlay() {
     const pixel = worldToPixel(event.point)
 
     if (traceMode) {
+      // Area layers (floors / roof): tap one corner, tap the opposite corner —
+      // the rectangle becomes a joist field or a gable roof. No chaining; each
+      // tap-pair is a separate area.
+      if (activeTraceLayer === 'floors' || activeTraceLayer === 'roof') {
+        if (!traceStart) { setTraceStart(pixel); setHoverPixel(pixel); return }
+        const a = traceStart
+        if (Math.hypot(pixel[0] - a[0], pixel[1] - a[1]) < 6) { setTraceStart(null); return }
+        const area = { id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1], material: '', level: activeLevel }
+        if (activeTraceLayer === 'floors') addFloorsAreas([{ ...area, elementType: floorsElement, size: floorsSize }])
+        else addRoofAreas([{ ...area, elementType: roofElement, size: roofSize }])
+        setTraceStart(null)
+        return
+      }
+
       // Trade layers (plumbing/electrical/HVAC) trace simple lines, not walls.
       if (activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') {
         if (!traceStart) { const s = snapTradeStart(pixel); setTraceStart(s); setHoverPixel(s); return }
@@ -695,6 +731,8 @@ export default function FloorplanOverlay() {
     activeTraceLayer === 'plumbing' ? plumbingColorFor(plumbElement, plumbTemp)
     : activeTraceLayer === 'electrical' ? electricalColorFor(elecElement, elecRole)
     : activeTraceLayer === 'hvac' ? hvacColorFor(hvacElement)
+    : activeTraceLayer === 'floors' ? LAYER_COLORS.floors
+    : activeTraceLayer === 'roof' ? LAYER_COLORS.roof
     : LAYER_COLORS.framing
 
   // Electrical code violations (shown as red markers while the layer is on).
@@ -719,7 +757,7 @@ export default function FloorplanOverlay() {
           position={[overlay.position[0], 0.01, overlay.position[1]]}
           rotation={[0, rotationRad, 0]}
         >
-          <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ layer: 'floors' }}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ layer: 'floors', noPick: true }}>
             <planeGeometry args={[width, depth]} />
             <meshBasicMaterial
               map={texture}
@@ -820,6 +858,31 @@ export default function FloorplanOverlay() {
       {tracePreviewPoints && (
         <Line points={tracePreviewPoints} color={activeLineColor} lineWidth={4} />
       )}
+
+      {/* Floor/roof area being pulled — rectangle outline on the print. */}
+      {floorsPreviewRect && (
+        <Line points={floorsPreviewRect} color={activeTraceLayer === 'roof' ? LAYER_COLORS.roof : LAYER_COLORS.floors} lineWidth={3} dashed dashSize={0.25} gapSize={0.15} />
+      )}
+
+      {/* Committed floor areas — rectangle outlines on the print. */}
+      {visibleLayers.has('floors') && floorsAreas.map((a) => (
+        <Line
+          key={`floor-${a.id}`}
+          points={floorsRectWorld(a.x1, a.y1, a.x2, a.y2)}
+          color={LAYER_COLORS.floors}
+          lineWidth={2.5}
+        />
+      ))}
+
+      {/* Committed roof areas — rectangle outlines on the print. */}
+      {visibleLayers.has('roof') && roofAreas.map((a) => (
+        <Line
+          key={`roof-${a.id}`}
+          points={floorsRectWorld(a.x1, a.y1, a.x2, a.y2)}
+          color={LAYER_COLORS.roof}
+          lineWidth={2.5}
+        />
+      ))}
 
       {/* Committed trade lines drawn on the print, coloured by field convention.
           When not tracing/placing, tapping a run selects it (edit-on-the-fly →

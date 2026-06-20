@@ -18,6 +18,9 @@ import ConstructionWizard from '../ConstructionWizard/ConstructionWizard'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
+import FloorJoistsLayer from './FloorJoistsLayer'
+import RoofLayer from './RoofLayer'
+import HoverNameplate from './HoverNameplate'
 import DrywallLayer from './DrywallLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
@@ -198,11 +201,12 @@ export default function ModelViewer() {
     ambient: s.ambientIntensity,
   })))
 
-  // drei's Grid has no opacity prop — fade by blending the line colour
-  // toward the canvas background instead.
-  const gridColor = new THREE.Color(scene.bg).lerp(
-    new THREE.Color(gridSettings.color),
-    gridSettings.opacity,
+  // drei's Grid has no opacity prop — dim the line colour by the grid's OWN
+  // opacity (toward black), independent of the background. So the Background
+  // colour drives only the backdrop, and the grid's colour/brightness is its
+  // own separate control.
+  const gridColor = new THREE.Color(gridSettings.color).multiplyScalar(
+    Math.max(0.05, gridSettings.opacity),
   )
   const model      = useAppStore((s) => s.model)
   const drawings   = useAppStore((s) => s.drawings)
@@ -513,6 +517,7 @@ export default function ModelViewer() {
 
       <Canvas
         shadows
+        dpr={[1, 2]}
         gl={{ antialias: true, preserveDrawingBuffer: true }}
         camera={{ fov: 55, near: 0.1, far: 1000 }}
         style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
@@ -525,8 +530,26 @@ export default function ModelViewer() {
         <CameraRig />
         {/* Live workspace background — drives the canvas clear colour. */}
         <color attach="background" args={[scene.bg]} />
+        {/* Lighting for FORM, so a stud cage reads as studs (not a flat block):
+            a hemisphere gradient + a shadow-casting key + a soft opposite fill.
+            Key shadows give the gaps between studs real contrast. */}
         <ambientLight intensity={scene.ambient} color={scene.lightColor} />
-        <directionalLight position={[10, 20, 10]} intensity={scene.dir} color={scene.lightColor} />
+        <hemisphereLight args={['#dbeafe', '#1b2430', 0.45]} />
+        <directionalLight
+          position={[14, 26, 12]}
+          intensity={scene.dir}
+          color={scene.lightColor}
+          castShadow
+          shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0004}
+          shadow-camera-near={0.5}
+          shadow-camera-far={150}
+          shadow-camera-left={-45}
+          shadow-camera-right={45}
+          shadow-camera-top={45}
+          shadow-camera-bottom={-45}
+        />
+        <directionalLight position={[-12, 10, -8]} intensity={scene.dir * 0.3} color={scene.lightColor} />
 
         {gridSettings.visible && (
           <Grid
@@ -546,6 +569,9 @@ export default function ModelViewer() {
         <FloatingLogo3D />
         <FloorplanOverlay />
         <LiveWallsLayer />
+        <FloorJoistsLayer />
+        <RoofLayer />
+        <HoverNameplate />
         <DrywallLayer />
         <PlacedObjectsLayer />
         <TradeLayersRenderer />

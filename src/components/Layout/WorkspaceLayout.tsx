@@ -105,6 +105,7 @@ const EXPLODE_SYSTEMS: Array<{ key: string; label: string }> = [
   { key: 'framing', label: 'Framing' },
   { key: 'walls', label: 'Walls' },
   { key: 'floors', label: 'Floors' },
+  { key: 'roof', label: 'Roof' },
   { key: 'doors-windows', label: 'Openings' },
   { key: 'structure', label: 'Structure' },
   { key: 'mep', label: 'MEP' },
@@ -163,13 +164,19 @@ function SettingsContent() {
 
   return (
     <div className={styles.settingsBody}>
-      <CollapsibleSection id="appearance" title="Appearance" openId={openId} setOpenId={setOpenId}>
-        <Slider label="Opacity" val={Math.round(ui.panelOpacity * 100)} min={0} max={100} step={1} unit="%"
+      <CollapsibleSection id="appearance" title="Panels & text" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Panel opacity" val={Math.round(ui.panelOpacity * 100)} min={0} max={100} step={1} unit="%"
           onChange={(v) => setUI({ topbarOpacity: v / 100, sidebarOpacity: v / 100, panelOpacity: v / 100 })} />
-        <ColorRow label="Colour" val={ui.panelColor} onChange={(v) => setUI({ panelColor: v })} />
-        <ColorRow label="Text colour" val={ui.textColor} onChange={(v) => setUI({ textColor: v })} />
-        <ColorRow label="Text (secondary)" val={ui.textColorDim} onChange={(v) => setUI({ textColorDim: v })} />
-        <ColorRow label="Accent" val={ui.accentColor} onChange={(v) => setUI({ accentColor: v })} />
+        <ColorRow label="Panel background" val={ui.panelColor} onChange={(v) => setUI({ panelColor: v })} />
+        <ColorRow label="Text — normal" val={ui.textColor} onChange={(v) => setUI({ textColor: v })} />
+        <ColorRow label="Text — dim / hints" val={ui.textColorDim} onChange={(v) => setUI({ textColorDim: v })} />
+        <ColorRow label="Selected / highlight" val={ui.accentColor} onChange={(v) => setUI({ accentColor: v })} />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="labels" title="Model labels" openId={openId} setOpenId={setOpenId}>
+        <ColorRow label="Label colour" val={ui.labelColor} onChange={(v) => setUI({ labelColor: v })} />
+        <Slider label="Label size" val={Math.round(ui.labelScale * 100)} min={50} max={200} step={5} unit="%"
+          onChange={(v) => setUI({ labelScale: v / 100 })} />
       </CollapsibleSection>
 
       <CollapsibleSection id="lighting" title="Lighting & background" openId={openId} setOpenId={setOpenId}>
@@ -641,7 +648,8 @@ export default function WorkspaceLayout() {
         <ModelViewer />
       </div>
 
-      {/* Brand mark — small, floating, top-left; never blocks the canvas. */}
+      {/* Brand mark — flat top-left wordmark. ALWAYS shown so the workspace
+          never loses its logo; the 3D floating logo is a bonus on top of it. */}
       <div className={styles.logoFloat} style={{ opacity: logoOpacity, transform: `scale(${logoSize})` }}>
         <span className={styles.logo}>
           <span className={styles.logoThe}>The</span>
@@ -667,7 +675,9 @@ export default function WorkspaceLayout() {
           the left; Settings from the right. Each has an X; Escape / canvas tap
           closes them. Vertically centered. */}
       {open && (
-        <div className={`${styles.specPanel} ${open === 'settings' ? styles.specPanelRight : styles.specPanelLeft}`}>
+        // All panels slide in from the LEFT so none of them sit under the
+        // right-side icon column (Settings used to open right, over the icons).
+        <div className={`${styles.specPanel} ${styles.specPanelLeft}`}>
           <button className={styles.specClose} onClick={closePanels} aria-label="Close">✕</button>
           <div className={styles.specScroll}>
             <p className={styles.specTitle}>{PANEL_TITLES[open]}</p>
@@ -706,6 +716,30 @@ export default function WorkspaceLayout() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Persistent Explode control — always reachable, with its OWN solid
+          surface (not the themed panel) so it can never disappear when UI
+          opacity is turned down. Shown whenever a plan is loaded. */}
+      {drawings.length > 0 && !calibrationMode && (
+        <div className={styles.explodeBar}>
+          <span>Explode</span>
+          <input
+            className={styles.explodeSlider}
+            type="range" min={0} max={1} step={0.01} value={explodeAmount}
+            onChange={(e) => setExplodeAmount(Number(e.target.value))}
+            aria-label="Explode separation"
+          />
+          {explodeAmount > 0 && (
+            <button
+              className={styles.explodeReset}
+              onClick={() => setExplodeAmount(0)}
+              aria-label="Reset explode"
+            >
+              Reset
+            </button>
+          )}
         </div>
       )}
 

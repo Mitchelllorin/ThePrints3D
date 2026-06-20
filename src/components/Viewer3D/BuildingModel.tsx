@@ -322,10 +322,11 @@ function buildFoundation(
   const cx = (fp.minX + fp.maxX) / 2
   const cz = (fp.minZ + fp.maxZ) / 2
   const depth = /basement/i.test(foundationType) ? 1.2 : /pier|pile/i.test(foundationType) ? 0.5 : 0.35
+  // Concrete grey so it reads as a poured foundation, not a mystery black slab.
   const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#334155'),
-    metalness: 0.08,
-    roughness: 0.92,
+    color: new THREE.Color('#aab0b8'),
+    metalness: 0.02,
+    roughness: 0.96,
   })
   const slab = new THREE.Mesh(new THREE.BoxGeometry(W, depth, D), material)
   slab.position.set(cx, -depth / 2, cz)
