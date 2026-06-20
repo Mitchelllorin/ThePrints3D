@@ -4,6 +4,7 @@ import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TopIcons from './TopIcons'
+import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -646,15 +647,9 @@ export default function WorkspaceLayout() {
         <ModelViewer />
       </div>
 
-      {/* Brand mark — the floating wordmark, top-left. 3D-extruded look (via the
-          text-shadow stack in .logo) + a gentle float; reliable + always visible. */}
-      <div className={styles.logoFloat}>
-        <span className={styles.logo}>
-          <span className={styles.logoThe}>The</span>
-          <span className={styles.logoPrints}>PRINTS</span>
-          <span className={styles.logo3D}>3D</span>
-        </span>
-      </div>
+      {/* Brand mark — the REAL 3D extruded wordmark, top-left, in its own isolated
+          canvas so it always renders + rocks to show its depth. */}
+      <Logo3DBadge />
 
       {/* The only persistent chrome: five icon buttons, fixed top-right. */}
       <TopIcons
