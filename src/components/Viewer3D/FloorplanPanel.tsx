@@ -1054,6 +1054,15 @@ export default function FloorplanPanel() {
                 {EXTERIOR_CLADDINGS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
               </select>
             </label>
+            <label className={styles.row}>
+              <span className={styles.propLabel}>See-through</span>
+              <button
+                className={userWalls[selectedWallIndex].transparent ? styles.action : styles.secondary}
+                onClick={() => updateUserWall(drawing.id, selectedWallIndex, { transparent: !userWalls[selectedWallIndex].transparent })}
+              >
+                {userWalls[selectedWallIndex].transparent ? 'X-ray: on' : 'X-ray: off'}
+              </button>
+            </label>
             <div className={styles.btnRow}>
               <button className={styles.action} onClick={deleteSelectedWall}>Delete wall</button>
               <button className={styles.secondary} onClick={() => setSelectedWallIndex(null)}>Deselect</button>

@@ -65,6 +65,9 @@ export interface ParsedWall {
   /** Storey this wall stands on (0 = ground, 1 = 2nd floor, …). Drives its 3D
    *  base elevation so upper-floor walls stack on the floor below. */
   level?: number
+  /** X-ray this wall — render it see-through so you can see what's behind/inside
+   *  (studs, MEP) without deleting it. Toggled from the wall edit panel. */
+  transparent?: boolean
 }
 
 /**

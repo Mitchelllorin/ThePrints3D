@@ -237,7 +237,7 @@ export default function LiveWallsLayer() {
           topTrackStyle={steelTrackTop === 'double' ? 'deep' : steelTrackTop}
           deflectionGapMm={steelTrackTop === 'slotted' ? steelDeflectionGapMm : 0}
           openings={openingsByWall[i] ?? []}
-          opacity={built ? 1 : 0.7}
+          opacity={wall.transparent ? 0.16 : built ? 1 : 0.7}
           built={built}
           activeUnit={activeUnit}
           lengthFormat={lengthFormat}
