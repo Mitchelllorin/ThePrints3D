@@ -772,6 +772,12 @@ export default function FloorplanPanel() {
               <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
               {framingShort(activeWallType)} · {roleShort(activeWallRole)}
             </button>
+            <span className={styles.stepHint}>Level — which storey these walls stand on</span>
+            <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+              {LEVEL_OPTIONS.map((lv) => (
+                <button key={lv.value} className={activeLevel === lv.value ? styles.action : styles.secondary} onClick={() => setActiveLevel(lv.value)}>{lv.label}</button>
+              ))}
+            </div>
             {pendingWalls ? (
               <>
                 <span className={styles.stepText}>

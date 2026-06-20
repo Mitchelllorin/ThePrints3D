@@ -14,7 +14,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallFraming, buildMasonryWall, type WallOpening } from '../../services/framingGeometry'
+import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import { getCatalogItem } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
@@ -43,9 +43,11 @@ interface WallMeshProps {
   /** This end meets another wall — extend it so the corner joins (no gap). */
   startCorner: boolean
   endCorner: boolean
+  /** Storey-to-storey rise, so upper-floor walls stack on the floor below. */
+  storeyHeight: number
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, storeyHeight }: WallMeshProps) {
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
 
@@ -91,12 +93,15 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
 
   if (length < 0.05) return null
 
+  // Upper-floor walls stand on the floor below.
+  const baseY = (wall.level ?? 0) * storeyHeight
+
   return (
     <>
-      <primitive object={framing} position={[cx, 0, cz]} rotation={[0, -angle, 0]} />
+      <primitive object={framing} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />
       {/* Nameplate — the wall's real length while tracing; hidden once built. */}
       {!built && (
-        <Billboard position={[cx, wallHeight + 0.28, cz]}>
+        <Billboard position={[cx, baseY + wallHeight + 0.28, cz]}>
           <Text fontSize={0.32 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.025 * labelScale} outlineColor="#0b1120">
             {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
           </Text>
@@ -127,6 +132,8 @@ export default function LiveWallsLayer() {
     () => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM,
     [wizardInputs],
   )
+  // Storey-to-storey rise so level-1 walls stand on the 2nd-floor deck, etc.
+  const storeyHeight = wallHeight + FLOOR_ASSEMBLY_H
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageWidth  = drawing?.rasterWidth  ?? 1400
@@ -232,6 +239,7 @@ export default function LiveWallsLayer() {
           lengthFormat={lengthFormat}
           startCorner={cornerEnds[i]?.start ?? false}
           endCorner={cornerEnds[i]?.end ?? false}
+          storeyHeight={storeyHeight}
         />
       ))}
     </group>

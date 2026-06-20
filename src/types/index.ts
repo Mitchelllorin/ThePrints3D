@@ -62,6 +62,9 @@ export interface ParsedWall {
   interiorMaterial?: string
   /** Exterior face cladding preset key (see WALL_MATERIALS), e.g. 'stucco' */
   exteriorMaterial?: string
+  /** Storey this wall stands on (0 = ground, 1 = 2nd floor, …). Drives its 3D
+   *  base elevation so upper-floor walls stack on the floor below. */
+  level?: number
 }
 
 /**

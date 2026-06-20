@@ -247,7 +247,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setActiveWallRole: (v) => set({ activeWallRole: v }),
   // Switching discipline drops any in-progress run anchor, so a resumed/new run
   // starts fresh in the newly selected trade instead of chaining from the old.
-  setActiveTraceLayer: (v) => set({ activeTraceLayer: v, traceStart: null }),
+  // Switching tab also drops back to Ground level, so e.g. tracing walls after a
+  // 2nd-floor floor doesn't silently place them up at level 2 (they "vanished").
+  setActiveTraceLayer: (v) => set({ activeTraceLayer: v, traceStart: null, activeLevel: 0 }),
   setTraceBand: (v) => set({ traceBand: v }),
   setPlumb: (patch) => set(patch),
   setElec: (patch) => set(patch),

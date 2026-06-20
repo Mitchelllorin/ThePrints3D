@@ -758,6 +758,7 @@ export default function BuildingModel({ layers }: Props) {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const placedObjects = useAppStore((s) => s.placedObjects)
+  const floorsAreas = useAppStore((s) => s.floorsAreas)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
   const explodeAmount = useAppStore((s) => s.explodeAmount)
   const explodeSpeed = useConfigStore((s) => s.explodeSpeed)
@@ -918,7 +919,10 @@ export default function BuildingModel({ layers }: Props) {
             break
           case 'floors': {
             const floorLayer = layerMap.get('floors')
-            if (floorLayer?.visible) {
+            // Skip the auto slab when the user traced their own floors — the
+            // traced joist/slab floor (FloorJoistsLayer) IS the real floor, so
+            // the slab must not cover it (it was turning wood floors to slab).
+            if (floorLayer?.visible && floorsAreas.length === 0) {
               buildFloorSlab(group, fp, elev, floorLayer.color, floorLayer.opacity)
             }
             break
@@ -1051,7 +1055,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects, floorsAreas])
 
   // Explode driver: each frame, ease the current progress toward the slider
   // target and fan every component out along its vector from the model centre,

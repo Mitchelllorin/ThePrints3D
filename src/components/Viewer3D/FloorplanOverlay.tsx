@@ -475,6 +475,7 @@ export default function FloorplanOverlay() {
         wallRole: activeWallRole,
         wallType: FRAMING_TO_WALLTYPE[activeWallType] ?? base.wallType,
         exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
+        level: activeLevel,
       }
       addUserTracedWall(drawing.id, wall)
       addTrace({ points: [traceStart, [wall.x2, wall.y2]], timestamp: Date.now() })
