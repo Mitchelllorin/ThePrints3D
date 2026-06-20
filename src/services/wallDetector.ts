@@ -242,11 +242,19 @@ function mergeAxisAligned(
   return result
 }
 
+/** A detected segment carrying the wall centerline derived from its face pair. */
+export type DetectedSeg = ParsedWall & { centerX?: number; centerY?: number }
+
 /**
  * Find parallel segment pairs that are close together (= two faces of a wall).
- * Updates thickness on the first segment of each pair and removes the second.
+ * Sets thickness on the first segment of each pair from the face separation AND
+ * records the wall *centerline* (`centerX`/`centerY`) — the midpoint between the
+ * two faces — so the emitted wall sits flush on the real centre, not on a face.
+ * The classifier still samples the original face position (which lies on ink);
+ * the centre is applied only when the final ParsedWall is built. The partner
+ * face keeps thickness 1 and is later dropped as a "dimension" line.
  */
-function detectWallPairs(segs: ParsedWall[], axis: 'h' | 'v', maxSep: number): void {
+export function detectWallPairs(segs: DetectedSeg[], axis: 'h' | 'v', maxSep: number): void {
   const paired = new Set<number>()
   for (let i = 0; i < segs.length; i++) {
     if (paired.has(i)) continue
@@ -262,6 +270,7 @@ function detectWallPairs(segs: ParsedWall[], axis: 'h' | 'v', maxSep: number): v
         const overlapEnd = Math.min(a.x2, b.x2)
         if (overlapEnd - overlapStart > 20) {
           a.thickness = sep
+          a.centerY = (a.y1 + b.y1) / 2
           paired.add(j)
         }
       } else {
@@ -271,6 +280,7 @@ function detectWallPairs(segs: ParsedWall[], axis: 'h' | 'v', maxSep: number): v
         const overlapEnd = Math.min(a.y2, b.y2)
         if (overlapEnd - overlapStart > 20) {
           a.thickness = sep
+          a.centerX = (a.x1 + b.x1) / 2
           paired.add(j)
         }
       }
@@ -340,18 +350,24 @@ export function detectWalls(
     minWallThicknessPx,
   })
 
-  // Only `wall`-classified lines survive into ParsedWall[].
-  const walls: ParsedWall[] = classified
-    .filter((c) => c.classification === 'wall')
-    .map((c) => ({
-      x1: c.x1,
-      y1: c.y1,
-      x2: c.x2,
-      y2: c.y2,
+  // Only `wall`-classified lines survive into ParsedWall[]. `classified` is in
+  // the same order as `candidates`, so candidates[k] carries the centerline that
+  // detectWallPairs recorded — emit the wall on its centre, not on a face, so a
+  // trace snapped to it lands flush instead of offset by half the thickness.
+  const walls: ParsedWall[] = []
+  classified.forEach((c, k) => {
+    if (c.classification !== 'wall') return
+    const cand = candidates[k] as DetectedSeg | undefined
+    walls.push({
+      x1: cand?.centerX ?? c.x1,
+      y1: cand?.centerY ?? c.y1,
+      x2: cand?.centerX ?? c.x2,
+      y2: cand?.centerY ?? c.y2,
       thickness: c.thickness,
       source: 'auto',
       detectionConfidence: c.confidence,
-    }))
+    })
+  })
 
   return { walls, stats, classified }
 }
