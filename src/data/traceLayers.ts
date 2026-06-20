@@ -54,11 +54,14 @@ export const HVAC_PICKER = {
 }
 export const HVAC_DEFAULTS = { element: 'Supply Duct', size: '6"', material: 'Sheet Metal' }
 
-/** Pre-trace picker rows for floors (element = joist type / slab, size = on-centre). */
+/** Pre-trace picker rows for floors (element = joist type / slab / ceiling, size = on-centre). */
 export const FLOORS_PICKER = {
-  element: ['2x10', '2x12', 'I-Joist', 'LVL', 'Concrete Slab'],
+  element: ['2x10', '2x12', 'I-Joist', 'LVL', 'Concrete Slab', 'Ceiling joists'],
   size: ['12"', '16"', '19.2"', '24"'],
 }
+
+/** Floor-element names that build a CEILING (joists + drywall at wall-top), not a floor. */
+export const CEILING_TYPES = new Set(['Ceiling joists'])
 export const FLOORS_DEFAULTS = { element: 'I-Joist', size: '16"' }
 
 /** Storey picker — which level a floor (or roof) sits on. */

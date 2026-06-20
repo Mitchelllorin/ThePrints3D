@@ -19,7 +19,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import {
   buildFloorJoists, buildFloorDeck, FLOOR_SLAB_TYPES, SUBFLOOR_T, SLAB_T, FLOOR_ASSEMBLY_H,
 } from '../../services/framingGeometry'
-import { joistProfile, ocToM } from '../../data/traceLayers'
+import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
 
@@ -133,12 +133,14 @@ export default function FloorJoistsLayer() {
   if (!visibleLayers.has('floors') || floorsAreas.length === 0) return null
 
   const partProps = { pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight }
-  const decked = floorsAreas.filter((a) => !FLOOR_SLAB_TYPES.has(a.elementType))
+  // Ceiling-typed areas are rendered by CeilingLayer (at wall-top); skip them here.
+  const structural = floorsAreas.filter((a) => !CEILING_TYPES.has(a.elementType))
+  const decked = structural.filter((a) => !FLOOR_SLAB_TYPES.has(a.elementType))
 
   return (
     <>
       <group name="floor-joists" ref={joistsRef}>
-        {floorsAreas.map((area) => <JoistPart key={area.id} area={area} {...partProps} />)}
+        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} />)}
       </group>
       <group name="floor-sheeting" ref={deckRef}>
         {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} />)}

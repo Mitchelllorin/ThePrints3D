@@ -19,8 +19,10 @@ import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
 import FloorJoistsLayer from './FloorJoistsLayer'
+import CeilingLayer from './CeilingLayer'
 import RoofLayer from './RoofLayer'
 import HoverNameplate from './HoverNameplate'
+import ExplodeDriver from './ExplodeDriver'
 import DrywallLayer from './DrywallLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
@@ -568,8 +570,10 @@ export default function ModelViewer() {
 
         <FloatingLogo3D />
         <FloorplanOverlay />
+        <ExplodeDriver />
         <LiveWallsLayer />
         <FloorJoistsLayer />
+        <CeilingLayer />
         <RoofLayer />
         <HoverNameplate />
         <DrywallLayer />

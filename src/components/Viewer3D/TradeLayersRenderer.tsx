@@ -54,6 +54,59 @@ function PipeRun({ a, b, color, radius, stickM, coupling, glow = 0 }: {
   )
 }
 
+const GALV = '#c9ced6'         // bare galvanised sheet metal
+const HANGER_SPACING = 1.2     // strap hanger every ~4'
+
+/**
+ * An HVAC duct as shiny galvanised metal — a RECTANGULAR trunk (Supply/Return/
+ * Exhaust) or a ROUND branch (Branch / Flex), hung from above on strap hangers.
+ */
+function DuctRun({ a, b, element, sizeM }: { a: THREE.Vector3; b: THREE.Vector3; element: string; sizeM: number }) {
+  const dir = new THREE.Vector3().subVectors(b, a)
+  const len = dir.length()
+  if (len < 0.02) return null
+  const ndir = dir.clone().normalize()
+  const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5)
+  const round = element === 'Branch / Flex'
+  const ductW = round ? sizeM : sizeM
+  const ductH = round ? sizeM : sizeM * 0.7
+  const perp = new THREE.Vector3().crossVectors(ndir, UP).normalize()
+  const hangers = Math.max(1, Math.floor(len / HANGER_SPACING))
+  return (
+    <group>
+      {round ? (
+        <mesh position={mid} quaternion={new THREE.Quaternion().setFromUnitVectors(UP, ndir)} castShadow>
+          <cylinderGeometry args={[sizeM / 2, sizeM / 2, len, 16]} />
+          <meshStandardMaterial color={GALV} roughness={0.24} metalness={0.92} />
+        </mesh>
+      ) : (
+        <mesh position={mid} quaternion={new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), ndir)} castShadow>
+          <boxGeometry args={[ductW, ductH, len]} />
+          <meshStandardMaterial color={GALV} roughness={0.24} metalness={0.92} />
+        </mesh>
+      )}
+      {Array.from({ length: hangers }, (_, i) => {
+        const p = new THREE.Vector3().lerpVectors(a, b, (i + 0.5) / hangers)
+        const topY = p.y + ductH / 2
+        return (
+          <group key={i}>
+            {[-1, 1].map((s) => (
+              <mesh key={s} position={[p.x + perp.x * (ductW / 2) * s, topY + 0.12, p.z + perp.z * (ductW / 2) * s]}>
+                <boxGeometry args={[0.012, 0.24, 0.012]} />
+                <meshStandardMaterial color={GALV} roughness={0.3} metalness={0.9} />
+              </mesh>
+            ))}
+            <mesh position={[p.x, p.y - ductH / 2 - 0.01, p.z]} quaternion={new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), perp)}>
+              <boxGeometry args={[ductW + 0.06, 0.012, 0.025]} />
+              <meshStandardMaterial color={GALV} roughness={0.3} metalness={0.9} />
+            </mesh>
+          </group>
+        )
+      })}
+    </group>
+  )
+}
+
 interface Riser { px: number; py: number; lo: number; hi: number; color: string }
 
 /** Vertical connectors: where runs of different bands meet, and where an open
@@ -141,10 +194,11 @@ export default function TradeLayersRenderer() {
           color={electricalColor(l)} radius={0.013} stickM={stickM} coupling={false} glow={0.45} />
       ))}
       {showElec && elecRisers.map((r, i) => <RiserMesh key={`er-${i}`} r={r} radius={0.013} glow={0.45} />)}
-      {/* HVAC ducts — fat round ducts at the ceiling band; a seam at each joint. */}
+      {/* HVAC ducts — shiny galvanised metal; rectangular trunks (Supply/Return/
+          Exhaust) + round branches (Branch / Flex), hung from strap hangers. */}
       {showHvac && hvacLines.map((l) => (
-        <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'ceiling'))} b={toWorld(l.x2, l.y2, bandY(l, 'ceiling'))}
-          color={hvacColor(l)} radius={0.09} stickM={1.5} coupling />
+        <DuctRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'ceiling'))} b={toWorld(l.x2, l.y2, bandY(l, 'ceiling'))}
+          element={l.elementType} sizeM={(parseFloat(l.size) || 6) * 0.0254} />
       ))}
       {showHvac && hvacRisers.map((r, i) => <RiserMesh key={`hr-${i}`} r={r} radius={0.09} />)}
     </group>

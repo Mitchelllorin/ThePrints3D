@@ -535,6 +535,63 @@ export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: num
   return g
 }
 
+// ── Ceiling (joists + drywall) ───────────────────────────────────────────────
+
+const CEILING_JOIST = { width: 0.038, depth: 0.184, color: '#d8c08a' }   // ≈ 2×8
+const CEILING_GYP_T = 0.0127   // 1/2" ceiling drywall
+
+/** Ceiling-joist section depth (m) — so the layer can seat it on the wall plate. */
+export const CEILING_JOIST_DEPTH = CEILING_JOIST.depth
+
+/**
+ * A ceiling: a joist field (centred on y=0) with a gypsum board hung just below.
+ * No hangers — ceiling joists bear on the wall top plate. The caller seats the
+ * group so the joist BOTTOMS rest on the wall top and the drywall faces the room.
+ */
+export function buildCeiling(opts: { lenX: number; lenZ: number; ocM: number; opacity?: number }): THREE.Group {
+  const { lenX, lenZ, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.1 || lenZ < 0.1) return g
+  const { width, depth, color } = CEILING_JOIST
+  const oc = Math.max(0.2, ocM)
+  const joistMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color), roughness: 0.75, metalness: 0, transparent: opacity < 1, opacity,
+  })
+  const addJoist = (w: number, d: number, x: number, z: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, depth, d), joistMat)
+    m.position.set(x, 0, z)
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'ceiling'
+    m.userData.info = 'Ceiling joist'
+    g.add(m)
+  }
+  const spanAlongX = lenX <= lenZ
+  const spanLen = spanAlongX ? lenX : lenZ
+  const runLen = spanAlongX ? lenZ : lenX
+  const halfRun = runLen / 2
+  const positions: number[] = [-halfRun + width / 2, halfRun - width / 2]
+  for (let p = -halfRun + width / 2; p < halfRun - width / 2; p += oc) positions.push(p)
+  for (const p of positions) {
+    if (spanAlongX) addJoist(spanLen, width, 0, p)
+    else            addJoist(width, spanLen, p, 0)
+  }
+  for (const s of [-1, 1]) {
+    const e = s * (spanLen / 2 - width / 2)
+    if (spanAlongX) addJoist(width, runLen, e, 0)
+    else            addJoist(runLen, width, 0, e)
+  }
+  const board = new THREE.Mesh(
+    new THREE.BoxGeometry(lenX, CEILING_GYP_T, lenZ),
+    new THREE.MeshStandardMaterial({ color: new THREE.Color('#ece9e4'), roughness: 0.95, metalness: 0, transparent: opacity < 1, opacity }),
+  )
+  board.position.set(0, -depth / 2 - CEILING_GYP_T / 2, 0)
+  board.castShadow = true; board.receiveShadow = true
+  board.userData.layer = 'ceiling'
+  board.userData.info = 'Ceiling drywall · 1/2"'
+  g.add(board)
+  return g
+}
+
 // ── Gable roof (common rafters + ridge) ──────────────────────────────────────
 
 /**
