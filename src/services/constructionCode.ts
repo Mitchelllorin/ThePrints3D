@@ -22,6 +22,60 @@ export function wallThicknessM(framingType?: string): number {
   return (framingType && WALL_THICKNESS_M[framingType]) || DEFAULT_WALL_THICKNESS_M
 }
 
+// ── Per-wall framing spec ─────────────────────────────────────────────────────
+// THE source of truth that lets a build honour EACH wall's own framing (material,
+// stud size, steel gauge) instead of one global setting — so a wood exterior and
+// a steel-stud interior coexist in the same model. Resolved from the picker's
+// framingType + wallRole, both stamped onto every traced wall.
+
+export interface WallFramingSpec {
+  material: 'wood' | 'steel'
+  /** Stud-size key ('2x4' | '2x6' | '2x8'). */
+  studSize: string
+  /** Nominal steel web width (e.g. '3-5/8' | '6'); undefined for wood. */
+  steelWidth?: string
+  /** Steel gauge, derived from the load role; undefined for wood. */
+  gauge?: string
+  /** CMU/concrete — solid, not stud-framed. */
+  isMasonry: boolean
+}
+
+const FRAMING_TYPE_SPEC: Record<string, { material: 'wood' | 'steel'; studSize: string; steelWidth?: string; isMasonry?: boolean }> = {
+  'wood-2x4':    { material: 'wood',  studSize: '2x4' },
+  'wood-2x6':    { material: 'wood',  studSize: '2x6' },
+  'wood-2x8':    { material: 'wood',  studSize: '2x8' },
+  'steel-3-5-8': { material: 'steel', studSize: '2x4', steelWidth: '3-5/8' },
+  'steel-6':     { material: 'steel', studSize: '2x6', steelWidth: '6' },
+  'cmu':         { material: 'wood',  studSize: '2x6', isMasonry: true },
+}
+
+// Steel gauge by load role. Lower number = heavier steel. Structural/exterior
+// studs are heavy (16–18 ga); only interior NON-load partitions use the
+// paper-thin 25 ga. A 6" exterior-bearing stud is 16 ga, never 25.
+const ROLE_GAUGE: Record<string, string> = {
+  'exterior-bearing':     '16',
+  'interior-bearing':     '18',
+  'interior-non-bearing': '20',
+  'partition':            '25',
+}
+export const DEFAULT_STEEL_GAUGE = '20'
+
+/** Resolve a wall's framing spec from its picked framingType + load role.
+ *  Unknown/auto walls fall back to wood 2×4. */
+export function wallFramingSpec(framingType?: string, wallRole?: string): WallFramingSpec {
+  const base = (framingType && FRAMING_TYPE_SPEC[framingType]) || FRAMING_TYPE_SPEC['wood-2x4']
+  const gauge = base.material === 'steel'
+    ? ((wallRole && ROLE_GAUGE[wallRole]) || DEFAULT_STEEL_GAUGE)
+    : undefined
+  return {
+    material: base.material,
+    studSize: base.studSize,
+    steelWidth: base.steelWidth,
+    gauge,
+    isMasonry: base.isMasonry ?? false,
+  }
+}
+
 // ── Wall finish/cladding materials (PBR presets for the two wall faces) ───────
 
 export interface WallMaterialPreset {

@@ -4,7 +4,7 @@
  * Shows exactly one contextual prompt at a time. No panels, no headers,
  * no dense button grids — just the next action the user needs to take.
  */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
@@ -153,16 +153,15 @@ export default function FloorplanPanel() {
   // The ONE active unit — calibration estimate, input, and label all read it.
   const activeUnit     = useConfigStore((s) => s.activeUnit)
   const lengthFormat   = useConfigStore((s) => s.lengthFormat)
-  const setCfg         = useConfigStore((s) => s.set)
+  // Nudge step for moving a selected wall, expressed in the active unit.
+  const [nudgeStep, setNudgeStep] = useState(1)
 
-  // Picking a framing type also sets the build's material/stud size, so a
-  // steel pick builds steel C-studs (not wood). CMU is masonry — left unframed.
+  // Picking a framing type ONLY arms the next trace — it no longer flips the
+  // global build config. The material/size/gauge are stamped per-wall (via
+  // framingType + role) and resolved at build time by wallFramingSpec, so
+  // choosing steel for an interior run never re-frames the walls already traced.
   const pickFraming = (key: string) => {
     setActiveWallType(key)
-    if (key.startsWith('steel')) setCfg({ framingMaterial: 'steel' })
-    else if (key.startsWith('wood')) setCfg({ framingMaterial: 'wood' })
-    if (key === 'wood-2x6' || key === 'steel-6') setCfg({ defaultStudSize: '2x6' })
-    else if (key === 'wood-2x4' || key === 'steel-3-5-8') setCfg({ defaultStudSize: '2x4' })
   }
   const setSeedProcessing = useFloorplanLocalStore((s) => s.setSeedProcessing)
   const setHoverPixel  = useFloorplanLocalStore((s) => s.setHoverPixel)
@@ -395,6 +394,20 @@ export default function FloorplanPanel() {
     deleteUserWall(drawing.id, selectedWallIndex)
     setSelectedWallIndex(null)
     if (modelReady) buildModel()
+  }
+
+  // Nudge the selected wall by a precise step (in the active unit). dx/dy are in
+  // STEP units (±1); converts to pixels via the calibrated scale and shifts both
+  // endpoints. The live walls follow instantly — no rebuild needed.
+  const nudgeWall = (dxSteps: number, dySteps: number) => {
+    if (selectedWallIndex == null || !drawing) return
+    const w = userWalls[selectedWallIndex]
+    if (!w) return
+    const stepMm = convertLength(nudgeStep, activeUnit, 'mm')
+    const pxPerStep = stepMm / (drawing.scaleMmPerPx ?? 8)
+    const dx = dxSteps * pxPerStep
+    const dy = dySteps * pxPerStep
+    updateUserWall(drawing.id, selectedWallIndex, { x1: w.x1 + dx, y1: w.y1 + dy, x2: w.x2 + dx, y2: w.y2 + dy })
   }
 
   const deleteSelectedObject = () => {
@@ -1085,6 +1098,26 @@ export default function FloorplanPanel() {
                 {userWalls[selectedWallIndex].transparent ? 'X-ray: on' : 'X-ray: off'}
               </button>
             </label>
+
+            {/* Precise move — nudge the wall by an exact step, or drag it / its
+                endpoints right on the print (yellow handles). */}
+            <span className={styles.stepHint}>Move · step {nudgeStep} {activeUnit}</span>
+            <div className={styles.btnRow}>
+              {[1, 6, 12].map((s) => (
+                <button
+                  key={s}
+                  className={nudgeStep === s ? styles.action : styles.secondary}
+                  onClick={() => setNudgeStep(s)}
+                >{s} {activeUnit}</button>
+              ))}
+            </div>
+            <div className={styles.nudgeGrid}>
+              <button className={styles.secondary} style={{ gridArea: 'up' }} onClick={() => nudgeWall(0, -1)} aria-label="Move up">↑</button>
+              <button className={styles.secondary} style={{ gridArea: 'left' }} onClick={() => nudgeWall(-1, 0)} aria-label="Move left">←</button>
+              <button className={styles.secondary} style={{ gridArea: 'right' }} onClick={() => nudgeWall(1, 0)} aria-label="Move right">→</button>
+              <button className={styles.secondary} style={{ gridArea: 'down' }} onClick={() => nudgeWall(0, 1)} aria-label="Move down">↓</button>
+            </div>
+
             <div className={styles.btnRow}>
               <button className={styles.action} onClick={deleteSelectedWall}>Delete wall</button>
               <button className={styles.secondary} onClick={() => setSelectedWallIndex(null)}>Deselect</button>
@@ -1164,6 +1197,15 @@ export default function FloorplanPanel() {
               value={selectedObject.brand ?? ''}
               onChange={(e) => updatePlacedObject(selectedObject.id, { brand: e.target.value })}
             />
+          </div>
+          <div className={styles.propRow}>
+            <span className={styles.propLabel}>See-through</span>
+            <button
+              className={selectedObject.transparent ? styles.action : styles.secondary}
+              onClick={() => updatePlacedObject(selectedObject.id, { transparent: !selectedObject.transparent })}
+            >
+              {selectedObject.transparent ? 'X-ray: on' : 'X-ray: off'}
+            </button>
           </div>
           <div className={styles.btnRow}>
             <button className={styles.secondary} onClick={() => updatePlacedObject(selectedObject.id, { rotationY: selectedObject.rotationY + Math.PI / 2 })}>

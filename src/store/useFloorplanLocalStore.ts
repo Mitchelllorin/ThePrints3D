@@ -21,13 +21,17 @@ type CalibrationUnit = 'mm' | 'm' | 'ft' | 'in'
  */
 type TraceStyle = 'line' | 'freehand'
 
-type DragKind = 'move' | 'corner' | 'edge' | 'rotate'
+type DragKind = 'move' | 'corner' | 'edge' | 'rotate' | 'wall' | 'wall-end'
 
 interface DragState {
   kind: DragKind
   axis?: 'x' | 'z'
   signX?: 1 | -1
   signZ?: 1 | -1
+  /** For 'wall' / 'wall-end' drags: which user wall is being moved. */
+  wallIndex?: number
+  /** For 'wall-end' drags: which endpoint slides. */
+  end?: 'start' | 'end'
 }
 
 interface FloorplanLocalState {

@@ -25,6 +25,7 @@ import type {
 } from './decisions'
 import { FRAMING_MM } from './wallTypeClassifier'
 import type { WallType } from './wallTypeClassifier'
+import { wallFramingSpec, DEFAULT_STEEL_GAUGE, type WallFramingSpec } from './constructionCode'
 import framingDefaults from '../data/defaults/framing.json'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -821,7 +822,10 @@ export function buildFraming(
 
   const [cx, cy] = centerOfWalls(walls)
   // Global setting overrides take precedence over the building-type defaults.
-  const studSize = options.studSize ?? resolveStudSize(buildingType)
+  // These are the FALLBACK for auto-detected walls; walls the user traced carry
+  // their own framingType/role and are resolved per-wall below.
+  const globalStudSize = options.studSize ?? resolveStudSize(buildingType)
+  const globalMaterial: 'wood' | 'steel' = options.material ?? 'wood'
   const spacingMm = options.spacingMm ?? resolveSpacingMm(buildingType)
   const bt = buildingType in framingDefaults.buildingTypeDefaults
     ? buildingType
@@ -833,6 +837,18 @@ export function buildFraming(
     'partition-thin', 'stud-2x4', 'stud-2x6', 'stud-2x8', 'stud-2x10', 'stud-2x12', 'unknown', undefined,
   ]
   const framedWalls = walls.filter((w) => framedWallTypes.includes(w.wallType))
+
+  // Resolve EACH wall's own framing spec (material / stud size / steel gauge),
+  // keyed by its original index. A traced wall uses the type it was drawn with;
+  // an auto wall falls back to the global options. This is what lets a wood
+  // exterior and a steel-stud interior live in the same build.
+  const specByIndex = new Map<number, WallFramingSpec>()
+  for (const w of framedWalls) {
+    const idx = walls.indexOf(w)
+    specByIndex.set(idx, w.framingType
+      ? wallFramingSpec(w.framingType, w.wallRole)
+      : { material: globalMaterial, studSize: globalStudSize, steelWidth: options.steelWidth, gauge: options.steelGauge, isMasonry: false })
+  }
 
   // Build geometry descriptors
   const geometries: WallGeometry[] = framedWalls.map((w) => {
@@ -849,6 +865,9 @@ export function buildFraming(
 
   for (const wg of geometries) {
     const wallOpenings = openingsByWall.get(wg.wallIndex) ?? []
+    const spec = specByIndex.get(wg.wallIndex)
+    const studSize = spec?.studSize ?? globalStudSize
+    const isSteel = (spec?.material ?? globalMaterial) === 'steel'
 
     // Studs
     components.push(
@@ -862,7 +881,7 @@ export function buildFraming(
 
     // Blocking (wood only — steel gets bridging, modelled separately). Carries
     // the ghost's blocking row into the built model so it goes ghost → solid.
-    if (options.material !== 'steel') {
+    if (!isSteel) {
       components.push(
         ...placeBlockingAlongWall(wg, spacingMm, studSize, wallOpenings, scaleMmPerPx, cx, cy),
       )
@@ -876,16 +895,27 @@ export function buildFraming(
     }
   }
 
-  // Corner assemblies
+  // Corner assemblies span two walls; frame them at the global stud size.
   const corners = findCorners(geometries)
-  components.push(...placeCornerAssemblies(corners, geometries, studSize, options.cornerType ?? 'three-stud'))
+  components.push(...placeCornerAssemblies(corners, geometries, globalStudSize, options.cornerType ?? 'three-stud'))
 
-  // Steel: convert the wood layout into cold-formed C-studs + track.
-  if (options.material === 'steel') {
-    const widthMm = STEEL_WIDTHS_MM[options.steelWidth ?? '3-5/8'] ?? STEEL_WIDTHS_MM['3-5/8']
-    applySteel(components, {
+  // Steel: convert ONLY the components of steel walls into cold-formed C-studs +
+  // track, each at that wall's own web width and role-derived gauge. Corner
+  // assemblies follow the wall they're keyed to. Wood walls are left untouched.
+  const componentsByWall = new Map<number, PlacedComponent[]>()
+  for (const c of components) {
+    const arr = componentsByWall.get(c.wallIndex)
+    if (arr) arr.push(c)
+    else componentsByWall.set(c.wallIndex, [c])
+  }
+  for (const [idx, spec] of specByIndex) {
+    if (spec.material !== 'steel') continue
+    const subset = componentsByWall.get(idx)
+    if (!subset || subset.length === 0) continue
+    const widthMm = STEEL_WIDTHS_MM[spec.steelWidth ?? '3-5/8'] ?? STEEL_WIDTHS_MM['3-5/8']
+    applySteel(subset, {
       widthMm,
-      gauge: options.steelGauge ?? '25',
+      gauge: spec.gauge ?? options.steelGauge ?? DEFAULT_STEEL_GAUGE,
       deflectionGapM: (options.steelDeflectionGapMm ?? 19) / 1000,
       trackTop: options.steelTrackTop ?? 'slotted',
       trackBottom: options.steelTrackBottom ?? 'shallow',

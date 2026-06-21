@@ -106,6 +106,9 @@ export interface PlacedObject {
   /** Door swing hand — 'left' (LH) or 'right' (RH) hinge. Drives the swing arc.
    *  Doors only; defaults to 'left'. */
   swing?: 'left' | 'right'
+  /** X-ray this object — render it see-through (same as the wall flag), so you
+   *  can see past/into it without deleting it. Toggled from the object panel. */
+  transparent?: boolean
 }
 
 export type CircuitType = 'general' | 'dedicated' | 'gfci' | 'afci' | 'gfci+afci'

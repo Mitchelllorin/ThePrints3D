@@ -341,6 +341,8 @@ interface AppState {
   deleteUserWall: (id: string, userIndex: number) => void
   /** Patch a single user-traced wall by its index within the drawing's user walls. */
   updateUserWall: (id: string, userIndex: number, patch: Partial<ParsedWall>) => void
+  /** Live-move a user wall's endpoints WITHOUT pushing history (drag use). */
+  moveUserWall: (id: string, userIndex: number, coords: Partial<Pick<ParsedWall, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
   clearUserTracedWalls: (id: string) => void
   clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
@@ -835,6 +837,23 @@ export const useAppStore = create<AppState>()(
         const target = userWalls[userIndex]
         if (!target) return
         Object.assign(target, patch)
+      })
+    },
+
+    // Live coordinate move for a user wall WITHOUT pushing history — used during
+    // a drag (one checkpoint is taken at drag start instead). Only touches the
+    // endpoints so a fast drag stays cheap and the live walls follow instantly.
+    moveUserWall: (id, userIndex, coords) => {
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+        const target = userWalls[userIndex]
+        if (!target) return
+        if (coords.x1 !== undefined) target.x1 = coords.x1
+        if (coords.y1 !== undefined) target.y1 = coords.y1
+        if (coords.x2 !== undefined) target.x2 = coords.x2
+        if (coords.y2 !== undefined) target.y2 = coords.y2
       })
     },
 

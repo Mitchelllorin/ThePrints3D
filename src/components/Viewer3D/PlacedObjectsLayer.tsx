@@ -6,7 +6,7 @@
  * Dragging uses transient local state and only commits to the store (one
  * undoable step) on pointer-up, so a drag doesn't flood the history stack.
  */
-import { useState, useRef } from 'react'
+import { useState, useRef, useLayoutEffect } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Edges, Line } from '@react-three/drei'
@@ -24,6 +24,33 @@ interface DragState {
   x: number
   z: number
   rotationY: number
+}
+
+/** X-ray wrapper — when `on`, traverses its rendered meshes and makes every
+ *  material see-through (depthWrite off so it sorts cleanly). Re-applies after
+ *  every render so it survives the procedural model rebuilding its materials,
+ *  and restores full opacity when toggled off. The same look as the wall X-ray,
+ *  applied uniformly to any object (procedural model or plain box). */
+function XRay({ on, children }: { on: boolean; children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null)
+  useLayoutEffect(() => {
+    const g = ref.current
+    if (!g) return
+    const apply = (mat: THREE.Material) => {
+      mat.transparent = on
+      ;(mat as THREE.MeshStandardMaterial).opacity = on ? 0.18 : 1
+      mat.depthWrite = !on
+      mat.needsUpdate = true
+    }
+    g.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        const m = o.material as THREE.Material | THREE.Material[]
+        if (Array.isArray(m)) m.forEach(apply)
+        else apply(m)
+      }
+    })
+  })
+  return <group ref={ref}>{children}</group>
 }
 
 function dims(obj: PlacedObject) {
@@ -128,9 +155,10 @@ export default function PlacedObjectsLayer() {
               }}
             >
               {/* Procedural product model when we have a shape for this type;
-                  openings and unmodelled types fall back to a plain box. */}
+                  openings and unmodelled types fall back to a plain box. The
+                  X-ray wrapper makes the whole model see-through when toggled. */}
               {!isOpening && model ? (
-                model
+                <XRay on={!!obj.transparent}>{model}</XRay>
               ) : (
                 <mesh castShadow={!isOpening} receiveShadow={!isOpening}>
                   <boxGeometry args={[w, h, boxD]} />
@@ -138,8 +166,9 @@ export default function PlacedObjectsLayer() {
                     color={color}
                     roughness={0.6}
                     metalness={0.05}
-                    transparent={isOpening}
-                    opacity={isOpening ? 0.35 : 1}
+                    transparent={isOpening || !!obj.transparent}
+                    opacity={obj.transparent ? 0.18 : isOpening ? 0.35 : 1}
+                    depthWrite={!(isOpening || obj.transparent)}
                   />
                 </mesh>
               )}

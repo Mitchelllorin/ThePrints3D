@@ -15,6 +15,7 @@ import { useConfigStore } from '../../store/useConfigStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
+import { wallFramingSpec } from '../../services/constructionCode'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import { getCatalogItem } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
@@ -225,15 +226,23 @@ export default function LiveWallsLayer() {
 
   return (
     <group name="live-walls" ref={groupRef}>
-      {userWalls.map(({ wall, scaleMmPerPx }, i) => (
+      {userWalls.map(({ wall, scaleMmPerPx }, i) => {
+        // Each wall renders as ITS OWN framing — material + gauge from the type
+        // picked when it was traced — so picking steel for one wall never
+        // re-skins the walls you already traced. Auto walls (no framingType)
+        // fall back to the global config preference.
+        const spec = wall.framingType ? wallFramingSpec(wall.framingType, wall.wallRole) : null
+        const wallMaterial = spec ? spec.material : framingMaterial
+        const wallGauge = spec?.gauge ?? steelGauge
+        return (
         <WallMesh
           key={i}
           wall={wall}
           pixelToWorld={pixelToWorld}
           scaleMmPerPx={scaleMmPerPx}
           wallHeight={wallHeight}
-          material={framingMaterial}
-          steelGauge={steelGauge}
+          material={wallMaterial}
+          steelGauge={wallGauge}
           topTrackStyle={steelTrackTop === 'double' ? 'deep' : steelTrackTop}
           deflectionGapMm={steelTrackTop === 'slotted' ? steelDeflectionGapMm : 0}
           openings={openingsByWall[i] ?? []}
@@ -245,7 +254,8 @@ export default function LiveWallsLayer() {
           endCorner={cornerEnds[i]?.end ?? false}
           storeyHeight={storeyHeight}
         />
-      ))}
+        )
+      })}
     </group>
   )
 }

@@ -15,7 +15,7 @@ import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import { useFloorplanLocalStore, type DragState } from '../../store/useFloorplanLocalStore'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
 
@@ -120,6 +120,7 @@ export default function FloorplanOverlay() {
   const setOverlayDrawing = useAppStore((s) => s.setFloorplanOverlayDrawing)
   const updateOverlay = useAppStore((s) => s.updateFloorplanOverlay)
   const checkpointHistory = useAppStore((s) => s.checkpointHistory)
+  const moveUserWall = useAppStore((s) => s.moveUserWall)
   const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
   const addTrace = useAppStore((s) => s.addTrace)
   const addPlacedObject = useAppStore((s) => s.addPlacedObject)
@@ -338,22 +339,47 @@ export default function FloorplanOverlay() {
     }, false)
   }
 
-  const onDragStart = (event: ThreeEvent<PointerEvent>, next: { kind: 'move' | 'corner' | 'edge' | 'rotate'; axis?: 'x' | 'z'; signX?: 1 | -1; signZ?: 1 | -1 }) => {
-    if (!canEdit) return
+  // Wall edit (select/nudge/drag) is allowed whenever we're not tracing,
+  // calibrating, or placing — a different gate than the calibration-only canEdit.
+  const canEditWalls = !traceMode && !overlay.calibrationMode && !placeObjectType && !overlay.locked
+
+  const onDragStart = (event: ThreeEvent<PointerEvent>, next: DragState) => {
+    const isWall = next.kind === 'wall' || next.kind === 'wall-end'
+    if (isWall ? !canEditWalls : !canEdit) return
     event.stopPropagation()
     checkpointHistory()
     setDrag(next)
   }
 
+  // Convert a WORLD-space delta (metres) into an image-PIXEL delta, undoing the
+  // overlay rotation/scale — so a wall drag tracks the cursor on the print.
+  const worldDeltaToPixel = (dx: number, dz: number): [number, number] => {
+    const v = new THREE.Vector3(dx, 0, dz).applyAxisAngle(new THREE.Vector3(0, 1, 0), -rotationRad)
+    return [(v.x / width) * imageWidth, (v.z / depth) * imageHeight]
+  }
+
   const onDragMove = (event: ThreeEvent<PointerEvent>) => {
-    if (!drag || !canEdit) return
+    if (!drag) return
     event.stopPropagation()
     const dx = event.movementX * 0.03
     const dz = event.movementY * 0.03
     if (drag.kind === 'move') { applyMove(dx, dz); return }
     if (drag.kind === 'rotate') { updateOverlay({ rotationDeg: overlay.rotationDeg + event.movementX * 0.5 }, false); return }
     if (drag.kind === 'corner') { applyScale((drag.signX ?? 1) * dx, (drag.signZ ?? 1) * dz); return }
-    if (drag.kind === 'edge') { applyScale((drag.axis === 'x' ? dx : 0), (drag.axis === 'z' ? dz : 0)) }
+    if (drag.kind === 'edge') { applyScale((drag.axis === 'x' ? dx : 0), (drag.axis === 'z' ? dz : 0)); return }
+    // Wall drags: translate the whole wall, or just one endpoint, in pixel space.
+    if ((drag.kind === 'wall' || drag.kind === 'wall-end') && drawing && drag.wallIndex != null) {
+      const w = userWalls[drag.wallIndex]
+      if (!w) return
+      const [dpx, dpy] = worldDeltaToPixel(dx, dz)
+      if (drag.kind === 'wall') {
+        moveUserWall(drawing.id, drag.wallIndex, { x1: w.x1 + dpx, y1: w.y1 + dpy, x2: w.x2 + dpx, y2: w.y2 + dpy })
+      } else if (drag.end === 'start') {
+        moveUserWall(drawing.id, drag.wallIndex, { x1: w.x1 + dpx, y1: w.y1 + dpy })
+      } else {
+        moveUserWall(drawing.id, drag.wallIndex, { x2: w.x2 + dpx, y2: w.y2 + dpy })
+      }
+    }
   }
 
   const onDragEnd = (event: ThreeEvent<PointerEvent>) => {
@@ -614,8 +640,6 @@ export default function FloorplanOverlay() {
     () => (drawing ? drawing.parsedWalls.filter((w) => w.source === 'user') : []),
     [drawing],
   )
-  // Edit mode = not tracing, not calibrating, not dragging the overlay handles.
-  const editMode = !traceMode && !overlay.calibrationMode && !drag
   // Click-target half-width for walls, ~20px of the print mapped to metres.
   const wallPickWidthM = Math.max(0.25, 20 * (width / imageWidth))
 
@@ -986,8 +1010,10 @@ export default function FloorplanOverlay() {
         </mesh>
       )}
 
-      {/* Wall select: thin invisible click targets along each user wall. */}
-      {editMode && !placeObjectType && userWalls.map((w, i) => {
+      {/* Wall select: thin invisible click targets along each UNSELECTED wall.
+          Under canEditWalls (not editMode) so they stay live through a drag. */}
+      {canEditWalls && !placeObjectType && userWalls.map((w, i) => {
+        if (i === selectedWallIndex) return null
         const a = planeLocalToWorld([w.x1, w.y1])
         const b = planeLocalToWorld([w.x2, w.y2])
         const len = Math.hypot(b[0] - a[0], b[2] - a[2])
@@ -1009,16 +1035,51 @@ export default function FloorplanOverlay() {
         )
       })}
 
-      {/* Highlight the selected wall. */}
-      {editMode && selectedWallIndex != null && userWalls[selectedWallIndex] && (
-        <Line
-          points={[
-            planeLocalToWorld([userWalls[selectedWallIndex].x1, userWalls[selectedWallIndex].y1]),
-            planeLocalToWorld([userWalls[selectedWallIndex].x2, userWalls[selectedWallIndex].y2]),
-          ]}
-          color="#facc15"
-          lineWidth={7}
-        />
+      {/* Selected wall — yellow highlight + a whole-wall drag body and two
+          endpoint handles. Grab the body to slide the wall; grab an end to
+          re-aim it. Move/up are handled by the global catcher below so a fast
+          drag never drops off the thin handle. */}
+      {canEditWalls && selectedWallIndex != null && userWalls[selectedWallIndex] && (() => {
+        const idx = selectedWallIndex
+        const w = userWalls[idx]
+        const a = planeLocalToWorld([w.x1, w.y1])
+        const b = planeLocalToWorld([w.x2, w.y2])
+        const len = Math.hypot(b[0] - a[0], b[2] - a[2])
+        const ang = Math.atan2(b[2] - a[2], b[0] - a[0])
+        return (
+          <group key="wall-edit">
+            <Line points={[a, b]} color="#facc15" lineWidth={7} />
+            {len >= 0.05 && (
+              <mesh
+                position={[(a[0] + b[0]) / 2, 0.07, (a[2] + b[2]) / 2]}
+                rotation={[0, -ang, 0]}
+                onPointerDown={(e) => onDragStart(e, { kind: 'wall', wallIndex: idx } as DragState)}
+              >
+                <boxGeometry args={[len, 0.08, wallPickWidthM]} />
+                <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+              </mesh>
+            )}
+            {([['start', a], ['end', b]] as const).map(([which, p]) => (
+              <mesh
+                key={which}
+                position={[p[0], 0.1, p[2]]}
+                onPointerDown={(e) => onDragStart(e, { kind: 'wall-end', wallIndex: idx, end: which } as DragState)}
+              >
+                <sphereGeometry args={[0.14, 16, 12]} />
+                <meshBasicMaterial color="#facc15" />
+              </mesh>
+            ))}
+          </group>
+        )
+      })()}
+
+      {/* Drag catcher — only while a wall drag is live. A huge inside-out sphere
+          guarantees onPointerMove/Up fire even when the cursor leaves the handle. */}
+      {drag && (drag.kind === 'wall' || drag.kind === 'wall-end') && (
+        <mesh onPointerMove={onDragMove} onPointerUp={onDragEnd}>
+          <sphereGeometry args={[800, 8, 6]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.BackSide} />
+        </mesh>
       )}
 
       {calibrationPreviewPoints && (
