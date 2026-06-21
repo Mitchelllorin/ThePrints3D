@@ -185,7 +185,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   distanceInput: '',
   activeWallType: 'wood-2x6',
   activeWallRole: 'exterior-bearing',
-  activeTraceLayer: 'framing',
+  activeTraceLayer: 'floors',
   traceBand: 'under-floor',
   plumbElement: PLUMBING_DEFAULTS.element,
   plumbSize: PLUMBING_DEFAULTS.size,
