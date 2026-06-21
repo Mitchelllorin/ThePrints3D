@@ -206,7 +206,11 @@ const DEFAULT_FLOORPLAN_OVERLAY: FloorplanOverlayState = {
   traceModeActive: false,
   orbitLocked: false,
   guidedStep: 1,
-  position: [0, 0],
+  // Nudged toward screen-right so the print sits centred in the area NOT covered
+  // by the left "Build" drawer (which is open most of the session). The camera
+  // looks from (12,10,12) at the origin, so world (+x,-z) is screen-right; an
+  // equal [+d,-d] offset slides the print purely rightward on screen.
+  position: [2.5, -2.5],
   scale: [12, 8],
   rotationDeg: 0,
   opacity: 0.65,
