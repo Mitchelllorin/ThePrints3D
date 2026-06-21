@@ -1055,8 +1055,12 @@ export default function BuildingModel({ layers }: Props) {
       child.userData.basePos = child.position.clone()
       box.expandByPoint(child.position)
     }
+    // When the engine group is (near) empty — the common traced-walls path,
+    // where engine walls/slab are skipped — fall back to the PRINT position, not
+    // world origin. The traced walls/floors live around overlay.position, so
+    // origin would fan the explode off-centre (worse now the print is offset).
     if (!box.isEmpty()) box.getCenter(explodeCenterRef.current)
-    else explodeCenterRef.current.set(0, 0, 0)
+    else explodeCenterRef.current.set(overlay.position[0], 1.5, overlay.position[1])
     explodeCurrentRef.current = 0
 
     const timer = setTimeout(() => {

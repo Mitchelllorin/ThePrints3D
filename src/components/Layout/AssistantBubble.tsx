@@ -5,7 +5,7 @@
  * alive, never pushy: one suggestion at a time, dismissible, and silent while the
  * user is actually working (the busy gate lives in the assistant module).
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { nextSuggestion, type AssistantActionKind, type AssistantContext } from '../../services/assistant'
@@ -75,6 +75,16 @@ export default function AssistantBubble() {
   }
 
   const suggestion = nextSuggestion(ctx)
+  const visibleId = suggestion && suggestion.id !== dismissedId ? suggestion.id : null
+
+  // Auto-hide after ~15s so it never lingers — it reappears on its own when the
+  // step changes (a new suggestion id). Timer resets whenever the id changes.
+  useEffect(() => {
+    if (!visibleId) return
+    const t = setTimeout(() => setDismissedId(visibleId), 15000)
+    return () => clearTimeout(t)
+  }, [visibleId])
+
   if (!suggestion || suggestion.id === dismissedId) return null
 
   return (

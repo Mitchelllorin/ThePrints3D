@@ -963,18 +963,15 @@ export default function FloorplanOverlay() {
         </mesh>
       )}
 
-      {/* Placement catcher — a large invisible plane ABOVE the scene so the
-          pointer always hits it (never occluded by the 3D build); the ray is
-          projected to the y=0 ground for the true floor point. */}
+      {/* Placement catcher — a huge inside-out sphere AROUND the scene so the
+          pointer ray always hits it at ANY zoom/camera height (a flat overhead
+          plane was missed once the camera dipped below it, so the ghost only
+          showed from far away). The hit point is ignored — moveGhost/placeAtPointer
+          project the event ray to the y=0 ground for the true floor point. */}
       {placeObjectType && (
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[0, 6, 0]}
-          onPointerDown={placeAtPointer}
-          onPointerMove={moveGhost}
-        >
-          <planeGeometry args={[4000, 4000]} />
-          <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+        <mesh onPointerDown={placeAtPointer} onPointerMove={moveGhost}>
+          <sphereGeometry args={[800, 16, 12]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.BackSide} />
         </mesh>
       )}
 

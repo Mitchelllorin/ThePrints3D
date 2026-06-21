@@ -415,9 +415,15 @@ export default function FloorplanPanel() {
   // Arm/disarm placement from the tray. Re-tapping the active item cancels.
   // Entering place mode closes every other menu (no overlapping UI).
   const armPlace = (type: string) => {
-    // Re-tapping the armed item cancels; otherwise arm it (closing all panels).
-    if (placeObjectType === type) setPlaceObjectType(null)
-    else armPlaceExclusive(type)
+    // Re-tapping the armed item cancels (and brings the catalog back); otherwise
+    // arm it and retract the Place drawer so the workspace is clear for the ghost.
+    if (placeObjectType === type) {
+      setPlaceObjectType(null)
+      setDrawerOpen('place', true)
+    } else {
+      armPlaceExclusive(type)
+      setDrawerOpen('place', false)
+    }
   }
 
   // Set one dimension of the selected object (metres) via its scale factor.
