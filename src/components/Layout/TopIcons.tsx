@@ -1,6 +1,7 @@
 /**
- * TopIcons — the ONLY persistent chrome: five icon buttons, fixed top-right.
- * Rebuild ⟳ · Trace ✏ · Layers ≡ · Settings ⚙ · Undo ↩.
+ * TopIcons — persistent global actions, fixed top-right: Rebuild ⟳ · Undo ↩.
+ * (Build / Settings / Place open from their own always-visible edge-drawer tabs,
+ * so they're no longer icons here.)
  * Plain-text tooltip to the LEFT on hover (CSS ::before). No emoji, no SVG.
  */
 import styles from './TopIcons.module.css'
@@ -29,13 +30,7 @@ function IconBtn({ label, glyph, active, disabled, onClick }: BtnProps) {
 
 interface Props {
   onRebuild: () => void
-  onTrace: () => void
-  onLayers: () => void
-  onSettings: () => void
   onUndo: () => void
-  traceActive?: boolean
-  layersActive?: boolean
-  settingsActive?: boolean
   canUndo?: boolean
 }
 
@@ -43,9 +38,6 @@ export default function TopIcons(p: Props) {
   return (
     <div className={styles.bar}>
       <IconBtn label="Rebuild" glyph="⟳" onClick={p.onRebuild} />
-      <IconBtn label="Trace" glyph="✏" active={p.traceActive} onClick={p.onTrace} />
-      <IconBtn label="Layers" glyph="≡" active={p.layersActive} onClick={p.onLayers} />
-      <IconBtn label="Settings" glyph="⚙" active={p.settingsActive} onClick={p.onSettings} />
       <IconBtn label="Undo" glyph="↩" disabled={!p.canUndo} onClick={p.onUndo} />
     </div>
   )

@@ -1,17 +1,18 @@
-/* Five icon buttons, fixed top-right. The only persistent chrome. */
+/* Global actions (Rebuild · Undo), fixed in the top-right corner, horizontally
+   aligned and flush to the perimeter. */
 .bar {
   position: fixed;
-  top: 12px;
-  right: 12px;
+  top: 10px;
+  right: 10px;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  flex-direction: row;
+  gap: 6px;
   z-index: 100;
 }
 
 .btn {
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.7));
   border: 1px solid var(--bp-border);
   border-radius: 8px;

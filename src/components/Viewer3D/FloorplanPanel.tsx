@@ -4,7 +4,7 @@
  * Shows exactly one contextual prompt at a time. No panels, no headers,
  * no dense button grids — just the next action the user needs to take.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
@@ -17,6 +17,8 @@ import {
 } from '../../data/traceLayers'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
 import styles from './AmbientGuide.module.css'
+import EdgeDrawer from '../Layout/EdgeDrawer'
+import LayersPanel from '../Layout/LayersPanel'
 
 // ── Discipline layer tabs (Framing/Plumbing/Electrical wired; HVAC placeholder)
 const TRACE_LAYERS = TRACE_LAYER_ORDER.map((key) => ({ key, label: LAYER_LABELS[key], color: LAYER_COLORS[key] }))
@@ -167,8 +169,11 @@ export default function FloorplanPanel() {
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  // Mobile: the guide is a retractable drawer — collapse it to clear the canvas.
-  const [guideCollapsed, setGuideCollapsed] = useState(false)
+  // Edge drawers replace the old click-through guide: Build (left) holds the
+  // tracing workflow; Place (bottom) holds the catalog + editors.
+  const buildDrawerOpen = useFloorplanLocalStore((s) => s.buildDrawerOpen)
+  const placeDrawerOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
+  const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
   // The wall-type picker shows before tracing begins, and can be reopened
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
   const pickerOpen = useFloorplanLocalStore((s) => s.activePanel === 'picker')
@@ -352,6 +357,17 @@ export default function FloorplanPanel() {
   // Exclusive menus: while an object is selected or placement is armed, the
   // picker is render-gated out (showSteps === false), so menus never overlap.
 
+  // Auto-open the Build drawer when the user enters an actionable build context
+  // (calibration, tracing, the picker, or a wall/run selection). Edge-triggered
+  // off a prevRef so a drawer the user deliberately closed mid-trace stays shut.
+  // MUST sit above the early return below so hook order is stable across renders.
+  const buildCtx = overlay.calibrationMode || traceMode || pickerOpen || selectedWallIndex != null || !!selectedLine
+  const prevBuildCtx = useRef(false)
+  useEffect(() => {
+    if (buildCtx && !prevBuildCtx.current) setDrawerOpen('build', true)
+    prevBuildCtx.current = buildCtx
+  }, [buildCtx, setDrawerOpen])
+
   // ── state machine ─────────────────────────────────────────────────────────
   // No drawing at all — render nothing (the drop zone in ModelViewer handles it)
   if (!drawing) return (
@@ -480,17 +496,17 @@ export default function FloorplanPanel() {
         </div>
       )}
 
-      {/* Mobile toggle tab — retracts the guide drawer so the workspace is clear. */}
-      <button
-        className={styles.guideTab}
-        onClick={() => setGuideCollapsed((v) => !v)}
-        aria-label={guideCollapsed ? 'Show menu' : 'Hide menu'}
-        title={guideCollapsed ? 'Show menu' : 'Hide menu'}
+      {/* LEFT drawer — the Build workflow: calibrate → lay floor → trace walls,
+          discipline tabs, the type picker, level/band selectors, and the
+          selected-wall / selected-run editors. Retracts to just its tab. */}
+      <EdgeDrawer
+        side="left"
+        title="Build"
+        tabLabel="Build"
+        tabIcon="✏"
+        open={buildDrawerOpen}
+        onToggle={() => setDrawerOpen('build', !buildDrawerOpen)}
       >
-        {guideCollapsed ? '☰' : '◂'}
-      </button>
-
-      <div className={`${styles.guide} ${guideCollapsed ? styles.guideCollapsed : ''}`}>
 
         {/* Drawing switcher — only shown when multiple drawings */}
         {drawings.length > 1 && !overlay.calibrationMode && !traceMode && (
@@ -1070,7 +1086,7 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-      </div>
+      </EdgeDrawer>
 
       {/* ── Property card for the selected placed object (above the tray) ── */}
       {selectedObject && objDims && (
@@ -1169,20 +1185,37 @@ export default function FloorplanPanel() {
         </div>
       )}
 
-      {/* ── Object tray — slim 64px single row, text-only, scrollable. ── */}
-      {trayVisible && (
-        <div className={styles.tray}>
-          {(activeTraceLayer === 'electrical' ? electricalTrayItems() : trayItems()).map((item) => (
-            <button
-              key={item.type}
-              className={placeObjectType === item.type ? styles.trayCardActive : styles.trayCard}
-              onClick={() => armPlace(item.type)}
-              title={item.label}
-            >
-              {item.short}
-            </button>
-          ))}
-        </div>
+      {/* BOTTOM drawer — Place & Layers: trade-layer visibility toggles + the
+          object catalog. Retracts to just its tab so it never covers the plan. */}
+      {drawing && drawing.status === 'ready' && (
+        <EdgeDrawer
+          side="bottom"
+          title="Place & Layers"
+          tabLabel="Place"
+          tabIcon="▦"
+          open={placeDrawerOpen}
+          onToggle={() => setDrawerOpen('place', !placeDrawerOpen)}
+        >
+          <span className={styles.stepLabel}>Layers</span>
+          <LayersPanel />
+          {trayVisible && (
+            <>
+              <span className={styles.stepLabel}>Catalog — tap an item, then tap the plan</span>
+              <div className={styles.tray}>
+                {(activeTraceLayer === 'electrical' ? electricalTrayItems() : trayItems()).map((item) => (
+                  <button
+                    key={item.type}
+                    className={placeObjectType === item.type ? styles.trayCardActive : styles.trayCard}
+                    onClick={() => armPlace(item.type)}
+                    title={item.label}
+                  >
+                    {item.short}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </EdgeDrawer>
       )}
     </>
   )

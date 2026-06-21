@@ -10,7 +10,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallDrywall, type WallOpening } from '../../services/framingGeometry'
+import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem } from '../../data/objectCatalog'
 import type { ParsedWall, PlacedObject } from '../../types'
@@ -25,9 +25,11 @@ interface WallBoardProps {
   wallHeight: number
   orientation: 'vertical' | 'horizontal'
   openings: Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>
+  /** Storey-to-storey rise, so upper-floor boards stack on the floor below. */
+  storeyHeight: number
 }
 
-function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, openings }: WallBoardProps) {
+function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, openings, storeyHeight }: WallBoardProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
   const dx = p2.x - p1.x
@@ -53,7 +55,11 @@ function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, 
   }, [board])
 
   if (length < 0.05 || isMasonry) return null
-  return <primitive object={board} position={[cx, 0, cz]} rotation={[0, -angle, 0]} />
+  // Upper-floor boards stand on the floor below — same lift as the framing they
+  // clad (LiveWallsLayer), so 2nd-floor walls get their sheeting up where the
+  // studs actually are instead of dropping to the ground floor.
+  const baseY = (wall.level ?? 0) * storeyHeight
+  return <primitive object={board} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />
 }
 
 export default function DrywallLayer() {
@@ -68,6 +74,8 @@ export default function DrywallLayer() {
   useExplodeChildren(groupRef, 'walls')
 
   const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
+  // Storey-to-storey rise so level-1 boards stand on the 2nd-floor deck, etc.
+  const storeyHeight = wallHeight + FLOOR_ASSEMBLY_H
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageWidth = drawing?.rasterWidth ?? 1400
@@ -133,6 +141,7 @@ export default function DrywallLayer() {
           wallHeight={wallHeight}
           orientation={orientation}
           openings={openingsByWall[i] ?? []}
+          storeyHeight={storeyHeight}
         />
       ))}
     </group>

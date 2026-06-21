@@ -119,6 +119,10 @@ interface FloorplanLocalState {
   seedProcessing: boolean
   /** Construction wizard panel (re-run from Settings) — mounted by ModelViewer. */
   wizardOpen: boolean
+  // ─── retractable edge drawers (left = build, right = settings, bottom = place) ──
+  buildDrawerOpen: boolean
+  settingsDrawerOpen: boolean
+  placeDrawerOpen: boolean
 
   // ─── actions ─────────────────────────────────────────────────────
   setTraceMode: (v: boolean) => void
@@ -167,6 +171,9 @@ interface FloorplanLocalState {
   setPracticeMode: (v: boolean) => void
   setSeedProcessing: (v: boolean) => void
   setWizardOpen: (v: boolean) => void
+  /** Open/close an edge drawer. On compact (phone / landscape-short) screens,
+   *  opening one retracts the others so they never stack over the workspace. */
+  setDrawerOpen: (which: 'build' | 'settings' | 'place', open: boolean) => void
 }
 
 export type { CalibrationUnit, DragKind, DragState, TraceStyle }
@@ -185,7 +192,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   distanceInput: '',
   activeWallType: 'wood-2x6',
   activeWallRole: 'exterior-bearing',
-  activeTraceLayer: 'floors',
+  activeTraceLayer: 'framing',
   traceBand: 'under-floor',
   plumbElement: PLUMBING_DEFAULTS.element,
   plumbSize: PLUMBING_DEFAULTS.size,
@@ -218,6 +225,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   practiceMode: true,
   seedProcessing: false,
   wizardOpen: false,
+  buildDrawerOpen: false,
+  settingsDrawerOpen: false,
+  placeDrawerOpen: false,
 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
@@ -283,4 +293,13 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setPracticeMode: (v) => set({ practiceMode: v }),
   setSeedProcessing: (v) => set({ seedProcessing: v }),
   setWizardOpen: (v) => set({ wizardOpen: v }),
+  setDrawerOpen: (which, open) => set(() => {
+    const compact = typeof window !== 'undefined'
+      && window.matchMedia('(max-width: 767px), (max-height: 600px)').matches
+    const base = open && compact
+      ? { buildDrawerOpen: false, settingsDrawerOpen: false, placeDrawerOpen: false }
+      : {}
+    const key = which === 'build' ? 'buildDrawerOpen' : which === 'settings' ? 'settingsDrawerOpen' : 'placeDrawerOpen'
+    return { ...base, [key]: open } as Partial<FloorplanLocalState>
+  }),
 }))

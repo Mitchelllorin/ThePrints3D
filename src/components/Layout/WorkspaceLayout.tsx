@@ -4,6 +4,7 @@ import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TopIcons from './TopIcons'
+import EdgeDrawer from './EdgeDrawer'
 import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import { useAppStore } from '../../store/useAppStore'
@@ -382,107 +383,6 @@ function ConverterPanel() {
   )
 }
 
-// ── Trace panel — framing type + wall role pills, then Start Tracing ──────────
-const TRACE_FRAMING: Array<{ key: string; label: string }> = [
-  { key: 'wood-2x4', label: '2×4' },
-  { key: 'wood-2x6', label: '2×6' },
-  { key: 'wood-2x8', label: '2×8' },
-  { key: 'steel-3-5-8', label: 'Steel 3-5/8"' },
-  { key: 'steel-6', label: 'Steel 6"' },
-  { key: 'cmu', label: 'CMU' },
-]
-
-const TRACE_ROLES: Array<{ key: string; label: string }> = [
-  { key: 'exterior-bearing', label: 'Ext' },
-  { key: 'interior-bearing', label: 'Int Bearing' },
-  { key: 'interior-non-bearing', label: 'Int' },
-  { key: 'partition', label: 'Partition' },
-]
-
-function TracePanel({ onStart }: { onStart: () => void }) {
-  const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
-  const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
-  const setActiveWallRole = useFloorplanLocalStore((s) => s.setActiveWallRole)
-  const setActiveWallType = useFloorplanLocalStore((s) => s.setActiveWallType)
-  const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
-  const setCfg = useConfigStore((s) => s.set)
-
-  // Same material/stud mapping as FloorplanPanel.pickFraming so the build
-  // produces the right framing (steel vs wood, 2x4 vs 2x6); CMU stays masonry.
-  const pickFraming = (key: string) => {
-    setActiveTraceLayer('framing')
-    setActiveWallType(key)
-    if (key.startsWith('steel')) setCfg({ framingMaterial: 'steel' })
-    else if (key.startsWith('wood')) setCfg({ framingMaterial: 'wood' })
-    if (key === 'wood-2x6' || key === 'steel-6') setCfg({ defaultStudSize: '2x6' })
-    else if (key === 'wood-2x4' || key === 'steel-3-5-8') setCfg({ defaultStudSize: '2x4' })
-  }
-
-  return (
-    <>
-      <p className={styles.pillLabel}>Framing type:</p>
-      <div className={styles.pillRow}>
-        {TRACE_FRAMING.map((t) => (
-          <button key={t.key} className={`${styles.pill} ${activeWallType === t.key ? styles.pillActive : ''}`}
-            onClick={() => pickFraming(t.key)}>{t.label}</button>
-        ))}
-      </div>
-      <p className={styles.pillLabel}>Wall role:</p>
-      <div className={styles.pillRow}>
-        {TRACE_ROLES.map((r) => (
-          <button key={r.key} className={`${styles.pill} ${activeWallRole === r.key ? styles.pillActive : ''}`}
-            onClick={() => setActiveWallRole(r.key)}>{r.label}</button>
-        ))}
-      </div>
-      <button className={styles.startTraceBtn} onClick={onStart}>Start Tracing</button>
-    </>
-  )
-}
-
-// ── Layers panel — the 4 trade layers, colour dot + on/off, active highlighted ─
-const LAYER_ROWS: Array<{ key: 'framing' | 'plumbing' | 'electrical' | 'hvac'; label: string; color: string }> = [
-  { key: 'framing', label: 'Framing', color: '#ffffff' },
-  { key: 'plumbing', label: 'Plumbing', color: '#60a5fa' },
-  { key: 'electrical', label: 'Electrical', color: '#facc15' },
-  { key: 'hvac', label: 'HVAC', color: '#4ade80' },
-]
-
-function LayersPanel() {
-  const visibleLayers = useAppStore((s) => s.visibleLayers)
-  const toggleTradeLayerVisible = useAppStore((s) => s.toggleTradeLayerVisible)
-  const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
-  const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
-
-  return (
-    <div className={styles.layerList}>
-      {LAYER_ROWS.map((l) => {
-        const on = visibleLayers.has(l.key)
-        const active = activeTraceLayer === l.key
-        return (
-          <div key={l.key} className={`${styles.layerRow} ${active ? styles.layerRowActive : ''}`}>
-            <span className={styles.layerDot} style={{ background: l.color }} />
-            <button className={styles.layerName} onClick={() => setActiveTraceLayer(l.key)}>{l.label}</button>
-            <button className={`${styles.layerToggle} ${on ? styles.layerToggleOn : ''}`}
-              onClick={() => toggleTradeLayerVisible(l.key)} aria-pressed={on}>
-              {on ? 'On' : 'Off'}
-            </button>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// The slide-in panels reachable from the top-right icons.
-type PanelId = 'trace' | 'layers' | 'settings'
-
-// Panel titles for the slide-in chrome panels.
-const PANEL_TITLES: Record<PanelId, string> = {
-  trace: 'Trace',
-  layers: 'Layers',
-  settings: 'Settings',
-}
-
 // ── Layout ───────────────────────────────────────────────────────────────────
 export default function WorkspaceLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -502,13 +402,9 @@ export default function WorkspaceLayout() {
 
   // Single source of truth: the chrome panels are driven by the store's
   // activePanel gate, the same gate every other overlay UI checks.
-  const activePanel = useFloorplanLocalStore((s) => s.activePanel)
-  const setActivePanel = useFloorplanLocalStore((s) => s.setActivePanel)
   const closePanels = useFloorplanLocalStore((s) => s.closeAllPanels)
-  const open: PanelId | null =
-    activePanel === 'trace' || activePanel === 'layers' || activePanel === 'settings'
-      ? activePanel
-      : null
+  const settingsDrawerOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
+  const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
 
   // Re-enter calibration: reset picked points and let the ambient guide drive.
   const recalibrate = () => {
@@ -522,7 +418,6 @@ export default function WorkspaceLayout() {
     updateOverlay({ calibrationMode: true, guidedStep: 1, locked: false }, false)
     closePanels()
   }
-  const traceActive = useFloorplanLocalStore((s) => s.traceMode || s.activePanel === 'trace' || s.activePanel === 'picker')
 
   const sharePng = () => {
     const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
@@ -535,30 +430,6 @@ export default function WorkspaceLayout() {
     } catch (e) {
       console.error('Snapshot failed', e)
       alert('Snapshot failed — orbit the view once, then retry.')
-    }
-  }
-
-  // "Start Tracing" — replicate FloorplanPanel.confirmWallType/startTracing so
-  // framing still calibrates first when the scale isn't trusted, then traces.
-  const startTracing = () => {
-    const fp = useFloorplanLocalStore.getState()
-    fp.closeAllPanels()
-    fp.setActiveTraceLayer('framing')
-    const app = useAppStore.getState()
-    const overlay = app.floorplanOverlay
-    const drawing = app.drawings.find((d) => d.id === overlay.drawingId) ?? app.drawings[0] ?? null
-    // Trade flows skip calibration; framing needs a trusted scale first.
-    if (drawing && drawing.scaleMmPerPx !== null && drawing.scaleConfidence === 'parsed') {
-      fp.setCalibrationA(null); fp.setCalibrationB(null); fp.setHoverPixel(null)
-      fp.setDistanceInput(''); fp.setPendingTraceAfterCalibration(false)
-      app.updateFloorplanOverlay({ calibrationMode: false }, false)
-      fp.setTraceMode(true)
-    } else {
-      // Enter calibration; finishing it drops straight into trace mode.
-      fp.setTraceMode(false); fp.setTraceStroke([])
-      fp.setCalibrationA(null); fp.setCalibrationB(null); fp.setHoverPixel(null)
-      fp.setDistanceInput(''); fp.setPendingTraceAfterCalibration(true)
-      app.updateFloorplanOverlay({ calibrationMode: true, guidedStep: 1, locked: false }, false)
     }
   }
 
@@ -584,31 +455,23 @@ export default function WorkspaceLayout() {
   // Onboarding card persists until a plan is actually loaded — no dismiss.
   const showUploadHint = !hasDrawings
 
-  // Five-button toggle: tapping the active panel's button closes it; tapping a
-  // different one swaps. Trace toggles tracing off if a run is in progress.
-  const toggleTrace = () => {
-    const fp = useFloorplanLocalStore.getState()
-    if (fp.traceMode) { fp.setTraceMode(false); fp.closeAllPanels(); return }
-    setActivePanel('trace')
-  }
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     if (files.length) { addDrawings(files) }
     e.target.value = ''
   }
 
-  // Escape closes any open chrome panel (FloorplanPanel handles Escape for its
-  // own pickers/cards; this covers trace/layers/settings).
+  // Escape retracts the Settings drawer (FloorplanPanel handles Escape for the
+  // Build/Place drawers + its own pickers/cards).
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
-      const ap = useFloorplanLocalStore.getState().activePanel
-      if (ap === 'trace' || ap === 'layers' || ap === 'settings') closePanels()
+      const st = useFloorplanLocalStore.getState()
+      if (st.settingsDrawerOpen) st.setDrawerOpen('settings', false)
     }
     window.addEventListener('keydown', onEsc)
     return () => window.removeEventListener('keydown', onEsc)
-  }, [closePanels])
+  }, [])
 
   // Global undo/redo shortcuts: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+Y.
   // Skipped while typing so text fields keep their native undo.
@@ -651,93 +514,57 @@ export default function WorkspaceLayout() {
           canvas so it always renders + rocks to show its depth. */}
       <Logo3DBadge />
 
-      {/* The only persistent chrome: five icon buttons, fixed top-right. */}
+      {/* Persistent global actions, top-right. Build / Settings / Place each
+          have their own always-visible edge tab, so they're not icons here. */}
       <TopIcons
         onRebuild={buildForMe}
-        onTrace={toggleTrace}
-        onLayers={() => setActivePanel('layers')}
-        onSettings={() => setActivePanel('settings')}
         onUndo={undo}
-        traceActive={traceActive}
-        layersActive={open === 'layers'}
-        settingsActive={open === 'settings'}
         canUndo={canUndo}
       />
 
-      {/* Spec panels — one at a time, slide in from the edge. Trace & Layers from
-          the left; Settings from the right. Each has an X; Escape / canvas tap
-          closes them. Vertically centered. */}
-      {open && (
-        // All panels slide in from the LEFT so none of them sit under the
-        // right-side icon column (Settings used to open right, over the icons).
-        <div className={`${styles.specPanel} ${styles.specPanelLeft}`}>
-          <button className={styles.specClose} onClick={closePanels} aria-label="Close">✕</button>
-          <div className={styles.specScroll}>
-            <p className={styles.specTitle}>{PANEL_TITLES[open]}</p>
+      {/* RIGHT drawer — Settings & view. Always mounted so its tab stays on the
+          edge; the body retracts off-screen until opened. The Explode control
+          folds in here (single home — no separate floating bar). */}
+      <EdgeDrawer
+        side="right"
+        title="Settings"
+        tabLabel="Settings"
+        tabIcon="⚙"
+        open={settingsDrawerOpen}
+        onToggle={() => setDrawerOpen('settings', !settingsDrawerOpen)}
+      >
+        <SettingsContent />
+        <div className={styles.specDivider} />
+        <p className={styles.sectionTitle}>Tools</p>
+        <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Load Preset</button>
+        <PresetPanel onLoad={handleLoadPreset} />
+        <button className={styles.specBtn} onClick={recalibrate}>
+          {calibrationMode ? 'Calibrating…' : 'Recalibrate'}
+        </button>
+        <button className={styles.specBtn} onClick={reRunWizard}>Re-run Wizard</button>
+        <p className={styles.sectionTitle}>Explode View</p>
+        <input
+          type="range" min={0} max={1} step={0.01} value={explodeAmount}
+          onChange={(e) => setExplodeAmount(Number(e.target.value))}
+          className={styles.specSlider}
+          aria-label="Explode separation"
+        />
+        {explodeAmount > 0 && (
+          <button className={styles.specBtn} onClick={() => setExplodeAmount(0)}>Reset explode</button>
+        )}
+        <p className={styles.sectionTitle}>Annotate &amp; Export</p>
+        <button className={styles.specBtn} onClick={() => setAnnotateMode(!annotateMode)}>
+          {annotateMode ? 'Stop annotating' : 'Annotate'}
+        </button>
+        <button className={styles.specBtn} onClick={sharePng}>Share PNG</button>
+        <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Export</button>
+        <AnnotationPanel />
+        <p className={styles.sectionTitle}>Unit converter</p>
+        <ConverterPanel />
+      </EdgeDrawer>
 
-            {open === 'trace' && <TracePanel onStart={startTracing} />}
-
-            {open === 'layers' && <LayersPanel />}
-
-            {open === 'settings' && (
-              <>
-                <SettingsContent />
-                <div className={styles.specDivider} />
-                <p className={styles.sectionTitle}>Tools</p>
-                <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Load Preset</button>
-                <PresetPanel onLoad={handleLoadPreset} />
-                <button className={styles.specBtn} onClick={recalibrate}>
-                  {calibrationMode ? 'Calibrating…' : 'Recalibrate'}
-                </button>
-                <button className={styles.specBtn} onClick={reRunWizard}>Re-run Wizard</button>
-                <p className={styles.sectionTitle}>Explode View</p>
-                <input
-                  type="range" min={0} max={1} step={0.01} value={explodeAmount}
-                  onChange={(e) => setExplodeAmount(Number(e.target.value))}
-                  className={styles.specSlider}
-                  aria-label="Explode separation"
-                />
-                <p className={styles.sectionTitle}>Annotate &amp; Export</p>
-                <button className={styles.specBtn} onClick={() => setAnnotateMode(!annotateMode)}>
-                  {annotateMode ? 'Stop annotating' : 'Annotate'}
-                </button>
-                <button className={styles.specBtn} onClick={sharePng}>Share PNG</button>
-                <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Export</button>
-                <AnnotationPanel />
-                <p className={styles.sectionTitle}>Unit converter</p>
-                <ConverterPanel />
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Persistent Explode control — always reachable, with its OWN solid
-          surface (not the themed panel) so it can never disappear when UI
-          opacity is turned down. Shown whenever a plan is loaded. */}
-      {drawings.length > 0 && !calibrationMode && (
-        <div className={styles.explodeBar}>
-          <span>Explode</span>
-          <input
-            className={styles.explodeSlider}
-            type="range" min={0} max={1} step={0.01} value={explodeAmount}
-            onChange={(e) => setExplodeAmount(Number(e.target.value))}
-            aria-label="Explode separation"
-          />
-          {explodeAmount > 0 && (
-            <button
-              className={styles.explodeReset}
-              onClick={() => setExplodeAmount(0)}
-              aria-label="Reset explode"
-            >
-              Reset
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Onboarding card — only when no drawings loaded and no panel open. */}
-      {showUploadHint && !open && (
+      {/* Onboarding card — only when no drawings are loaded. */}
+      {showUploadHint && (
         <div className={styles.uploadHint}>
           <div className={styles.uploadHintHeader}>
             <span className={styles.uploadHintTitle}>Get started</span>

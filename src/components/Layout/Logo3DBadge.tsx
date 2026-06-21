@@ -47,7 +47,9 @@ function ShearedWord({ shear, children }: { shear: number; children: ReactNode }
     const g = ref.current
     if (!g || !shear) return
     g.matrixAutoUpdate = false
-    g.matrix.makeShear(shear, 0, 0, 0, 0, 0)
+    // x-by-y shear → letters lean right (true italic) while the BASELINE stays
+    // flat. (The xy arg would slope y by x and tilt the whole word off-baseline.)
+    g.matrix.makeShear(0, 0, shear, 0, 0, 0)
   }, [shear])
   return <group ref={ref}>{children}</group>
 }

@@ -1,0 +1,184 @@
+/* EdgeDrawer — retractable edge panel (left / right / bottom). The root holds the
+   geometry + the visible surface and slides via transform; the tab is an absolutely
+   positioned child that protrudes back on-screen so it stays reachable when the
+   drawer is retracted. overflow:visible on the root keeps the tab from being clipped;
+   the inner wrapper clips + scrolls the content. */
+
+.root {
+  position: fixed;
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;            /* don't clip the protruding tab */
+  pointer-events: auto;
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-panel-opacity, 0.95));
+  backdrop-filter: blur(var(--bp-blur, 10px));
+  border: 1px solid var(--bp-border);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The clipped, scrollable content region. */
+.inner {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;       /* don't chain scroll into the 3D canvas */
+  padding: 6px 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  /* Always-visible, grabbable scrollbar — the explicit ask. Firefox: */
+  scrollbar-width: thin;
+  scrollbar-color: var(--bp-accent, #38bdf8) rgba(255, 255, 255, 0.08);
+}
+/* WebKit/Blink (incl. Android Chrome, which otherwise auto-hides touch scrollbars). */
+.scroll::-webkit-scrollbar { width: 12px; }
+.scroll::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.06); border-radius: 6px; }
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--bp-accent, #38bdf8);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 40px;
+}
+.scroll::-webkit-scrollbar-thumb:active { background: color-mix(in srgb, var(--bp-accent, #38bdf8) 80%, white); }
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+.header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--bp-border);
+}
+.title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--bp-text-dim, #94a3b8);
+}
+.close {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.35);
+  border: 1px solid var(--bp-border);
+  border-radius: 7px;
+  color: var(--bp-text, #f1f5f9);
+  font-size: 13px;
+  cursor: pointer;
+}
+.close:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* ── Toggle tab ──────────────────────────────────────────────────────────── */
+.tab {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.95);
+  border: 1px solid color-mix(in srgb, var(--bp-accent, #38bdf8) 55%, transparent);
+  color: var(--bp-accent, #38bdf8);
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+.tabIcon { font-size: 15px; line-height: 1; }
+
+/* ── Left edge ───────────────────────────────────────────────────────────── */
+.left {
+  top: 56px;
+  left: 0;
+  bottom: 8px;
+  width: min(320px, 88vw);
+  transform: translateX(-100%);
+  border-radius: 0 12px 12px 0;
+  border-left: none;
+}
+.left.open { transform: translateX(0); }
+.left .tab {
+  right: -34px;
+  top: 14px;
+  width: 34px;
+  min-height: 84px;
+  padding: 10px 0;
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* ── Right edge (mirror of left) ─────────────────────────────────────────── */
+.right {
+  top: 56px;
+  right: 0;
+  bottom: 8px;
+  width: min(320px, 88vw);
+  transform: translateX(100%);
+  border-radius: 12px 0 0 12px;
+  border-right: none;
+}
+.right.open { transform: translateX(0); }
+.right .tab {
+  left: -34px;
+  /* Clear the top-right global-action icons (Rebuild / Undo) so they don't sit
+     on top of this tab. */
+  top: 64px;
+  width: 34px;
+  min-height: 84px;
+  padding: 10px 0;
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
+/* ── Bottom edge ─────────────────────────────────────────────────────────── */
+.bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 60dvh;
+  transform: translateY(100%);
+  border-radius: 12px 12px 0 0;
+  border-bottom: none;
+}
+.bottom.open { transform: translateY(0); }
+.bottom .tab {
+  top: -34px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 34px;
+  min-width: 96px;
+  padding: 0 16px;
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+}
+
+/* Landscape phones / short viewports: wide but short — let the side drawers use
+   nearly the full height and scroll internally (matches the existing
+   max-height:600px treatment elsewhere). */
+@media (max-height: 600px) {
+  .left, .right { top: 8px; bottom: 8px; }
+  .bottom { max-height: 78dvh; }
+}
