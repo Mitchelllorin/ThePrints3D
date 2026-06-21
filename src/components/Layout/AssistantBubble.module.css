@@ -1,0 +1,99 @@
+/* Top-centre coach bubble. The wrap is click-through; only .bubble captures
+   input so it never blocks orbiting the workspace. It only ever shows when the
+   trace HUDs (measureHud/offPrintToast) are hidden, so they never collide. */
+.wrap {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 55;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(86vw, 420px);
+}
+
+.bubble {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
+  border-radius: 10px;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.92));
+  border: 1px solid var(--bp-border);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  animation: bubbleIn 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes bubbleIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Tone accents — a calm border colour, not a flashing alert. */
+.idle    { border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 50%, transparent); }
+.progress { border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 35%, transparent); }
+.success { border-color: color-mix(in srgb, #4ade80 55%, transparent); }
+
+/* The "alive" avatar — a small accent dot with a soft pulsing ring. */
+.dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bp-accent, #38bdf8);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--bp-accent, #38bdf8) 60%, transparent);
+  animation: pulse 2.4s ease-out infinite;
+}
+.success .dot { background: #4ade80; box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6); }
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--bp-accent, #38bdf8) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+/* Progress: spin the dot like the analysing glyph. */
+.dotSpin { animation: pulse 2.4s ease-out infinite, spin 1.2s linear infinite; }
+@keyframes spin { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+
+.message {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--bp-text, #f1f5f9);
+}
+
+.action {
+  flex-shrink: 0;
+  min-height: 28px;
+  padding: 4px 11px;
+  border-radius: 7px;
+  border: none;
+  background: var(--bp-accent, #38bdf8);
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.action:hover { opacity: 0.88; }
+
+.dismiss {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 5px;
+}
+.dismiss:hover { color: var(--bp-text, #f1f5f9); background: rgba(255, 255, 255, 0.1); }
+
+@media (max-width: 767px), (max-height: 600px) {
+  .message { font-size: 12px; }
+  .wrap { max-width: 92vw; }
+}

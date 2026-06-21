@@ -10,7 +10,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 import { blockMaterial } from '../../services/framingGeometry'
-import { explodeRuntime } from './explodeRuntime'
+import { explodeRuntime, FLOOR_SEP } from './explodeRuntime'
 
 /** Wall finishes that should render as block courses, not a flat colour. */
 const MASONRY_FINISHES = new Set(['brick', 'exposedBrick', 'stone', 'concrete'])
@@ -905,7 +905,9 @@ export default function BuildingModel({ layers }: Props) {
       buildFoundation(group, fp, sceneConfig.foundationType)
     }
 
+    let levelIndex = 0
     for (const level of floorLevels) {
+      const levelChildStart = group.children.length
       const elev = level.elevation
       const fh = floorHeight
       const floorDrawings: Drawing[] = level.drawingIds
@@ -1010,6 +1012,12 @@ export default function BuildingModel({ layers }: Props) {
             break
         }
       }
+      // Tag everything this storey added with its level so the explode driver
+      // peels the floors apart (level 0 = ground stays put, each level lifts).
+      for (let i = levelChildStart; i < group.children.length; i++) {
+        if (group.children[i].userData.level === undefined) group.children[i].userData.level = levelIndex
+      }
+      levelIndex++
     }
 
     // Framing from construction engine. Skipped when user walls exist — the
@@ -1093,13 +1101,18 @@ export default function BuildingModel({ layers }: Props) {
     explodeRuntime.spread = explodeSpread
     explodeRuntime.center.copy(center)
 
+    // Per-storey vertical separation so the floors peel apart floor-by-floor,
+    // matching the shared layer runtime. Independent of the radial multiplier so
+    // storeys split even when a system's spread is low.
+    const sep = explodeSpread * eased * FLOOR_SEP
     for (const child of group.children) {
       const base = child.userData.basePos as THREE.Vector3 | undefined
       if (!base) continue
       const mult = (explodeMults[explodeSystemKey(child.userData.layer)] ?? 1) * explodeSpread * eased
+      const level = (child.userData.level as number) ?? 0
       child.position.set(
         base.x + (base.x - center.x) * mult,
-        base.y + (base.y - center.y) * mult,
+        base.y + (base.y - center.y) * mult + level * sep,
         base.z + (base.z - center.z) * mult,
       )
     }

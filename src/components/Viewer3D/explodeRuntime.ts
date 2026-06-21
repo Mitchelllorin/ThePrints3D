@@ -27,8 +27,9 @@ export const explodeRuntime = {
 const baseMap = new WeakMap<THREE.Object3D, THREE.Vector3>()
 
 // Extra vertical gap added PER STOREY at full explode, so the floors separate
-// floor-by-floor (an object tagged userData.level = N lifts N gaps).
-const FLOOR_SEP = 3.2
+// floor-by-floor (an object tagged userData.level = N lifts N gaps). Exported so
+// BuildingModel's own (authoritative) explode driver lifts by the same amount.
+export const FLOOR_SEP = 3.2
 
 /**
  * Fan a group's direct children out from the shared explode centre each frame,

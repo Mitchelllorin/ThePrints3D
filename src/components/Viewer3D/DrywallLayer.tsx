@@ -47,8 +47,10 @@ function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, 
   const board = useMemo(() => {
     if (isMasonry) return new THREE.Group()
     const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
-    return buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, opacity: 0.96 })
-  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings])
+    const g = buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, opacity: 0.96 })
+    g.userData.level = wall.level ?? 0  // so the shared explode peels boards floor-by-floor
+    return g
+  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level])
 
   useEffect(() => () => {
     board.traverse((o) => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() } })

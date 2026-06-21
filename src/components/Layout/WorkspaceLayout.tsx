@@ -5,6 +5,7 @@ import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TopIcons from './TopIcons'
 import EdgeDrawer from './EdgeDrawer'
+import AssistantBubble from './AssistantBubble'
 import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import { useAppStore } from '../../store/useAppStore'
@@ -404,6 +405,7 @@ export default function WorkspaceLayout() {
   // activePanel gate, the same gate every other overlay UI checks.
   const closePanels = useFloorplanLocalStore((s) => s.closeAllPanels)
   const settingsDrawerOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
+  const placeDrawerOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
 
   // Re-enter calibration: reset picked points and let the ambient guide drive.
@@ -542,16 +544,6 @@ export default function WorkspaceLayout() {
           {calibrationMode ? 'Calibrating…' : 'Recalibrate'}
         </button>
         <button className={styles.specBtn} onClick={reRunWizard}>Re-run Wizard</button>
-        <p className={styles.sectionTitle}>Explode View</p>
-        <input
-          type="range" min={0} max={1} step={0.01} value={explodeAmount}
-          onChange={(e) => setExplodeAmount(Number(e.target.value))}
-          className={styles.specSlider}
-          aria-label="Explode separation"
-        />
-        {explodeAmount > 0 && (
-          <button className={styles.specBtn} onClick={() => setExplodeAmount(0)}>Reset explode</button>
-        )}
         <p className={styles.sectionTitle}>Annotate &amp; Export</p>
         <button className={styles.specBtn} onClick={() => setAnnotateMode(!annotateMode)}>
           {annotateMode ? 'Stop annotating' : 'Annotate'}
@@ -582,6 +574,27 @@ export default function WorkspaceLayout() {
           <PresetPanel onLoad={handleLoadPreset} />
         </div>
       )}
+
+      {/* Persistent Explode slider — always reachable on its own SOLID surface
+          (so it can't vanish at low UI opacity), bottom-right. Hidden during
+          calibration and while the bottom Place drawer is open (avoid overlap). */}
+      {hasDrawings && !calibrationMode && !placeDrawerOpen && (
+        <div className={styles.explodeBar}>
+          <span className={styles.explodeLabel}>Explode</span>
+          <input
+            className={styles.explodeSlider}
+            type="range" min={0} max={1} step={0.01} value={explodeAmount}
+            onChange={(e) => setExplodeAmount(Number(e.target.value))}
+            aria-label="Explode separation"
+          />
+          {explodeAmount > 0 && (
+            <button className={styles.explodeReset} onClick={() => setExplodeAmount(0)} aria-label="Reset explode">Reset</button>
+          )}
+        </div>
+      )}
+
+      {/* The omnipresent assistant — proactive next-step coach (top-centre). */}
+      <AssistantBubble />
     </div>
   )
 }
