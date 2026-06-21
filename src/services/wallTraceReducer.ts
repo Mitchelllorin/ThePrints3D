@@ -401,6 +401,9 @@ export function inferCorners(walls: ParsedWall[], tolerancePx = 20): ParsedWall[
     for (let j = i + 1; j < result.length; j++) {
       const a = result[i]
       const b = result[j]
+      // Different storeys never form a corner — a 2nd-floor wall must not snap to
+      // the ground-floor wall directly beneath it (same footprint, other level).
+      if ((a.level ?? 0) !== (b.level ?? 0)) continue
       const aHoriz = Math.abs(a.y2 - a.y1) < Math.abs(a.x2 - a.x1)
       const bHoriz = Math.abs(b.y2 - b.y1) < Math.abs(b.x2 - b.x1)
       if (aHoriz === bHoriz) continue // parallel — skip

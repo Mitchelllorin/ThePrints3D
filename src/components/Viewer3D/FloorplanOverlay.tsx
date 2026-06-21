@@ -455,9 +455,15 @@ export default function FloorplanOverlay() {
         return
       }
 
+      // Snap only against the PRINT lines + walls on the SAME storey, so a
+      // 2nd-floor wall snaps to the plan and to its own level — never to the
+      // ground-floor wall directly beneath it (same footprint, other level).
+      const refWalls = drawing.parsedWalls.filter(
+        (w) => (w.source ?? 'auto') !== 'user' || (w.level ?? 0) === activeLevel,
+      )
       // Rubber-band: tap A anchors, tap B commits, B becomes the next A so
       // consecutive segments share an exact corner point.
-      const snapped = snapPointToWalls(pixel[0], pixel[1], drawing.parsedWalls)
+      const snapped = snapPointToWalls(pixel[0], pixel[1], refWalls)
       if (!traceStart) {
         setTraceStart([snapped.x, snapped.y])
         setHoverPixel(pixel)
@@ -467,7 +473,7 @@ export default function FloorplanOverlay() {
       // (so a trace a hair off the printed wall lands exactly on it, at the
       // print's real angle). Generous tolerances so you don't have to be exact;
       // only fall back to ortho squaring when nothing parallel is reasonably near.
-      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, drawing.parsedWalls, 28, 42)
+      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, refWalls, 28, 42)
       const reduced = printLine
         ? { x1: printLine.x1, y1: printLine.y1, x2: printLine.x2, y2: printLine.y2, thickness: 8, source: 'user' as const, detectionConfidence: 1 }
         : reduceStrokeToWall([
@@ -479,8 +485,8 @@ export default function FloorplanOverlay() {
         setTraceStart(null)
         return
       }
-      const snappedWall = snapTraceWallToExisting(reduced, drawing.parsedWalls)
-      const base = extendWallToNearbyWall(snappedWall, drawing.parsedWalls)
+      const snappedWall = snapTraceWallToExisting(reduced, refWalls)
+      const base = extendWallToNearbyWall(snappedWall, refWalls)
       // Stamp the picked framing/role/material onto the wall so the build frames
       // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
       const isMasonry = activeWallType === 'cmu'
