@@ -618,6 +618,20 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   z-index: 200;
+  /* See-through to the workspace; only the controls below re-capture input, so
+     you can keep orbiting/clicking the model right through the panel. */
+  pointer-events: none;
+}
+
+/* Re-enable input on the panel's actual controls only. */
+.specPanel button,
+.specPanel select,
+.specPanel input,
+.specPanel textarea,
+.specPanel a,
+.specPanel label,
+.specPanel [role='button'] {
+  pointer-events: auto;
 }
 
 .specPanelLeft { left: 12px; }

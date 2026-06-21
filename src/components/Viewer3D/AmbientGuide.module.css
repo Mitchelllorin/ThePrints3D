@@ -17,15 +17,14 @@
   pointer-events: none;
 }
 
-/* Re-enable input only on the things you actually operate, so the rest of the
-   transparent menu stays click-through to the workspace. */
-.guide button,
-.guide select,
-.guide input,
-.guide textarea,
-.guide a,
-.guide label,
-.guide [role='button'] {
+/* Re-enable input only on the things you actually operate, so the rest of every
+   transparent overlay (menu, tray, prop card, toast) stays click-through to the
+   workspace behind it. */
+.guide button, .guide select, .guide input, .guide textarea, .guide a, .guide label, .guide [role='button'],
+.tray button, .tray select, .tray input, .tray a, .tray label, .tray [role='button'],
+.trayCard, .trayCardActive, .trayItem, .trayItemActive,
+.propCard button, .propCard select, .propCard input, .propCard textarea, .propCard a, .propCard label, .propCard [role='button'],
+.offPrintToast button, .offPrintToast a, .offPrintToast [role='button'] {
   pointer-events: auto;
 }
 
@@ -301,7 +300,7 @@
   backdrop-filter: blur(calc(var(--bp-panel-opacity, 0.92) * 8px));
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   z-index: 30;
-  pointer-events: all;
+  pointer-events: none; /* see-through to workspace; cards re-enable below */
 }
 
 /* Text-only object cards — no icons. */
@@ -379,7 +378,7 @@
   border-radius: 12px;
   padding: 12px 14px;
   z-index: 31;
-  pointer-events: all;
+  pointer-events: none; /* see-through to workspace; controls re-enable below */
 }
 
 .propHeader {
@@ -507,7 +506,7 @@
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.92);
   border: 1px solid var(--bp-accent, #38bdf8);
   backdrop-filter: blur(8px);
-  pointer-events: all;
+  pointer-events: none; /* see-through to workspace; buttons re-enable below */
 }
 
 @media (max-width: 767px) {
