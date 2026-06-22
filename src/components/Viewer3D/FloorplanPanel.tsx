@@ -561,10 +561,14 @@ export default function FloorplanPanel() {
         tabIcon="✏"
         open={buildDrawerOpen}
         onToggle={() => setDrawerOpen('build', !buildDrawerOpen)}
-        /* While the user is tapping the print to calibrate or trace, let taps
-           between the step cards fall through to the workspace — otherwise the
-           open drawer (up to 88vw on a phone) eats them and tracing "stops". */
-        clickThrough={overlay.calibrationMode || traceMode}
+        /* Click-through is the NARROW FALLBACK, not the default. During active
+           tracing the drawer already RETRACTS (see the tracingActive effect), so
+           there's nothing overlapping to tap through — retract-on-action is the
+           primary mobile model. The one context where the drawer must stay open
+           OVER the plan while you tap it is calibration (the step card guides you
+           while you place the two scale points), so click-through is limited to
+           that. Avoids the tap-ambiguity that broad click-through caused. */
+        clickThrough={overlay.calibrationMode}
       >
 
         {/* Drawing switcher — only shown when multiple drawings */}
