@@ -11,6 +11,7 @@ import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Edges, Line } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
+import { createDoubleTapState, detectDoubleTap } from './doubleTap'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
@@ -75,6 +76,9 @@ export default function PlacedObjectsLayer() {
 
   const [drag, setDrag] = useState<DragState | null>(null)
   const groupRef = useRef<THREE.Group>(null)
+  // Double-tap an object to flip its X-ray — quick, no panel/scroll. One detector
+  // for the whole layer; the per-object handler calls it. (Walls/floors next.)
+  const dtap = useRef(createDoubleTapState())
   useExplodeChildren(groupRef, 'mep')
 
   if (placedObjects.length === 0) return null
@@ -150,6 +154,12 @@ export default function PlacedObjectsLayer() {
               onPointerDown={(e) => {
                 // In place mode the floorplan handles the next click — don't steal it.
                 if (placeObjectType) return
+                // Double-tap → toggle X-ray, and don't also start a drag/select.
+                if (detectDoubleTap(dtap.current, obj.id, e)) {
+                  e.stopPropagation()
+                  updatePlacedObject(obj.id, { transparent: !obj.transparent })
+                  return
+                }
                 if (selected) startDrag(e, obj, 'move')
                 else { e.stopPropagation(); select(obj.id) }
               }}

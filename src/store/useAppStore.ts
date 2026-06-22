@@ -206,11 +206,12 @@ const DEFAULT_FLOORPLAN_OVERLAY: FloorplanOverlayState = {
   traceModeActive: false,
   orbitLocked: false,
   guidedStep: 1,
-  // Nudged toward screen-right so the print sits centred in the area NOT covered
-  // by the left "Build" drawer (which is open most of the session). The camera
-  // looks from (12,10,12) at the origin, so world (+x,-z) is screen-right; an
-  // equal [+d,-d] offset slides the print purely rightward on screen.
-  position: [2.5, -2.5],
+  // CENTERED on the workspace. The plan owns the middle at all times — drawers
+  // retract during action and are globally exclusive, so the plan is never
+  // permanently covered (workspace-sacred). Was nudged screen-right to dodge the
+  // Build drawer, but that left the plan off-centre and meant panel transparency
+  // revealed only empty background instead of the plan behind it.
+  position: [0, 0],
   scale: [12, 8],
   rotationDeg: 0,
   opacity: 0.65,
