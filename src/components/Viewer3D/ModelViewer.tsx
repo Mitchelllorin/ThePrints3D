@@ -76,6 +76,69 @@ function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObj
   return null
 }
 
+/**
+ * Camera pose that frames the whole print: target = the print's centre on the
+ * ground, distance sized to fit the plan's bounding CIRCLE inside the FOV (so
+ * it's rotation- and aspect-proof — portrait phones use the tighter horizontal
+ * FOV), viewed from a near-top-down angle on phones / a friendly iso angle on
+ * desktop. Lands the plan centred and full, ready to trace with zero manual
+ * panning or zooming.
+ */
+function framePrintPreset(
+  width: number, depth: number, position: [number, number],
+  aspect: number, fovDeg: number, mobile: boolean,
+) {
+  const target: [number, number, number] = [position[0], 0, position[1]]
+  const vfov = (fovDeg * Math.PI) / 180
+  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * Math.max(0.0001, aspect))
+  const minFov = Math.min(vfov, hfov)
+  const radius = 0.5 * Math.hypot(width, depth)
+  const dist = (radius / Math.sin(minFov / 2)) * 1.15   // 15% breathing room
+  const dx = mobile ? 0.32 : 0.8
+  const dy = mobile ? 1.0 : 0.85
+  const dz = mobile ? 0.32 : 0.8
+  const len = Math.hypot(dx, dy, dz)
+  return {
+    position: [
+      target[0] + (dx / len) * dist,
+      (dy / len) * dist,
+      target[2] + (dz / len) * dist,
+    ] as [number, number, number],
+    target,
+  }
+}
+
+/**
+ * Auto-frames the print the moment a drawing loads — and re-fits once when its
+ * footprint settles (after the scale estimate / calibration) — so the plan
+ * lands centred and full and the user never has to position it. Edge-triggered
+ * per drawing+footprint so it doesn't fight manual camera moves afterwards.
+ */
+function PrintAutoFrame() {
+  const { size } = useThree()
+  const drawingId = useAppStore((s) => s.floorplanOverlay.drawingId)
+  const scale = useAppStore((s) => s.floorplanOverlay.scale)
+  const position = useAppStore((s) => s.floorplanOverlay.position)
+  const setCameraPreset = useAppStore((s) => s.setCameraPreset)
+  const lastKey = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (!drawingId) { lastKey.current = null; return }
+    const [w, d] = scale
+    if (!w || !d) return
+    // Reframe on a new drawing OR when its rounded footprint changes (scale
+    // estimate / calibration) — not on every tiny jitter, so we don't yank the
+    // camera while the user works.
+    const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}`
+    if (lastKey.current === key) return
+    lastKey.current = key
+    const mobile = typeof window !== 'undefined' && window.innerWidth < 768
+    setCameraPreset(framePrintPreset(w, d, position, size.width / size.height, 55, mobile))
+  }, [drawingId, scale, position, size.width, size.height, setCameraPreset])
+
+  return null
+}
+
 function BuildingProgress() {
   const mesh = useRef<THREE.Mesh>(null)
   useFrame((_, delta) => {
@@ -529,6 +592,7 @@ export default function ModelViewer() {
         }}
       >
         <CameraRig />
+        <PrintAutoFrame />
         {/* Live workspace background — drives the canvas clear colour. */}
         <color attach="background" args={[scene.bg]} />
         {/* Lighting for FORM, so a stud cage reads as studs (not a flat block):
