@@ -291,7 +291,16 @@ export default function FloorplanOverlay() {
   // tracing → 0 (unchanged).
   const tracingAtWallTop = activeTraceLayer === 'roof'
     || (activeTraceLayer === 'floors' && CEILING_TYPES.has(floorsElement))
-  const traceElevation = areaElevation(activeLevel, tracingAtWallTop)
+  // Trades (plumbing/electrical/HVAC) trace on the print plane — they render by
+  // BAND (under-floor/in-wall/ceiling), not by storey level, so they must NOT
+  // lift with the now-persistent activeLevel. Otherwise, after any multi-floor
+  // work the trade catcher/preview floats up to a storey while the committed run
+  // stays at ground → you tap a floating plane and the line lands elsewhere
+  // ("trades tracing not working"). Walls/floors/roof still lift to where they render.
+  const tradeLayer = activeTraceLayer === 'plumbing'
+    || activeTraceLayer === 'electrical'
+    || activeTraceLayer === 'hvac'
+  const traceElevation = tradeLayer ? 0 : areaElevation(activeLevel, tracingAtWallTop)
 
   const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width
