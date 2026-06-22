@@ -278,15 +278,20 @@ export default function FloorplanOverlay() {
   const raiseRect = (pts: [number, number, number][], dy: number): [number, number, number][] =>
     dy ? pts.map(([x, y, z]) => [x, y + dy, z] as [number, number, number]) : pts
 
-  // Multi-floor tiered tracing (Phase 1): the ACTIVE storey's print, the tap-
-  // catcher and the LIVE previews all sit at this elevation, so you trace ON the
-  // floor you're working — print and catcher coplanar. Tracing an upper floor
-  // while the print sat on the ground made taps land offset in perspective (you
-  // aim at the floating deck, the ray hits the ground catcher shifted toward the
-  // camera); lifting the whole trace surface to the tier removes that. storeyHeight
-  // here equals the wall/floor layers' storeyHeight, so the print lands on the
-  // deck. Level 0 → 0 (ground tracing unchanged).
-  const traceElevation = activeLevel * storeyHeight
+  // Multi-floor tiered tracing: the ACTIVE storey's print, the tap-catcher and
+  // the LIVE previews all sit at this elevation, so you trace ON the plane the
+  // geometry lands on — print and catcher coplanar. Tracing while the print sat
+  // on the ground made taps land offset in perspective (you aim at the floating
+  // geometry, the ray hits the lower catcher shifted toward the camera); lifting
+  // the whole trace surface removes that. The elevation MATCHES where each layer
+  // renders: roofs + ceiling-type floors land at the WALL TOP, everything else
+  // (floor deck, walls, trades) at the storey floor — so the roof/ceiling trace
+  // plane must include wallTop or you get the same offset a wall-height too low.
+  // storeyHeight here equals the wall/floor layers' storeyHeight. Level 0 floor
+  // tracing → 0 (unchanged).
+  const tracingAtWallTop = activeTraceLayer === 'roof'
+    || (activeTraceLayer === 'floors' && CEILING_TYPES.has(floorsElement))
+  const traceElevation = areaElevation(activeLevel, tracingAtWallTop)
 
   const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width
