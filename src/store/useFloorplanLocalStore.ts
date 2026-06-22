@@ -261,9 +261,13 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setActiveWallRole: (v) => set({ activeWallRole: v }),
   // Switching discipline drops any in-progress run anchor, so a resumed/new run
   // starts fresh in the newly selected trade instead of chaining from the old.
-  // Switching tab also drops back to Ground level, so e.g. tracing walls after a
-  // 2nd-floor floor doesn't silently place them up at level 2 (they "vanished").
-  setActiveTraceLayer: (v) => set({ activeTraceLayer: v, traceStart: null, activeLevel: 0 }),
+  // Switching tab KEEPS the active level, so you can lay a 2nd-floor floor and
+  // then switch to framing to build that storey's walls right on it. (It used to
+  // reset to Ground here, which made building on an upper storey impossible — the
+  // walls always dropped to level 0.) The level stays visible in the trace bar +
+  // the Build drawer's Level selector, so walls never silently land on a level
+  // you forgot (the original "they vanished up at level 2" concern).
+  setActiveTraceLayer: (v) => set({ activeTraceLayer: v, traceStart: null }),
   setTraceBand: (v) => set({ traceBand: v }),
   setPlumb: (patch) => set(patch),
   setElec: (patch) => set(patch),
@@ -298,9 +302,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setSeedProcessing: (v) => set({ seedProcessing: v }),
   setWizardOpen: (v) => set({ wizardOpen: v }),
   setDrawerOpen: (which, open) => set(() => {
-    const compact = typeof window !== 'undefined'
-      && window.matchMedia('(max-width: 767px), (max-height: 600px)').matches
-    const base = open && compact
+    // Globally exclusive: opening any drawer closes the other two, so only one
+    // menu is ever over the workspace (was small-screen-only; now always).
+    const base = open
       ? { buildDrawerOpen: false, settingsDrawerOpen: false, placeDrawerOpen: false }
       : {}
     const key = which === 'build' ? 'buildDrawerOpen' : which === 'settings' ? 'settingsDrawerOpen' : 'placeDrawerOpen'

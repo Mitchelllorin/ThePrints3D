@@ -483,3 +483,64 @@
   color: #e2e8f0;
   white-space: nowrap;
 }
+
+/* ── Trace bar — slim floating controls, bottom-centre, while actively tracing.
+   The Build drawer retracts during active tracing so the workspace is clear;
+   this carries the live controls (change type, pause, build, done). ── */
+.traceBar {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;            /* clear the Place tab + Explode bar along the bottom */
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 7px 10px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  pointer-events: all;
+  max-width: calc(100vw - 20px);
+}
+.traceBarChip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.traceBarChip:hover { background: rgba(255, 255, 255, 0.16); }
+.traceBarDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+.traceBarBtn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #f1f5f9;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.traceBarBtn:hover { background: rgba(255, 255, 255, 0.18); }
+.traceBarBuild {
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 32%, rgba(0, 0, 0, 0.5));
+  border-color: var(--bp-accent, #38bdf8);
+}

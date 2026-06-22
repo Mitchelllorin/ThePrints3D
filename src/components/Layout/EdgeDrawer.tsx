@@ -19,15 +19,22 @@ interface EdgeDrawerProps {
   tabIcon?: ReactNode
   /** Optional header title shown inside the body, with an ✕ that calls onToggle. */
   title?: string
+  /**
+   * Let taps that land between controls fall THROUGH to the workspace behind.
+   * The surface goes transparent and stops catching pointers; only the actual
+   * controls + the tab stay live. Used while tracing/calibrating so the open
+   * drawer (up to 88vw on a phone) can't swallow taps meant for the print.
+   */
+  clickThrough?: boolean
   children: ReactNode
   className?: string
 }
 
 const SIDE_CLASS = { left: styles.left, right: styles.right, bottom: styles.bottom } as const
 
-export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, title, children, className }: EdgeDrawerProps) {
+export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, title, clickThrough, children, className }: EdgeDrawerProps) {
   return (
-    <div className={`${styles.root} ${SIDE_CLASS[side]} ${open ? styles.open : ''} ${className ?? ''}`}>
+    <div className={`${styles.root} ${SIDE_CLASS[side]} ${open ? styles.open : ''} ${clickThrough ? styles.clickThrough : ''} ${className ?? ''}`}>
       <button
         className={styles.tab}
         onClick={onToggle}

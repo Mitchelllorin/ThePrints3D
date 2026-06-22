@@ -356,16 +356,31 @@ export default function FloorplanPanel() {
   // Exclusive menus: while an object is selected or placement is armed, the
   // picker is render-gated out (showSteps === false), so menus never overlap.
 
-  // Auto-open the Build drawer when the user enters an actionable build context
-  // (calibration, tracing, the picker, or a wall/run selection). Edge-triggered
-  // off a prevRef so a drawer the user deliberately closed mid-trace stays shut.
+  // The Build drawer opens when the user needs to CHOOSE or READ — calibration,
+  // the type picker, or a wall/run selection. Active tracing is deliberately
+  // excluded here (see the retract effect below) so the menu never sits over the
+  // workspace while you tap. Edge-triggered so a drawer you closed stays shut.
   // MUST sit above the early return below so hook order is stable across renders.
-  const buildCtx = overlay.calibrationMode || traceMode || pickerOpen || selectedWallIndex != null || !!selectedLine
+  const buildCtx = overlay.calibrationMode || pickerOpen || selectedWallIndex != null || !!selectedLine
   const prevBuildCtx = useRef(false)
   useEffect(() => {
     if (buildCtx && !prevBuildCtx.current) setDrawerOpen('build', true)
     prevBuildCtx.current = buildCtx
   }, [buildCtx, setDrawerOpen])
+
+  // Workspace-clear rule: while you're actively tracing (tapping corners on the
+  // print), the Build drawer RETRACTS so the workspace is fully clear — the slim
+  // floating trace bar carries the live controls then. Leaving active tracing
+  // (pause, a pending-walls confirm, reopening the picker, or finishing) brings
+  // the drawer back so the next choice/step is visible.
+  const tracingActive = traceMode && !tracePaused && !pickerOpen && !pendingWalls
+  const prevTracingActive = useRef(false)
+  useEffect(() => {
+    if (tracingActive !== prevTracingActive.current) {
+      setDrawerOpen('build', !tracingActive)
+      prevTracingActive.current = tracingActive
+    }
+  }, [tracingActive, setDrawerOpen])
 
   // ── state machine ─────────────────────────────────────────────────────────
   // No drawing at all — render nothing (the drop zone in ModelViewer handles it)
@@ -451,6 +466,9 @@ export default function FloorplanPanel() {
   // workspace is fully visible — the tray and property card carry the UI.
   const showSteps = !placeObjectType && !selectedObject
   const framingActive = activeTraceLayer === 'framing'
+  // Which storey the next trace lands on — shown wherever you trace so walls
+  // never silently build on a level you forgot you were on.
+  const activeLevelLabel = LEVEL_OPTIONS.find((l) => l.value === activeLevel)?.label ?? 'Ground'
   const floorsActive = activeTraceLayer === 'floors'
   const roofActive = activeTraceLayer === 'roof'
   // Floors & roofs are "area" layers: pull a rectangle instead of tracing a line.
@@ -473,7 +491,7 @@ export default function FloorplanPanel() {
       : activeTraceLayer === 'hvac'
         ? `${hvacElement} · ${hvacSize} · ${hvacMaterial}`
         : activeTraceLayer === 'floors'
-          ? `${LEVEL_OPTIONS.find((l) => l.value === activeLevel)?.label ?? 'Ground'} · ${floorsElement === 'Concrete Slab' ? floorsElement : `${floorsElement} · ${floorsSize} OC`}`
+          ? `${activeLevelLabel} · ${floorsElement === 'Concrete Slab' ? floorsElement : `${floorsElement} · ${floorsSize} OC`}`
           : activeTraceLayer === 'roof'
             ? `${roofElement} · ${roofSize} pitch`
             : ''
@@ -503,6 +521,24 @@ export default function FloorplanPanel() {
         </div>
       )}
 
+      {/* Slim floating trace controls — shown ONLY while actively tracing, when
+          the Build drawer is retracted, so the workspace stays clear. The chip
+          reopens the picker (type / level), Pause frees the camera, Build builds,
+          Done finishes the run. */}
+      {tracingActive && showSteps && (
+        <div className={styles.traceBar}>
+          <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
+            <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
+            {framingActive ? `${activeLevel > 0 ? `${activeLevelLabel} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
+          </button>
+          <button className={styles.traceBarBtn} onClick={() => setTracePaused(true)} title="Free the camera to orbit, then resume">⏸ Pause</button>
+          {((framingActive && userWallCount > 0) || (floorsActive && hasFloor)) && (
+            <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+          )}
+          <button className={styles.traceBarBtn} onClick={cancelTracing} title="Finish tracing">✓ Done</button>
+        </div>
+      )}
+
       {/* Off-print nudge — a wall landed outside the plan; offer a quick undo. */}
       {offPrintWarn && (
         <div className={styles.offPrintToast}>
@@ -525,6 +561,10 @@ export default function FloorplanPanel() {
         tabIcon="✏"
         open={buildDrawerOpen}
         onToggle={() => setDrawerOpen('build', !buildDrawerOpen)}
+        /* While the user is tapping the print to calibrate or trace, let taps
+           between the step cards fall through to the workspace — otherwise the
+           open drawer (up to 88vw on a phone) eats them and tracing "stops". */
+        clickThrough={overlay.calibrationMode || traceMode}
       >
 
         {/* Drawing switcher — only shown when multiple drawings */}

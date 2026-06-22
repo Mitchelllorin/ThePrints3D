@@ -226,6 +226,20 @@ export default function FloorplanOverlay() {
     }, false)
   }, [drag, traceMode, tracePaused, overlay.calibrationMode, placeObjectType, updateOverlay])
 
+  // Safety net: a drag that releases OFF its handle/catcher (fast flick, pointer
+  // leaves the window) could leave `drag` set forever — which keeps the camera
+  // locked ("can't orbit, even when exploded"). A window-level pointerup/cancel
+  // always clears it; the geometry was already applied live during the drag.
+  useEffect(() => {
+    const clear = () => { if (useFloorplanLocalStore.getState().drag) setDrag(null) }
+    window.addEventListener('pointerup', clear)
+    window.addEventListener('pointercancel', clear)
+    return () => {
+      window.removeEventListener('pointerup', clear)
+      window.removeEventListener('pointercancel', clear)
+    }
+  }, [setDrag])
+
   const estimatedScale = useMemo<[number, number]>(() => {
     if (!drawing) return overlay.scale
     const widthPx = drawing.rasterWidth ?? 1400
@@ -254,19 +268,25 @@ export default function FloorplanOverlay() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
   const hScale = (isMobile ? 2.6 : 1.3) * Math.max(1, Math.min(2.5, Math.max(width, depth) / 8))
 
-  // Multi-floor: raise the trace plane + previews so you pull the rectangle where
-  // it lands — floors on their storey deck; roofs and ceilings up on the wall top.
+  // Multi-floor: COMMITTED floor/roof areas render at their storey elevation —
+  // floors on their storey deck; roofs and ceilings up on the wall top. (The live
+  // rubber-band preview stays at print level so it hugs the cursor; see below.)
   const storeyHeight = ceilingM + FLOOR_ASSEMBLY_H
   const wallTop = ceilingM
   const areaElevation = (level: number, atWallTop: boolean) =>
     level * storeyHeight + (atWallTop ? wallTop : 0)
-  const activeIsRoof = activeTraceLayer === 'roof'
-  const activeIsCeiling = activeTraceLayer === 'floors' && CEILING_TYPES.has(floorsElement)
-  const traceY = (activeTraceLayer === 'floors' || activeIsRoof)
-    ? areaElevation(activeLevel, activeIsRoof || activeIsCeiling)
-    : 0
   const raiseRect = (pts: [number, number, number][], dy: number): [number, number, number][] =>
     dy ? pts.map(([x, y, z]) => [x, y + dy, z] as [number, number, number]) : pts
+
+  // Multi-floor tiered tracing (Phase 1): the ACTIVE storey's print, the tap-
+  // catcher and the LIVE previews all sit at this elevation, so you trace ON the
+  // floor you're working — print and catcher coplanar. Tracing an upper floor
+  // while the print sat on the ground made taps land offset in perspective (you
+  // aim at the floating deck, the ray hits the ground catcher shifted toward the
+  // camera); lifting the whole trace surface to the tier removes that. storeyHeight
+  // here equals the wall/floor layers' storeyHeight, so the print lands on the
+  // deck. Level 0 → 0 (ground tracing unchanged).
+  const traceElevation = activeLevel * storeyHeight
 
   const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width
@@ -274,6 +294,15 @@ export default function FloorplanOverlay() {
     const rotated = new THREE.Vector3(localX, 0.03, localZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationRad)
     return [overlay.position[0] + rotated.x, 0.03, overlay.position[1] + rotated.z]
   }, [depth, imageHeight, imageWidth, overlay.position, rotationRad, width])
+
+  // Same mapping, lifted to the active storey — used ONLY for the live trace
+  // surface (rubber-band previews + anchor dot). Committed overlays (trade lines,
+  // selected-wall highlight, violations) keep using planeLocalToWorld at print
+  // level so they don't jump storeys when you change the active floor.
+  const planeLocalToTrace = useCallback((pixel: [number, number]): [number, number, number] => {
+    const p = planeLocalToWorld(pixel)
+    return [p[0], p[1] + traceElevation, p[2]]
+  }, [planeLocalToWorld, traceElevation])
 
   const worldToPixel = (point: THREE.Vector3): [number, number] => {
     const translated = new THREE.Vector3(point.x - overlay.position[0], 0, point.z - overlay.position[1])
@@ -286,26 +315,39 @@ export default function FloorplanOverlay() {
     ]
   }
 
+  // Same mapping but WITHOUT clamping to the print's raster bounds. Floors and
+  // roofs can be pulled past the edge of the drawing (lay a deck "for miles"),
+  // so their corners must not snap back to the image edge the way wall/trace
+  // points do — that edge-clamp was building the floor short on the far side.
+  const worldToPixelRaw = (point: THREE.Vector3): [number, number] => {
+    const translated = new THREE.Vector3(point.x - overlay.position[0], 0, point.z - overlay.position[1])
+      .applyAxisAngle(new THREE.Vector3(0, 1, 0), -rotationRad)
+    return [((translated.x / width) + 0.5) * imageWidth, ((translated.z / depth) + 0.5) * imageHeight]
+  }
+  /** Area layers (floors/roof) pull freely past the print; everything else clamps. */
+  const toPixel = (point: THREE.Vector3): [number, number] =>
+    (activeTraceLayer === 'floors' || activeTraceLayer === 'roof') ? worldToPixelRaw(point) : worldToPixel(point)
+
   const traceWorldPoints = useMemo(
-    () => traceStroke.map(planeLocalToWorld),
-    [traceStroke, planeLocalToWorld],
+    () => traceStroke.map(planeLocalToTrace),
+    [traceStroke, planeLocalToTrace],
   )
 
   const calibrationPreviewPoints = useMemo(() => {
-    const start = calibrationA ? planeLocalToWorld(calibrationA) : null
+    const start = calibrationA ? planeLocalToTrace(calibrationA) : null
     const endPixel = calibrationB ?? (overlay.calibrationMode ? hoverPixel : null)
-    const end = endPixel ? planeLocalToWorld(endPixel) : null
+    const end = endPixel ? planeLocalToTrace(endPixel) : null
     if (!start || !end) return null
     return [start, end] as [[number, number, number], [number, number, number]]
-  }, [calibrationA, calibrationB, hoverPixel, overlay.calibrationMode, planeLocalToWorld])
+  }, [calibrationA, calibrationB, hoverPixel, overlay.calibrationMode, planeLocalToTrace])
 
   // Rubber-band trace preview — same stretchy interaction as calibration.
   // Floors preview as a rectangle (below), not a diagonal line, so it's skipped here.
   const tracePreviewPoints = useMemo(() => {
     if (!traceMode || tracePaused || traceStyle !== 'line' || activeTraceLayer === 'floors' || activeTraceLayer === 'roof' || !traceStart || !hoverPixel) return null
-    return [planeLocalToWorld(traceStart), planeLocalToWorld(hoverPixel)] as
+    return [planeLocalToTrace(traceStart), planeLocalToTrace(hoverPixel)] as
       [[number, number, number], [number, number, number]]
-  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToWorld])
+  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace])
 
   // A floor area's 4 pixel corners → a closed world-space rectangle loop.
   const floorsRectWorld = useCallback((x1: number, y1: number, x2: number, y2: number) =>
@@ -428,7 +470,7 @@ export default function FloorplanOverlay() {
   // with no meaningful drag), so the camera is free to move between points.
   const commitTraceOrCalibrationPoint = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
-    const pixel = worldToPixel(event.point)
+    const pixel = toPixel(event.point)
 
     if (traceMode) {
       // Area layers (floors / roof): tap one corner, tap the opposite corner —
@@ -554,7 +596,7 @@ export default function FloorplanOverlay() {
   const handleWorkspacePointerMove = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     event.stopPropagation()
-    const pixel = worldToPixel(event.point)
+    const pixel = toPixel(event.point)
     setHoverPixel(pixel)
     if (!traceMode || traceStyle !== 'freehand') return
     setTraceStroke((prev) => (prev.length === 0 ? prev : [...prev, pixel]))
@@ -800,7 +842,10 @@ export default function FloorplanOverlay() {
     <>
       {drawing && overlay.visible && texture && (
         <group
-          position={[overlay.position[0], 0.01, overlay.position[1]]}
+          /* Lifted to the active storey: the print image + the tap-catcher +
+             the edit handles inside this group all rise together, so you trace
+             on the floor you're working and the catcher stays coplanar. */
+          position={[overlay.position[0], 0.01 + traceElevation, overlay.position[1]]}
           rotation={[0, rotationRad, 0]}
         >
           <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ layer: 'floors', noPick: true }}>
@@ -819,14 +864,19 @@ export default function FloorplanOverlay() {
           {((traceMode && !tracePaused) || overlay.calibrationMode) && (
             <mesh
               rotation={[-Math.PI / 2, 0, 0]}
-              position={[0, 0.02 + traceY, 0]}
+              /* Catch at PRINT level (not lifted to traceY): the user always aims
+                 at the plan, so an elevated catcher made the ray land offset in
+                 perspective ("short on one side unless straight overhead"). And
+                 it's far larger than the print so floors/roofs can be pulled well
+                 past the drawing edge ("for miles"); walls still clamp to bounds. */
+              position={[0, 0.02, 0]}
               onPointerDown={handleWorkspacePointerDown}
               onPointerMove={handleWorkspacePointerMove}
               onPointerUp={handleWorkspacePointerUp}
               onPointerLeave={handleWorkspacePointerCancel}
               onPointerCancel={handleWorkspacePointerCancel}
             >
-              <planeGeometry args={[width, depth]} />
+              <planeGeometry args={[Math.max(width, depth) * 12, Math.max(width, depth) * 12]} />
               <meshBasicMaterial transparent opacity={0.02} color="#ffffff" side={THREE.DoubleSide} />
             </mesh>
           )}
@@ -905,9 +955,14 @@ export default function FloorplanOverlay() {
         <Line points={tracePreviewPoints} color={activeLineColor} lineWidth={4} />
       )}
 
-      {/* Floor/roof area being pulled — rectangle outline, raised to the level. */}
+      {/* Floor/roof area being pulled — rubber-band rectangle, lifted to the
+          ACTIVE storey so it hugs the cursor on the raised print/catcher (which
+          now sit at the same tier). The print, catcher and this preview are all
+          coplanar at traceElevation, so the outline tracks the tap exactly — no
+          perspective offset. Committed areas (below) use their own per-area
+          elevation. */}
       {floorsPreviewRect && (
-        <Line points={raiseRect(floorsPreviewRect, traceY)} color={activeTraceLayer === 'roof' ? LAYER_COLORS.roof : LAYER_COLORS.floors} lineWidth={3} dashed dashSize={0.25} gapSize={0.15} />
+        <Line points={raiseRect(floorsPreviewRect, traceElevation)} color={activeTraceLayer === 'roof' ? LAYER_COLORS.roof : LAYER_COLORS.floors} lineWidth={3} dashed dashSize={0.25} gapSize={0.15} />
       )}
 
       {/* Committed floor areas — outlines at each area's storey elevation. */}
@@ -981,7 +1036,7 @@ export default function FloorplanOverlay() {
       ))}
 
       {traceMode && traceStyle === 'line' && traceStart && (
-        <mesh position={planeLocalToWorld(traceStart)}>
+        <mesh position={planeLocalToTrace(traceStart)}>
           <sphereGeometry args={[0.09, 16, 16]} />
           <meshBasicMaterial color={activeLineColor} />
         </mesh>
