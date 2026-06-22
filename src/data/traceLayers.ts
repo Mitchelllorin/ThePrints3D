@@ -94,7 +94,9 @@ export function ocToM(size: string): number {
 
 /** Pre-trace picker rows for roofs (element = roof type, size = pitch). */
 export const ROOF_PICKER = {
-  element: ['Gable'],   // hip / valley / shed come later — same pull flow, new profile
+  // Each maps to a builder in framingGeometry (buildRoofByType). Gambrel/mansard
+  // are the next profiles to add. Shed = mono-pitch/lean-to; Flat ignores pitch.
+  element: ['Gable', 'Hip', 'Shed', 'Flat'],
   size: ['3:12', '4:12', '6:12', '8:12', '12:12'],
 }
 export const ROOF_DEFAULTS = { element: 'Gable', size: '6:12' }

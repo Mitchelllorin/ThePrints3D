@@ -11,7 +11,7 @@ import * as THREE from 'three'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildGableRoof, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
+import { buildRoofByType, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { pitchToRatio } from '../../data/traceLayers'
 import type { TracedLine } from '../../types'
 
@@ -34,10 +34,10 @@ function RoofAreaMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, o
   const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
 
   const roof = useMemo(() => {
-    const r = buildGableRoof({ lenX, lenZ, pitch: pitchToRatio(area.size), ocM: RAFTER_OC_M })
+    const r = buildRoofByType(area.elementType, { lenX, lenZ, pitch: pitchToRatio(area.size), ocM: RAFTER_OC_M })
     r.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
     return r
-  }, [lenX, lenZ, area.size, area.level])
+  }, [lenX, lenZ, area.size, area.elementType, area.level])
 
   useEffect(() => () => {
     roof.traverse((o) => {

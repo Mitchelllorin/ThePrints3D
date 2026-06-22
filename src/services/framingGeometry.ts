@@ -655,6 +655,163 @@ export function buildGableRoof(opts: {
   return g
 }
 
+// ── Additional roof types (hip / shed / flat) ────────────────────────────────
+// Shared stock + helpers so every roof type frames consistently with the gable.
+const ROOF_RT = 0.184   // rafter depth (≈ 2×8)
+const ROOF_RW = 0.038   // rafter width
+
+function roofMat(opacity: number) {
+  return new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#c79a5e'), roughness: 0.75, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+}
+function addRoofBox(
+  g: THREE.Group, mat: THREE.Material,
+  w: number, h: number, d: number, x: number, y: number, z: number,
+  rx: number, ry: number, rz: number, info: string,
+) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
+  m.position.set(x, y, z)
+  m.rotation.set(rx, ry, rz)
+  m.castShadow = true; m.receiveShadow = true
+  m.userData.layer = 'roof'
+  m.userData.info = info
+  g.add(m)
+}
+/** Evenly-spaced positions along a run (outer member at each end + OC between). */
+function roofRun(runLen: number, ocM: number, memberW: number): number[] {
+  const halfRun = runLen / 2
+  const ps: number[] = [-halfRun + memberW / 2, halfRun - memberW / 2]
+  for (let p = -halfRun + memberW / 2 + Math.max(0.3, ocM); p < halfRun - memberW / 2; p += Math.max(0.3, ocM)) ps.push(p)
+  return ps
+}
+
+/** Shed / mono-pitch / lean-to — a single slope across the shorter side. */
+export function buildShedRoof(opts: {
+  lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+}): THREE.Group {
+  const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.2 || lenZ < 0.2) return g
+  const mat = roofMat(opacity)
+  const slopeAlongX = lenX <= lenZ
+  const span = slopeAlongX ? lenX : lenZ
+  const runLen = slopeAlongX ? lenZ : lenX
+  const rise = Math.max(0.1, span * pitch)
+  const rafterLen = Math.hypot(span, rise)
+  const angle = Math.atan2(rise, span)
+  const info = `Shed rafter · ${Math.round(pitch * 12)}:12`
+  for (const p of roofRun(runLen, ocM, ROOF_RW)) {
+    if (slopeAlongX) addRoofBox(g, mat, rafterLen, ROOF_RT, ROOF_RW, 0, rise / 2, p, 0, 0, angle, info)
+    else addRoofBox(g, mat, ROOF_RW, ROOF_RT, rafterLen, p, rise / 2, 0, angle, 0, 0, info)
+  }
+  if (slopeAlongX) {
+    addRoofBox(g, mat, ROOF_RW, ROOF_RT, runLen, span / 2, rise, 0, 0, 0, 0, 'High wall beam')
+    addRoofBox(g, mat, ROOF_RW, ROOF_RT, runLen, -span / 2, 0, 0, 0, 0, 0, 'Low wall plate')
+  } else {
+    addRoofBox(g, mat, runLen, ROOF_RT, ROOF_RW, 0, rise, span / 2, 0, 0, 0, 'High wall beam')
+    addRoofBox(g, mat, runLen, ROOF_RT, ROOF_RW, 0, 0, -span / 2, 0, 0, 0, 'Low wall plate')
+  }
+  return g
+}
+
+/** Flat roof — horizontal joists across the shorter span + a membrane deck. */
+export function buildFlatRoof(opts: {
+  lenX: number; lenZ: number; ocM: number; opacity?: number
+}): THREE.Group {
+  const { lenX, lenZ, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.2 || lenZ < 0.2) return g
+  const mat = roofMat(opacity)
+  const JT = 0.235, JW = 0.038   // ≈ 2×10 roof joists
+  const spanAlongX = lenX <= lenZ
+  const span = spanAlongX ? lenX : lenZ
+  const runLen = spanAlongX ? lenZ : lenX
+  for (const p of roofRun(runLen, ocM, JW)) {
+    if (spanAlongX) addRoofBox(g, mat, span, JT, JW, 0, 0, p, 0, 0, 0, 'Roof joist · flat')
+    else addRoofBox(g, mat, JW, JT, span, p, 0, 0, 0, 0, 0, 'Roof joist · flat')
+  }
+  const deckMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#3b3f46'), roughness: 0.92, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(lenX, 0.03, lenZ), deckMat)
+  deck.position.set(0, JT / 2 + 0.015, 0)
+  deck.castShadow = true; deck.receiveShadow = true
+  deck.userData.layer = 'roof'; deck.userData.info = 'Flat roof membrane'
+  g.add(deck)
+  return g
+}
+
+/** Hip — ridge along the longer side, all four sides slope (both ends hipped). */
+export function buildHipRoof(opts: {
+  lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+}): THREE.Group {
+  const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.2 || lenZ < 0.2) return g
+  const mat = roofMat(opacity)
+  // Build canonically with the ridge along X (L = long, W = short), then rotate
+  // 90° if the footprint's long side is actually along Z.
+  const ridgeAlongX = lenX >= lenZ
+  const L = Math.max(lenX, lenZ)
+  const W = Math.min(lenX, lenZ)
+  const half = W / 2
+  const rise = Math.max(0.1, half * pitch)
+  const ridgeLen = Math.max(0, L - W)            // hips eat `half` off each end
+  const angle = Math.atan2(rise, half)
+  const rafterLen = Math.hypot(half, rise)
+  const info = `Hip · ${Math.round(pitch * 12)}:12`
+
+  // Ridge board.
+  addRoofBox(g, mat, Math.max(ROOF_RW, ridgeLen), ROOF_RT, ROOF_RW, 0, rise, 0, 0, 0, 0, 'Ridge board')
+  // Common rafters on both long sides, over the ridge portion only.
+  const halfRidge = ridgeLen / 2
+  const ps: number[] = []
+  for (let p = -halfRidge + ROOF_RW / 2; p <= halfRidge; p += Math.max(0.3, ocM)) ps.push(p)
+  if (ps.length === 0) ps.push(0)
+  for (const p of ps) {
+    addRoofBox(g, mat, ROOF_RW, ROOF_RT, rafterLen, p, rise / 2, -half / 2, -angle, 0, 0, info)
+    addRoofBox(g, mat, ROOF_RW, ROOF_RT, rafterLen, p, rise / 2, half / 2, angle, 0, 0, info)
+  }
+  // Four hip rafters: each eave corner up to the nearest ridge end.
+  const corners: Array<[number, number, number]> = [
+    [-L / 2, -half, -ridgeLen / 2], [-L / 2, half, -ridgeLen / 2],
+    [L / 2, -half, ridgeLen / 2], [L / 2, half, ridgeLen / 2],
+  ]
+  for (const [cx, cz, rx] of corners) {
+    const c = new THREE.Vector3(cx, 0, cz)
+    const r = new THREE.Vector3(rx, rise, 0)
+    const dir = new THREE.Vector3().subVectors(r, c)
+    const len = dir.length()
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, ROOF_RT, ROOF_RW), mat)
+    m.position.copy(c).addScaledVector(dir, 0.5)
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), dir.clone().normalize())
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'roof'; m.userData.info = 'Hip rafter'
+    g.add(m)
+  }
+  if (!ridgeAlongX) g.rotation.y = Math.PI / 2
+  return g
+}
+
+/** Dispatch to the right roof builder by type name (defaults to gable). */
+export function buildRoofByType(
+  type: string,
+  opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number },
+): THREE.Group {
+  switch ((type || '').trim().toLowerCase()) {
+    case 'hip': return buildHipRoof(opts)
+    case 'shed':
+    case 'lean-to':
+    case 'mono':
+    case 'mono-pitch': return buildShedRoof(opts)
+    case 'flat': return buildFlatRoof(opts)
+    default: return buildGableRoof(opts)
+  }
+}
+
 export interface WallDrywallOpts {
   length: number
   height: number
