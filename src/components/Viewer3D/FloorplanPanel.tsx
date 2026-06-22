@@ -1255,7 +1255,20 @@ export default function FloorplanPanel() {
             <button className={styles.secondary} onClick={() => updatePlacedObject(selectedObject.id, { rotationY: selectedObject.rotationY + Math.PI / 2 })}>
               Rotate 90°
             </button>
-            <button className={styles.action} onClick={deleteSelectedObject}>Delete</button>
+            <button className={styles.secondary} onClick={deleteSelectedObject}>Delete</button>
+          </div>
+          {/* Positive confirm — the placement is already live, but there was no
+              commit affordance (you had to ✕ out). Done closes the editor;
+              Build 3D re-finalises the model so the opening is cut into framing. */}
+          <div className={styles.btnRow}>
+            {modelReady && (
+              <button className={styles.action} onClick={() => { buildModel(); setSelectedObjectId(null) }}>
+                Build 3D →
+              </button>
+            )}
+            <button className={modelReady ? styles.secondary : styles.action} onClick={() => setSelectedObjectId(null)}>
+              Done ✓
+            </button>
           </div>
         </div>
       )}

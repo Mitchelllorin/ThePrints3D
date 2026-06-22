@@ -293,6 +293,14 @@
   z-index: 31;
   pointer-events: none; /* see-through to workspace; controls re-enable below */
 }
+/* Re-enable the actual controls — without this the whole card is dead: you can't
+   edit any field or even tap the ✕ (the re-enable rule had gone missing). The
+   empty gaps stay click-through to the workspace. */
+.propCard button,
+.propCard input,
+.propCard select,
+.propCard textarea,
+.propCard a { pointer-events: auto; }
 
 .propHeader {
   display: flex;
@@ -416,6 +424,8 @@
   backdrop-filter: blur(8px);
   pointer-events: none; /* see-through to workspace; buttons re-enable below */
 }
+.offPrintToast button,
+.offPrintToast a { pointer-events: auto; }
 
 /* Phones (narrow) + landscape phones (short): cap the contextual popovers so
    they scroll instead of overflowing. The drawers handle their own sizing. */
