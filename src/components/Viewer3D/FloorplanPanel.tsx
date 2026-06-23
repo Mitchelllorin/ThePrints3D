@@ -982,7 +982,7 @@ export default function FloorplanPanel() {
                 className={styles.secondary}
                 style={{ alignSelf: 'flex-start' }}
                 onClick={() => carryWallsUp(drawing.id, activeLevel - 1)}
-                title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}`}
+                title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}, plumb`}
               >
                 ⤴ Carry {belowLevelLabel} walls up ({wallsBelowCount})
               </button>
