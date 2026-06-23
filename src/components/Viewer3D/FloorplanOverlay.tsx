@@ -37,6 +37,7 @@ import {
   snapTraceWallToExisting,
   snapWallToPrintLine,
 } from '../../services/wallTraceReducer'
+import { ensureInkBuffer, getInkBuffer, snapSegmentToInk } from '../../services/inkRaster'
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, deviceMountHeightM } from '../../data/objectCatalog'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -213,6 +214,14 @@ export default function FloorplanOverlay() {
   useEffect(() => {
     updateOverlay({ traceModeActive: traceMode }, false)
   }, [traceMode, updateOverlay])
+
+  // Make sure the trace-time ink buffer exists for this drawing. It's populated
+  // during processing, but a reloaded project starts with an empty cache — this
+  // rebuilds it from the raster URL so snap-to-ink works without re-analysing.
+  useEffect(() => {
+    if (!drawing || drawing.status !== 'ready') return
+    void ensureInkBuffer(drawing.id, drawing.rasterUrl)
+  }, [drawing?.id, drawing?.status, drawing?.rasterUrl])
 
   // Lock the camera whenever a gesture must own the pointer: tracing,
   // calibrating, placing an object, or dragging an overlay handle. The grid
@@ -571,6 +580,17 @@ export default function FloorplanOverlay() {
         setTraceStart(null)
         return
       }
+      // No detected wall to lock onto? Snap the segment onto the actual ink under
+      // the stroke, so faint/dashed/undetected printed lines still trace cleanly.
+      let inkSnapped = false
+      if (!printLine) {
+        const buf = getInkBuffer(drawing.id)
+        const ink = buf && snapSegmentToInk(reduced.x1, reduced.y1, reduced.x2, reduced.y2, buf)
+        if (ink) {
+          reduced.x1 = ink.x1; reduced.y1 = ink.y1; reduced.x2 = ink.x2; reduced.y2 = ink.y2
+          inkSnapped = true
+        }
+      }
       const snappedWall = snapTraceWallToExisting(reduced, refWalls)
       const base = extendWallToNearbyWall(snappedWall, refWalls)
       // Stamp the picked framing/role/material onto the wall so the build frames
@@ -592,7 +612,7 @@ export default function FloorplanOverlay() {
       const rh = drawing.rasterHeight ?? 900
       const mx = (wall.x1 + wall.x2) / 2, my = (wall.y1 + wall.y2) / 2
       const m = 24
-      if (!printLine && (mx < -m || my < -m || mx > rw + m || my > rh + m)) {
+      if (!printLine && !inkSnapped && (mx < -m || my < -m || mx > rw + m || my > rh + m)) {
         setOffPrintWarn(true)
       }
       setTraceStart([wall.x2, wall.y2])
@@ -625,6 +645,15 @@ export default function FloorplanOverlay() {
   const tieInChainEnds = (walls: ParsedWall[], existing: ParsedWall[]): ParsedWall[] => {
     if (walls.length === 0) return walls
     const out = walls.map((w) => ({ ...w }))
+    // Snap each freehand segment onto the printed ink under it (faint/dashed/
+    // undetected lines included) before tying corners together.
+    const inkBuf = drawing ? getInkBuffer(drawing.id) : null
+    if (inkBuf) {
+      for (const w of out) {
+        const ink = snapSegmentToInk(w.x1, w.y1, w.x2, w.y2, inkBuf)
+        if (ink) { w.x1 = ink.x1; w.y1 = ink.y1; w.x2 = ink.x2; w.y2 = ink.y2 }
+      }
+    }
     const first = out[0]
     const last = out[out.length - 1]
     // Snap the two FREE ends of the chain onto nearby existing endpoints/lines.

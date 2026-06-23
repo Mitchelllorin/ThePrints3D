@@ -12,6 +12,7 @@ import { inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
 import { filterWallsForNoisyPrint } from './noisyPrintFilter'
 import { inferCorners } from './wallTraceReducer'
+import { setInkBuffer } from './inkRaster'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -39,6 +40,9 @@ export async function processDrawing(
 
     // 1. Rasterize
     const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8))
+    // Cache a grayscale "ink" buffer so tracing can snap to the actual printed
+    // line under the stroke — even on lines detection discarded as noise.
+    setInkBuffer(drawing.id, raster.imageData)
 
     // 2. Discipline gate — skip wall detection on M/E/P/C/L/F/T sheets where
     //    "thick parallels" are ducts/pipes/conduit, not walls.
