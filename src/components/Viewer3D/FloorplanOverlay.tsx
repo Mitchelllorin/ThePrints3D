@@ -446,7 +446,11 @@ export default function FloorplanOverlay() {
 
   // ─── trace / calibration pointer handlers ──────────────────────────────
 
+  // Tap-vs-drag threshold. A touch finger wanders FAR more than a mouse on a
+  // "tap", so a tight 9px slop made taps read as drags and points never dropped
+  // — the core "touches don't work" bug. Give touch a much larger slop.
   const TAP_MOVE_PX = 9
+  const TAP_MOVE_TOUCH_PX = 22
   const pointerDownScreen = useRef<{ x: number; y: number } | null>(null)
 
   // Press: remember where the finger landed so pointer-up can tell a tap (place
@@ -678,7 +682,8 @@ export default function FloorplanOverlay() {
     pointerDownScreen.current = null
     if (down) {
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
-      if (moved > TAP_MOVE_PX) return
+      const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
+      if (moved > limit) return
     }
     event.stopPropagation()
     commitTraceOrCalibrationPoint(event)
@@ -1153,6 +1158,22 @@ export default function FloorplanOverlay() {
 
       {calibrationPreviewPoints && (
         <TraceArrow start={calibrationPreviewPoints[0]} end={calibrationPreviewPoints[1]} color="#f59e0b" />
+      )}
+
+      {/* Calibration point markers — you need to SEE where A and B landed, not
+          just the measuring arrow between them. Amber dots at each tapped point
+          (coplanar with the lifted print via planeLocalToTrace). */}
+      {overlay.calibrationMode && calibrationA && (
+        <mesh position={planeLocalToTrace(calibrationA)}>
+          <sphereGeometry args={[0.13, 18, 18]} />
+          <meshBasicMaterial color="#f59e0b" />
+        </mesh>
+      )}
+      {overlay.calibrationMode && calibrationB && (
+        <mesh position={planeLocalToTrace(calibrationB)}>
+          <sphereGeometry args={[0.13, 18, 18]} />
+          <meshBasicMaterial color="#f59e0b" />
+        </mesh>
       )}
     </>
   )
