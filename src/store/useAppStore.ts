@@ -215,6 +215,7 @@ const DEFAULT_FLOORPLAN_OVERLAY: FloorplanOverlayState = {
   scale: [12, 8],
   rotationDeg: 0,
   opacity: 0.65,
+  printAtGround: false,
 }
 
 const HISTORY_LIMIT = 80
@@ -331,7 +332,10 @@ interface AppState {
 
   // Actions
   setView: (view: AppView) => void
-  addDrawings: (files: File[]) => void
+  addDrawings: (files: File[]) => string[]
+  /** Tag a drawing as belonging to a storey (0 = ground), so the overlay can
+   *  show the right plan per floor and the AI knows which floors have a plan. */
+  assignDrawingToLevel: (id: string, floorNumber: number) => void
   removeDrawing: (id: string) => void
   updateDrawing: (id: string, patch: Partial<Drawing>) => void
   setDrawingType: (id: string, type: DrawingType) => void
@@ -733,7 +737,14 @@ export const useAppStore = create<AppState>()(
       for (const id of newIds) {
         get().processDrawing(id)
       }
+      return newIds
     },
+
+    assignDrawingToLevel: (id, floorNumber) =>
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (d) d.floorNumber = floorNumber
+      }),
 
     removeDrawing: (id) => {
       pushHistory()

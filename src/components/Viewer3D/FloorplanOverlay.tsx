@@ -902,7 +902,14 @@ export default function FloorplanOverlay() {
           position={[overlay.position[0], 0.01 + traceElevation, overlay.position[1]]}
           rotation={[0, rotationRad, 0]}
         >
-          <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ layer: 'floors', noPick: true }}>
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            /* Optionally keep the IMAGE at ground while the group (and the
+               tap-catcher) stay lifted to the active storey — so an upper floor
+               isn't muddled with the ground plan floating up at it. */
+            position={[0, overlay.printAtGround ? -traceElevation : 0, 0]}
+            userData={{ layer: 'floors', noPick: true }}
+          >
             <planeGeometry args={[width, depth]} />
             <meshBasicMaterial
               map={texture}

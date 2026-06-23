@@ -74,6 +74,7 @@ export default function FloorplanPanel() {
   const clearTracingForDrawing = useAppStore((s) => s.clearTracingForDrawing)
   const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
   const carryWallsUp    = useAppStore((s) => s.carryWallsUp)
+  const assignDrawingToLevel = useAppStore((s) => s.assignDrawingToLevel)
   const undoAction      = useAppStore((s) => s.undo)
   const canUndo         = useAppStore((s) => s.historyPast.length > 0)
   const userTraces      = useAppStore((s) => s.userTraces)
@@ -157,6 +158,9 @@ export default function FloorplanPanel() {
   const lengthFormat   = useConfigStore((s) => s.lengthFormat)
   // Nudge step for moving a selected wall, expressed in the active unit.
   const [nudgeStep, setNudgeStep] = useState(1)
+  // Storeys where the user has already answered the "different plan?" prompt, so
+  // it asks once per floor instead of nagging every time you switch up.
+  const [planPromptHandled, setPlanPromptHandled] = useState<number[]>([])
 
   // Picking a framing type ONLY arms the next trace — it no longer flips the
   // global build config. The material/size/gauge are stamped per-wall (via
@@ -338,11 +342,36 @@ export default function FloorplanPanel() {
     setSeedProcessing(false)
   }
 
+  // When non-null, the next file picked is imported AS the plan for this storey
+  // (set by the per-floor "Import this floor's plan" prompt). Otherwise a normal
+  // upload that just joins the drawing list.
+  const importLevelRef = useRef<number | null>(null)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    if (files.length) addDrawings(files)
+    if (files.length) {
+      const ids = addDrawings(files)
+      const lvl = importLevelRef.current
+      if (lvl != null && ids[0]) {
+        assignDrawingToLevel(ids[0], lvl)
+        setOverlayDrawing(ids[0])
+      }
+    }
+    importLevelRef.current = null
     e.target.value = ''
   }
+  const importPlanForLevel = (level: number) => {
+    importLevelRef.current = level
+    fileInputRef.current?.click()
+  }
+
+  // When you move to a storey that has its OWN imported plan, show it; floors
+  // without their own plan keep whatever's up (the base plan). Only switches to
+  // an explicit per-level plan, so it never fights the manual drawing picker.
+  useEffect(() => {
+    const own = drawings.find((d) => d.floorNumber === activeLevel && d.status !== 'error')
+    if (own && overlay.drawingId !== own.id) setOverlayDrawing(own.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLevel])
 
   // Calibration fires FIRST: the moment a ready drawing is shown and the user
   // hasn't yet calibrated or skipped it, drop straight into calibration mode —
@@ -477,6 +506,12 @@ export default function FloorplanPanel() {
   const wallsBelowCount = drawing.parsedWalls.filter(
     (w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1,
   ).length
+  // Does this storey have its own imported plan? If not (and it's an upper
+  // floor), the AI asks how to handle it — upper floors often differ from below.
+  const levelHasOwnPrint = drawings.some((d) => d.floorNumber === activeLevel)
+  const showLevelPlanPrompt = activeLevel > 0 && !levelHasOwnPrint
+    && !planPromptHandled.includes(activeLevel)
+    && !overlay.calibrationMode && drawing.status === 'ready'
   const floorsActive = activeTraceLayer === 'floors'
   const roofActive = activeTraceLayer === 'roof'
   // Floors & roofs are "area" layers: pull a rectangle instead of tracing a line.
@@ -593,6 +628,73 @@ export default function FloorplanPanel() {
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
+          </div>
+        )}
+
+        {/* ── AI: present at the moment you move up a floor. Upper storeys
+              usually have their own plan, so don't silently reuse the one below
+              floating up — ask. Import a plan, carry the floor below up plumb,
+              or just trace this floor fresh on the lifted plane. ── */}
+        {showLevelPlanPrompt && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>You're on {activeLevelLabel}</span>
+            <span className={styles.stepText}>Different plan for this floor?</span>
+            <span className={styles.stepHint}>
+              Upper floors are often laid out differently from {belowLevelLabel}. How do you
+              want to build {activeLevelLabel}?
+            </span>
+            <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+              <button className={styles.action} onClick={() => importPlanForLevel(activeLevel)}>
+                Import this floor's plan →
+              </button>
+              {wallsBelowCount > 0 && (
+                <button
+                  className={styles.secondary}
+                  onClick={() => {
+                    carryWallsUp(drawing.id, activeLevel - 1)
+                    updateOverlay({ printAtGround: true }, false)
+                    setPlanPromptHandled((prev) => [...prev, activeLevel])
+                  }}
+                  title={`Stack the ${belowLevelLabel} walls straight up, plumb`}
+                >
+                  ⤴ Reuse {belowLevelLabel} (plumb)
+                </button>
+              )}
+              <button
+                className={styles.secondary}
+                onClick={() => {
+                  updateOverlay({ printAtGround: true }, false)
+                  setPlanPromptHandled((prev) => [...prev, activeLevel])
+                }}
+              >
+                Trace fresh here
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Compact plan controls: dismiss the print, or pin it at ground while
+            you work an upper floor. Hidden during calibration (it owns the plan). */}
+        {drawing.status === 'ready' && !overlay.calibrationMode && (
+          <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+            <button
+              className={overlay.visible ? styles.secondary : styles.action}
+              style={{ fontSize: 11, padding: '2px 8px' }}
+              onClick={() => updateOverlay({ visible: !overlay.visible }, false)}
+              title="Show or hide the floor-plan image"
+            >
+              {overlay.visible ? '🙈 Hide plan' : '👁 Show plan'}
+            </button>
+            {activeLevel > 0 && (
+              <button
+                className={overlay.printAtGround ? styles.action : styles.secondary}
+                style={{ fontSize: 11, padding: '2px 8px' }}
+                onClick={() => updateOverlay({ printAtGround: !overlay.printAtGround }, false)}
+                title="Keep the plan image at ground level while you trace an upper floor"
+              >
+                {overlay.printAtGround ? '⬇ Plan at ground' : '⬆ Plan follows floor'}
+              </button>
+            )}
           </div>
         )}
 

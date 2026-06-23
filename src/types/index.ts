@@ -426,4 +426,8 @@ export interface FloorplanOverlayState {
   scale: [number, number]
   rotationDeg: number
   opacity: number
+  /** Keep the print IMAGE pinned at ground even when tracing an upper storey,
+   *  so an unrelated upper floor isn't confused with the ground-floor plan
+   *  floating up at it. Tracing still happens on the lifted plane. */
+  printAtGround: boolean
 }
