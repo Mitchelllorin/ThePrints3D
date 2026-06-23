@@ -17,7 +17,12 @@ import type { TracedLine } from '../../types'
 const UP = new THREE.Vector3(0, 1, 0)
 const FLOOR_Y = 0.06
 const BAND_Y: Record<string, number> = {
-  'under-floor': -0.25,  // in the joist space below the floor
+  // Was -0.25 (in the joist space BELOW the floor) — which meant plumbing was
+  // hidden under the deck/print and read as "not rendering". Lift it just above
+  // the print plane so the run is visible while you work (electrical/HVAC are
+  // already up at in-wall/ceiling). Realistic depth can return via the explode
+  // peel later; for now visibility wins ("so long as it renders and can be seen").
+  'under-floor': 0.12,
   'in-wall': 1.2,        // mid-wall
   'ceiling': 2.5,        // near the top plate
 }
@@ -184,9 +189,9 @@ export default function TradeLayersRenderer() {
     <group name="trade-layers" ref={groupRef}>
       {showPlumb && plumbingLines.map((l) => (
         <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'under-floor'))} b={toWorld(l.x2, l.y2, bandY(l, 'under-floor'))}
-          color={plumbingColor(l)} radius={0.013} stickM={stickM} coupling />
+          color={plumbingColor(l)} radius={0.02} stickM={stickM} coupling />
       ))}
-      {showPlumb && plumbRisers.map((r, i) => <RiserMesh key={`pr-${i}`} r={r} radius={0.013} />)}
+      {showPlumb && plumbRisers.map((r, i) => <RiserMesh key={`pr-${i}`} r={r} radius={0.02} />)}
       {/* Electrical wires are exaggerated (thicker + a soft glow) so the runs
           stay readable while routing — you can orbit to find the best path. */}
       {showElec && electricalLines.map((l) => (

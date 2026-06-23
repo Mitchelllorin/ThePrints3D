@@ -532,7 +532,8 @@ export default function FloorplanPanel() {
             {framingActive ? `${activeLevel > 0 ? `${activeLevelLabel} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
           </button>
           <button className={styles.traceBarBtn} onClick={() => setTracePaused(true)} title="Free the camera to orbit, then resume">⏸ Pause</button>
-          {((framingActive && userWallCount > 0) || (floorsActive && hasFloor)) && (
+          {((framingActive && userWallCount > 0) || (floorsActive && hasFloor)
+            || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
             <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
           )}
           <button className={styles.traceBarBtn} onClick={cancelTracing} title="Finish tracing">✓ Done</button>
@@ -663,6 +664,10 @@ export default function FloorplanPanel() {
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}
                 {/* Make this step real — e.g. the poured slab becomes the built floor. */}
                 {floorsActive && hasFloor && (
+                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+                )}
+                {/* Trades render live, but give the same positive "it's in" commit. */}
+                {(activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
                   <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
                 )}
                 <button className={styles.cancel} onClick={cancelTracing}>Done</button>
