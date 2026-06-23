@@ -178,6 +178,50 @@ export default function ObjectModel({ type, w, h, d, color }: ModelProps) {
         </>
       )
     }
+    case 'stairs': {
+      // A straight flight climbing the full height h over the run d. Step count
+      // targets a ~0.18 m riser (code-typical) so it reads as real stairs; each
+      // tread is a solid box up from the floor for a clean stepped silhouette.
+      const steps = THREE.MathUtils.clamp(Math.round(h / 0.18), 10, 20)
+      const riser = h / steps
+      const tread = d / steps
+      const sideR = Math.min(w, 0.08)
+      return (
+        <>
+          {Array.from({ length: steps }, (_, i) => {
+            const stepTop = (i + 1) * riser
+            return (
+              <Box
+                key={i}
+                args={[w, stepTop, tread]}
+                pos={[0, floor + stepTop / 2, -d / 2 + i * tread + tread / 2]}
+                color={i % 2 === 0 ? body : light}
+              />
+            )
+          })}
+          {/* stringers down each side for a built look */}
+          <Box args={[sideR, h, d]} pos={[-w / 2 + sideR / 2, floor + h / 2, 0]} color={dark} />
+          <Box args={[sideR, h, d]} pos={[w / 2 - sideR / 2, floor + h / 2, 0]} color={dark} />
+        </>
+      )
+    }
+    case 'elevator': {
+      // Shaft shell (back + sides) with a contrasting cab and a door seam — a
+      // recognisable lift stand-in that spans the storey.
+      const t = Math.min(w, d) * 0.06
+      return (
+        <>
+          {/* back + side walls */}
+          <Box args={[w, h, t]} pos={[0, floor + h / 2, -d / 2 + t / 2]} color={dark} />
+          <Box args={[t, h, d]} pos={[-w / 2 + t / 2, floor + h / 2, 0]} color={dark} />
+          <Box args={[t, h, d]} pos={[w / 2 - t / 2, floor + h / 2, 0]} color={dark} />
+          {/* cab */}
+          <Box args={[w - 3 * t, h - 2 * t, d - 3 * t]} pos={[0, floor + h / 2, t]} color={light} rough={0.4} metal={0.3} />
+          {/* door seam up the front */}
+          <Box args={[t * 0.6, h * 0.9, t * 0.6]} pos={[0, floor + h / 2, d / 2 - t * 0.3]} color={shade(color, -0.3)} />
+        </>
+      )
+    }
     default:
       return null
   }

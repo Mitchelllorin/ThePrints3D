@@ -34,6 +34,9 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
   { type: 'kitchen-counter',label: 'Kitchen Counter', short: 'Counter',  icon: '🍳', defaultW: 2.4,  defaultD: 0.6,  defaultH: 0.9,  color: '#78716c' },
   { type: 'toilet',         label: 'Toilet',          short: 'Toilet',   icon: '🚽', defaultW: 0.4,  defaultD: 0.7,  defaultH: 0.8,  color: '#e2e8f0' },
   { type: 'bathtub',        label: 'Bathtub',         short: 'Bath',     icon: '🛁', defaultW: 1.7,  defaultD: 0.75, defaultH: 0.6,  color: '#38bdf8' },
+  // ── Vertical circulation — H defaults to one storey rise; scale to fit. ──
+  { type: 'stairs',         label: 'Stairs',          short: 'Stairs',   icon: '🪜', defaultW: 1.0,  defaultD: 3.6,  defaultH: 2.9,  color: '#a16207' },
+  { type: 'elevator',       label: 'Elevator',        short: 'Lift',     icon: '🛗', defaultW: 1.7,  defaultD: 1.7,  defaultH: 2.9,  color: '#94a3b8' },
   // ── Electrical rough-in boxes (installed first, then wired) ──
   { type: 'device-box',     label: 'Device Box (1-gang)', short: 'Dev Box',  icon: '⬛', defaultW: 0.07, defaultD: 0.06, defaultH: 0.11, color: '#64748b' },
   { type: 'junction-box',   label: 'Junction Box',        short: 'J-Box',    icon: '⬛', defaultW: 0.10, defaultD: 0.06, defaultH: 0.10, color: '#64748b' },
@@ -104,7 +107,11 @@ export function electricalTrayItems(): ObjectCatalogItem[] {
 export const TRAY_ORDER: string[] = [
   'door', 'window', 'sofa', 'chair', 'bed-double', 'desk',
   'dining-table', 'kitchen-counter', 'toilet', 'bathtub',
+  'stairs', 'elevator',
 ]
+
+/** Vertical-circulation types (span a storey; sit on the floor and rise up). */
+export const VERTICAL_CIRCULATION = new Set(['stairs', 'elevator'])
 
 /** Sub-type options offered in the property card, by object type. */
 export const SUBTYPES: Record<string, string[]> = {
