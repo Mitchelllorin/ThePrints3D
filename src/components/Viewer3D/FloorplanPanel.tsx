@@ -73,6 +73,7 @@ export default function FloorplanPanel() {
   const setDrawingScale = useAppStore((s) => s.setDrawingScale)
   const clearTracingForDrawing = useAppStore((s) => s.clearTracingForDrawing)
   const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
+  const carryWallsUp    = useAppStore((s) => s.carryWallsUp)
   const undoAction      = useAppStore((s) => s.undo)
   const canUndo         = useAppStore((s) => s.historyPast.length > 0)
   const userTraces      = useAppStore((s) => s.userTraces)
@@ -132,6 +133,7 @@ export default function FloorplanPanel() {
   const removeElectricalLine = useAppStore((s) => s.removeElectricalLine)
   const removeHvacLine = useAppStore((s) => s.removeHvacLine)
   const floorsAreas = useAppStore((s) => s.floorsAreas)
+  const roofAreas = useAppStore((s) => s.roofAreas)
   const hvacElement = useFloorplanLocalStore((s) => s.hvacElement)
   const hvacSize = useFloorplanLocalStore((s) => s.hvacSize)
   const hvacMaterial = useFloorplanLocalStore((s) => s.hvacMaterial)
@@ -469,12 +471,19 @@ export default function FloorplanPanel() {
   // Which storey the next trace lands on — shown wherever you trace so walls
   // never silently build on a level you forgot you were on.
   const activeLevelLabel = LEVEL_OPTIONS.find((l) => l.value === activeLevel)?.label ?? 'Ground'
+  // The storey directly below + how many user walls stand on it — drives the
+  // "carry walls up" action so an upper floor can stack plumb on the one below.
+  const belowLevelLabel = LEVEL_OPTIONS.find((l) => l.value === activeLevel - 1)?.label ?? 'below'
+  const wallsBelowCount = drawing.parsedWalls.filter(
+    (w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1,
+  ).length
   const floorsActive = activeTraceLayer === 'floors'
   const roofActive = activeTraceLayer === 'roof'
   // Floors & roofs are "area" layers: pull a rectangle instead of tracing a line.
   const areaActive = floorsActive || roofActive
   // Construction order in the guided flow: floor goes in before the walls.
   const hasFloor = floorsAreas.length > 0
+  const hasRoof = roofAreas.length > 0
   // Floors/roofs reuse the same trace flow as the trades (start/pause/picker/done),
   // just committing rectangles instead of lines.
   const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac' || areaActive
@@ -532,7 +541,7 @@ export default function FloorplanPanel() {
             {framingActive ? `${activeLevel > 0 ? `${activeLevelLabel} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
           </button>
           <button className={styles.traceBarBtn} onClick={() => setTracePaused(true)} title="Free the camera to orbit, then resume">⏸ Pause</button>
-          {((framingActive && userWallCount > 0) || (floorsActive && hasFloor)
+          {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
             || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
             <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
           )}
@@ -664,6 +673,9 @@ export default function FloorplanPanel() {
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}
                 {/* Make this step real — e.g. the poured slab becomes the built floor. */}
                 {floorsActive && hasFloor && (
+                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+                )}
+                {roofActive && hasRoof && (
                   <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
                 )}
                 {/* Trades render live, but give the same positive "it's in" commit. */}
@@ -862,6 +874,18 @@ export default function FloorplanPanel() {
                 <button key={lv.value} className={activeLevel === lv.value ? styles.action : styles.secondary} onClick={() => setActiveLevel(lv.value)}>{lv.label}</button>
               ))}
             </div>
+            {/* Carry the build up: clone the storey below onto this level so it
+                stands plumb on top — real construction, not stacked boxes. */}
+            {activeLevel > 0 && wallsBelowCount > 0 && (
+              <button
+                className={styles.secondary}
+                style={{ alignSelf: 'flex-start' }}
+                onClick={() => carryWallsUp(drawing.id, activeLevel - 1)}
+                title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}, plumb`}
+              >
+                ⤴ Carry {belowLevelLabel} walls up ({wallsBelowCount})
+              </button>
+            )}
             {pendingWalls ? (
               <>
                 <span className={styles.stepText}>

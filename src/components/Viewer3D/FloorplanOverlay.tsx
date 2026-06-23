@@ -556,6 +556,12 @@ export default function FloorplanOverlay() {
       const refWalls = drawing.parsedWalls.filter(
         (w) => (w.source ?? 'auto') !== 'user' || (w.level ?? 0) === activeLevel,
       )
+      // Walls on the storey directly below — used ONLY to align this floor plumb
+      // over the one beneath (perpendicular line-snap), never corner-merged
+      // across levels. So a wall traced a hair off lands plumb above its mate.
+      const belowWalls = activeLevel > 0
+        ? drawing.parsedWalls.filter((w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1)
+        : []
       // Rubber-band: tap A anchors, tap B commits, B becomes the next A so
       // consecutive segments share an exact corner point.
       const snapped = snapPointToWalls(pixel[0], pixel[1], refWalls)
@@ -568,7 +574,7 @@ export default function FloorplanOverlay() {
       // (so a trace a hair off the printed wall lands exactly on it, at the
       // print's real angle). Generous tolerances so you don't have to be exact;
       // only fall back to ortho squaring when nothing parallel is reasonably near.
-      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, refWalls, 28, 42)
+      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, [...refWalls, ...belowWalls], 28, 42)
       const reduced = printLine
         ? { x1: printLine.x1, y1: printLine.y1, x2: printLine.x2, y2: printLine.y2, thickness: 8, source: 'user' as const, detectionConfidence: 1 }
         : reduceStrokeToWall([

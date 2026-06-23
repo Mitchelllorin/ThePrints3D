@@ -345,6 +345,9 @@ interface AppState {
   /** Live-move a user wall's endpoints WITHOUT pushing history (drag use). */
   moveUserWall: (id: string, userIndex: number, coords: Partial<Pick<ParsedWall, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
   clearUserTracedWalls: (id: string) => void
+  /** Clone every user wall on `fromLevel` up to the next storey (plumb), so the
+   *  build carries floor-over-floor instead of stacking unrelated footprints. */
+  carryWallsUp: (id: string, fromLevel: number) => void
   clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
   processDrawing: (id: string) => Promise<void>
@@ -864,6 +867,31 @@ export const useAppStore = create<AppState>()(
         const d = s.drawings.find((dr) => dr.id === id)
         if (!d) return
         d.parsedWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+      })
+    },
+
+    // Carry the build up: clone every user wall on `fromLevel` onto the storey
+    // above at the SAME footprint, so upper floors stand plumb on the one below
+    // — real construction, not boxes stacked freehand. Skips any wall whose
+    // footprint already exists on the target level so it's safe to re-tap.
+    carryWallsUp: (id, fromLevel) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+        const toLevel = fromLevel + 1
+        const sameFootprint = (a: ParsedWall, b: ParsedWall) =>
+          Math.abs(a.x1 - b.x1) < 2 && Math.abs(a.y1 - b.y1) < 2 &&
+          Math.abs(a.x2 - b.x2) < 2 && Math.abs(a.y2 - b.y2) < 2
+        const clones = userWalls
+          .filter((w) => (w.level ?? 0) === fromLevel)
+          .filter((w) => !userWalls.some((u) => (u.level ?? 0) === toLevel && sameFootprint(u, w)))
+          .map((w) => ({ ...w, level: toLevel }))
+        if (clones.length === 0) return
+        // Clones inherit corners from already-clean source walls — append as-is.
+        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, [...userWalls, ...clones])
       })
     },
 
