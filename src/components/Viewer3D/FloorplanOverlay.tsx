@@ -231,9 +231,16 @@ export default function FloorplanOverlay() {
     updateOverlay({
       // Paused tracing unlocks the camera so you can orbit to find the best
       // route, then resume — the run/anchor is preserved meanwhile.
-      orbitLocked: drag !== null || (traceMode && !tracePaused) || overlay.calibrationMode || placeObjectType !== null,
+      // Line tracing leaves the camera FREE: a tap drops a corner, a drag
+      // orbits/pans — so you never pause/move/resume just to reposition. Lock
+      // only when a gesture must own the pointer: dragging a handle, drawing a
+      // freehand stroke (the drag IS the line), calibrating, or placing.
+      orbitLocked: drag !== null
+        || (traceMode && traceStyle === 'freehand')
+        || overlay.calibrationMode
+        || placeObjectType !== null,
     }, false)
-  }, [drag, traceMode, tracePaused, overlay.calibrationMode, placeObjectType, updateOverlay])
+  }, [drag, traceMode, traceStyle, overlay.calibrationMode, placeObjectType, updateOverlay])
 
   // Safety net: a drag that releases OFF its handle/catcher (fast flick, pointer
   // leaves the window) could leave `drag` set forever — which keeps the camera
@@ -461,6 +468,9 @@ export default function FloorplanOverlay() {
   const TAP_MOVE_PX = 9
   const TAP_MOVE_TOUCH_PX = 22
   const pointerDownScreen = useRef<{ x: number; y: number } | null>(null)
+  // Last committed tap (screen space + time) — a quick second tap nearby is a
+  // double-tap that ENDS the run, so the rubber-band cursor stops trailing you.
+  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null)
 
   // Press: remember where the finger landed so pointer-up can tell a tap (place
   // a point) from a drag (the user moved the camera — OrbitControls handled it).
@@ -721,6 +731,22 @@ export default function FloorplanOverlay() {
       if (moved > limit) return
     }
     event.stopPropagation()
+    // Double-tap while a run is active ENDS it — a single deliberate gesture to
+    // drop the sticky rubber-band cursor, instead of having to find an End/Done
+    // button. A single tap still extends the chain.
+    if (traceMode && traceStart) {
+      const now = performance.now()
+      const sx = event.nativeEvent.clientX
+      const sy = event.nativeEvent.clientY
+      const lt = lastTapRef.current
+      if (lt && now - lt.t < 350 && Math.hypot(sx - lt.x, sy - lt.y) < 28) {
+        lastTapRef.current = null
+        setTraceStart(null)
+        setHoverPixel(null)
+        return
+      }
+      lastTapRef.current = { t: now, x: sx, y: sy }
+    }
     commitTraceOrCalibrationPoint(event)
   }
 

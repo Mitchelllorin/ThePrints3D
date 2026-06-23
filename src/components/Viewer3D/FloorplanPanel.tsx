@@ -566,16 +566,16 @@ export default function FloorplanPanel() {
       )}
 
       {/* Slim floating trace controls — shown ONLY while actively tracing, when
-          the Build drawer is retracted, so the workspace stays clear. The chip
-          reopens the picker (type / level), Pause frees the camera, Build builds,
-          Done finishes the run. */}
+          the Build drawer is retracted, so the workspace stays clear. The camera
+          stays free (tap a corner, drag to orbit), so there's no pause: the chip
+          reopens the picker (type / level), Build builds, Done finishes the run.
+          Double-tap the workspace to end the current run. */}
       {tracingActive && showSteps && (
         <div className={styles.traceBar}>
           <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
             {framingActive ? `${activeLevel > 0 ? `${activeLevelLabel} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
           </button>
-          <button className={styles.traceBarBtn} onClick={() => setTracePaused(true)} title="Free the camera to orbit, then resume">⏸ Pause</button>
           {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
             || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
             <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
@@ -770,7 +770,6 @@ export default function FloorplanPanel() {
                 </>
               )}
               <div className={styles.btnRow}>
-                <button className={styles.secondary} onClick={() => setTracePaused(true)} title="Free the camera to orbit, then resume">Pause / move view</button>
                 {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}
                 {/* Make this step real — e.g. the poured slab becomes the built floor. */}
@@ -1042,9 +1041,6 @@ export default function FloorplanPanel() {
                       Build 3D →
                     </button>
                   )}
-                  <button className={tracePaused ? styles.action : styles.secondary} onClick={() => setTracePaused(!tracePaused)} title="Free the camera to orbit, then resume — your trace is kept">
-                    {tracePaused ? 'Resume' : 'Pause / move view'}
-                  </button>
                   {traceStyle === 'line' && traceStart && (
                     <button className={styles.secondary} onClick={() => setTraceStart(null)}>
                       End run
