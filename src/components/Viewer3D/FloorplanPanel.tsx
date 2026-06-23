@@ -638,10 +638,10 @@ export default function FloorplanPanel() {
         {showLevelPlanPrompt && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>You're on {activeLevelLabel}</span>
-            <span className={styles.stepText}>Different plan for this floor?</span>
+            <span className={styles.stepText}>Is this floor different?</span>
             <span className={styles.stepHint}>
-              Upper floors are often laid out differently from {belowLevelLabel}. How do you
-              want to build {activeLevelLabel}?
+              Bring in a plan for it, build it the same as {belowLevelLabel}, or just
+              draw it yourself.
             </span>
             <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
               <button className={styles.action} onClick={() => importPlanForLevel(activeLevel)}>
@@ -655,9 +655,9 @@ export default function FloorplanPanel() {
                     updateOverlay({ printAtGround: true }, false)
                     setPlanPromptHandled((prev) => [...prev, activeLevel])
                   }}
-                  title={`Stack the ${belowLevelLabel} walls straight up, plumb`}
+                  title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}`}
                 >
-                  ⤴ Reuse {belowLevelLabel} (plumb)
+                  ⤴ Same as {belowLevelLabel}
                 </button>
               )}
               <button
@@ -667,7 +667,7 @@ export default function FloorplanPanel() {
                   setPlanPromptHandled((prev) => [...prev, activeLevel])
                 }}
               >
-                Trace fresh here
+                Draw it myself
               </button>
             </div>
           </div>
@@ -982,7 +982,7 @@ export default function FloorplanPanel() {
                 className={styles.secondary}
                 style={{ alignSelf: 'flex-start' }}
                 onClick={() => carryWallsUp(drawing.id, activeLevel - 1)}
-                title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}, plumb`}
+                title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}`}
               >
                 ⤴ Carry {belowLevelLabel} walls up ({wallsBelowCount})
               </button>
