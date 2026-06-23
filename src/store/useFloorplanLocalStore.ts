@@ -23,6 +23,21 @@ type TraceStyle = 'line' | 'freehand'
 
 type DragKind = 'move' | 'corner' | 'edge' | 'rotate' | 'wall' | 'wall-end'
 
+/**
+ * An upper-floor wall that landed close to — but not lined up with — a wall on
+ * the storey below. Surfaced as a gentle "line it up?" prompt so the app flags
+ * the deviation (floors normally stack) without forcing it: the user decides.
+ */
+export interface PlumbNudge {
+  drawingId: string
+  /** Index of the offending wall among the drawing's user walls. */
+  userIndex: number
+  /** How far off the wall below it is, in mm (for the prompt copy). */
+  offMm: number
+  /** Where the wall would sit if lined up over the one below. */
+  target: { x1: number; y1: number; x2: number; y2: number }
+}
+
 interface DragState {
   kind: DragKind
   axis?: 'x' | 'z'
@@ -43,6 +58,9 @@ interface FloorplanLocalState {
   /** Set true right after a wall is traced OFF the print (outside the plan) so a
    *  gentle "did you mean to?" prompt can offer to undo it. */
   offPrintWarn: boolean
+  /** Set when an upper-floor wall lands near-but-not-aligned with the one below,
+   *  so a "line it up?" prompt can surface. Null when there's nothing to flag. */
+  plumbNudge: PlumbNudge | null
   traceStyle: TraceStyle
   /** Anchor of the active rubber-band segment (line style only) */
   traceStart: [number, number] | null
@@ -132,6 +150,7 @@ interface FloorplanLocalState {
   setTraceMode: (v: boolean) => void
   setTracePaused: (v: boolean) => void
   setOffPrintWarn: (v: boolean) => void
+  setPlumbNudge: (v: PlumbNudge | null) => void
   setTraceStyle: (v: TraceStyle) => void
   setTraceStart: (v: [number, number] | null) => void
   setTraceStroke: (v: [number, number][] | ((prev: [number, number][]) => [number, number][])) => void
@@ -186,6 +205,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   traceMode: false,
   tracePaused: false,
   offPrintWarn: false,
+  plumbNudge: null,
   traceStyle: 'line',
   traceStart: null,
   traceStroke: [],
@@ -236,6 +256,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
   setOffPrintWarn: (v) => set({ offPrintWarn: v }),
+  setPlumbNudge: (v) => set({ plumbNudge: v }),
   setTraceStyle: (v) => set({ traceStyle: v, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTraceStart: (v) => set({ traceStart: v }),
   setPendingWalls: (v) => set({ pendingWalls: v }),

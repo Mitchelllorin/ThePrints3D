@@ -150,6 +150,7 @@ export default function FloorplanOverlay() {
   const traceStart = useFloorplanLocalStore((s) => s.traceStart)
   const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
   const setOffPrintWarn = useFloorplanLocalStore((s) => s.setOffPrintWarn)
+  const setPlumbNudge = useFloorplanLocalStore((s) => s.setPlumbNudge)
   const traceStroke = useFloorplanLocalStore((s) => s.traceStroke)
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
   const pendingWalls = useFloorplanLocalStore((s) => s.pendingWalls)
@@ -503,6 +504,51 @@ export default function FloorplanOverlay() {
     return snapped
   }
 
+  // Flag an upper-floor wall that landed near — but not lined up with — a wall
+  // on the storey below. Within ~snap range it already auto-aligned; clearly far
+  // is a deliberately different layout; the in-between band is the "did you mean
+  // to be off?" case worth surfacing. Sets a nudge with the lined-up target.
+  const maybeNudgePlumb = (wall: ParsedWall, userIndex: number) => {
+    if (!drawing || activeLevel <= 0) return
+    const below = drawing.parsedWalls.filter((w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1)
+    if (below.length === 0) return
+    const wdx = wall.x2 - wall.x1, wdy = wall.y2 - wall.y1
+    if (Math.hypot(wdx, wdy) < 1) return
+    const wmx = (wall.x1 + wall.x2) / 2, wmy = (wall.y1 + wall.y2) / 2
+    const angleDiff = (ax: number, ay: number, bx: number, by: number) => {
+      let d = Math.abs(Math.atan2(ay, ax) - Math.atan2(by, bx)) * (180 / Math.PI)
+      d %= 180
+      return d > 90 ? 180 - d : d
+    }
+    const NEAR_PX = 42 // already auto-snapped within this
+    const FAR_PX = 110 // beyond this it's a genuinely different layout
+    let best: { off: number; target: { x1: number; y1: number; x2: number; y2: number } } | null = null
+    for (const b of below) {
+      const bdx = b.x2 - b.x1, bdy = b.y2 - b.y1
+      const blen2 = bdx * bdx + bdy * bdy
+      if (blen2 < 1 || angleDiff(wdx, wdy, bdx, bdy) > 12) continue
+      const t = ((wmx - b.x1) * bdx + (wmy - b.y1) * bdy) / blen2
+      if (t < -0.1 || t > 1.1) continue // doesn't overlap the wall below
+      const off = Math.hypot(wmx - (b.x1 + t * bdx), wmy - (b.y1 + t * bdy))
+      if (off <= NEAR_PX || off > FAR_PX) continue
+      if (!best || off < best.off) {
+        const proj = (px: number, py: number) => {
+          const tt = ((px - b.x1) * bdx + (py - b.y1) * bdy) / blen2
+          return { x: b.x1 + tt * bdx, y: b.y1 + tt * bdy }
+        }
+        const a = proj(wall.x1, wall.y1), e = proj(wall.x2, wall.y2)
+        best = { off, target: { x1: a.x, y1: a.y, x2: e.x, y2: e.y } }
+      }
+    }
+    // Set when off, or clear any stale nudge when this wall is fine.
+    if (best) {
+      const mmPerPx = drawing.scaleMmPerPx ?? 8
+      setPlumbNudge({ drawingId: drawing.id, userIndex, offMm: Math.round(best.off * mmPerPx), target: best.target })
+    } else {
+      setPlumbNudge(null)
+    }
+  }
+
   // Drop a trace/calibration point — called only on a genuine tap (pointer-up
   // with no meaningful drag), so the camera is free to move between points.
   const commitTraceOrCalibrationPoint = (event: ThreeEvent<PointerEvent>) => {
@@ -620,6 +666,9 @@ export default function FloorplanOverlay() {
         exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
         level: activeLevel,
       }
+      // New wall is appended last among user walls, so its user-index is the
+      // count before the add — captured for the "line it up?" nudge below.
+      const newUserIndex = drawing.parsedWalls.filter((w) => w.source === 'user').length
       addUserTracedWall(drawing.id, wall)
       addTrace({ points: [traceStart, [wall.x2, wall.y2]], timestamp: Date.now() })
       // Off the print? If the wall's midpoint lands outside the plan image and it
@@ -630,6 +679,12 @@ export default function FloorplanOverlay() {
       const m = 24
       if (!printLine && !inkSnapped && (mx < -m || my < -m || mx > rw + m || my > rh + m)) {
         setOffPrintWarn(true)
+      } else {
+        // Floors stack: if this upper-floor wall landed near — but not lined up
+        // with — a wall on the storey below, surface a "line it up?" prompt. The
+        // app knows floors are normally plumb and flags the drift; the user
+        // decides whether to snap it or keep the offset on purpose.
+        maybeNudgePlumb(wall, newUserIndex)
       }
       setTraceStart([wall.x2, wall.y2])
       return

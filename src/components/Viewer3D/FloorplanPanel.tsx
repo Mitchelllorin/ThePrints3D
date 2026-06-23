@@ -92,6 +92,8 @@ export default function FloorplanPanel() {
   const setTracePaused = useFloorplanLocalStore((s) => s.setTracePaused)
   const offPrintWarn   = useFloorplanLocalStore((s) => s.offPrintWarn)
   const setOffPrintWarn = useFloorplanLocalStore((s) => s.setOffPrintWarn)
+  const plumbNudge     = useFloorplanLocalStore((s) => s.plumbNudge)
+  const setPlumbNudge  = useFloorplanLocalStore((s) => s.setPlumbNudge)
   const traceStyle     = useFloorplanLocalStore((s) => s.traceStyle)
   const setTraceStyle  = useFloorplanLocalStore((s) => s.setTraceStyle)
   const traceStart     = useFloorplanLocalStore((s) => s.traceStart)
@@ -301,7 +303,7 @@ export default function FloorplanPanel() {
     }
   }
 
-  const cancelTracing = () => { setTraceMode(false); setTraceStroke([]); setTraceStart(null); setPendingWalls(null); setHoverPixel(null) }
+  const cancelTracing = () => { setTraceMode(false); setTraceStroke([]); setTraceStart(null); setPendingWalls(null); setHoverPixel(null); setPlumbNudge(null) }
 
   const keepPendingWalls = () => {
     if (!drawing || !pendingWalls || pendingWalls.length === 0) return
@@ -592,6 +594,30 @@ export default function FloorplanPanel() {
           <div className={styles.btnRow}>
             <button className={styles.secondary} onClick={() => setOffPrintWarn(false)}>Keep it</button>
             <button className={styles.action} onClick={() => { undoAction(); setOffPrintWarn(false) }}>Undo</button>
+          </div>
+        </div>
+      )}
+
+      {/* Plumb nudge — an upper-floor wall landed near but not over the one
+          below. The app flags the drift (floors stack); the user decides. */}
+      {plumbNudge && !offPrintWarn && (
+        <div className={styles.offPrintToast}>
+          <span className={styles.stepText}>Off the floor below</span>
+          <span className={styles.stepHint}>
+            This wall's about {formatLengthFromMm(plumbNudge.offMm, activeUnit)} off the one under it. Line it up?
+          </span>
+          <div className={styles.btnRow}>
+            <button
+              className={styles.action}
+              onClick={() => {
+                updateUserWall(plumbNudge.drawingId, plumbNudge.userIndex, plumbNudge.target)
+                if (modelReady) buildModel()
+                setPlumbNudge(null)
+              }}
+            >
+              Line it up
+            </button>
+            <button className={styles.secondary} onClick={() => setPlumbNudge(null)}>Keep it</button>
           </div>
         </div>
       )}
