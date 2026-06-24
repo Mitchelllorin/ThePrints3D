@@ -560,10 +560,21 @@ export default function FloorplanOverlay() {
       // the rectangle becomes a joist field or a gable roof. No chaining; each
       // tap-pair is a separate area.
       if (activeTraceLayer === 'floors' || activeTraceLayer === 'roof') {
-        if (!traceStart) { setTraceStart(pixel); setHoverPixel(pixel); return }
+        // Snap each corner to the building's wall corners (endpoints) so a floor
+        // pulled along the walls lands ON the footprint — not a tap-projection
+        // short when you orbit. Falls back to the raw tap when no corner is near.
+        const areaRef = drawing.parsedWalls.filter(
+          (w) => (w.source ?? 'auto') !== 'user' || (w.level ?? 0) === activeLevel,
+        )
+        const snapCorner = (p: [number, number]): [number, number] => {
+          const s = snapPointToWalls(p[0], p[1], areaRef, 40, 20)
+          return [s.x, s.y]
+        }
+        if (!traceStart) { const s = snapCorner(pixel); setTraceStart(s); setHoverPixel(s); return }
         const a = traceStart
-        if (Math.hypot(pixel[0] - a[0], pixel[1] - a[1]) < 6) { setTraceStart(null); return }
-        const area = { id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1], material: '', level: activeLevel }
+        const end = snapCorner(pixel)
+        if (Math.hypot(end[0] - a[0], end[1] - a[1]) < 6) { setTraceStart(null); return }
+        const area = { id: genLineId(), x1: a[0], y1: a[1], x2: end[0], y2: end[1], material: '', level: activeLevel }
         if (activeTraceLayer === 'floors') addFloorsAreas([{ ...area, elementType: floorsElement, size: floorsSize }])
         else addRoofAreas([{ ...area, elementType: roofElement, size: roofSize }])
         setTraceStart(null)
