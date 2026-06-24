@@ -38,7 +38,7 @@ import {
   snapWallToPrintLine,
 } from '../../services/wallTraceReducer'
 import { ensureInkBuffer, getInkBuffer, snapSegmentToInk } from '../../services/inkRaster'
-import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, deviceMountHeightM } from '../../data/objectCatalog'
+import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, VERTICAL_CIRCULATION, deviceMountHeightM } from '../../data/objectCatalog'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { validateElectrical } from '../../services/constructionCode'
@@ -873,9 +873,36 @@ export default function FloorplanOverlay() {
     return { x: sx, z: sz }
   }
 
-  // Final pose for a device tap: wall devices snap onto the wall; everything else
-  // drops where tapped. Both auto-orient to the nearest wall.
+  // Stairs/elevators snap FLUSH against the nearest wall: aligned to it, with
+  // their near edge on the wall face and the run going into the room — so a
+  // stairwell/shaft sits against the wall instead of floating mid-room. Returns
+  // the tap point (auto-oriented) when no wall is within reach.
+  const circulationPose = (x: number, z: number) => {
+    let best = Infinity, foot: { x: number; z: number } | null = null, yaw = 0, nrm = { x: 0, z: 0 }
+    for (const w of userWalls) {
+      const a = planeLocalToWorld([w.x1, w.y1])
+      const b = planeLocalToWorld([w.x2, w.y2])
+      const ax = a[0], az = a[2], dx = b[0] - ax, dz = b[2] - az
+      const len2 = dx * dx + dz * dz
+      if (len2 < 1e-6) continue
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2))
+      const fx = ax + t * dx, fz = az + t * dz
+      const d = Math.hypot(x - fx, z - fz)
+      if (d < best) { best = d; foot = { x: fx, z: fz }; yaw = -Math.atan2(dz, dx); nrm = { x: x - fx, z: z - fz } }
+    }
+    if (!foot || best > 2.5) return { x, z, rotationY: autoOrientYaw(x, z) }
+    const item = getCatalogItem(placeObjectType ?? '')
+    const depth = item?.defaultD ?? 1.5
+    const nl = Math.hypot(nrm.x, nrm.z) || 1
+    const off = depth / 2 + 0.05   // centre out by half-depth → near edge on the wall
+    return { x: foot.x + (nrm.x / nl) * off, z: foot.z + (nrm.z / nl) * off, rotationY: yaw }
+  }
+
+  // Final pose for a placement tap: wall devices snap onto the wall; stairs/
+  // elevators snap flush against it; everything else drops where tapped. All
+  // auto-orient to the nearest wall.
   const devicePose = (x: number, z: number) => {
+    if (VERTICAL_CIRCULATION.has(placeObjectType ?? '')) return circulationPose(x, z)
     const snapped = WALL_MOUNTED_DEVICES.has(placeObjectType ?? '') ? snapToWall(x, z) : { x, z }
     return { x: snapped.x, z: snapped.z, rotationY: autoOrientYaw(snapped.x, snapped.z) }
   }
