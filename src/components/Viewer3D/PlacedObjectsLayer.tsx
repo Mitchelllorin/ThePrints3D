@@ -164,7 +164,7 @@ export default function PlacedObjectsLayer() {
         const mountY = obj.type === 'window'
           ? (obj.sillM ?? 0.9) + h / 2
           : deviceMountHeightM(obj.type, ceilingM) ?? h / 2
-        const model = isOpening ? null : <ObjectModel type={obj.type} w={w} h={h} d={d} color={color} />
+        const model = isOpening ? null : <ObjectModel type={obj.type} w={w} h={h} d={d} color={color} subtype={obj.subtype} />
         return (
           <group key={obj.id} position={[live.x, 0, live.z]} rotation={[0, live.rotationY, 0]}>
             <group

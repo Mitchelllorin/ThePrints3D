@@ -20,6 +20,8 @@ interface ModelProps {
   h: number
   d: number
   color: string
+  /** Sub-type — e.g. stair shape: 'Straight' | 'L-shaped' | 'U-shaped' | 'Switchback'. */
+  subtype?: string
 }
 
 /** Lighten (amt>0) or darken (amt<0) a colour via HSL lightness. */
@@ -66,7 +68,7 @@ function Cyl({
  * Pick a procedural model for the item type. Returns null for types without a
  * dedicated shape so the caller can fall back to a plain box.
  */
-export default function ObjectModel({ type, w, h, d, color }: ModelProps) {
+export default function ObjectModel({ type, w, h, d, color, subtype }: ModelProps) {
   const floor = -h / 2
   const body = color
   const light = shade(color, 0.12)
@@ -179,29 +181,42 @@ export default function ObjectModel({ type, w, h, d, color }: ModelProps) {
       )
     }
     case 'stairs': {
-      // A straight flight climbing the full height h over the run d. Step count
-      // targets a ~0.18 m riser (code-typical) so it reads as real stairs; each
-      // tread is a solid box up from the floor for a clean stepped silhouette.
-      const steps = THREE.MathUtils.clamp(Math.round(h / 0.18), 10, 20)
-      const riser = h / steps
-      const tread = d / steps
-      const sideR = Math.min(w, 0.08)
+      // Configurable stair: Straight, L-shaped (quarter-turn + landing),
+      // U-shaped / Switchback (half-turn + landing). Treads climb at a ~0.18 m
+      // code-typical riser; landings are a flat slab at the turn. Proprietary —
+      // generated on-device from primitives, no external geometry.
+      const total = THREE.MathUtils.clamp(Math.round(h / 0.18), 10, 22)
+      const riser = h / total
+      const TT = Math.max(0.04, h * 0.02)   // tread thickness
+      const shape = (subtype ?? 'Straight').toLowerCase()
+      type Step = { x: number; y: number; z: number; tw: number; td: number; c: THREE.Color | string }
+      const steps: Step[] = []
+      const landings: Step[] = []
+      if (shape.startsWith('l')) {
+        // Lower flight up +Z, landing at the corner, upper flight turning along +X.
+        const n1 = Math.ceil(total / 2), n2 = total - n1
+        const lowerRun = d * 0.6, t1 = lowerRun / n1
+        for (let i = 0; i < n1; i++) steps.push({ x: 0, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * t1, tw: w, td: t1 * 0.95, c: i % 2 ? light : body })
+        const landY = floor + n1 * riser, landZ = -d / 2 + lowerRun + w / 2
+        landings.push({ x: 0, y: landY, z: landZ, tw: w, td: w, c: dark })
+        const upperRun = d * 0.45, t2 = upperRun / n2
+        for (let i = 0; i < n2; i++) steps.push({ x: (i + 0.5) * t2, y: landY + (i + 1) * riser, z: landZ, tw: t2 * 0.95, td: w, c: i % 2 ? light : body })
+      } else if (shape.startsWith('u') || shape.startsWith('s')) {
+        // Two flights in parallel lanes, opposite directions, landing at the far end.
+        const half = Math.ceil(total / 2), n2 = total - half
+        const run = d * 0.9, t = run / half, fw = w * 0.46, lane = w * 0.27
+        for (let i = 0; i < half; i++) steps.push({ x: -lane, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * t, tw: fw, td: t * 0.95, c: i % 2 ? light : body })
+        const landY = floor + half * riser
+        landings.push({ x: 0, y: landY, z: -d / 2 + run + w * 0.2, tw: w, td: w * 0.4, c: dark })
+        for (let i = 0; i < n2; i++) steps.push({ x: lane, y: landY + (i + 1) * riser, z: -d / 2 + run - (i + 0.5) * t, tw: fw, td: t * 0.95, c: i % 2 ? light : body })
+      } else {
+        const t = d / total
+        for (let i = 0; i < total; i++) steps.push({ x: 0, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * t, tw: w, td: t * 0.95, c: i % 2 ? light : body })
+      }
       return (
         <>
-          {Array.from({ length: steps }, (_, i) => {
-            const stepTop = (i + 1) * riser
-            return (
-              <Box
-                key={i}
-                args={[w, stepTop, tread]}
-                pos={[0, floor + stepTop / 2, -d / 2 + i * tread + tread / 2]}
-                color={i % 2 === 0 ? body : light}
-              />
-            )
-          })}
-          {/* stringers down each side for a built look */}
-          <Box args={[sideR, h, d]} pos={[-w / 2 + sideR / 2, floor + h / 2, 0]} color={dark} />
-          <Box args={[sideR, h, d]} pos={[w / 2 - sideR / 2, floor + h / 2, 0]} color={dark} />
+          {steps.map((s, i) => <Box key={i} args={[s.tw, TT, s.td]} pos={[s.x, s.y, s.z]} color={s.c} />)}
+          {landings.map((s, i) => <Box key={`l${i}`} args={[s.tw, TT, s.td]} pos={[s.x, s.y, s.z]} color={s.c} />)}
         </>
       )
     }

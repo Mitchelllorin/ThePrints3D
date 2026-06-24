@@ -117,6 +117,7 @@ export const VERTICAL_CIRCULATION = new Set(['stairs', 'elevator'])
 export const SUBTYPES: Record<string, string[]> = {
   door: ['Hinged Single', 'Hinged Double', 'Pocket', 'Sliding', 'Bifold'],
   window: ['Single-hung', 'Double-hung', 'Casement', 'Fixed'],
+  stairs: ['Straight', 'L-shaped', 'U-shaped', 'Switchback'],
 }
 
 export function getCatalogItem(type: string): ObjectCatalogItem | undefined {
