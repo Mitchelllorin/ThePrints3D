@@ -867,22 +867,82 @@ export function buildFinkTrussRoof(opts: {
   return g
 }
 
-/** Dispatch to the right roof builder by type name (defaults to gable). */
+/**
+ * Boxed-eave overhang: soffit panels, fascia around the outer edge, and
+ * lookouts framing back to the wall (the "framing back to the wall" + blocking
+ * in the overhang). Built axis-aligned to the footprint so it's added as a
+ * sibling of the roof — never spun by a roof type's own internal rotation.
+ * Spec: eave overhang ~16" (12–24" typical); fascia from 2× stock; lookouts
+ * 2×6 ~4 ft at 24" OC; soffit captured under the fascia (see research notes).
+ */
+function buildEaveOverhang(
+  g: THREE.Group,
+  opts: { lenX: number; lenZ: number; overhang: number; opacity: number },
+): void {
+  const { lenX, lenZ, overhang, opacity } = opts
+  if (overhang <= 0 || lenX < 0.2 || lenZ < 0.2) return
+  const wood = roofMat(opacity)
+  const soffitMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#d9d3c6'), roughness: 0.9, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const FAS = 0.184, FW = 0.038, SOF = 0.018, LOOK = 0.089
+  const hx = lenX / 2, hz = lenZ / 2
+  const ox = hx + overhang, oz = hz + overhang
+  const soffitY = -FAS + SOF / 2
+  const fasciaY = -FAS / 2
+  // Soffit panels — X sides span lenZ; Z sides span the full outer width so the
+  // four corners are covered.
+  addRoofBox(g, soffitMat, overhang, SOF, lenZ, hx + overhang / 2, soffitY, 0, 0, 0, 0, 'Soffit')
+  addRoofBox(g, soffitMat, overhang, SOF, lenZ, -hx - overhang / 2, soffitY, 0, 0, 0, 0, 'Soffit')
+  addRoofBox(g, soffitMat, lenX + 2 * overhang, SOF, overhang, 0, soffitY, hz + overhang / 2, 0, 0, 0, 'Soffit')
+  addRoofBox(g, soffitMat, lenX + 2 * overhang, SOF, overhang, 0, soffitY, -hz - overhang / 2, 0, 0, 0, 'Soffit')
+  // Fascia around the outer edge.
+  addRoofBox(g, wood, FW, FAS, lenZ + 2 * overhang, ox, fasciaY, 0, 0, 0, 0, 'Fascia')
+  addRoofBox(g, wood, FW, FAS, lenZ + 2 * overhang, -ox, fasciaY, 0, 0, 0, 0, 'Fascia')
+  addRoofBox(g, wood, lenX + 2 * overhang, FAS, FW, 0, fasciaY, oz, 0, 0, 0, 'Fascia')
+  addRoofBox(g, wood, lenX + 2 * overhang, FAS, FW, 0, fasciaY, -oz, 0, 0, 0, 'Fascia')
+  // Lookouts — cantilever back to the wall at 24" OC on every side.
+  const OC = 0.6096
+  for (let z = -hz + 0.3; z <= hz; z += OC) {
+    addRoofBox(g, wood, overhang, LOOK, FW, hx + overhang / 2, -LOOK / 2, z, 0, 0, 0, 'Lookout')
+    addRoofBox(g, wood, overhang, LOOK, FW, -hx - overhang / 2, -LOOK / 2, z, 0, 0, 0, 'Lookout')
+  }
+  for (let x = -hx + 0.3; x <= hx; x += OC) {
+    addRoofBox(g, wood, FW, LOOK, overhang, x, -LOOK / 2, hz + overhang / 2, 0, 0, 0, 'Lookout')
+    addRoofBox(g, wood, FW, LOOK, overhang, x, -LOOK / 2, -hz - overhang / 2, 0, 0, 0, 'Lookout')
+  }
+}
+
+/** Dispatch to the right roof builder by type name (defaults to gable), then add
+ *  the boxed-eave overhang (soffit/fascia/lookouts) as an axis-aligned sibling. */
 export function buildRoofByType(
   type: string,
-  opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number },
+  opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number; overhangM?: number },
 ): THREE.Group {
-  switch ((type || '').trim().toLowerCase()) {
-    case 'truss':
-    case 'trusses': return buildFinkTrussRoof(opts)
-    case 'hip': return buildHipRoof(opts)
-    case 'shed':
-    case 'lean-to':
-    case 'mono':
-    case 'mono-pitch': return buildShedRoof(opts)
-    case 'flat': return buildFlatRoof(opts)
-    default: return buildGableRoof(opts)
+  const roof = (() => {
+    switch ((type || '').trim().toLowerCase()) {
+      case 'truss':
+      case 'trusses': return buildFinkTrussRoof(opts)
+      case 'hip': return buildHipRoof(opts)
+      case 'shed':
+      case 'lean-to':
+      case 'mono':
+      case 'mono-pitch': return buildShedRoof(opts)
+      case 'flat': return buildFlatRoof(opts)
+      default: return buildGableRoof(opts)
+    }
+  })()
+  const overhangM = opts.overhangM ?? 0.4 // ~16" boxed eave
+  if (overhangM > 0) {
+    const wrapper = new THREE.Group()
+    wrapper.add(roof)
+    const eave = new THREE.Group()
+    buildEaveOverhang(eave, { lenX: opts.lenX, lenZ: opts.lenZ, overhang: overhangM, opacity: opts.opacity ?? 1 })
+    wrapper.add(eave)
+    return wrapper
   }
+  return roof
 }
 
 export interface WallDrywallOpts {
