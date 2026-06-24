@@ -18,7 +18,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { wallFramingSpec } from '../../services/constructionCode'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
-import { getCatalogItem } from '../../data/objectCatalog'
+import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
 import type { ParsedWall, PlacedObject } from '../../types'
 
@@ -231,8 +231,33 @@ export default function LiveWallsLayer() {
       const heightM = (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY
       out[best].push({ t: bestT, widthM, type: o.type as 'door' | 'window', sillM: o.sillM, heightM })
     }
+    // Stairs/elevators cut a full-height opening where they sit flush against a
+    // wall. They're DEEP, so assign by the footprint's near EDGE (centre minus
+    // half-depth), not the centre — otherwise a stair's centre is always too far.
+    const pxPerM = 1000 / (drawing?.scaleMmPerPx ?? 8)
+    for (const o of placedObjects) {
+      if (!VERTICAL_CIRCULATION.has(o.type) || o.pxX == null || o.pxY == null) continue
+      const px = o.pxX as number, py = o.pxY as number
+      const item = getCatalogItem(o.type)
+      const widthM = (item?.defaultW ?? 1) * o.scaleX     // along the wall (snap convention)
+      const reachPx = ((item?.defaultD ?? 1) * o.scaleZ / 2) * pxPerM   // half-depth toward the wall
+      let best = -1, bestEdge = Infinity, bestT = 0
+      userWalls.forEach(({ wall: w }, i) => {
+        const dx = w.x2 - w.x1, dy = w.y2 - w.y1
+        const len2 = dx * dx + dy * dy
+        if (len2 < 1e-6) return
+        const t = ((px - w.x1) * dx + (py - w.y1) * dy) / len2
+        if (t < -0.02 || t > 1.02) return
+        const perp = Math.hypot(px - (w.x1 + t * dx), py - (w.y1 + t * dy))
+        const edge = Math.abs(perp - reachPx)   // footprint near-edge to wall
+        const threshPx = Math.max((w.thickness || 8) * 2.5, 28) + 6
+        if (edge < threshPx && edge < bestEdge) { best = i; bestEdge = edge; bestT = Math.max(0, Math.min(1, t)) }
+      })
+      if (best < 0) continue
+      out[best].push({ t: bestT, widthM, type: 'door', sillM: 0, heightM: (item?.defaultH ?? 2.4) * o.scaleY })
+    }
     return out
-  }, [userWalls, placedObjects])
+  }, [userWalls, placedObjects, drawing?.scaleMmPerPx])
 
   // The traced walls ARE the build: instead of BuildingModel re-rendering them
   // through a different (engine) path that drops detail, the ghost walls persist

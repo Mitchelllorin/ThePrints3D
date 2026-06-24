@@ -12,7 +12,7 @@ import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
-import { getCatalogItem } from '../../data/objectCatalog'
+import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import type { ParsedWall, PlacedObject } from '../../types'
 
 const MIN_THICKNESS = 0.1
@@ -126,6 +126,30 @@ export default function DrywallLayer() {
       const item = getCatalogItem(o.type)
       const heightM = (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY
       out[best].push({ t: bestT, widthM: (item?.defaultW ?? 0.9) * o.scaleX, type: o.type as 'door' | 'window', sillM: o.sillM, heightM })
+    }
+    // Stairs/elevators: cut a full-height board opening where they sit flush
+    // against a wall — assigned by the footprint's near edge (deep footprint),
+    // matching the framing layer so board and studs cut the same hole.
+    const pxPerM = 1000 / (userWalls[0]?.scaleMmPerPx ?? 8)
+    for (const o of placedObjects) {
+      if (!VERTICAL_CIRCULATION.has(o.type) || o.pxX == null || o.pxY == null) continue
+      const px = o.pxX as number, py = o.pxY as number
+      const item = getCatalogItem(o.type)
+      const reachPx = ((item?.defaultD ?? 1) * o.scaleZ / 2) * pxPerM
+      let best = -1, bestEdge = Infinity, bestT = 0
+      userWalls.forEach(({ wall: w }, i) => {
+        const ddx = w.x2 - w.x1, ddy = w.y2 - w.y1
+        const len2 = ddx * ddx + ddy * ddy
+        if (len2 < 1e-6) return
+        const t = ((px - w.x1) * ddx + (py - w.y1) * ddy) / len2
+        if (t < -0.02 || t > 1.02) return
+        const perp = Math.hypot(px - (w.x1 + t * ddx), py - (w.y1 + t * ddy))
+        const edge = Math.abs(perp - reachPx)
+        const threshPx = Math.max((w.thickness || 8) * 2.5, 28) + 6
+        if (edge < threshPx && edge < bestEdge) { best = i; bestEdge = edge; bestT = Math.max(0, Math.min(1, t)) }
+      })
+      if (best < 0) continue
+      out[best].push({ t: bestT, widthM: (item?.defaultW ?? 1) * o.scaleX, type: 'door', sillM: 0, heightM: (item?.defaultH ?? 2.4) * o.scaleY })
     }
     return out
   }, [userWalls, placedObjects])
