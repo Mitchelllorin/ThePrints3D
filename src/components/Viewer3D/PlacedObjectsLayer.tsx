@@ -54,6 +54,24 @@ function XRay({ on, children }: { on: boolean; children: React.ReactNode }) {
   return <group ref={ref}>{children}</group>
 }
 
+/** Detail explode — spreads a model's part meshes radially out from its centre
+ *  so you can see the components, then snaps them back when off. Mirrors XRay's
+ *  traverse-and-restore approach; base positions are cached per mesh. */
+function DetailExplode({ amount, children }: { amount: number; children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null)
+  useLayoutEffect(() => {
+    const g = ref.current
+    if (!g) return
+    g.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        const base = (o.userData.basePos ??= o.position.clone()) as THREE.Vector3
+        o.position.copy(base).multiplyScalar(1 + amount)
+      }
+    })
+  })
+  return <group ref={ref}>{children}</group>
+}
+
 function dims(obj: PlacedObject) {
   const item = getCatalogItem(obj.type)
   return {
@@ -69,6 +87,7 @@ export default function PlacedObjectsLayer() {
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
+  const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
 
@@ -168,7 +187,9 @@ export default function PlacedObjectsLayer() {
                   openings and unmodelled types fall back to a plain box. The
                   X-ray wrapper makes the whole model see-through when toggled. */}
               {!isOpening && model ? (
-                <XRay on={!!obj.transparent}>{model}</XRay>
+                <XRay on={!!obj.transparent}>
+                  <DetailExplode amount={obj.id === detailExplodeId ? 0.7 : 0}>{model}</DetailExplode>
+                </XRay>
               ) : (
                 <mesh castShadow={!isOpening} receiveShadow={!isOpening}>
                   <boxGeometry args={[w, h, boxD]} />

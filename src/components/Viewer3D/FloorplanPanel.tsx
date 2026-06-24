@@ -119,6 +119,8 @@ export default function FloorplanPanel() {
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
+  const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
+  const setDetailExplodeId = useFloorplanLocalStore((s) => s.setDetailExplodeId)
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
   const setActiveWallType = useFloorplanLocalStore((s) => s.setActiveWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
@@ -1411,6 +1413,13 @@ export default function FloorplanPanel() {
             </button>
             <button className={styles.secondary} onClick={() => { const nid = clonePlacedObject(selectedObject.id); if (nid) setSelectedObjectId(nid) }}>
               Clone
+            </button>
+            <button
+              className={detailExplodeId === selectedObject.id ? styles.action : styles.secondary}
+              onClick={() => setDetailExplodeId(detailExplodeId === selectedObject.id ? null : selectedObject.id)}
+              title="Spread this item's parts apart to see its components"
+            >
+              {detailExplodeId === selectedObject.id ? 'Collapse' : 'Explode parts'}
             </button>
             <button className={styles.secondary} onClick={deleteSelectedObject}>Delete</button>
           </div>

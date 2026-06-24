@@ -126,6 +126,8 @@ interface FloorplanLocalState {
   placeCommitNonce: number
   /** Id of the currently selected placed object, or null. */
   selectedObjectId: string | null
+  /** Object whose parts are detail-exploded (spread to show components), or null. */
+  detailExplodeId: string | null
   /** Currently selected traced trade run (for edit-on-the-fly delete), or null. */
   selectedLine: { trade: 'plumbing' | 'electrical' | 'hvac'; id: string } | null
   /**
@@ -178,6 +180,7 @@ interface FloorplanLocalState {
   setPlaceGhost: (v: { x: number; z: number; rotationY: number } | null) => void
   requestPlaceCommit: () => void
   setSelectedObjectId: (v: string | null) => void
+  setDetailExplodeId: (v: string | null) => void
   // Coordinated openers — one panel at a time (each sets activePanel + clears the rest).
   openPicker: () => void
   openPanelBoard: () => void
@@ -239,6 +242,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   placeGhost: null,
   placeCommitNonce: 0,
   selectedObjectId: null,
+  detailExplodeId: null,
   selectedLine: null,
   activePanel: null,
   calibrationHandledIds: [],
@@ -302,6 +306,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setPlaceGhost: (v) => set({ placeGhost: v }),
   requestPlaceCommit: () => set((s) => ({ placeCommitNonce: s.placeCommitNonce + 1 })),
   setSelectedObjectId: (v) => set({ selectedObjectId: v, activePanel: v ? 'object' : null }),
+  setDetailExplodeId: (v) => set({ detailExplodeId: v }),
   // One panel at a time: every opener sets activePanel and clears the rest.
   openPicker: () => set({ activePanel: 'picker', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
   openPanelBoard: () => set({ activePanel: 'panelBoard', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
