@@ -139,6 +139,32 @@ function PrintAutoFrame() {
   return null
 }
 
+/**
+ * Recenters the print into the VISIBLE area whenever a side drawer is open, so
+ * the user never has to pan to re-center. Uses a camera view-offset — it shifts
+ * the rendered framing without moving the camera/target, so orbit and zoom are
+ * untouched — and clears it when the drawer closes. The left (Build) drawer
+ * pushes content right into the space beside it; the right (Settings) drawer
+ * pushes it left. The bottom (Place) drawer's height is content-driven, so
+ * vertical recentering is left alone.
+ */
+function DrawerRecenter() {
+  const { camera, size } = useThree()
+  const buildOpen = useFloorplanLocalStore((s) => s.buildDrawerOpen)
+  const settingsOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
+  useEffect(() => {
+    const cam = camera as THREE.PerspectiveCamera
+    const w = size.width, h = size.height
+    const drawerW = Math.min(248, 0.72 * w)   // matches the EdgeDrawer CSS width
+    // Negative offsetX shifts content RIGHT (into the space beside a left drawer).
+    const offsetX = buildOpen ? -drawerW / 2 : settingsOpen ? drawerW / 2 : 0
+    if (offsetX === 0) cam.clearViewOffset()
+    else cam.setViewOffset(w, h, offsetX, 0, w, h)
+    cam.updateProjectionMatrix()
+  }, [camera, size.width, size.height, buildOpen, settingsOpen])
+  return null
+}
+
 function BuildingProgress() {
   const mesh = useRef<THREE.Mesh>(null)
   useFrame((_, delta) => {
@@ -593,6 +619,7 @@ export default function ModelViewer() {
       >
         <CameraRig />
         <PrintAutoFrame />
+        <DrawerRecenter />
         {/* Live workspace background — drives the canvas clear colour. */}
         <color attach="background" args={[scene.bg]} />
         {/* Lighting for FORM, so a stud cage reads as studs (not a flat block):
