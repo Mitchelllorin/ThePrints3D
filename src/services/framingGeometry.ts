@@ -652,6 +652,30 @@ export function buildGableRoof(opts: {
     }
     addBox(runLen, RT, RW, 0, rise, 0, 0, 0, 0, 'Ridge board')
   }
+
+  // ── Complete the framing: ties + gable-end studs (not rafters alone) ──
+  // Spec: rafter ties ≤24" OC in the lower third; collar ties ≤48" OC in the
+  // upper third; gable studs 16" OC (see research notes).
+  const TT = 0.089, TW2 = 0.038
+  const tieY = Math.min(rise * 0.2, 0.3)        // ceiling/rafter ties above the plate
+  const collarY = rise * 0.66                    // collar ties in the upper third
+  const collarHalf = half * (1 - collarY / rise) // rafter half-width at collar height
+  const studOC = 0.4064                          // 16"
+  for (const p of ps) {                          // ceiling/rafter tie at every rafter
+    if (spanAlongX) addBox(span, TT, TW2, 0, tieY, p, 0, 0, 0, 'Ceiling/rafter tie')
+    else addBox(TW2, TT, span, p, tieY, 0, 0, 0, 0, 'Ceiling/rafter tie')
+  }
+  for (let p = -halfRun + 0.3; p <= halfRun; p += 1.219) { // collar ties ~48" OC
+    if (spanAlongX) addBox(2 * collarHalf, TT, TW2, 0, collarY, p, 0, 0, 0, 'Collar tie')
+    else addBox(TW2, TT, 2 * collarHalf, p, collarY, 0, 0, 0, 0, 'Collar tie')
+  }
+  for (const gp of [-halfRun + RW / 2, halfRun - RW / 2]) { // gable-end studs
+    for (let s = -half + studOC; s < half; s += studOC) {
+      const hAt = Math.max(0.05, rise * (1 - Math.abs(s) / half))
+      if (spanAlongX) addBox(TW2, hAt, TW2, s, hAt / 2, gp, 0, 0, 0, 'Gable stud')
+      else addBox(TW2, hAt, TW2, gp, hAt / 2, s, 0, 0, 0, 'Gable stud')
+    }
+  }
   return g
 }
 
@@ -796,12 +820,61 @@ export function buildHipRoof(opts: {
   return g
 }
 
+/**
+ * Fink (W-web) truss roof — the residential workhorse. Trusses at 24" OC, each
+ * with 2×4 top chords, a bottom chord (ceiling), a centre king post and the
+ * Fink W webs. Built canonically with the span along X, then rotated so the
+ * ridge runs along the footprint's longer side.
+ * Spec: SBCA / typical residential — Fink, 24" OC (see research notes).
+ */
+export function buildFinkTrussRoof(opts: {
+  lenX: number; lenZ: number; pitch: number; ocM?: number; opacity?: number
+}): THREE.Group {
+  const { lenX, lenZ, pitch, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.2 || lenZ < 0.2) return g
+  const mat = roofMat(opacity)
+  const TC = 0.089   // chord depth (2×4 = 3.5")
+  const TW = 0.038   // member width (1.5") — truss thickness along the run
+  const OC = 0.6096  // 24" on-centre (truss spec)
+  const span = Math.min(lenX, lenZ)
+  const runLen = Math.max(lenX, lenZ)
+  const half = span / 2
+  const rise = Math.max(0.1, half * pitch)
+  const info = `Fink truss · ${Math.round(pitch * 12)}:12`
+
+  // A member in the truss's X–Y plane (thin in Z), at run-position p.
+  const member = (x0: number, y0: number, x1: number, y1: number, p: number, depth: number, lbl: string) => {
+    const dx = x1 - x0, dy = y1 - y0
+    const len = Math.hypot(dx, dy)
+    if (len < 1e-3) return
+    addRoofBox(g, mat, len, depth, TW, (x0 + x1) / 2, (y0 + y1) / 2, p, 0, 0, Math.atan2(dy, dx), lbl)
+  }
+
+  for (const p of roofRun(runLen, OC, TW)) {
+    addRoofBox(g, mat, span, TC, TW, 0, 0, p, 0, 0, 0, 'Bottom chord')   // ceiling chord
+    member(-half, 0, 0, rise, p, TC, info)        // left top chord
+    member(half, 0, 0, rise, p, TC, info)         // right top chord
+    member(0, 0, 0, rise, p, TW, 'King post')     // centre post
+    // Fink W: apex down to the bottom-chord quarter points + the quarter verticals
+    member(0, rise, -half / 2, 0, p, TW, 'Web')
+    member(0, rise, half / 2, 0, p, TW, 'Web')
+    member(-half / 2, 0, -half / 2, rise / 2, p, TW, 'Web')
+    member(half / 2, 0, half / 2, rise / 2, p, TW, 'Web')
+  }
+  // Canonical ridge runs along Z; rotate when the footprint's long side is X.
+  if (lenX >= lenZ) g.rotation.y = Math.PI / 2
+  return g
+}
+
 /** Dispatch to the right roof builder by type name (defaults to gable). */
 export function buildRoofByType(
   type: string,
   opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number },
 ): THREE.Group {
   switch ((type || '').trim().toLowerCase()) {
+    case 'truss':
+    case 'trusses': return buildFinkTrussRoof(opts)
     case 'hip': return buildHipRoof(opts)
     case 'shed':
     case 'lean-to':
