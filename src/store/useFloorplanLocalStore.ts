@@ -128,6 +128,8 @@ interface FloorplanLocalState {
   selectedObjectId: string | null
   /** Object whose parts are detail-exploded (spread to show components), or null. */
   detailExplodeId: string | null
+  /** When true, the selected wall's framing spreads apart to show its members. */
+  wallDetailExplode: boolean
   /** Currently selected traced trade run (for edit-on-the-fly delete), or null. */
   selectedLine: { trade: 'plumbing' | 'electrical' | 'hvac'; id: string } | null
   /** Currently selected floor/roof area (tap to select → delete/clone), or null. */
@@ -183,6 +185,7 @@ interface FloorplanLocalState {
   requestPlaceCommit: () => void
   setSelectedObjectId: (v: string | null) => void
   setDetailExplodeId: (v: string | null) => void
+  setWallDetailExplode: (v: boolean) => void
   selectAreaExclusive: (kind: 'floor' | 'roof', id: string) => void
   // Coordinated openers — one panel at a time (each sets activePanel + clears the rest).
   openPicker: () => void
@@ -246,6 +249,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   placeCommitNonce: 0,
   selectedObjectId: null,
   detailExplodeId: null,
+  wallDetailExplode: false,
   selectedArea: null,
   selectedLine: null,
   activePanel: null,
@@ -311,6 +315,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   requestPlaceCommit: () => set((s) => ({ placeCommitNonce: s.placeCommitNonce + 1 })),
   setSelectedObjectId: (v) => set({ selectedObjectId: v, activePanel: v ? 'object' : null }),
   setDetailExplodeId: (v) => set({ detailExplodeId: v }),
+  setWallDetailExplode: (v) => set({ wallDetailExplode: v }),
   // One panel at a time: every opener sets activePanel and clears the rest.
   openPicker: () => set({ activePanel: 'picker', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
   openPanelBoard: () => set({ activePanel: 'panelBoard', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),

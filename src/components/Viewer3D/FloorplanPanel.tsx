@@ -121,6 +121,8 @@ export default function FloorplanPanel() {
   const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
   const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
   const setDetailExplodeId = useFloorplanLocalStore((s) => s.setDetailExplodeId)
+  const wallDetailExplode = useFloorplanLocalStore((s) => s.wallDetailExplode)
+  const setWallDetailExplode = useFloorplanLocalStore((s) => s.setWallDetailExplode)
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
   const setActiveWallType = useFloorplanLocalStore((s) => s.setActiveWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
@@ -1355,6 +1357,13 @@ export default function FloorplanPanel() {
 
             <div className={styles.btnRow}>
               <button className={styles.action} onClick={deleteSelectedWall}>Delete wall</button>
+              <button
+                className={wallDetailExplode ? styles.action : styles.secondary}
+                onClick={() => setWallDetailExplode(!wallDetailExplode)}
+                title="Spread this wall's framing apart to see studs, plates and layers"
+              >
+                {wallDetailExplode ? 'Collapse' : 'Explode framing'}
+              </button>
               <button className={styles.secondary} onClick={() => setSelectedWallIndex(null)}>Deselect</button>
             </div>
           </div>

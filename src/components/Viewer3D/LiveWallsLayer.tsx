@@ -6,13 +6,14 @@
  * same transform as FloorplanOverlay (overlay position/scale/rotation) to
  * place them correctly in the world.
  */
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard, Text } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { wallFramingSpec } from '../../services/constructionCode'
@@ -46,9 +47,11 @@ interface WallMeshProps {
   endCorner: boolean
   /** Storey-to-storey rise, so upper-floor walls stack on the floor below. */
   storeyHeight: number
+  /** Spread this wall's framing members apart to show the assembly. */
+  detailExplode?: boolean
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, storeyHeight }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, storeyHeight, detailExplode }: WallMeshProps) {
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
 
@@ -96,6 +99,19 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
     })
   }, [framing])
 
+  // Detail explode — spread this wall's framing members apart (plates lift, the
+  // faces/layers pull out through the thickness) so you can see the assembly;
+  // snaps back when off. Studs keep their place along the length.
+  useLayoutEffect(() => {
+    const amount = detailExplode ? 1 : 0
+    framing.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        const base = (o.userData.basePos ??= o.position.clone()) as THREE.Vector3
+        o.position.set(base.x, base.y * (1 + amount * 1.5), base.z * (1 + amount * 6))
+      }
+    })
+  }, [framing, detailExplode])
+
   if (length < 0.05) return null
 
   // Upper-floor walls stand on the floor below.
@@ -129,6 +145,9 @@ export default function LiveWallsLayer() {
   const steelDeflectionGapMm = useConfigStore((s) => s.steelDeflectionGapMm)
   const activeUnit = useConfigStore((s) => s.activeUnit)
   const lengthFormat = useConfigStore((s) => s.lengthFormat)
+
+  const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
+  const wallDetailExplode = useFloorplanLocalStore((s) => s.wallDetailExplode)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'framing')
@@ -253,6 +272,7 @@ export default function LiveWallsLayer() {
           startCorner={cornerEnds[i]?.start ?? false}
           endCorner={cornerEnds[i]?.end ?? false}
           storeyHeight={storeyHeight}
+          detailExplode={wallDetailExplode && i === selectedWallIndex}
         />
         )
       })}
