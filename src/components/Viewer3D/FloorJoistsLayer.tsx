@@ -18,8 +18,10 @@ import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import {
   buildFloorJoists, buildFloorDeck, FLOOR_SLAB_TYPES, SUBFLOOR_T, SLAB_T, FLOOR_ASSEMBLY_H,
+  type FloorHole,
 } from '../../services/framingGeometry'
 import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
+import { VERTICAL_CIRCULATION, getCatalogItem } from '../../data/objectCatalog'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
 
@@ -79,6 +81,8 @@ interface PartProps {
   pixelToWorld: (px: number, py: number) => THREE.Vector3
   imageWidth: number; imageHeight: number; overlayW: number; overlayD: number; rotRad: number
   storeyHeight: number
+  /** Stairwell/shaft openings (area-local centred metres) to frame through this floor. */
+  holes?: FloorHole[]
 }
 
 /** Vertical explode for one floor part: the within-floor PEEL (deck up / joists
@@ -93,12 +97,14 @@ function useFloorExplode(ref: React.RefObject<THREE.Group | null>, baseY: number
 }
 
 /** The structure: joist field, or a concrete slab. */
-function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight }: PartProps) {
+function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
+  const holeKey = JSON.stringify(holes ?? [])
   const joists = useMemo(
-    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size) }),
-    [lenX, lenZ, area.elementType, area.size],
+    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [lenX, lenZ, area.elementType, area.size, holeKey],
   )
   const ref = useRef<THREE.Group>(null)
   // Deck top sits at this storey's elevation; the structure hangs below it.
@@ -116,9 +122,11 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
 }
 
 /** The plywood subfloor deck (individual sheets) + a sheet-count nameplate. */
-function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight }: PartProps) {
+function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
-  const deck = useMemo(() => buildFloorDeck({ lenX, lenZ }), [lenX, lenZ])
+  const holeKey = JSON.stringify(holes ?? [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const deck = useMemo(() => buildFloorDeck({ lenX, lenZ, holes }), [lenX, lenZ, holeKey])
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
   const ref = useRef<THREE.Group>(null)
@@ -146,6 +154,7 @@ export default function FloorJoistsLayer() {
   const drawings = useAppStore((s) => s.drawings)
   const overlay: FloorplanOverlayState = useAppStore((s) => s.floorplanOverlay)
   const floorsAreas = useAppStore((s) => s.floorsAreas)
+  const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
 
@@ -170,6 +179,34 @@ export default function FloorJoistsLayer() {
     return new THREE.Vector3(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
+  // Stairwell/shaft openings: a placed stair/elevator cuts the deck(s) ABOVE it
+  // (upper-floor decks, level ≥ 1) whose footprint sits over it. Footprints are
+  // converted from world into each area's local centred frame.
+  const holesByArea: Record<string, FloorHole[]> = useMemo(() => {
+    const map: Record<string, FloorHole[]> = {}
+    const circ = placedObjects.filter((o) => VERTICAL_CIRCULATION.has(o.type))
+    if (circ.length === 0) return map
+    const cos = Math.cos(rotRad), sin = Math.sin(rotRad)
+    for (const area of floorsAreas) {
+      if ((area.level ?? 0) < 1) continue   // ground deck sits on grade — no shaft below
+      const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
+      const hs: FloorHole[] = []
+      for (const o of circ) {
+        const item = getCatalogItem(o.type)
+        const w = (item?.defaultW ?? 1) * o.scaleX
+        const d = (item?.defaultD ?? 1) * o.scaleZ
+        const dx = o.x - centre.x, dz = o.z - centre.z
+        const localX = dx * cos + dz * sin
+        const localZ = -dx * sin + dz * cos
+        if (Math.abs(localX) < lenX / 2 + w / 2 && Math.abs(localZ) < lenZ / 2 + d / 2) {
+          hs.push({ x: localX, z: localZ, w, d })
+        }
+      }
+      if (hs.length) map[area.id] = hs
+    }
+    return map
+  }, [placedObjects, floorsAreas, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad])
+
   if (!visibleLayers.has('floors') || floorsAreas.length === 0) return null
 
   const partProps = { pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight }
@@ -180,10 +217,10 @@ export default function FloorJoistsLayer() {
   return (
     <>
       <group name="floor-joists">
-        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} />)}
+        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} />)}
       </group>
       <group name="floor-sheeting">
-        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} />)}
+        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} />)}
       </group>
     </>
   )

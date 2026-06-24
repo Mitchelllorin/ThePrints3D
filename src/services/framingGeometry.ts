@@ -408,10 +408,14 @@ export const FLOOR_ASSEMBLY_H = 0.32
  * height and renders the joists and the subfloor DECK as SEPARATE children, so
  * the explode view lifts the sheets cleanly off the joists.
  */
+/** A rectangular opening in a floor, in the area's LOCAL centred coords (metres):
+ *  centre (x,z) and size (w,d). Used to frame a stairwell/shaft through the deck. */
+export interface FloorHole { x: number; z: number; w: number; d: number }
+
 export function buildFloorJoists(opts: {
-  lenX: number; lenZ: number; element: string; ocM: number; opacity?: number
+  lenX: number; lenZ: number; element: string; ocM: number; opacity?: number; holes?: FloorHole[]
 }): THREE.Group {
-  const { lenX, lenZ, element, ocM, opacity = 1 } = opts
+  const { lenX, lenZ, element, ocM, opacity = 1, holes = [] } = opts
   const g = new THREE.Group()
   if (lenX < 0.1 || lenZ < 0.1) return g
 
@@ -453,15 +457,45 @@ export function buildFloorJoists(opts: {
   // Common joists at OC, plus an outer joist flush to each long edge.
   const positions: number[] = [-halfRun + width / 2, halfRun - width / 2]
   for (let p = -halfRun + width / 2; p < halfRun - width / 2; p += oc) positions.push(p)
+  // Each hole, mapped to (span-range s0..s1, run-range p0..p1) for this orientation.
+  const spanHalf = spanLen / 2
+  const mapped = holes.map((h) => spanAlongX
+    ? { s0: h.x - h.w / 2, s1: h.x + h.w / 2, p0: h.z - h.d / 2, p1: h.z + h.d / 2 }
+    : { s0: h.z - h.d / 2, s1: h.z + h.d / 2, p0: h.x - h.w / 2, p1: h.x + h.w / 2 })
+  // A joist segment from a→b along the span axis at run-position p.
+  const addJoistSeg = (p: number, a: number, b: number) => {
+    if (b - a < 0.05) return
+    const mid = (a + b) / 2, len = b - a
+    if (spanAlongX) addJoist(len, width, mid, p)
+    else            addJoist(width, len, p, mid)
+  }
   for (const p of positions) {
-    if (spanAlongX) addJoist(spanLen, width, 0, p)
-    else            addJoist(width, spanLen, p, 0)
+    // Span-axis cuts from any hole whose run-range straddles this joist.
+    const cuts = mapped
+      .filter((m) => p > m.p0 && p < m.p1)
+      .map((m) => [Math.max(-spanHalf, m.s0), Math.min(spanHalf, m.s1)] as [number, number])
+      .filter(([a, b]) => b > a)
+      .sort((a, b) => a[0] - b[0])
+    if (cuts.length === 0) { addJoistSeg(p, -spanHalf, spanHalf); continue }
+    let cursor = -spanHalf
+    for (const [a, b] of cuts) { addJoistSeg(p, cursor, a); cursor = Math.max(cursor, b) }
+    addJoistSeg(p, cursor, spanHalf)
   }
   // Rim/band joists capping the joist ends (perpendicular to the joists).
   for (const s of [-1, 1]) {
     const e = s * (spanLen / 2 - width / 2)
     if (spanAlongX) addJoist(width, runLen, e, 0)
     else            addJoist(runLen, width, 0, e)
+  }
+  // Headers/trimmers framing each opening (doubled members along the run axis at
+  // the span edges of the hole) — how a real stairwell is framed.
+  for (const m of mapped) {
+    const runLenH = m.p1 - m.p0
+    if (runLenH < 0.05) continue
+    for (const s of [m.s0, m.s1]) {
+      if (spanAlongX) addJoist(width, runLenH, s, (m.p0 + m.p1) / 2)
+      else            addJoist(runLenH, width, (m.p0 + m.p1) / 2, s)
+    }
   }
 
   // Galvanised joist hangers — a shiny metal saddle at each joist-to-rim
@@ -502,10 +536,13 @@ export function buildFloorJoists(opts: {
  * y=0; the caller seats it just above the joists. The sheet COUNT is stashed on
  * `group.userData.sheetCount` for the material takeoff / nameplate.
  */
-export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: number }): THREE.Group {
+export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: number; holes?: FloorHole[] }): THREE.Group {
   const g = new THREE.Group()
-  const { lenX, lenZ, opacity = 1 } = opts
+  const { lenX, lenZ, opacity = 1, holes = [] } = opts
   if (lenX < 0.1 || lenZ < 0.1) { g.userData.sheetCount = 0; return g }
+  // A sheet is dropped if it overlaps any opening, leaving a clean gap over it.
+  const inHole = (x0: number, z0: number, x1: number, z1: number) =>
+    holes.some((h) => x0 < h.x + h.w / 2 && x1 > h.x - h.w / 2 && z0 < h.z + h.d / 2 && z1 > h.z - h.d / 2)
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#caa66e'), roughness: 0.85, metalness: 0,
     transparent: opacity < 1, opacity,
@@ -523,6 +560,7 @@ export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: num
       const x0 = Math.max(-halfX, x)
       const w = Math.min(x + sw, halfX) - x0
       if (w < 0.05 || d < 0.05) continue
+      if (inHole(x0, z, x0 + w, z + d)) continue   // leave the opening clear
       const sheet = new THREE.Mesh(new THREE.BoxGeometry(w - SHEET_GAP, SUBFLOOR_T, d - SHEET_GAP), mat)
       sheet.position.set(x0 + w / 2, 0, z + d / 2)
       sheet.castShadow = true; sheet.receiveShadow = true
