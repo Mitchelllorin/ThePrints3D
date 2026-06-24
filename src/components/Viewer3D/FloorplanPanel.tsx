@@ -135,6 +135,11 @@ export default function FloorplanPanel() {
   const plumbTemp = useFloorplanLocalStore((s) => s.plumbTemp)
   const setPlumb = useFloorplanLocalStore((s) => s.setPlumb)
   const selectedLine = useFloorplanLocalStore((s) => s.selectedLine)
+  const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
+  const removeRoofArea = useAppStore((s) => s.removeRoofArea)
+  const removeFloorsArea = useAppStore((s) => s.removeFloorsArea)
+  const addRoofAreas = useAppStore((s) => s.addRoofAreas)
+  const addFloorsAreas = useAppStore((s) => s.addFloorsAreas)
   const removePlumbingLine = useAppStore((s) => s.removePlumbingLine)
   const removeElectricalLine = useAppStore((s) => s.removeElectricalLine)
   const removeHvacLine = useAppStore((s) => s.removeHvacLine)
@@ -397,7 +402,7 @@ export default function FloorplanPanel() {
   // excluded here (see the retract effect below) so the menu never sits over the
   // workspace while you tap. Edge-triggered so a drawer you closed stays shut.
   // MUST sit above the early return below so hook order is stable across renders.
-  const buildCtx = overlay.calibrationMode || pickerOpen || selectedWallIndex != null || !!selectedLine
+  const buildCtx = overlay.calibrationMode || pickerOpen || selectedWallIndex != null || !!selectedLine || !!selectedArea
   const prevBuildCtx = useRef(false)
   useEffect(() => {
     if (buildCtx && !prevBuildCtx.current) setDrawerOpen('build', true)
@@ -473,6 +478,23 @@ export default function FloorplanPanel() {
     if (selectedLine.trade === 'plumbing') removePlumbingLine(selectedLine.id)
     else if (selectedLine.trade === 'electrical') removeElectricalLine(selectedLine.id)
     else removeHvacLine(selectedLine.id)
+    closeAllPanels()
+  }
+
+  // Edit-on-the-fly for floor/roof areas: delete or clone the selected area.
+  const deleteSelectedArea = () => {
+    if (!selectedArea) return
+    if (selectedArea.kind === 'roof') removeRoofArea(selectedArea.id)
+    else removeFloorsArea(selectedArea.id)
+    closeAllPanels()
+  }
+  const cloneSelectedArea = () => {
+    if (!selectedArea) return
+    const src = (selectedArea.kind === 'roof' ? roofAreas : floorsAreas).find((a) => a.id === selectedArea.id)
+    if (!src) return
+    const copy = { ...src, id: `${src.id}-copy-${Date.now()}`, x1: src.x1 + 24, y1: src.y1 + 24, x2: src.x2 + 24, y2: src.y2 + 24 }
+    if (selectedArea.kind === 'roof') addRoofAreas([copy])
+    else addFloorsAreas([copy])
     closeAllPanels()
   }
 
@@ -1259,6 +1281,19 @@ export default function FloorplanPanel() {
             <span className={styles.stepHint}>Remove this run, or tap another to select it.</span>
             <div className={styles.btnRow}>
               <button className={styles.cancel} onClick={deleteSelectedLine}>Delete run</button>
+              <button className={styles.secondary} onClick={() => closeAllPanels()}>Deselect</button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Selected floor/roof area (tap to select → delete or clone) ── */}
+        {selectedArea && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>{selectedArea.kind === 'roof' ? 'Roof' : 'Floor'} area selected</span>
+            <span className={styles.stepHint}>Delete it, clone it, or tap another to select.</span>
+            <div className={styles.btnRow}>
+              <button className={styles.cancel} onClick={deleteSelectedArea}>Delete</button>
+              <button className={styles.secondary} onClick={cloneSelectedArea}>Clone</button>
               <button className={styles.secondary} onClick={() => closeAllPanels()}>Deselect</button>
             </div>
           </div>

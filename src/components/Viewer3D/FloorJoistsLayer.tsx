@@ -15,6 +15,7 @@ import { Billboard, Text } from '@react-three/drei'
 import { explodeRuntime } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import {
   buildFloorJoists, buildFloorDeck, FLOOR_SLAB_TYPES, SUBFLOOR_T, SLAB_T, FLOOR_ASSEMBLY_H,
@@ -123,6 +124,7 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
 
 /** The plywood subfloor deck (individual sheets) + a sheet-count nameplate. */
 function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes }: PartProps) {
+  const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const holeKey = JSON.stringify(holes ?? [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,7 +140,12 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   const sheetCount = (deck.userData.sheetCount as number) ?? 0
   return (
     <group ref={ref}>
-      <primitive object={deck} position={[centre.x, -SUBFLOOR_T / 2, centre.z]} rotation={[0, rotRad, 0]} />
+      <primitive
+        object={deck}
+        position={[centre.x, -SUBFLOOR_T / 2, centre.z]}
+        rotation={[0, rotRad, 0]}
+        onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); selectArea('floor', area.id) }}
+      />
       {sheetCount > 0 && (
         <Billboard position={[centre.x, 0.5, centre.z]}>
           <Text fontSize={0.26 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.02 * labelScale} outlineColor="#0b1120">

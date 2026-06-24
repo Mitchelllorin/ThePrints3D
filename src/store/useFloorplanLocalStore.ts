@@ -130,12 +130,14 @@ interface FloorplanLocalState {
   detailExplodeId: string | null
   /** Currently selected traced trade run (for edit-on-the-fly delete), or null. */
   selectedLine: { trade: 'plumbing' | 'electrical' | 'hvac'; id: string } | null
+  /** Currently selected floor/roof area (tap to select → delete/clone), or null. */
+  selectedArea: { kind: 'floor' | 'roof'; id: string } | null
   /**
    * THE single global panel gate — only one overlay UI shows at a time. Every
    * panel/card/picker checks this. Selection data (selectedObjectId /
    * selectedWallIndex) is the content; `activePanel` controls visibility.
    */
-  activePanel: 'picker' | 'panelBoard' | 'object' | 'wall' | 'catalog' | 'line' | 'trace' | 'layers' | 'settings' | null
+  activePanel: 'picker' | 'panelBoard' | 'object' | 'wall' | 'catalog' | 'line' | 'area' | 'trace' | 'layers' | 'settings' | null
 
   // ─── UI toggles ──────────────────────────────────────────────────
   presetOpen: boolean
@@ -181,6 +183,7 @@ interface FloorplanLocalState {
   requestPlaceCommit: () => void
   setSelectedObjectId: (v: string | null) => void
   setDetailExplodeId: (v: string | null) => void
+  selectAreaExclusive: (kind: 'floor' | 'roof', id: string) => void
   // Coordinated openers — one panel at a time (each sets activePanel + clears the rest).
   openPicker: () => void
   openPanelBoard: () => void
@@ -243,6 +246,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   placeCommitNonce: 0,
   selectedObjectId: null,
   detailExplodeId: null,
+  selectedArea: null,
   selectedLine: null,
   activePanel: null,
   calibrationHandledIds: [],
@@ -308,21 +312,22 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setSelectedObjectId: (v) => set({ selectedObjectId: v, activePanel: v ? 'object' : null }),
   setDetailExplodeId: (v) => set({ detailExplodeId: v }),
   // One panel at a time: every opener sets activePanel and clears the rest.
-  openPicker: () => set({ activePanel: 'picker', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
-  openPanelBoard: () => set({ activePanel: 'panelBoard', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
+  openPicker: () => set({ activePanel: 'picker', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
+  openPanelBoard: () => set({ activePanel: 'panelBoard', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
   toggleCatalog: () => set((s) => s.activePanel === 'catalog'
     ? { activePanel: null }
-    : { activePanel: 'catalog', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
-  selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
-  selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, placeObjectType: null }),
-  selectLineExclusive: (trade, id) => set({ activePanel: 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, placeObjectType: null }),
-  armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null }),
+    : { activePanel: 'catalog', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
+  selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
+  selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
+  selectLineExclusive: (trade, id) => set({ activePanel: 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, selectedArea: null, placeObjectType: null }),
+  selectAreaExclusive: (kind, id) => set({ activePanel: 'area', selectedArea: { kind, id }, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
+  armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null }),
   // Toggling the same panel closes it; opening a different one clears every
   // selection/floater so the single-panel rule holds across both UI systems.
   setActivePanel: (v) => set((s) => v && s.activePanel === v
     ? { activePanel: null }
-    : { activePanel: v, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
-  closeAllPanels: () => set({ activePanel: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
+    : { activePanel: v, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
+  closeAllPanels: () => set({ activePanel: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),
   setSeedProcessing: (v) => set({ seedProcessing: v }),

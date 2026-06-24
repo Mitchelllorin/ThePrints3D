@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildRoofByType, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { pitchToRatio } from '../../data/traceLayers'
@@ -29,6 +30,7 @@ interface RoofAreaMeshProps {
 }
 
 function RoofAreaMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, wallHeight }: RoofAreaMeshProps) {
+  const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
   const lenX = (Math.abs(area.x2 - area.x1) / imageWidth) * overlayW
   const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
   const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
@@ -49,7 +51,14 @@ function RoofAreaMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, o
 
   // Seat the eaves on the top plate of this storey's walls (level-aware).
   const eaveY = wallHeight + (area.level ?? 0) * (wallHeight + FLOOR_ASSEMBLY_H)
-  return <primitive object={roof} position={[centre.x, eaveY, centre.z]} rotation={[0, rotRad, 0]} />
+  return (
+    <primitive
+      object={roof}
+      position={[centre.x, eaveY, centre.z]}
+      rotation={[0, rotRad, 0]}
+      onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); selectArea('roof', area.id) }}
+    />
+  )
 }
 
 export default function RoofLayer() {
