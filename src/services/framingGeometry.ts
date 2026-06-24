@@ -867,6 +867,71 @@ export function buildFinkTrussRoof(opts: {
   return g
 }
 
+/** An angled framing member in the X–Y plane (thin in Z), at run-position z. */
+function addRoofMemberXY(
+  g: THREE.Group, mat: THREE.Material,
+  x0: number, y0: number, x1: number, y1: number,
+  z: number, depth: number, width: number, info: string,
+) {
+  const dx = x1 - x0, dy = y1 - y0
+  const len = Math.hypot(dx, dy)
+  if (len < 1e-3) return
+  addRoofBox(g, mat, len, depth, width, (x0 + x1) / 2, (y0 + y1) / 2, z, 0, 0, Math.atan2(dy, dx), info)
+}
+
+/** Gambrel (barn) — two slopes per side: steep lower, shallow upper. */
+export function buildGambrelRoof(opts: {
+  lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+}): THREE.Group {
+  const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.2 || lenZ < 0.2) return g
+  const mat = roofMat(opacity)
+  const span = Math.min(lenX, lenZ)
+  const runLen = Math.max(lenX, lenZ)
+  const half = span / 2
+  const kneeX = half * 0.55
+  const kneeY = half * (0.7 + Math.min(1, pitch) * 0.4)
+  const peakY = kneeY + kneeX * 0.5
+  const info = `Gambrel · ${Math.round(pitch * 12)}:12`
+  for (const p of roofRun(runLen, Math.max(0.3, ocM), ROOF_RW)) {
+    addRoofMemberXY(g, mat, -half, 0, -kneeX, kneeY, p, ROOF_RT, ROOF_RW, info)
+    addRoofMemberXY(g, mat, -kneeX, kneeY, 0, peakY, p, ROOF_RT, ROOF_RW, info)
+    addRoofMemberXY(g, mat, half, 0, kneeX, kneeY, p, ROOF_RT, ROOF_RW, info)
+    addRoofMemberXY(g, mat, kneeX, kneeY, 0, peakY, p, ROOF_RT, ROOF_RW, info)
+    addRoofBox(g, mat, span, 0.089, 0.038, 0, 0, p, 0, 0, 0, 'Ceiling/rafter tie')
+  }
+  addRoofBox(g, mat, ROOF_RW, ROOF_RT, runLen, 0, peakY, 0, 0, 0, 0, 'Ridge board')
+  addRoofBox(g, mat, ROOF_RW, ROOF_RT, runLen, -kneeX, kneeY, 0, 0, 0, 0, 'Knuckle purlin')
+  addRoofBox(g, mat, ROOF_RW, ROOF_RT, runLen, kneeX, kneeY, 0, 0, 0, 0, 'Knuckle purlin')
+  if (lenX >= lenZ) g.rotation.y = Math.PI / 2
+  return g
+}
+
+/** Saltbox — asymmetric gable: one long shallow slope, one short steep slope. */
+export function buildSaltboxRoof(opts: {
+  lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+}): THREE.Group {
+  const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.2 || lenZ < 0.2) return g
+  const mat = roofMat(opacity)
+  const span = Math.min(lenX, lenZ)
+  const runLen = Math.max(lenX, lenZ)
+  const half = span / 2
+  const ridgeX = -half * 0.35
+  const rise = Math.max(0.2, half * pitch * 1.3)
+  const info = `Saltbox · ${Math.round(pitch * 12)}:12`
+  for (const p of roofRun(runLen, Math.max(0.3, ocM), ROOF_RW)) {
+    addRoofMemberXY(g, mat, -half, 0, ridgeX, rise, p, ROOF_RT, ROOF_RW, info)
+    addRoofMemberXY(g, mat, half, 0, ridgeX, rise, p, ROOF_RT, ROOF_RW, info)
+    addRoofBox(g, mat, span, 0.089, 0.038, 0, 0, p, 0, 0, 0, 'Ceiling/rafter tie')
+  }
+  addRoofBox(g, mat, ROOF_RW, ROOF_RT, runLen, ridgeX, rise, 0, 0, 0, 0, 'Ridge board')
+  if (lenX >= lenZ) g.rotation.y = Math.PI / 2
+  return g
+}
+
 /**
  * Boxed-eave overhang: soffit panels, fascia around the outer edge, and
  * lookouts framing back to the wall (the "framing back to the wall" + blocking
@@ -924,6 +989,8 @@ export function buildRoofByType(
     switch ((type || '').trim().toLowerCase()) {
       case 'truss':
       case 'trusses': return buildFinkTrussRoof(opts)
+      case 'gambrel': return buildGambrelRoof(opts)
+      case 'saltbox': return buildSaltboxRoof(opts)
       case 'hip': return buildHipRoof(opts)
       case 'shed':
       case 'lean-to':

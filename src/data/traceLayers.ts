@@ -95,9 +95,10 @@ export function ocToM(size: string): number {
 /** Pre-trace picker rows for roofs (element = roof type, size = pitch). */
 export const ROOF_PICKER = {
   // Each maps to a builder in framingGeometry (buildRoofByType). Truss = Fink
-  // (W-web) trusses at 24" OC; Gable = stick framing. Gambrel/mansard/combined
-  // are next. Shed = mono-pitch/lean-to; Flat ignores pitch.
-  element: ['Gable', 'Truss', 'Hip', 'Shed', 'Flat'],
+  // (W-web) at 24" OC; Gable = stick. Gambrel = barn; Saltbox = asymmetric.
+  // A COMBINED roof = trace several areas, each with its own type. Shed =
+  // mono-pitch/lean-to; Flat ignores pitch.
+  element: ['Gable', 'Truss', 'Hip', 'Gambrel', 'Saltbox', 'Shed', 'Flat'],
   size: ['3:12', '4:12', '6:12', '8:12', '12:12'],
 }
 export const ROOF_DEFAULTS = { element: 'Gable', size: '6:12' }
