@@ -84,6 +84,7 @@ export default function FloorplanPanel() {
   const placedObjects   = useAppStore((s) => s.placedObjects)
   const removePlacedObject = useAppStore((s) => s.removePlacedObject)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
+  const clonePlacedObject = useAppStore((s) => s.clonePlacedObject)
   const modelReady      = useAppStore((s) => s.model.status === 'ready')
 
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
@@ -1407,6 +1408,9 @@ export default function FloorplanPanel() {
           <div className={styles.btnRow}>
             <button className={styles.secondary} onClick={() => updatePlacedObject(selectedObject.id, { rotationY: selectedObject.rotationY + Math.PI / 2 })}>
               Rotate 90°
+            </button>
+            <button className={styles.secondary} onClick={() => { const nid = clonePlacedObject(selectedObject.id); if (nid) setSelectedObjectId(nid) }}>
+              Clone
             </button>
             <button className={styles.secondary} onClick={deleteSelectedObject}>Delete</button>
           </div>

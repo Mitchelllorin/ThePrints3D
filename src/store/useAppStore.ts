@@ -410,6 +410,8 @@ interface AppState {
   addPlacedObject: (obj: PlacedObject) => void
   removePlacedObject: (id: string) => void
   updatePlacedObject: (id: string, patch: Partial<PlacedObject>) => void
+  /** Duplicate a placed object (slightly offset); returns the new object's id. */
+  clonePlacedObject: (id: string) => string
   // Trade trace lines
   addPlumbingLines: (lines: TracedLine[]) => void
   addElectricalLines: (lines: TracedLine[]) => void
@@ -1549,6 +1551,19 @@ export const useAppStore = create<AppState>()(
         const obj = s.placedObjects.find((o) => o.id === id)
         if (obj) Object.assign(obj, patch)
       })
+    },
+
+    clonePlacedObject: (id) => {
+      let newId = ''
+      const src = get().placedObjects.find((o) => o.id === id)
+      if (!src) return newId
+      pushHistory()
+      newId = `${src.type}-${Date.now()}-${Math.round(Math.random() * 1e6)}`
+      set((s) => {
+        // Offset the copy slightly so it doesn't sit exactly on the original.
+        s.placedObjects.push({ ...src, id: newId, x: src.x + 0.4, z: src.z + 0.4, circuitId: undefined })
+      })
+      return newId
     },
 
     // ─── Trade trace lines (plumbing / electrical) ────────────────────
