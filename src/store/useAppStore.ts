@@ -422,12 +422,16 @@ interface AppState {
   // Floor areas (joist fields)
   addFloorsAreas: (areas: TracedLine[]) => void
   removeFloorsArea: (id: string) => void
+  /** Drag-move a floor area by a pixel-space delta (both corners). */
+  translateFloorsArea: (id: string, dxPx: number, dyPx: number) => void
   /** Clone the floor area(s) on `fromLevel` up to the next storey — a guaranteed
    *  full upper floor matching the one below (no perspective-prone re-tracing). */
   carryFloorUp: (fromLevel: number) => void
   // Roof areas (gable roofs)
   addRoofAreas: (areas: TracedLine[]) => void
   removeRoofArea: (id: string) => void
+  /** Drag-move a roof area by a pixel-space delta (both corners). */
+  translateRoofArea: (id: string, dxPx: number, dyPx: number) => void
   toggleTradeLayerVisible: (layer: TraceLayer) => void
   // Electrical circuits
   addCircuit: (c: Circuit) => void
@@ -1628,6 +1632,14 @@ export const useAppStore = create<AppState>()(
       set((s) => { s.floorsAreas = s.floorsAreas.filter((a) => a.id !== id) })
     },
 
+    translateFloorsArea: (id, dxPx, dyPx) => {
+      pushHistory()
+      set((s) => {
+        const a = s.floorsAreas.find((ar) => ar.id === id)
+        if (a) { a.x1 += dxPx; a.y1 += dyPx; a.x2 += dxPx; a.y2 += dyPx }
+      })
+    },
+
     carryFloorUp: (fromLevel) => {
       pushHistory()
       set((s) => {
@@ -1652,6 +1664,14 @@ export const useAppStore = create<AppState>()(
     removeRoofArea: (id) => {
       pushHistory()
       set((s) => { s.roofAreas = s.roofAreas.filter((a) => a.id !== id) })
+    },
+
+    translateRoofArea: (id, dxPx, dyPx) => {
+      pushHistory()
+      set((s) => {
+        const a = s.roofAreas.find((ar) => ar.id === id)
+        if (a) { a.x1 += dxPx; a.y1 += dyPx; a.x2 += dxPx; a.y2 += dyPx }
+      })
     },
 
     addElectricalLines: (lines) => {

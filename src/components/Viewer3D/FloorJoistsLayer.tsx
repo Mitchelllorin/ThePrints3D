@@ -8,9 +8,9 @@
  * deck is modelled as individual 4'×8' sheets with visible joints, and each area
  * carries a sheet COUNT nameplate for material takeoff.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import { explodeRuntime } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
@@ -84,6 +84,10 @@ interface PartProps {
   storeyHeight: number
   /** Stairwell/shaft openings (area-local centred metres) to frame through this floor. */
   holes?: FloorHole[]
+  /** Live drag offset (world X/Z) while this area is being moved. */
+  offset?: [number, number]
+  /** Pointer-down on the area — selects, then drags on the next press. */
+  onDown?: (e: ThreeEvent<PointerEvent>) => void
 }
 
 /** Vertical explode for one floor part: the within-floor PEEL (deck up / joists
@@ -98,7 +102,7 @@ function useFloorExplode(ref: React.RefObject<THREE.Group | null>, baseY: number
 }
 
 /** The structure: joist field, or a concrete slab. */
-function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes }: PartProps) {
+function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], onDown }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
   const holeKey = JSON.stringify(holes ?? [])
@@ -117,14 +121,13 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
   if (lenX < 0.1 || lenZ < 0.1) return null
   return (
     <group ref={ref}>
-      <primitive object={joists} position={[centre.x, 0, centre.z]} rotation={[0, rotRad, 0]} />
+      <primitive object={joists} position={[centre.x + offset[0], 0, centre.z + offset[1]]} rotation={[0, rotRad, 0]} onPointerDown={onDown} />
     </group>
   )
 }
 
 /** The plywood subfloor deck (individual sheets) + a sheet-count nameplate. */
-function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes }: PartProps) {
-  const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
+function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], onDown }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const holeKey = JSON.stringify(holes ?? [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,9 +145,9 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
     <group ref={ref}>
       <primitive
         object={deck}
-        position={[centre.x, -SUBFLOOR_T / 2, centre.z]}
+        position={[centre.x + offset[0], -SUBFLOOR_T / 2, centre.z + offset[1]]}
         rotation={[0, rotRad, 0]}
-        onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); selectArea('floor', area.id) }}
+        onPointerDown={onDown}
       />
       {sheetCount > 0 && (
         <Billboard position={[centre.x, 0.5, centre.z]}>
@@ -164,6 +167,10 @@ export default function FloorJoistsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const translateFloorsArea = useAppStore((s) => s.translateFloorsArea)
+  const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
+  const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
+  const [drag, setDrag] = useState<{ id: string; sx: number; sz: number; dx: number; dz: number } | null>(null)
 
   // Storey-to-storey rise = wall height + the floor assembly on top of it, so a
   // 2nd-floor deck's joists rest ON the lower wall's top plate.
@@ -214,6 +221,35 @@ export default function FloorJoistsLayer() {
     return map
   }, [placedObjects, floorsAreas, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad])
 
+  // World drag delta → pixel delta (un-rotate by overlay rotation, then scale).
+  const worldDeltaToPixel = (dx: number, dz: number): [number, number] => {
+    const c = Math.cos(-rotRad), s = Math.sin(-rotRad)
+    const lx = dx * c - dz * s
+    const lz = dx * s + dz * c
+    return [(lx / overlayW) * imageWidth, (lz / overlayD) * imageHeight]
+  }
+  const onDownArea = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    if (selectedArea?.kind === 'floor' && selectedArea.id === area.id) {
+      setDrag({ id: area.id, sx: e.point.x, sz: e.point.z, dx: 0, dz: 0 })   // selected → start drag
+    } else {
+      selectArea('floor', area.id)
+    }
+  }
+  const onMove = (e: ThreeEvent<PointerEvent>) => {
+    if (!drag) return
+    e.stopPropagation()
+    setDrag({ ...drag, dx: e.point.x - drag.sx, dz: e.point.z - drag.sz })
+  }
+  const onUp = (e: ThreeEvent<PointerEvent>) => {
+    if (!drag) return
+    e.stopPropagation()
+    const [dpx, dpy] = worldDeltaToPixel(drag.dx, drag.dz)
+    if (Math.hypot(dpx, dpy) > 0.5) translateFloorsArea(drag.id, dpx, dpy)
+    setDrag(null)
+  }
+  const offsetFor = (id: string): [number, number] => (drag && drag.id === id ? [drag.dx, drag.dz] : [0, 0])
+
   if (!visibleLayers.has('floors') || floorsAreas.length === 0) return null
 
   const partProps = { pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight }
@@ -223,11 +259,17 @@ export default function FloorJoistsLayer() {
 
   return (
     <>
+      {drag && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
+          <planeGeometry args={[4000, 4000]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      )}
       <group name="floor-joists">
-        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} />)}
+        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={offsetFor(area.id)} onDown={onDownArea(area)} />)}
       </group>
       <group name="floor-sheeting">
-        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} />)}
+        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={offsetFor(area.id)} onDown={onDownArea(area)} />)}
       </group>
     </>
   )

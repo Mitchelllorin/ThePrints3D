@@ -606,12 +606,6 @@ export default function FloorplanPanel() {
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
             {framingActive ? `${activeLevel > 0 ? `${activeLevelLabel} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
           </button>
-          {/* Hard stop for the rubber-band: ends the current run so the cursor
-              line stops following — without leaving trace mode. Only shows while
-              a run is live (an anchor is down). */}
-          {traceStart && (
-            <button className={styles.traceBarBtn} onClick={() => { setTraceStart(null); setHoverPixel(null) }} title="Stop the line — end this run">✕ End line</button>
-          )}
           {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
             || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
             <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
@@ -1311,7 +1305,7 @@ export default function FloorplanPanel() {
         {selectedArea && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>{selectedArea.kind === 'roof' ? 'Roof' : 'Floor'} area selected</span>
-            <span className={styles.stepHint}>Delete it, clone it, or tap another to select.</span>
+            <span className={styles.stepHint}>Drag it to move; or delete / clone. Tap another to select.</span>
             <div className={styles.btnRow}>
               <button className={styles.cancel} onClick={deleteSelectedArea}>Delete</button>
               <button className={styles.secondary} onClick={cloneSelectedArea}>Clone</button>

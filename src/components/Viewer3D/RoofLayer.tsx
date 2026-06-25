@@ -6,8 +6,9 @@
  * and seat it on top of the walls (eaves at wall-top height) so it sits where a
  * roof actually goes.
  */
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import type { ThreeEvent } from '@react-three/fiber'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -27,10 +28,12 @@ interface RoofAreaMeshProps {
   overlayD: number
   rotRad: number
   wallHeight: number
+  selected: boolean
+  offset: [number, number]
+  onDown: (e: ThreeEvent<PointerEvent>) => void
 }
 
-function RoofAreaMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, wallHeight }: RoofAreaMeshProps) {
-  const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
+function RoofAreaMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, wallHeight, selected, offset, onDown }: RoofAreaMeshProps) {
   const lenX = (Math.abs(area.x2 - area.x1) / imageWidth) * overlayW
   const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
   const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
@@ -54,10 +57,17 @@ function RoofAreaMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, o
   return (
     <primitive
       object={roof}
-      position={[centre.x, eaveY, centre.z]}
+      position={[centre.x + offset[0], eaveY, centre.z + offset[1]]}
       rotation={[0, rotRad, 0]}
-      onClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); selectArea('roof', area.id) }}
-    />
+      onPointerDown={onDown}
+    >
+      {selected && (
+        <mesh position={[0, 0.2, 0]}>
+          <boxGeometry args={[lenX, 0.05, lenZ]} />
+          <meshBasicMaterial color="#facc15" transparent opacity={0.18} depthWrite={false} />
+        </mesh>
+      )}
+    </primitive>
   )
 }
 
@@ -67,9 +77,15 @@ export default function RoofLayer() {
   const roofAreas = useAppStore((s) => s.roofAreas)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const translateRoofArea = useAppStore((s) => s.translateRoofArea)
+  const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
+  const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'roof')
+
+  // Drag-move a selected roof area: select on first tap, drag on the next press.
+  const [drag, setDrag] = useState<{ id: string; sx: number; sz: number; dx: number; dz: number } | null>(null)
 
   const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
 
@@ -87,10 +103,45 @@ export default function RoofLayer() {
     return new THREE.Vector3(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
+  // World drag delta → pixel delta (un-rotate by the overlay rotation, scale).
+  const worldDeltaToPixel = (dx: number, dz: number): [number, number] => {
+    const c = Math.cos(-rotRad), s = Math.sin(-rotRad)
+    const lx = dx * c - dz * s
+    const lz = dx * s + dz * c
+    return [(lx / overlayW) * imageWidth, (lz / overlayD) * imageHeight]
+  }
+  const onDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    if (selectedArea?.kind === 'roof' && selectedArea.id === area.id) {
+      setDrag({ id: area.id, sx: e.point.x, sz: e.point.z, dx: 0, dz: 0 })   // already selected → start drag
+    } else {
+      selectArea('roof', area.id)
+    }
+  }
+  const onMove = (e: ThreeEvent<PointerEvent>) => {
+    if (!drag) return
+    e.stopPropagation()
+    setDrag({ ...drag, dx: e.point.x - drag.sx, dz: e.point.z - drag.sz })
+  }
+  const onUp = (e: ThreeEvent<PointerEvent>) => {
+    if (!drag) return
+    e.stopPropagation()
+    const [dpx, dpy] = worldDeltaToPixel(drag.dx, drag.dz)
+    if (Math.hypot(dpx, dpy) > 0.5) translateRoofArea(drag.id, dpx, dpy)
+    setDrag(null)
+  }
+
   if (!visibleLayers.has('roof') || roofAreas.length === 0) return null
 
   return (
     <group name="roof" ref={groupRef}>
+      {/* Ground catcher while dragging, so the move keeps tracking off the area. */}
+      {drag && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
+          <planeGeometry args={[4000, 4000]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      )}
       {roofAreas.map((area) => (
         <RoofAreaMesh
           key={area.id}
@@ -102,6 +153,9 @@ export default function RoofLayer() {
           overlayD={overlayD}
           rotRad={rotRad}
           wallHeight={wallHeight}
+          selected={selectedArea?.kind === 'roof' && selectedArea.id === area.id}
+          offset={drag && drag.id === area.id ? [drag.dx, drag.dz] : [0, 0]}
+          onDown={onDown(area)}
         />
       ))}
     </group>
