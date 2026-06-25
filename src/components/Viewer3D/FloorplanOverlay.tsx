@@ -590,31 +590,41 @@ export default function FloorplanOverlay() {
 
       // Trade layers (plumbing/electrical/HVAC) trace simple lines, not walls.
       if (activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') {
-        if (!traceStart) { const s = snapTradeStart(pixel); setTraceStart(s); setHoverPixel(s); return }
+        // In-wall runs follow the studs: snap taps onto the nearest wall line so
+        // the run routes INSIDE the wall (through the studs) instead of floating
+        // across the room. Other bands (under-floor / ceiling) tap freely.
+        const inWallSnap = (p: [number, number]): [number, number] => {
+          if (traceBand !== 'in-wall') return p
+          const refWalls = drawing.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user' || (w.level ?? 0) === activeLevel)
+          const s = snapPointToWalls(p[0], p[1], refWalls, 26, 26)
+          return [s.x, s.y]
+        }
+        if (!traceStart) { const s = snapTradeStart(inWallSnap(pixel)); setTraceStart(s); setHoverPixel(s); return }
         const a = traceStart
-        if (Math.hypot(pixel[0] - a[0], pixel[1] - a[1]) < 4) { setTraceStart(null); return }
+        const end = inWallSnap(pixel)
+        if (Math.hypot(end[0] - a[0], end[1] - a[1]) < 4) { setTraceStart(null); return }
         if (activeTraceLayer === 'plumbing') {
           addPlumbingLines([{
-            id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
+            id: genLineId(), x1: a[0], y1: a[1], x2: end[0], y2: end[1],
             elementType: plumbElement, size: plumbSize, material: plumbMaterial,
             tempType: plumbElement === 'Supply Line' ? plumbTemp : undefined,
             band: traceBand,
           }])
         } else if (activeTraceLayer === 'electrical') {
           addElectricalLines([{
-            id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
+            id: genLineId(), x1: a[0], y1: a[1], x2: end[0], y2: end[1],
             elementType: elecElement, size: elecAmp, material: elecWire,
             wireRole: elecElement === 'Low Voltage' ? undefined : elecRole,
             band: traceBand,
           }])
         } else {
           addHvacLines([{
-            id: genLineId(), x1: a[0], y1: a[1], x2: pixel[0], y2: pixel[1],
+            id: genLineId(), x1: a[0], y1: a[1], x2: end[0], y2: end[1],
             elementType: hvacElement, size: hvacSize, material: hvacMaterial,
             band: traceBand,
           }])
         }
-        setTraceStart(pixel) // chain: B becomes the next A
+        setTraceStart(end) // chain: B becomes the next A
         return
       }
 

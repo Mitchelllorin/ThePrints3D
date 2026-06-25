@@ -31,26 +31,26 @@ export const LAYER_LABELS: Record<TraceLayer, string> = {
 
 /** Pre-trace picker rows for plumbing. */
 export const PLUMBING_PICKER = {
-  element: ['Supply Line', 'Drain Line', 'Vent Stack', 'Cleanout'],
-  size: ['1/2"', '3/4"', '1-1/2"', '2"', '3"', '4"'],
-  material: ['PEX', 'Copper', 'PVC', 'ABS'],
+  element: ['Supply Line', 'Fixture Branch', 'Drain Line', 'Waste Stack', 'Vent Stack', 'Gas Line', 'Cleanout'],
+  size: ['1/2"', '5/8"', '3/4"', '1"', '1-1/4"', '1-1/2"', '2"', '3"', '4"'],
+  material: ['PEX', 'Copper', 'CPVC', 'PVC', 'ABS', 'Cast Iron', 'Galvanized'],
 }
 export const PLUMBING_DEFAULTS = { element: 'Supply Line', size: '1/2"', material: 'PEX', temp: 'cold' as 'hot' | 'cold' }
 
 /** Pre-trace picker rows for electrical (size = amperage, material = wire gauge). */
 export const ELECTRICAL_PICKER = {
-  element: ['Circuit Run', 'Home Run', 'Low Voltage'],
-  size: ['15A', '20A', '30A', '50A'],
-  material: ['14/2 Romex', '12/2 Romex', '10/2 Romex', 'Conduit'],
+  element: ['Circuit Run', 'Home Run', 'Dedicated Circuit', 'Sub-Feed', 'Service Entrance', 'Low Voltage'],
+  size: ['15A', '20A', '30A', '40A', '50A', '60A', '100A', '200A'],
+  material: ['14/2 Romex', '14/3 Romex', '12/2 Romex', '12/3 Romex', '10/2 Romex', '10/3 Romex', '8/3 Romex', 'THHN (conduit)'],
   role: ['Hot (Black)', 'Hot (Red)', 'Neutral', 'Ground'],
 }
 export const ELECTRICAL_DEFAULTS = { element: 'Circuit Run', size: '15A', material: '14/2 Romex', role: 'Hot (Black)' }
 
-/** Pre-trace picker rows for HVAC (size = round-duct diameter). */
+/** Pre-trace picker rows for HVAC (size = round-duct diameter / trunk size). */
 export const HVAC_PICKER = {
-  element: ['Supply Duct', 'Return Duct', 'Branch / Flex', 'Exhaust'],
-  size: ['4"', '6"', '8"', '10"', '12"', '14"'],
-  material: ['Sheet Metal', 'Flex', 'Rigid Fiberglass'],
+  element: ['Supply Duct', 'Return Duct', 'Trunk / Main', 'Branch / Flex', 'Plenum', 'Exhaust'],
+  size: ['4"', '6"', '8"', '10"', '12"', '14"', '16"', '18"', '20"'],
+  material: ['Sheet Metal', 'Spiral Metal', 'Flex', 'Rigid Fiberglass'],
 }
 export const HVAC_DEFAULTS = { element: 'Supply Duct', size: '6"', material: 'Sheet Metal' }
 

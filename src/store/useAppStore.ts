@@ -1123,6 +1123,9 @@ export const useAppStore = create<AppState>()(
     loadPresetDrawing: (difficulty, practiceMode) => {
       pushHistory()
       const preset = createPresetDrawing(difficulty, practiceMode)
+      // The Family House ships as a 2-storey preset so the multi-floor flow can
+      // be tested out of the box: a second plan tagged to the upper floor.
+      const upper = difficulty === 'medium' ? createPresetDrawing(difficulty, practiceMode) : null
       set((s) => {
         const { wizardInputs, overlayScale, ...drawingSeed } = preset
         const drawing: Drawing = {
@@ -1133,6 +1136,19 @@ export const useAppStore = create<AppState>()(
         }
         drawingPool.set(drawing.id, drawing)
         s.drawings.push(drawing)
+        if (upper) {
+          const { wizardInputs: _uw, overlayScale: _uo, ...upperSeed } = upper
+          const d2: Drawing = {
+            id: genId(),
+            source: 'preset',
+            presetDifficulty: difficulty,
+            ...upperSeed,
+            name: `${upperSeed.name} — 2nd floor`,
+            floorNumber: 1,
+          }
+          drawingPool.set(d2.id, d2)
+          s.drawings.push(d2)
+        }
         s.selectedDrawingId = drawing.id
         s.floorplanOverlay = {
           ...deepCopy(DEFAULT_FLOORPLAN_OVERLAY),
