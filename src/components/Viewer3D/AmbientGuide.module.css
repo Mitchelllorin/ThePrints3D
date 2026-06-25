@@ -499,13 +499,12 @@
    this carries the live controls (change type, pause, build, done). ── */
 .traceBar {
   position: absolute;
-  left: 50%;
+  left: 12px;              /* bottom-LEFT corner — never centered over the plan */
   bottom: 72px;            /* clear the Place tab + Explode bar along the bottom */
-  transform: translateX(-50%);
   z-index: 40;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 8px;
   padding: 7px 10px;
@@ -514,7 +513,7 @@
   border-radius: 12px;
   backdrop-filter: blur(8px);
   pointer-events: all;
-  max-width: calc(100vw - 20px);
+  max-width: min(60vw, 360px);
 }
 .traceBarChip {
   display: flex;

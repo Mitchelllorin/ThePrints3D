@@ -167,7 +167,6 @@ export default function FloorplanOverlay() {
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
-  const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
   const selectedLine = useFloorplanLocalStore((s) => s.selectedLine)
   const selectLineExclusive = useFloorplanLocalStore((s) => s.selectLineExclusive)
@@ -1004,7 +1003,10 @@ export default function FloorplanOverlay() {
     })
     setPlaceObjectType(null)
     hideGhost()
-    selectObjectExclusive(id)
+    // Don't auto-open the editor on placement — on a phone the card covers the
+    // whole scene, so the object you just placed looks like it never rendered.
+    // Drop it in plain sight; tap it any time to open the editor.
+    closeAllPanels()
   }
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
