@@ -231,7 +231,14 @@ export default function FloorJoistsLayer() {
   const onDownArea = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     if (selectedArea?.kind === 'floor' && selectedArea.id === area.id) {
-      setDrag({ id: area.id, sx: e.point.x, sz: e.point.z, dx: 0, dz: 0 })   // selected → start drag
+      // Start the drag from where the pointer ray meets the y=0 ground plane —
+      // the SAME plane onMove samples. e.point lands on the area MESH, which for
+      // an upper floor sits up at level×storeyHeight; mixing that start with a
+      // y=0 move made the first delta huge and the floor "shot out" into the
+      // workspace. Sampling one plane for both keeps the delta honest.
+      const hit = e.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3())
+      if (!hit) return
+      setDrag({ id: area.id, sx: hit.x, sz: hit.z, dx: 0, dz: 0 })   // selected → start drag
     } else {
       selectArea('floor', area.id)
     }

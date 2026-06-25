@@ -113,7 +113,12 @@ export default function RoofLayer() {
   const onDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     if (selectedArea?.kind === 'roof' && selectedArea.id === area.id) {
-      setDrag({ id: area.id, sx: e.point.x, sz: e.point.z, dx: 0, dz: 0 })   // already selected → start drag
+      // Start from the pointer's y=0 ground intersection — the SAME plane onMove
+      // samples. e.point lands on the roof mesh up at wall height, so mixing it
+      // with a y=0 move made the first delta huge and the roof "shot out".
+      const hit = e.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3())
+      if (!hit) return
+      setDrag({ id: area.id, sx: hit.x, sz: hit.z, dx: 0, dz: 0 })   // already selected → start drag
     } else {
       selectArea('roof', area.id)
     }
