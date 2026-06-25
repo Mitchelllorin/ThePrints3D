@@ -74,6 +74,7 @@ export default function FloorplanPanel() {
   const clearTracingForDrawing = useAppStore((s) => s.clearTracingForDrawing)
   const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
   const carryWallsUp    = useAppStore((s) => s.carryWallsUp)
+  const carryFloorUp    = useAppStore((s) => s.carryFloorUp)
   const assignDrawingToLevel = useAppStore((s) => s.assignDrawingToLevel)
   const undoAction      = useAppStore((s) => s.undo)
   const canUndo         = useAppStore((s) => s.historyPast.length > 0)
@@ -605,6 +606,12 @@ export default function FloorplanPanel() {
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
             {framingActive ? `${activeLevel > 0 ? `${activeLevelLabel} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
           </button>
+          {/* Hard stop for the rubber-band: ends the current run so the cursor
+              line stops following — without leaving trace mode. Only shows while
+              a run is live (an anchor is down). */}
+          {traceStart && (
+            <button className={styles.traceBarBtn} onClick={() => { setTraceStart(null); setHoverPixel(null) }} title="Stop the line — end this run">✕ End line</button>
+          )}
           {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
             || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
             <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
@@ -808,6 +815,18 @@ export default function FloorplanPanel() {
                       <button key={lv.value} className={activeLevel === lv.value ? styles.action : styles.secondary} onClick={() => setActiveLevel(lv.value)}>{lv.label}</button>
                     ))}
                   </div>
+                  {/* Guaranteed full upper floor — clone the storey below instead of
+                      re-tracing it (which comes up short in perspective). */}
+                  {activeLevel > 0 && floorsAreas.some((a) => (a.level ?? 0) === activeLevel - 1) && (
+                    <button
+                      className={styles.action}
+                      style={{ alignSelf: 'flex-start' }}
+                      onClick={() => { carryFloorUp(activeLevel - 1); updateOverlay({ printAtGround: true }, false) }}
+                      title="Drop a full floor matching the storey below — no tracing"
+                    >
+                      ⤴ Floor over {belowLevelLabel}
+                    </button>
+                  )}
                 </>
               )}
               {!areaActive && (

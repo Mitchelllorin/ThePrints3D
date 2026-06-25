@@ -566,8 +566,10 @@ export default function FloorplanOverlay() {
         const areaRef = drawing.parsedWalls.filter(
           (w) => (w.source ?? 'auto') !== 'user' || (w.level ?? 0) === activeLevel,
         )
+        // Generous tolerance: on an upper floor the trace plane is lifted, so the
+        // perspective short-fall can be large — grab the building corner anyway.
         const snapCorner = (p: [number, number]): [number, number] => {
-          const s = snapPointToWalls(p[0], p[1], areaRef, 40, 20)
+          const s = snapPointToWalls(p[0], p[1], areaRef, 70, 36)
           return [s.x, s.y]
         }
         if (!traceStart) { const s = snapCorner(pixel); setTraceStart(s); setHoverPixel(s); return }
@@ -805,7 +807,9 @@ export default function FloorplanOverlay() {
       const sx = event.nativeEvent.clientX
       const sy = event.nativeEvent.clientY
       const lt = lastTapRef.current
-      if (lt && now - lt.t < 350 && Math.hypot(sx - lt.x, sy - lt.y) < 28) {
+      // Forgiving window (touch fingers wander) so a quick second tap reliably
+      // ends the run and drops the rubber-band cursor.
+      if (lt && now - lt.t < 450 && Math.hypot(sx - lt.x, sy - lt.y) < 46) {
         lastTapRef.current = null
         setTraceStart(null)
         setHoverPixel(null)

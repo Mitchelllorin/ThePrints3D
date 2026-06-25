@@ -422,6 +422,9 @@ interface AppState {
   // Floor areas (joist fields)
   addFloorsAreas: (areas: TracedLine[]) => void
   removeFloorsArea: (id: string) => void
+  /** Clone the floor area(s) on `fromLevel` up to the next storey — a guaranteed
+   *  full upper floor matching the one below (no perspective-prone re-tracing). */
+  carryFloorUp: (fromLevel: number) => void
   // Roof areas (gable roofs)
   addRoofAreas: (areas: TracedLine[]) => void
   removeRoofArea: (id: string) => void
@@ -1607,6 +1610,21 @@ export const useAppStore = create<AppState>()(
     removeFloorsArea: (id) => {
       pushHistory()
       set((s) => { s.floorsAreas = s.floorsAreas.filter((a) => a.id !== id) })
+    },
+
+    carryFloorUp: (fromLevel) => {
+      pushHistory()
+      set((s) => {
+        const toLevel = fromLevel + 1
+        const same = (a: TracedLine, b: TracedLine) =>
+          Math.abs(a.x1 - b.x1) < 2 && Math.abs(a.y1 - b.y1) < 2 &&
+          Math.abs(a.x2 - b.x2) < 2 && Math.abs(a.y2 - b.y2) < 2
+        const clones = s.floorsAreas
+          .filter((a) => (a.level ?? 0) === fromLevel)
+          .filter((a) => !s.floorsAreas.some((b) => (b.level ?? 0) === toLevel && same(a, b)))
+          .map((a) => ({ ...a, id: `${a.id}-up-${Date.now()}-${Math.round(Math.random() * 1e5)}`, level: toLevel }))
+        s.floorsAreas.push(...clones)
+      })
     },
 
     addRoofAreas: (areas) => {
