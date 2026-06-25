@@ -1005,16 +1005,26 @@ function buildEaveOverhang(
   addRoofBox(g, wood, FW, FAS, lenZ + 2 * overhang, -ox, fasciaY, 0, 0, 0, 0, 'Fascia')
   addRoofBox(g, wood, lenX + 2 * overhang, FAS, FW, 0, fasciaY, oz, 0, 0, 0, 'Fascia')
   addRoofBox(g, wood, lenX + 2 * overhang, FAS, FW, 0, fasciaY, -oz, 0, 0, 0, 'Fascia')
-  // Lookouts — cantilever back to the wall at 24" OC on every side.
+  // Lookouts — outriggers that cantilever from INSIDE the wall out to the
+  // sub-fascia, so the framing visibly ties back to the house instead of
+  // floating in the overhang. Each reaches back over the plate by `tie`.
   const OC = 0.6096
-  for (let z = -hz + 0.3; z <= hz; z += OC) {
-    addRoofBox(g, wood, overhang, LOOK, FW, hx + overhang / 2, -LOOK / 2, z, 0, 0, 0, 'Lookout')
-    addRoofBox(g, wood, overhang, LOOK, FW, -hx - overhang / 2, -LOOK / 2, z, 0, 0, 0, 'Lookout')
+  const tie = 0.3
+  const lkLen = overhang + tie
+  for (let z = -hz + 0.2; z <= hz; z += OC) {
+    addRoofBox(g, wood, lkLen, LOOK, FW, hx - tie / 2 + overhang / 2, -LOOK / 2, z, 0, 0, 0, 'Lookout')
+    addRoofBox(g, wood, lkLen, LOOK, FW, -(hx - tie / 2 + overhang / 2), -LOOK / 2, z, 0, 0, 0, 'Lookout')
   }
-  for (let x = -hx + 0.3; x <= hx; x += OC) {
-    addRoofBox(g, wood, FW, LOOK, overhang, x, -LOOK / 2, hz + overhang / 2, 0, 0, 0, 'Lookout')
-    addRoofBox(g, wood, FW, LOOK, overhang, x, -LOOK / 2, -hz - overhang / 2, 0, 0, 0, 'Lookout')
+  for (let x = -hx + 0.2; x <= hx; x += OC) {
+    addRoofBox(g, wood, FW, LOOK, lkLen, x, -LOOK / 2, hz - tie / 2 + overhang / 2, 0, 0, 0, 'Lookout')
+    addRoofBox(g, wood, FW, LOOK, lkLen, x, -LOOK / 2, -(hz - tie / 2 + overhang / 2), 0, 0, 0, 'Lookout')
   }
+  // Frieze / ledger where the soffit returns to the house — closes the joint to
+  // the wall and gives the lookouts something to bear on at the top plate.
+  addRoofBox(g, wood, FW, FAS, lenZ, hx, fasciaY, 0, 0, 0, 0, 'Frieze')
+  addRoofBox(g, wood, FW, FAS, lenZ, -hx, fasciaY, 0, 0, 0, 0, 'Frieze')
+  addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY, hz, 0, 0, 0, 'Frieze')
+  addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY, -hz, 0, 0, 0, 'Frieze')
 }
 
 /** Dispatch to the right roof builder by type name (defaults to gable), then add
