@@ -25,6 +25,10 @@ interface DragState {
   x: number
   z: number
   rotationY: number
+  /** True once the pointer has actually moved — distinguishes a drag (move the
+   *  object) from a tap (select it). Lets a single press-drag reposition on
+   *  touch, instead of needing a select-tap first. */
+  moved?: boolean
 }
 
 /** X-ray wrapper — when `on`, traverses its rendered meshes and makes every
@@ -106,30 +110,42 @@ export default function PlacedObjectsLayer() {
     selectObjectExclusive(id)
   }
 
+  // Rotate knob (only shows when selected): an explicit rotate drag.
   const startDrag = (e: ThreeEvent<PointerEvent>, obj: PlacedObject, kind: 'move' | 'rotate') => {
     e.stopPropagation()
     select(obj.id)
-    setDrag({ id: obj.id, kind, x: obj.x, z: obj.z, rotationY: obj.rotationY })
+    setDrag({ id: obj.id, kind, x: obj.x, z: obj.z, rotationY: obj.rotationY, moved: false })
+  }
+
+  // Pressing an object starts a PENDING move — no select yet. If the pointer
+  // moves it becomes a drag; if it doesn't, the release selects it (tap).
+  const startObjectPress = (e: ThreeEvent<PointerEvent>, obj: PlacedObject) => {
+    e.stopPropagation()
+    setDrag({ id: obj.id, kind: 'move', x: obj.x, z: obj.z, rotationY: obj.rotationY, moved: false })
   }
 
   const onPlaneMove = (e: ThreeEvent<PointerEvent>) => {
     if (!drag) return
     e.stopPropagation()
     if (drag.kind === 'move') {
-      setDrag({ ...drag, x: e.point.x, z: e.point.z })
+      setDrag({ ...drag, x: e.point.x, z: e.point.z, moved: true })
     } else {
       const obj = placedObjects.find((o) => o.id === drag.id)
       if (!obj) return
-      setDrag({ ...drag, rotationY: Math.atan2(e.point.x - obj.x, e.point.z - obj.z) })
+      setDrag({ ...drag, rotationY: Math.atan2(e.point.x - obj.x, e.point.z - obj.z), moved: true })
     }
   }
 
   const endDrag = (e: ThreeEvent<PointerEvent>) => {
     if (!drag) return
     e.stopPropagation()
-    updatePlacedObject(drag.id, drag.kind === 'move'
-      ? { x: drag.x, z: drag.z }
-      : { rotationY: drag.rotationY })
+    if (drag.moved) {
+      updatePlacedObject(drag.id, drag.kind === 'move'
+        ? { x: drag.x, z: drag.z }
+        : { rotationY: drag.rotationY })
+    } else {
+      select(drag.id)   // a tap (no movement) just selects → opens the editor
+    }
     setDrag(null)
   }
 
@@ -179,8 +195,13 @@ export default function PlacedObjectsLayer() {
                   updatePlacedObject(obj.id, { transparent: !obj.transparent })
                   return
                 }
-                if (selected) startDrag(e, obj, 'move')
-                else { e.stopPropagation(); select(obj.id) }
+                // Press-drag to move, tap to select — one gesture either way.
+                startObjectPress(e, obj)
+              }}
+              onPointerUp={(e) => {
+                // Tap with no drag, and the catcher didn't catch the release →
+                // select here so the editor still opens on a plain tap.
+                if (drag && drag.id === obj.id && !drag.moved) { e.stopPropagation(); select(obj.id); setDrag(null) }
               }}
             >
               {/* Procedural product model when we have a shape for this type;

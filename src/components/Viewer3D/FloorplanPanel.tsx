@@ -174,6 +174,8 @@ export default function FloorplanPanel() {
   // Storeys where the user has already answered the "different plan?" prompt, so
   // it asks once per floor instead of nagging every time you switch up.
   const [planPromptHandled, setPlanPromptHandled] = useState<number[]>([])
+  // Storeys whose exterior shell + floor we've auto-carried up (once each).
+  const [autoCarriedLevels, setAutoCarriedLevels] = useState<number[]>([])
 
   // Picking a framing type ONLY arms the next trace — it no longer flips the
   // global build config. The material/size/gauge are stamped per-wall (via
@@ -385,6 +387,27 @@ export default function FloorplanPanel() {
     if (own && overlay.drawingId !== own.id) setOverlayDrawing(own.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLevel])
+
+  // AUTO-CARRY THE SHELL: moving up to a storey with nothing on it yet carries
+  // the exterior walls + floor straight up over the one below — automatically.
+  // Plumb is inherent and flush is the default in real construction, so we never
+  // ask "plumb & flush?"; the advisory below just offers the deviations
+  // (bump-out / balcony / overhang) or a different plan. Once per storey.
+  useEffect(() => {
+    if (!drawing || drawing.status !== 'ready' || activeLevel < 1) return
+    if (autoCarriedLevels.includes(activeLevel)) return
+    const below = activeLevel - 1
+    const hasExteriorBelow = drawing.parsedWalls.some(
+      (w) => w.source === 'user' && (w.level ?? 0) === below && w.wallRole === 'exterior-bearing',
+    )
+    const hasWallsHere = drawing.parsedWalls.some((w) => w.source === 'user' && (w.level ?? 0) === activeLevel)
+    if (!hasExteriorBelow || hasWallsHere) return
+    carryWallsUp(drawing.id, below, true)   // exterior shell, flush + plumb (a given)
+    carryFloorUp(below)
+    updateOverlay({ printAtGround: true }, false)
+    setAutoCarriedLevels((prev) => [...prev, activeLevel])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLevel, drawing?.id, drawing?.status])
 
   // Calibration fires FIRST: the moment a ready drawing is shown and the user
   // hasn't yet calibrated or skipped it, drop straight into calibration mode —
@@ -685,59 +708,40 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── AI: present at the moment you move up a floor. Upper storeys
-              usually have their own plan, so don't silently reuse the one below
-              floating up — ask. Import a plan, carry the floor below up plumb,
-              or just trace this floor fresh on the lifted plane. ── */}
+        {/* ── Upper-floor advisory: the exterior shell + floor already carried
+              straight up automatically (plumb is a given, flush is the default).
+              So we DON'T ask "plumb & flush?" — we just offer the deviations:
+              a bump-out/balcony/overhang, a different plan, or the full floor. ── */}
         {showLevelPlanPrompt && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>You're on {activeLevelLabel}</span>
-            <span className={styles.stepText}>Stack the shell up {belowLevelLabel}?</span>
+            <span className={styles.stepText}>Shell carried up over {belowLevelLabel}</span>
             <span className={styles.stepHint}>
-              In a 2-storey the exterior walls + floor carry straight up — plumb
-              and flush over {belowLevelLabel}. I'll do that and you trace the
-              interior fresh. Or do the whole floor, bring in a plan, or draw it.
+              Exterior walls + floor are up (same footprint, joists on the walls).
+              Trace the interior. Anything different up here — a bump-out, balcony,
+              deck, or overhang? Or a different plan.
             </span>
             <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
               {wallsBelowCount > 0 && (
                 <button
-                  className={styles.action}
-                  onClick={() => {
-                    carryWallsUp(drawing.id, activeLevel - 1, true)   // exterior shell only
-                    carryFloorUp(activeLevel - 1)
-                    updateOverlay({ printAtGround: true }, false)
-                    setPlanPromptHandled((prev) => [...prev, activeLevel])
-                  }}
-                  title={`Carry the ${belowLevelLabel} exterior walls + floor straight up — plumb & flush`}
-                >
-                  ⤴ Carry shell up (plumb &amp; flush)
-                </button>
-              )}
-              {wallsBelowCount > 0 && (
-                <button
                   className={styles.secondary}
                   onClick={() => {
-                    carryWallsUp(drawing.id, activeLevel - 1)         // every wall
-                    carryFloorUp(activeLevel - 1)
-                    updateOverlay({ printAtGround: true }, false)
+                    carryWallsUp(drawing.id, activeLevel - 1)         // interior walls too
                     setPlanPromptHandled((prev) => [...prev, activeLevel])
                   }}
-                  title={`Copy ALL ${belowLevelLabel} walls + floor straight up`}
+                  title={`Also copy the ${belowLevelLabel} interior walls up`}
                 >
-                  Whole floor same
+                  Whole floor same as {belowLevelLabel}
                 </button>
               )}
               <button className={styles.secondary} onClick={() => importPlanForLevel(activeLevel)}>
-                Import a plan
+                Different plan
               </button>
               <button
-                className={styles.secondary}
-                onClick={() => {
-                  updateOverlay({ printAtGround: true }, false)
-                  setPlanPromptHandled((prev) => [...prev, activeLevel])
-                }}
+                className={styles.action}
+                onClick={() => setPlanPromptHandled((prev) => [...prev, activeLevel])}
               >
-                Draw it myself
+                Trace it
               </button>
             </div>
           </div>
