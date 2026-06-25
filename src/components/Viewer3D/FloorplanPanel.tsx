@@ -203,7 +203,10 @@ export default function FloorplanPanel() {
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const userWallCount = drawing?.parsedWalls.filter((w) => w.source === 'user').length ?? 0
-  const hasTrace = userTraces.some((t) => t.points.length >= 8)
+  // "Find the rest" can fire as soon as one wall is traced — in either Line
+  // (2-point) or Freehand mode. (Was gated on an 8+ point freehand stroke,
+  // which never matched line-mode tracing.)
+  const hasTrace = userWallCount >= 1 || userTraces.length >= 1
 
   // Live running length of the wall segment being traced (anchor → cursor),
   // in real-world units via the drawing's scale. Drives the on-screen readout.
@@ -1092,6 +1095,11 @@ export default function FloorplanPanel() {
                       : 'Tap a wall corner to start, then tap the next corner'
                     : 'Draw a stroke along each wall — corners in the stroke become connected walls'}
                 </span>
+                {hasTrace && (
+                  <span className={styles.stepHint} style={{ color: LAYER_COLORS[activeTraceLayer] }}>
+                    ✨ Traced one? Tap <strong>Find the rest</strong> and it’ll pick up the matching walls across the print.
+                  </span>
+                )}
                 <div className={styles.btnRow}>
                   <button
                     className={traceStyle === 'line' ? styles.action : styles.secondary}
@@ -1125,8 +1133,8 @@ export default function FloorplanPanel() {
                     </button>
                   )}
                   {hasTrace && (
-                    <button className={styles.secondary} onClick={handleSmartRefine} disabled={seedProcessing}>
-                      {seedProcessing ? 'Refining…' : 'Smart refine'}
+                    <button className={styles.action} onClick={handleSmartRefine} disabled={seedProcessing}>
+                      {seedProcessing ? 'Finding…' : '✨ Find the rest'}
                     </button>
                   )}
                   <button className={styles.secondary} onClick={() => { clearTracingForDrawing(drawing.id); cancelTracing() }}>

@@ -1442,10 +1442,19 @@ export const useAppStore = create<AppState>()(
         set((s) => {
           const d = s.drawings.find((dr) => dr.id === drawingId)
           if (d) {
-            const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+            // The whole point of "find the rest": take the walls the seed-guided
+            // detector actually found across the print and add them to the model.
+            // Previously `result` was used only to colour the legend and the
+            // detected walls were thrown away. Strip the enhanced-only fields,
+            // mark them auto, and let the user's traced walls win any overlap.
+            const detected: ParsedWall[] = result.map((w) => ({
+              x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2,
+              thickness: w.thickness,
+              source: 'auto' as const,
+              detectionConfidence: w.confidence,
+            }))
             const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
-            const merged = mergeAutoAndUserWalls(autoWalls, userWalls)
-            d.parsedWalls = merged
+            d.parsedWalls = mergeAutoAndUserWalls(detected, userWalls)
           }
           s.detectedWallTypes = result
             .filter((w) => w.wallTypeId && w.wallTypeId !== 'unknown')
