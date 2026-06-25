@@ -59,6 +59,41 @@ function PipeRun({ a, b, color, radius, stickM, coupling, glow = 0 }: {
   )
 }
 
+// Conductor colours for a multi-wire electrical run (NM/Romex): hot, neutral,
+// ground — run together in one pass, the way they're actually pulled.
+const ELEC_CONDUCTORS = ['#1f2937', '#e5e7eb', '#16a34a'] // black / white / green
+// A plumbing supply run carries BOTH temperatures at once.
+const SUPPLY_PAIR = ['#ef4444', '#2563eb'] // hot / cold
+
+/**
+ * A bundle of parallel conductors/pipes for ONE traced run — offset
+ * perpendicular to the run (in the horizontal band plane) so a single trace
+ * lays the whole set (3-wire cable, hot+cold supply) and you can see each one.
+ */
+function BundleRun({ a, b, colors, radius, stickM, coupling, glow = 0 }: {
+  a: THREE.Vector3; b: THREE.Vector3; colors: string[]
+  radius: number; stickM: number; coupling: boolean; glow?: number
+}) {
+  const dir = new THREE.Vector3().subVectors(b, a)
+  const len = dir.length()
+  if (len < 0.02) return null
+  const perp = new THREE.Vector3().crossVectors(dir.clone().normalize(), UP)
+  if (perp.lengthSq() < 1e-6) perp.set(1, 0, 0)
+  perp.normalize()
+  const spacing = radius * 2.6
+  const n = colors.length
+  return (
+    <group>
+      {colors.map((c, i) => {
+        const off = (i - (n - 1) / 2) * spacing
+        const oa = a.clone().addScaledVector(perp, off)
+        const ob = b.clone().addScaledVector(perp, off)
+        return <PipeRun key={i} a={oa} b={ob} color={c} radius={radius} stickM={stickM} coupling={coupling} glow={glow} />
+      })}
+    </group>
+  )
+}
+
 const GALV = '#c9ced6'         // bare galvanised sheet metal
 const HANGER_SPACING = 1.2     // strap hanger every ~4'
 
@@ -188,15 +223,27 @@ export default function TradeLayersRenderer() {
   return (
     <group name="trade-layers" ref={groupRef}>
       {showPlumb && plumbingLines.map((l) => (
-        <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'under-floor'))} b={toWorld(l.x2, l.y2, bandY(l, 'under-floor'))}
-          color={plumbingColor(l)} radius={0.02} stickM={stickM} coupling />
+        // A supply run carries hot + cold together; drain/vent/etc. is one pipe.
+        l.elementType === 'Supply Line' ? (
+          <BundleRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'under-floor'))} b={toWorld(l.x2, l.y2, bandY(l, 'under-floor'))}
+            colors={SUPPLY_PAIR} radius={0.02} stickM={stickM} coupling />
+        ) : (
+          <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'under-floor'))} b={toWorld(l.x2, l.y2, bandY(l, 'under-floor'))}
+            color={plumbingColor(l)} radius={0.02} stickM={stickM} coupling />
+        )
       ))}
       {showPlumb && plumbRisers.map((r, i) => <RiserMesh key={`pr-${i}`} r={r} radius={0.02} />)}
       {/* Electrical wires are exaggerated (thicker + a soft glow) so the runs
-          stay readable while routing — you can orbit to find the best path. */}
+          stay readable while routing. A standard circuit pulls 3 conductors at
+          once (hot/neutral/ground); low-voltage is a single run. */}
       {showElec && electricalLines.map((l) => (
-        <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'in-wall'))} b={toWorld(l.x2, l.y2, bandY(l, 'in-wall'))}
-          color={electricalColor(l)} radius={0.013} stickM={stickM} coupling={false} glow={0.45} />
+        l.elementType === 'Low Voltage' ? (
+          <PipeRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'in-wall'))} b={toWorld(l.x2, l.y2, bandY(l, 'in-wall'))}
+            color={electricalColor(l)} radius={0.013} stickM={stickM} coupling={false} glow={0.45} />
+        ) : (
+          <BundleRun key={l.id} a={toWorld(l.x1, l.y1, bandY(l, 'in-wall'))} b={toWorld(l.x2, l.y2, bandY(l, 'in-wall'))}
+            colors={ELEC_CONDUCTORS} radius={0.011} stickM={stickM} coupling={false} glow={0.4} />
+        )
       ))}
       {showElec && elecRisers.map((r, i) => <RiserMesh key={`er-${i}`} r={r} radius={0.013} glow={0.45} />)}
       {/* HVAC ducts — shiny galvanised metal; rectangular trunks (Supply/Return/
