@@ -355,9 +355,14 @@ export default function FloorplanOverlay() {
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), -rotationRad)
     return [((translated.x / width) + 0.5) * imageWidth, ((translated.z / depth) + 0.5) * imageHeight]
   }
-  /** Area layers (floors/roof) pull freely past the print; everything else clamps. */
+  /** Areas (floors/roof) AND trade runs (plumbing/electrical/HVAC) pull freely
+   *  past the print — trades must be able to ORIGINATE OUTSIDE the footprint
+   *  (water service / electrical service entrance from the street). Only walls
+   *  clamp to the plan, since a wall belongs on the drawing. */
   const toPixel = (point: THREE.Vector3): [number, number] =>
-    (activeTraceLayer === 'floors' || activeTraceLayer === 'roof') ? worldToPixelRaw(point) : worldToPixel(point)
+    (activeTraceLayer === 'floors' || activeTraceLayer === 'roof'
+      || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac')
+      ? worldToPixelRaw(point) : worldToPixel(point)
 
   const traceWorldPoints = useMemo(
     () => traceStroke.map(planeLocalToTrace),
@@ -1017,6 +1022,19 @@ export default function FloorplanOverlay() {
 
   return (
     <>
+      {/* Ghost ceiling — a faint plane at ceiling height for the WHOLE HVAC flow
+          (whenever the HVAC discipline is active, not just mid-trace), so ducts
+          can be run "in the ceiling" before a real ceiling exists. It tracks the
+          active storey + the plan's orientation, the way a placed door orients to
+          its wall; the ducts still render up at the ceiling band. */}
+      {drawing && drawing.status === 'ready' && activeTraceLayer === 'hvac' && (
+        <group position={[overlay.position[0], activeLevel * storeyHeight + ceilingM, overlay.position[1]]} rotation={[0, rotationRad, 0]}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ noPick: true }}>
+            <planeGeometry args={[width, depth]} />
+            <meshBasicMaterial color="#a78bfa" transparent opacity={0.1} depthWrite={false} side={THREE.DoubleSide} />
+          </mesh>
+        </group>
+      )}
       {drawing && overlay.visible && texture && (
         <group
           /* Lifted to the active storey: the print image + the tap-catcher +
