@@ -1,6 +1,7 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { useAppStore } from '../../store/useAppStore'
+import CameraCapture from './CameraCapture'
 import styles from './DrawingUploader.module.css'
 
 /** Navigate to drawings once files have been queued (for use outside the wizard). */
@@ -23,6 +24,8 @@ export default function DrawingUploader({ autoNavigate = true }: { autoNavigate?
   const addDrawings = useAppStore((s) => s.addDrawings)
   const navigateAfterDrop = useNavigateAfterDrop()
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  // Live camera (getUserMedia) — works with a laptop webcam too, not just phones.
+  const [cameraOpen, setCameraOpen] = useState(false)
 
   const onDrop = useCallback(
     (accepted: File[]) => {
@@ -46,10 +49,18 @@ export default function DrawingUploader({ autoNavigate = true }: { autoNavigate?
     [addDrawings, autoNavigate, navigateAfterDrop]
   )
 
+  // Open the live camera (laptop webcam / phone). The modal falls back to the
+  // file-input capture below when getUserMedia isn't available (LAN http phone).
   const openCameraCapture = useCallback((e?: React.MouseEvent<HTMLButtonElement>) => {
     e?.stopPropagation()
-    cameraInputRef.current?.click()
+    setCameraOpen(true)
   }, [])
+
+  const onCameraShot = useCallback((file: File) => {
+    setCameraOpen(false)
+    addDrawings([file])
+    if (autoNavigate) navigateAfterDrop()
+  }, [addDrawings, autoNavigate, navigateAfterDrop])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -59,6 +70,13 @@ export default function DrawingUploader({ autoNavigate = true }: { autoNavigate?
 
   return (
     <div className={styles.page}>
+      {cameraOpen && (
+        <CameraCapture
+          onCapture={onCameraShot}
+          onClose={() => setCameraOpen(false)}
+          onFallback={() => { setCameraOpen(false); cameraInputRef.current?.click() }}
+        />
+      )}
       <div className={styles.hero}>
         <h1 className={styles.title}>
           <span className={styles.titleBlue}>Blue</span>
