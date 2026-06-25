@@ -230,18 +230,18 @@ export default function FloorplanOverlay() {
   // the controls directly). Pan/orbit resumes when you leave these modes.
   useEffect(() => {
     updateOverlay({
-      // Paused tracing unlocks the camera so you can orbit to find the best
-      // route, then resume — the run/anchor is preserved meanwhile.
-      // Line tracing leaves the camera FREE: a tap drops a corner, a drag
-      // orbits/pans — so you never pause/move/resume just to reposition. Lock
-      // only when a gesture must own the pointer: dragging a handle, drawing a
-      // freehand stroke (the drag IS the line), calibrating, or placing.
+      // Lock the workspace once a run is ACTIVE so taps land precisely and the
+      // view doesn't drift while you trace (on touch, free-orbit fought the
+      // tracing). Before the first point the camera is free to frame the shot;
+      // a double-tap ends the run → unlocks → reposition → tap resumes. Freehand
+      // locks for the whole stroke (the drag IS the line); also calibrating,
+      // placing, or dragging a handle.
       orbitLocked: drag !== null
-        || (traceMode && traceStyle === 'freehand')
+        || (traceMode && (traceStyle === 'freehand' || traceStart !== null))
         || overlay.calibrationMode
         || placeObjectType !== null,
     }, false)
-  }, [drag, traceMode, traceStyle, overlay.calibrationMode, placeObjectType, updateOverlay])
+  }, [drag, traceMode, traceStyle, traceStart, overlay.calibrationMode, placeObjectType, updateOverlay])
 
   // Safety net: a drag that releases OFF its handle/catcher (fast flick, pointer
   // leaves the window) could leave `drag` set forever — which keeps the camera
@@ -804,11 +804,14 @@ export default function FloorplanOverlay() {
       pointerDownScreen.current = null
       return
     }
-    // Tap vs drag: if the pointer travelled, it was a camera orbit/pan — the
-    // user is moving the view mid-trace/calibration, so don't drop a point.
+    // Tap vs drag: if the pointer travelled, it was a camera orbit/pan — don't
+    // drop a point. BUT once a line run is active the camera is LOCKED (can't
+    // orbit), so a wandering finger is still a tap — always place it then, so
+    // touch placement is reliable and you're not fighting the workspace.
+    const activeLineRun = traceMode && traceStyle === 'line' && traceStart !== null
     const down = pointerDownScreen.current
     pointerDownScreen.current = null
-    if (down) {
+    if (down && !activeLineRun) {
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
       if (moved > limit) return
