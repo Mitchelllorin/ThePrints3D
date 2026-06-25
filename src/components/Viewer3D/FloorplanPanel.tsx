@@ -692,28 +692,44 @@ export default function FloorplanPanel() {
         {showLevelPlanPrompt && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>You're on {activeLevelLabel}</span>
-            <span className={styles.stepText}>Is this floor different?</span>
+            <span className={styles.stepText}>Stack the shell up {belowLevelLabel}?</span>
             <span className={styles.stepHint}>
-              Bring in a plan for it, build it the same as {belowLevelLabel}, or just
-              draw it yourself.
+              In a 2-storey the exterior walls + floor carry straight up — plumb
+              and flush over {belowLevelLabel}. I'll do that and you trace the
+              interior fresh. Or do the whole floor, bring in a plan, or draw it.
             </span>
             <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
-              <button className={styles.action} onClick={() => importPlanForLevel(activeLevel)}>
-                Import this floor's plan →
-              </button>
+              {wallsBelowCount > 0 && (
+                <button
+                  className={styles.action}
+                  onClick={() => {
+                    carryWallsUp(drawing.id, activeLevel - 1, true)   // exterior shell only
+                    carryFloorUp(activeLevel - 1)
+                    updateOverlay({ printAtGround: true }, false)
+                    setPlanPromptHandled((prev) => [...prev, activeLevel])
+                  }}
+                  title={`Carry the ${belowLevelLabel} exterior walls + floor straight up — plumb & flush`}
+                >
+                  ⤴ Carry shell up (plumb &amp; flush)
+                </button>
+              )}
               {wallsBelowCount > 0 && (
                 <button
                   className={styles.secondary}
                   onClick={() => {
-                    carryWallsUp(drawing.id, activeLevel - 1)
+                    carryWallsUp(drawing.id, activeLevel - 1)         // every wall
+                    carryFloorUp(activeLevel - 1)
                     updateOverlay({ printAtGround: true }, false)
                     setPlanPromptHandled((prev) => [...prev, activeLevel])
                   }}
-                  title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}`}
+                  title={`Copy ALL ${belowLevelLabel} walls + floor straight up`}
                 >
-                  ⤴ Same as {belowLevelLabel}
+                  Whole floor same
                 </button>
               )}
+              <button className={styles.secondary} onClick={() => importPlanForLevel(activeLevel)}>
+                Import a plan
+              </button>
               <button
                 className={styles.secondary}
                 onClick={() => {

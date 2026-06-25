@@ -349,9 +349,11 @@ interface AppState {
   /** Live-move a user wall's endpoints WITHOUT pushing history (drag use). */
   moveUserWall: (id: string, userIndex: number, coords: Partial<Pick<ParsedWall, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
   clearUserTracedWalls: (id: string) => void
-  /** Clone every user wall on `fromLevel` up to the next storey (plumb), so the
-   *  build carries floor-over-floor instead of stacking unrelated footprints. */
-  carryWallsUp: (id: string, fromLevel: number) => void
+  /** Clone walls on `fromLevel` up to the next storey at the SAME footprint, so
+   *  they stand plumb (vertical) AND flush (faces in the same plane) over the
+   *  ones below. `exteriorOnly` carries just the exterior-bearing shell — the
+   *  smart default for an upper storey (interior layout is traced fresh). */
+  carryWallsUp: (id: string, fromLevel: number, exteriorOnly?: boolean) => void
   clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
   processDrawing: (id: string) => Promise<void>
@@ -894,7 +896,7 @@ export const useAppStore = create<AppState>()(
     // above at the SAME footprint, so upper floors stand plumb on the one below
     // — real construction, not boxes stacked freehand. Skips any wall whose
     // footprint already exists on the target level so it's safe to re-tap.
-    carryWallsUp: (id, fromLevel) => {
+    carryWallsUp: (id, fromLevel, exteriorOnly = false) => {
       pushHistory()
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
@@ -907,7 +909,11 @@ export const useAppStore = create<AppState>()(
           Math.abs(a.x2 - b.x2) < 2 && Math.abs(a.y2 - b.y2) < 2
         const clones = userWalls
           .filter((w) => (w.level ?? 0) === fromLevel)
+          // Exterior shell only by default — interior partitions usually differ
+          // per storey, but the exterior walls stack plumb + flush.
+          .filter((w) => !exteriorOnly || w.wallRole === 'exterior-bearing')
           .filter((w) => !userWalls.some((u) => (u.level ?? 0) === toLevel && sameFootprint(u, w)))
+          // SAME footprint coords → plumb (vertical) and flush (faces aligned).
           .map((w) => ({ ...w, level: toLevel }))
         if (clones.length === 0) return
         // Clones inherit corners from already-clean source walls — append as-is.

@@ -146,6 +146,7 @@ export default function FloorplanOverlay() {
 
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const tracePaused = useFloorplanLocalStore((s) => s.tracePaused)
+  const setTracePaused = useFloorplanLocalStore((s) => s.setTracePaused)
   const traceStyle = useFloorplanLocalStore((s) => s.traceStyle)
   const traceStart = useFloorplanLocalStore((s) => s.traceStart)
   const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
@@ -230,18 +231,18 @@ export default function FloorplanOverlay() {
   // the controls directly). Pan/orbit resumes when you leave these modes.
   useEffect(() => {
     updateOverlay({
-      // Lock the workspace once a run is ACTIVE so taps land precisely and the
-      // view doesn't drift while you trace (on touch, free-orbit fought the
-      // tracing). Before the first point the camera is free to frame the shot;
-      // a double-tap ends the run → unlocks → reposition → tap resumes. Freehand
+      // Click-lock model (in 3D): a tap places a point AND locks the workspace so
+      // the view holds still and taps land precisely; a double-tap UNLOCKS
+      // (tracePaused) so you can orbit/pan; a triple-tap ends the run. Freehand
       // locks for the whole stroke (the drag IS the line); also calibrating,
       // placing, or dragging a handle.
       orbitLocked: drag !== null
-        || (traceMode && (traceStyle === 'freehand' || traceStart !== null))
+        || (traceMode && traceStyle === 'freehand')
+        || (traceMode && traceStyle === 'line' && traceStart !== null && !tracePaused)
         || overlay.calibrationMode
         || placeObjectType !== null,
     }, false)
-  }, [drag, traceMode, traceStyle, traceStart, overlay.calibrationMode, placeObjectType, updateOverlay])
+  }, [drag, traceMode, traceStyle, traceStart, tracePaused, overlay.calibrationMode, placeObjectType, updateOverlay])
 
   // Safety net: a drag that releases OFF its handle/catcher (fast flick, pointer
   // leaves the window) could leave `drag` set forever — which keeps the camera
@@ -355,14 +356,11 @@ export default function FloorplanOverlay() {
       .applyAxisAngle(new THREE.Vector3(0, 1, 0), -rotationRad)
     return [((translated.x / width) + 0.5) * imageWidth, ((translated.z / depth) + 0.5) * imageHeight]
   }
-  /** Areas (floors/roof) AND trade runs (plumbing/electrical/HVAC) pull freely
-   *  past the print — trades must be able to ORIGINATE OUTSIDE the footprint
-   *  (water service / electrical service entrance from the street). Only walls
-   *  clamp to the plan, since a wall belongs on the drawing. */
-  const toPixel = (point: THREE.Vector3): [number, number] =>
-    (activeTraceLayer === 'floors' || activeTraceLayer === 'roof'
-      || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac')
-      ? worldToPixelRaw(point) : worldToPixel(point)
+  /** Everything pulls freely past the print — the print line is the source of
+   *  truth (trace snaps ONTO it), but the user can deliberately pull past it
+   *  ("miles away") when they want, and trades originate OUTSIDE the footprint
+   *  (service entrance). Snapping reins you in near a line; nothing clamps you. */
+  const toPixel = (point: THREE.Vector3): [number, number] => worldToPixelRaw(point)
 
   const traceWorldPoints = useMemo(
     () => traceStroke.map(planeLocalToTrace),
@@ -476,7 +474,7 @@ export default function FloorplanOverlay() {
   const pointerDownScreen = useRef<{ x: number; y: number } | null>(null)
   // Last committed tap (screen space + time) — a quick second tap nearby is a
   // double-tap that ENDS the run, so the rubber-band cursor stops trailing you.
-  const lastTapRef = useRef<{ t: number; x: number; y: number } | null>(null)
+  const lastTapRef = useRef<{ t: number; x: number; y: number; count: number } | null>(null)
 
   // Press: remember where the finger landed so pointer-up can tell a tap (place
   // a point) from a drag (the user moved the camera — OrbitControls handled it).
@@ -804,37 +802,39 @@ export default function FloorplanOverlay() {
       pointerDownScreen.current = null
       return
     }
-    // Tap vs drag: if the pointer travelled, it was a camera orbit/pan — don't
-    // drop a point. BUT once a line run is active the camera is LOCKED (can't
-    // orbit), so a wandering finger is still a tap — always place it then, so
-    // touch placement is reliable and you're not fighting the workspace.
-    const activeLineRun = traceMode && traceStyle === 'line' && traceStart !== null
+    // While LOCKED (a run active, not paused) the camera can't orbit, so a
+    // wandering finger is still a tap — place it. While UNLOCKED, a travelled
+    // pointer was an orbit/pan, not a point.
+    const lockedRun = traceMode && traceStyle === 'line' && traceStart !== null && !tracePaused
     const down = pointerDownScreen.current
     pointerDownScreen.current = null
-    if (down && !activeLineRun) {
+    if (down && !lockedRun) {
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
       if (moved > limit) return
     }
     event.stopPropagation()
-    // Double-tap while a run is active ENDS it — a single deliberate gesture to
-    // drop the sticky rubber-band cursor, instead of having to find an End/Done
-    // button. A single tap still extends the chain.
+    // Click-count model while a run is active:
+    //   1 tap  → place a point + LOCK the workspace (view frozen, precise taps)
+    //   2 taps → UNLOCK (free the camera to orbit/pan; the run is kept)
+    //   3 taps → terminate the run
+    // A tap after the window re-locks and places (resume after an unlock).
     if (traceMode && traceStart) {
       const now = performance.now()
       const sx = event.nativeEvent.clientX
       const sy = event.nativeEvent.clientY
       const lt = lastTapRef.current
-      // Forgiving window (touch fingers wander) so a quick second tap reliably
-      // ends the run and drops the rubber-band cursor.
-      if (lt && now - lt.t < 450 && Math.hypot(sx - lt.x, sy - lt.y) < 46) {
-        lastTapRef.current = null
-        setTraceStart(null)
-        setHoverPixel(null)
-        return
+      const within = lt && now - lt.t < 380 && Math.hypot(sx - lt.x, sy - lt.y) < 46
+      if (within) {
+        const count = (lt!.count) + 1
+        lastTapRef.current = { t: now, x: sx, y: sy, count }
+        if (count === 2) { setTracePaused(true); return }            // unlock — free the camera
+        setTraceStart(null); setTracePaused(false); setHoverPixel(null); lastTapRef.current = null
+        return                                                       // 3+ — terminate the run
       }
-      lastTapRef.current = { t: now, x: sx, y: sy }
+      lastTapRef.current = { t: now, x: sx, y: sy, count: 1 }
     }
+    if (tracePaused) setTracePaused(false)   // a placing tap re-locks (resume)
     commitTraceOrCalibrationPoint(event)
   }
 
@@ -1074,9 +1074,11 @@ export default function FloorplanOverlay() {
             />
           </mesh>
 
-          {/* While paused the catcher is removed so drags orbit the camera
-              instead of placing points; the anchor/run is kept for resume. */}
-          {((traceMode && !tracePaused) || overlay.calibrationMode) && (
+          {/* Catcher stays present throughout trace/calibration so a tap always
+              registers (incl. resuming after a double-tap unlock). When unlocked
+              a DRAG still orbits the camera (OrbitControls reads the DOM event);
+              a TAP places + re-locks. */}
+          {(traceMode || overlay.calibrationMode) && (
             <mesh
               rotation={[-Math.PI / 2, 0, 0]}
               /* Catch at PRINT level (not lifted to traceY): the user always aims
