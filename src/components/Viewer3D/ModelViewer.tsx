@@ -109,6 +109,60 @@ function framePrintPreset(
 }
 
 /**
+ * STRAIGHT top-down (plan) view for tracing/calibrating — the camera looks
+ * straight down at the print so there's NO perspective foreshortening: a tap
+ * lands exactly where you put it (a tilted 3D view makes taps miss on touch).
+ * A hair of Z offset keeps OrbitControls out of its straight-down singularity.
+ */
+function topDownPreset(
+  width: number, depth: number, position: [number, number], aspect: number, fovDeg: number,
+) {
+  const target: [number, number, number] = [position[0], 0, position[1]]
+  const vfov = (fovDeg * Math.PI) / 180
+  const hfov = 2 * Math.atan(Math.tan(vfov / 2) * Math.max(0.0001, aspect))
+  const minFov = Math.min(vfov, hfov)
+  const radius = 0.5 * Math.hypot(width, depth)
+  // Extra breathing room so the whole plan stays visible even after the drawer
+  // recenter nudges it sideways — no plan edge clipped off-screen while tracing.
+  const dist = (radius / Math.sin(minFov / 2)) * 1.4
+  return {
+    position: [target[0], dist, target[2] + dist * 0.0015] as [number, number, number],
+    target,
+  }
+}
+
+/**
+ * Swings to the flat top-down view the moment you enter tracing/calibration, and
+ * back to the angled 3D view when you leave — so input is always 1:1 with the
+ * plan while drawing, and you see the model in 3D otherwise.
+ */
+function TraceCamera() {
+  const { size } = useThree()
+  const traceMode = useFloorplanLocalStore((s) => s.traceMode)
+  const calibrationMode = useAppStore((s) => s.floorplanOverlay.calibrationMode)
+  const drawingId = useAppStore((s) => s.floorplanOverlay.drawingId)
+  const scale = useAppStore((s) => s.floorplanOverlay.scale)
+  const position = useAppStore((s) => s.floorplanOverlay.position)
+  const setCameraPreset = useAppStore((s) => s.setCameraPreset)
+  const prev = useRef(false)
+  const flat = traceMode || calibrationMode
+  useEffect(() => {
+    if (flat === prev.current) return
+    prev.current = flat
+    if (!drawingId) return
+    const [w, d] = scale
+    if (!w || !d) return
+    const aspect = size.width / size.height
+    const mobile = typeof window !== 'undefined' && window.innerWidth < 768
+    setCameraPreset(flat
+      ? topDownPreset(w, d, position, aspect, 55)
+      : framePrintPreset(w, d, position, aspect, 55, mobile))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat])
+  return null
+}
+
+/**
  * Auto-frames the print the moment a drawing loads — and re-fits once when its
  * footprint settles (after the scale estimate / calibration) — so the plan
  * lands centred and full and the user never has to position it. Edge-triggered
@@ -156,8 +210,12 @@ function DrawerRecenter() {
     const cam = camera as THREE.PerspectiveCamera
     const w = size.width, h = size.height
     const drawerW = Math.min(248, 0.72 * w)   // matches the EdgeDrawer CSS width
+    // On a narrow screen the drawer can cover most of the width; shifting the
+    // plan into the sliver that's left would push it off-screen. Only recenter
+    // when the drawer is a minority of the width (e.g. landscape).
+    const tooWide = drawerW > w * 0.42
     // Negative offsetX shifts content RIGHT (into the space beside a left drawer).
-    const offsetX = buildOpen ? -drawerW / 2 : settingsOpen ? drawerW / 2 : 0
+    const offsetX = tooWide ? 0 : buildOpen ? -drawerW / 2 : settingsOpen ? drawerW / 2 : 0
     if (offsetX === 0) cam.clearViewOffset()
     else cam.setViewOffset(w, h, offsetX, 0, w, h)
     cam.updateProjectionMatrix()
@@ -350,6 +408,10 @@ export default function ModelViewer() {
   // freehand-drawing). Trace/calibration points are placed on a tap, so a drag
   // moves the view instead of dropping a point.
   const orbitEnabled = !overlay.orbitLocked
+  // While tracing/calibrating, keep the view FLAT (top-down) — never let the user
+  // tilt back into a perspective angle, which is what made taps miss on touch.
+  // Pan + zoom stay on (to navigate the plan); only rotation is disabled.
+  const flatTracing = overlay.traceModeActive || overlay.calibrationMode
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
@@ -619,6 +681,7 @@ export default function ModelViewer() {
       >
         <CameraRig />
         <PrintAutoFrame />
+        <TraceCamera />
         <DrawerRecenter />
         {/* Live workspace background — drives the canvas clear colour. */}
         <color attach="background" args={[scene.bg]} />
@@ -683,6 +746,7 @@ export default function ModelViewer() {
           ref={controlsRef}
           makeDefault
           enabled={orbitEnabled}
+          enableRotate={!flatTracing}
           enableDamping
           dampingFactor={0.12}
           rotateSpeed={0.6}
