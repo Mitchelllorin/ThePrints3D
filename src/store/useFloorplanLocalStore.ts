@@ -119,6 +119,9 @@ interface FloorplanLocalState {
   selectedWallIndex: number | null
   /** Catalog type currently armed for placement (positioned via the ghost). */
   placeObjectType: string | null
+  /** When on, placement stays armed after each drop so you can place several
+   *  (e.g. a row of electrical boxes) without re-selecting from the tray. */
+  keepPlacing: boolean
   /** Live ghost pose while placing: ground point + auto-oriented yaw. The
    *  "Place" button commits the object here (no precise tap needed). */
   placeGhost: { x: number; z: number; rotationY: number } | null
@@ -181,6 +184,7 @@ interface FloorplanLocalState {
   setDrag: (v: DragState | null) => void
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
+  setKeepPlacing: (v: boolean) => void
   setPlaceGhost: (v: { x: number; z: number; rotationY: number } | null) => void
   requestPlaceCommit: () => void
   setSelectedObjectId: (v: string | null) => void
@@ -245,6 +249,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   activeLevel: 0,
   selectedWallIndex: null,
   placeObjectType: null,
+  keepPlacing: false,
   placeGhost: null,
   placeCommitNonce: 0,
   selectedObjectId: null,
@@ -311,6 +316,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setDrag: (v) => set({ drag: v }),
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v, activePanel: v != null ? 'wall' : null }),
   setPlaceObjectType: (v) => set({ placeObjectType: v, placeGhost: null }),
+  setKeepPlacing: (v) => set({ keepPlacing: v }),
   setPlaceGhost: (v) => set({ placeGhost: v }),
   requestPlaceCommit: () => set((s) => ({ placeCommitNonce: s.placeCommitNonce + 1 })),
   setSelectedObjectId: (v) => set({ selectedObjectId: v, activePanel: v ? 'object' : null }),

@@ -118,6 +118,8 @@ export default function FloorplanPanel() {
   const setSelectedWallIndex = useFloorplanLocalStore((s) => s.setSelectedWallIndex)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
+  const keepPlacing = useFloorplanLocalStore((s) => s.keepPlacing)
+  const setKeepPlacing = useFloorplanLocalStore((s) => s.setKeepPlacing)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
   const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
@@ -1526,9 +1528,17 @@ export default function FloorplanPanel() {
         <div className={styles.placeBar}>
           <span className={styles.placeHint}>
             Tap the plan to place {getCatalogItem(placeObjectType)?.label ?? placeObjectType}
+            {keepPlacing && ' — keeps placing until you stop'}
           </span>
+          <button
+            className={keepPlacing ? styles.action : styles.secondary}
+            onClick={() => setKeepPlacing(!keepPlacing)}
+            title="Stay armed after each drop so you can place several in a row"
+          >
+            {keepPlacing ? '✓ Place multiple' : 'Place multiple'}
+          </button>
           <button className={styles.secondary} onClick={() => setPlaceObjectType(null)}>
-            Cancel
+            {keepPlacing ? 'Done' : 'Cancel'}
           </button>
         </div>
       )}

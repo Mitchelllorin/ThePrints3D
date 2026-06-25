@@ -167,6 +167,7 @@ export default function FloorplanOverlay() {
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
+  const keepPlacing = useFloorplanLocalStore((s) => s.keepPlacing)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
   const selectedLine = useFloorplanLocalStore((s) => s.selectedLine)
   const selectLineExclusive = useFloorplanLocalStore((s) => s.selectLineExclusive)
@@ -969,6 +970,7 @@ export default function FloorplanOverlay() {
 
   const commitPlacement = (pose: { x: number; z: number; rotationY: number }) => {
     if (!placeObjectType || !drawing) return
+    const placingType = placeObjectType   // captured: closeAllPanels() clears it below
     const item = getCatalogItem(placeObjectType)
     const id = genObjectId()
 
@@ -1007,6 +1009,9 @@ export default function FloorplanOverlay() {
     // whole scene, so the object you just placed looks like it never rendered.
     // Drop it in plain sight; tap it any time to open the editor.
     closeAllPanels()
+    // Keep-placing: re-arm the same type (after closeAllPanels clears it) so the
+    // user can drop a run of boxes/devices without re-picking from the tray.
+    if (keepPlacing) setPlaceObjectType(placingType)
   }
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
