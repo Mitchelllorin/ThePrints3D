@@ -34,6 +34,26 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
   { type: 'kitchen-counter',label: 'Kitchen Counter', short: 'Counter',  icon: '🍳', defaultW: 2.4,  defaultD: 0.6,  defaultH: 0.9,  color: '#78716c' },
   { type: 'toilet',         label: 'Toilet',          short: 'Toilet',   icon: '🚽', defaultW: 0.4,  defaultD: 0.7,  defaultH: 0.8,  color: '#e2e8f0' },
   { type: 'bathtub',        label: 'Bathtub',         short: 'Bath',     icon: '🛁', defaultW: 1.7,  defaultD: 0.75, defaultH: 0.6,  color: '#38bdf8' },
+  // ── More furniture ──
+  { type: 'armchair',       label: 'Armchair',        short: 'Armchair', icon: '🛋️', defaultW: 0.85, defaultD: 0.85, defaultH: 0.85, color: '#7c3aed' },
+  { type: 'coffee-table',   label: 'Coffee Table',    short: 'Coffee',   icon: '🪵', defaultW: 1.1,  defaultD: 0.6,  defaultH: 0.4,  color: '#92400e' },
+  { type: 'tv',             label: 'TV',              short: 'TV',       icon: '📺', defaultW: 1.2,  defaultD: 0.1,  defaultH: 0.72, color: '#0b0f17' },
+  { type: 'bookshelf',      label: 'Bookshelf',       short: 'Shelf',    icon: '📚', defaultW: 0.9,  defaultD: 0.3,  defaultH: 1.8,  color: '#7c5c3e' },
+  { type: 'dresser',        label: 'Dresser',         short: 'Dresser',  icon: '🗄️', defaultW: 1.2,  defaultD: 0.5,  defaultH: 0.8,  color: '#8b5e34' },
+  { type: 'nightstand',     label: 'Nightstand',      short: 'Nightstd', icon: '🗄️', defaultW: 0.45, defaultD: 0.4,  defaultH: 0.5,  color: '#8b5e34' },
+  { type: 'wardrobe',       label: 'Wardrobe',        short: 'Wardrobe', icon: '🚪', defaultW: 1.2,  defaultD: 0.6,  defaultH: 2.0,  color: '#6b4423' },
+  // ── Kitchen appliances ──
+  { type: 'refrigerator',   label: 'Refrigerator',    short: 'Fridge',   icon: '🧊', defaultW: 0.9,  defaultD: 0.7,  defaultH: 1.8,  color: '#cbd5e1' },
+  { type: 'stove',          label: 'Range / Stove',   short: 'Stove',    icon: '🔥', defaultW: 0.76, defaultD: 0.7,  defaultH: 0.92, color: '#94a3b8' },
+  { type: 'range-hood',     label: 'Range Hood',      short: 'Hood',     icon: '💨', defaultW: 0.76, defaultD: 0.5,  defaultH: 0.4,  color: '#9ca3af' },
+  { type: 'dishwasher',     label: 'Dishwasher',      short: 'Dishwshr', icon: '🍽️', defaultW: 0.6,  defaultD: 0.6,  defaultH: 0.85, color: '#cbd5e1' },
+  { type: 'kitchen-sink',   label: 'Kitchen Sink',    short: 'K-Sink',   icon: '🚰', defaultW: 0.8,  defaultD: 0.6,  defaultH: 0.2,  color: '#e2e8f0' },
+  // ── Bath / laundry / mechanical ──
+  { type: 'bathroom-sink',  label: 'Bathroom Vanity', short: 'Vanity',   icon: '🚰', defaultW: 0.6,  defaultD: 0.5,  defaultH: 0.85, color: '#e2e8f0' },
+  { type: 'shower',         label: 'Shower',          short: 'Shower',   icon: '🚿', defaultW: 0.9,  defaultD: 0.9,  defaultH: 2.0,  color: '#bae6fd' },
+  { type: 'washer',         label: 'Washer',          short: 'Washer',   icon: '🌀', defaultW: 0.6,  defaultD: 0.6,  defaultH: 0.9,  color: '#e2e8f0' },
+  { type: 'dryer',          label: 'Dryer',           short: 'Dryer',    icon: '♨️', defaultW: 0.6,  defaultD: 0.6,  defaultH: 0.9,  color: '#e2e8f0' },
+  { type: 'water-heater',   label: 'Water Heater',    short: 'Wtr Htr',  icon: '🛢️', defaultW: 0.6,  defaultD: 0.6,  defaultH: 1.5,  color: '#d6d3d1' },
   // ── Vertical circulation — H defaults to one storey rise; scale to fit. ──
   { type: 'stairs',         label: 'Stairs',          short: 'Stairs',   icon: '🪜', defaultW: 1.0,  defaultD: 3.6,  defaultH: 2.9,  color: '#a16207' },
   { type: 'elevator',       label: 'Elevator',        short: 'Lift',     icon: '🛗', defaultW: 1.7,  defaultD: 1.7,  defaultH: 2.9,  color: '#94a3b8' },
@@ -105,8 +125,12 @@ export function electricalTrayItems(): ObjectCatalogItem[] {
 
 /** Tray display order (curated; one bed entry shown as "Bed"). */
 export const TRAY_ORDER: string[] = [
-  'door', 'window', 'sofa', 'chair', 'bed-double', 'desk',
-  'dining-table', 'kitchen-counter', 'toilet', 'bathtub',
+  'door', 'window', 'sofa', 'armchair', 'chair', 'coffee-table', 'tv',
+  'bed-double', 'bed-single', 'nightstand', 'dresser', 'wardrobe', 'bookshelf',
+  'desk', 'dining-table',
+  'kitchen-counter', 'refrigerator', 'stove', 'range-hood', 'dishwasher', 'kitchen-sink',
+  'toilet', 'bathtub', 'shower', 'bathroom-sink',
+  'washer', 'dryer', 'water-heater',
   'stairs', 'elevator',
 ]
 
