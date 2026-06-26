@@ -344,30 +344,55 @@ export function detectWalls(
     return true
   })
 
-  // Sample the original image along each candidate to decide its line class.
-  const { classified, stats } = classifyLines(imageData, candidates, {
-    minWallLengthPx,
-    minWallThicknessPx,
+  // A wall reads as ink in one of two ways depending on the drawing style:
+  //  • solid / poché / vector single-stroke walls → the CENTRELINE is the ink
+  //  • double-line walls (two parallel faces, hollow centre) → the FACES are ink
+  // The raw candidate sits on a FACE, so face-sampling catches double-line walls
+  // but misreads a single stroke's edge as half-dark (every wall on a clean
+  // vector plan — e.g. the practice presets — was lost). Sample BOTH the face
+  // and the pair's centreline and treat the candidate as a wall if EITHER reads
+  // as one, so both drawing styles work. Emitted coords come from the centre, so
+  // a trace snapped to a wall lands flush instead of offset by half its thickness.
+  const centreCands = candidates.map((c) => {
+    const seg = c as DetectedSeg
+    if (seg.centerY != null) return { ...c, y1: seg.centerY, y2: seg.centerY }
+    if (seg.centerX != null) return { ...c, x1: seg.centerX, x2: seg.centerX }
+    return c
+  })
+  const faceClass = classifyLines(imageData, candidates, { minWallLengthPx, minWallThicknessPx }).classified
+  const centreClass = classifyLines(imageData, centreCands, { minWallLengthPx, minWallThicknessPx }).classified
+
+  const walls: ParsedWall[] = []
+  const classified: ClassifiedLine[] = candidates.map((cand, k) => {
+    const seg = cand as DetectedSeg
+    const f = faceClass[k]
+    const ce = centreClass[k]
+    const wallByFace = f.classification === 'wall'
+    const wallByCentre = ce.classification === 'wall'
+    const isWall = wallByFace || wallByCentre
+    // `classified` carries centre coords so a debug overlay lines up with the
+    // emitted walls; mark 'wall' on the union, else keep the centre reading.
+    const confidence = isWall
+      ? Math.max(wallByFace ? f.confidence : 0, wallByCentre ? ce.confidence : 0)
+      : ce.confidence
+    if (isWall) {
+      walls.push({
+        x1: seg.centerX ?? cand.x1,
+        y1: seg.centerY ?? cand.y1,
+        x2: seg.centerX ?? cand.x2,
+        y2: seg.centerY ?? cand.y2,
+        thickness: cand.thickness,
+        source: 'auto',
+        detectionConfidence: confidence,
+      })
+    }
+    return { ...ce, classification: isWall ? 'wall' : ce.classification, confidence }
   })
 
-  // Only `wall`-classified lines survive into ParsedWall[]. `classified` is in
-  // the same order as `candidates`, so candidates[k] carries the centerline that
-  // detectWallPairs recorded — emit the wall on its centre, not on a face, so a
-  // trace snapped to it lands flush instead of offset by half the thickness.
-  const walls: ParsedWall[] = []
-  classified.forEach((c, k) => {
-    if (c.classification !== 'wall') return
-    const cand = candidates[k] as DetectedSeg | undefined
-    walls.push({
-      x1: cand?.centerX ?? c.x1,
-      y1: cand?.centerY ?? c.y1,
-      x2: cand?.centerX ?? c.x2,
-      y2: cand?.centerY ?? c.y2,
-      thickness: c.thickness,
-      source: 'auto',
-      detectionConfidence: c.confidence,
-    })
-  })
+  const stats: LineClassificationStats = {
+    total: classified.length, wall: 0, dimension: 0, dashed: 0, dotted: 0, leader: 0, unknown: 0,
+  }
+  for (const c of classified) stats[c.classification]++
 
   return { walls, stats, classified }
 }
