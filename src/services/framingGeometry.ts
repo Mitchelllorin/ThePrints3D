@@ -980,9 +980,18 @@ export function buildSaltboxRoof(opts: {
  */
 function buildEaveOverhang(
   g: THREE.Group,
-  opts: { lenX: number; lenZ: number; overhang: number; opacity: number },
+  opts: {
+    lenX: number; lenZ: number; overhang: number; opacity: number
+    /** Ridge axis for gable-type roofs. Set → the two ends ALONG this axis are
+     *  gable ends and get a sloped RAKE (barge) instead of a flat boxed soffit;
+     *  the sides parallel to the ridge stay true (low, horizontal) eaves.
+     *  Unset → all four sides boxed (hip / flat / shed / gambrel / saltbox). */
+    ridgeAxis?: 'x' | 'z'
+    /** Roof pitch (rise/run) — needed to slope the rake to match the ridge. */
+    pitch?: number
+  },
 ): void {
-  const { lenX, lenZ, overhang, opacity } = opts
+  const { lenX, lenZ, overhang, opacity, ridgeAxis, pitch = 0.5 } = opts
   if (overhang <= 0 || lenX < 0.2 || lenZ < 0.2) return
   const wood = roofMat(opacity)
   const soffitMat = new THREE.MeshStandardMaterial({
@@ -994,6 +1003,15 @@ function buildEaveOverhang(
   const ox = hx + overhang, oz = hz + overhang
   const soffitY = -FAS + SOF / 2
   const fasciaY = -FAS / 2
+
+  if (ridgeAxis) {
+    buildGableEaveAndRake(g, wood, soffitMat, {
+      lenX, lenZ, overhang, ridgeAxis, pitch,
+      FAS, FW, SOF, LOOK, hx, hz, soffitY, fasciaY,
+    })
+    return
+  }
+
   // Soffit panels — X sides span lenZ; Z sides span the full outer width so the
   // four corners are covered.
   addRoofBox(g, soffitMat, overhang, SOF, lenZ, hx + overhang / 2, soffitY, 0, 0, 0, 0, 'Soffit')
@@ -1027,14 +1045,90 @@ function buildEaveOverhang(
   addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY, -hz, 0, 0, 0, 'Frieze')
 }
 
+/**
+ * Gable-type overhang: a boxed soffit/fascia on the two true eaves (the low
+ * sides parallel to the ridge) and a sloped RAKE (barge board + rake soffit
+ * flying out past the gable wall) on the two gable ends. This is the "default
+ * gable + small rake" termination — the roof's sheathing flies past the gable
+ * by `overhang` and the barge caps it, following the roof slope up to the ridge.
+ */
+function buildGableEaveAndRake(
+  g: THREE.Group,
+  wood: THREE.Material,
+  soffitMat: THREE.Material,
+  o: {
+    lenX: number; lenZ: number; overhang: number; ridgeAxis: 'x' | 'z'; pitch: number
+    FAS: number; FW: number; SOF: number; LOOK: number
+    hx: number; hz: number; soffitY: number; fasciaY: number
+  },
+): void {
+  const { lenX, lenZ, overhang, ridgeAxis, pitch, FAS, FW, SOF, LOOK, hx, hz, soffitY, fasciaY } = o
+  const rakeOnZ = ridgeAxis === 'z'   // ridge along Z → gable ends at ±z, eaves at ±x
+  const OC = 0.6096
+  const tie = 0.3
+  const lkLen = overhang + tie
+
+  // ── True eaves (the two low sides parallel to the ridge) ──
+  // Span the eave members the FULL outer length so they tuck under the rake and
+  // cover the corners.
+  if (rakeOnZ) {
+    const zSpan = lenZ + 2 * overhang
+    for (const sx of [1, -1]) {
+      addRoofBox(g, soffitMat, overhang, SOF, zSpan, sx * (hx + overhang / 2), soffitY, 0, 0, 0, 0, 'Soffit')
+      addRoofBox(g, wood, FW, FAS, zSpan, sx * (hx + overhang), fasciaY, 0, 0, 0, 0, 'Fascia')
+      addRoofBox(g, wood, FW, FAS, lenZ, sx * hx, fasciaY, 0, 0, 0, 0, 'Frieze')
+    }
+    for (let z = -hz + 0.2; z <= hz; z += OC) {
+      for (const sx of [1, -1]) {
+        addRoofBox(g, wood, lkLen, LOOK, FW, sx * (hx - tie / 2 + overhang / 2), -LOOK / 2, z, 0, 0, 0, 'Lookout')
+      }
+    }
+  } else {
+    const xSpan = lenX + 2 * overhang
+    for (const sz of [1, -1]) {
+      addRoofBox(g, soffitMat, xSpan, SOF, overhang, 0, soffitY, sz * (hz + overhang / 2), 0, 0, 0, 'Soffit')
+      addRoofBox(g, wood, xSpan, FAS, FW, 0, fasciaY, sz * (hz + overhang), 0, 0, 0, 'Fascia')
+      addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY, sz * hz, 0, 0, 0, 'Frieze')
+    }
+    for (let x = -hx + 0.2; x <= hx; x += OC) {
+      for (const sz of [1, -1]) {
+        addRoofBox(g, wood, FW, LOOK, lkLen, x, -LOOK / 2, sz * (hz - tie / 2 + overhang / 2), 0, 0, 0, 'Lookout')
+      }
+    }
+  }
+
+  // ── Gable-end rakes (barge board + sloped rake soffit, flying past the wall) ──
+  const half = rakeOnZ ? hx : hz              // across-slope half-span (peak at centre)
+  const rise = Math.max(0.1, half * pitch)
+  const slopeLen = Math.hypot(half, rise)
+  const angle = Math.atan2(rise, half)
+  const out = (rakeOnZ ? hz : hx) + overhang  // outboard plane of the barge
+  const slopeY = rise / 2                     // midpoint of the slope line
+  for (const end of [1, -1]) {                // each gable end
+    for (const side of [1, -1]) {             // each slope (left / right of ridge)
+      const mid = side * (half / 2)           // along-slope midpoint
+      if (rakeOnZ) {
+        // Board runs along X, thin in Z; tilt about Z to follow the slope.
+        addRoofBox(g, wood, slopeLen, FAS, FW, mid, slopeY + fasciaY, end * out, 0, 0, -side * angle, 'Rake fascia')
+        addRoofBox(g, soffitMat, slopeLen, SOF, overhang, mid, slopeY + soffitY, end * (out - overhang / 2), 0, 0, -side * angle, 'Rake soffit')
+      } else {
+        // Board runs along Z, thin in X; tilt about X to follow the slope.
+        addRoofBox(g, wood, FW, FAS, slopeLen, end * out, slopeY + fasciaY, mid, side * angle, 0, 0, 'Rake fascia')
+        addRoofBox(g, soffitMat, overhang, SOF, slopeLen, end * (out - overhang / 2), slopeY + soffitY, mid, side * angle, 0, 0, 'Rake soffit')
+      }
+    }
+  }
+}
+
 /** Dispatch to the right roof builder by type name (defaults to gable), then add
  *  the boxed-eave overhang (soffit/fascia/lookouts) as an axis-aligned sibling. */
 export function buildRoofByType(
   type: string,
   opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number; overhangM?: number },
 ): THREE.Group {
+  const t = (type || '').trim().toLowerCase()
   const roof = (() => {
-    switch ((type || '').trim().toLowerCase()) {
+    switch (t) {
       case 'truss':
       case 'trusses': return buildFinkTrussRoof(opts)
       case 'gambrel': return buildGambrelRoof(opts)
@@ -1053,7 +1147,15 @@ export function buildRoofByType(
     const wrapper = new THREE.Group()
     wrapper.add(roof)
     const eave = new THREE.Group()
-    buildEaveOverhang(eave, { lenX: opts.lenX, lenZ: opts.lenZ, overhang: overhangM, opacity: opts.opacity ?? 1 })
+    // Gable & truss roofs have two true eaves + two gable ends (sloped rakes).
+    // Every other type stays a four-side boxed eave (no ridgeAxis).
+    const ridged = t === 'truss' || t === 'trusses' || t === 'gable' || t === ''
+      || !['gambrel', 'saltbox', 'hip', 'shed', 'lean-to', 'mono', 'mono-pitch', 'flat'].includes(t)
+    const ridgeAxis = ridged ? (opts.lenX <= opts.lenZ ? 'z' : 'x') : undefined
+    buildEaveOverhang(eave, {
+      lenX: opts.lenX, lenZ: opts.lenZ, overhang: overhangM, opacity: opts.opacity ?? 1,
+      ridgeAxis, pitch: opts.pitch,
+    })
     wrapper.add(eave)
     return wrapper
   }
