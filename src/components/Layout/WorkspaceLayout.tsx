@@ -203,6 +203,10 @@ function SettingsContent() {
         <Select label="Corner" val={cfg.cornerType} options={[{ value: 'three-stud', label: 'Three-stud' }, { value: 'california', label: 'California (2-stud)' }]} onChange={(v) => setCfg({ cornerType: v as 'three-stud' | 'california' })} />
       </CollapsibleSection>
 
+      <CollapsibleSection id="roof" title="Roof" openId={openId} setOpenId={setOpenId}>
+        <Slider label="Eave / soffit overhang" val={cfg.roofOverhangIn} min={0} max={36} step={1} unit={'"'} onChange={(v) => setCfg({ roofOverhangIn: v })} />
+      </CollapsibleSection>
+
       <CollapsibleSection id="steel" title="Steel" openId={openId} setOpenId={setOpenId}>
         <Select label="Width" val={cfg.steelWidth} options={STEEL_WIDTH_OPTIONS} onChange={(v) => setCfg({ steelWidth: v as typeof cfg.steelWidth })} />
         <Select label="Gauge" val={cfg.steelGauge} options={STEEL_GAUGE_OPTIONS} onChange={(v) => setCfg({ steelGauge: v as typeof cfg.steelGauge })} />

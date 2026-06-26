@@ -11,6 +11,7 @@ import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
+import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildRoofByType, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -38,11 +39,15 @@ function RoofAreaMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, o
   const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
   const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
 
+  // Eave/soffit overhang the roof auto-extends past the wall line (config default
+  // 16"). Because lenX/lenZ are the wall footprint, the overhang lands OUTSIDE
+  // the walls automatically — no manual sizing.
+  const overhangM = useConfigStore((s) => s.roofOverhangIn) * 0.0254
   const roof = useMemo(() => {
-    const r = buildRoofByType(area.elementType, { lenX, lenZ, pitch: pitchToRatio(area.size), ocM: RAFTER_OC_M })
+    const r = buildRoofByType(area.elementType, { lenX, lenZ, pitch: pitchToRatio(area.size), ocM: RAFTER_OC_M, overhangM })
     r.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
     return r
-  }, [lenX, lenZ, area.size, area.elementType, area.level])
+  }, [lenX, lenZ, area.size, area.elementType, area.level, overhangM])
 
   useEffect(() => () => {
     roof.traverse((o) => {

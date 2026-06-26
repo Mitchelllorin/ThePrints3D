@@ -71,6 +71,12 @@ export interface AppConfig {
   /** Automatically reveal the framing layer after "Build for me". */
   buildAutoEnableFraming: boolean
 
+  // ── Roof ──────────────────────────────────────────────────────────────────
+  /** Eave/soffit overhang (inches) the roof automatically extends PAST the wall
+   *  line on every side. Drives the boxed eave (soffit + fascia + lookouts) and
+   *  is applied to every roof the moment it's laid — no manual sizing. */
+  roofOverhangIn: number
+
   // ── Framing ─────────────────────────────────────────────────────────────────
   /** Global stud spacing, on-centre (inches). */
   studSpacingIn: 16 | 24
@@ -117,6 +123,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   buildFloorHeightM: 2.7,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,
+  roofOverhangIn: 16,
   studSpacingIn: 16,
   defaultStudSize: '2x4',
   cornerType: 'three-stud',
