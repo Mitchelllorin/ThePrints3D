@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -391,8 +391,25 @@ export default function WorkspaceLayout() {
   const drawings            = useAppStore((s) => s.drawings)
   const addDrawings         = useAppStore((s) => s.addDrawings)
   const loadPresetDrawing   = useAppStore((s) => s.loadPresetDrawing)
-  const undo    = useAppStore((s) => s.undo)
-  const canUndo = useAppStore((s) => s.historyPast.length > 0)
+  const hasHistory = useAppStore((s) => s.historyPast.length > 0)
+  const traceModeActive = useFloorplanLocalStore((s) => s.traceMode)
+  const traceStartPt = useFloorplanLocalStore((s) => s.traceStart)
+  const pendingTrace = useFloorplanLocalStore((s) => s.pendingWalls)
+  // Enabled when there's real history OR a trace step in progress to back out of.
+  const canUndo = hasHistory || (traceModeActive && (!!traceStartPt || !!pendingTrace))
+
+  // Undo, trace-aware: during an active trace, undo the last TRACE STEP (discard
+  // pending walls, else clear a dangling start point) instead of a coarse history
+  // undo that pops you out of tracing back to the type-picker menu. Matches Esc.
+  // Only falls through to the real history undo once there's no in-progress point.
+  const smartUndo = useCallback(() => {
+    const fp = useFloorplanLocalStore.getState()
+    if (fp.traceMode) {
+      if (fp.pendingWalls) { fp.setPendingWalls(null); return }
+      if (fp.traceStart) { fp.setTraceStart(null); return }
+    }
+    useAppStore.getState().undo()
+  }, [])
   const buildForMe = useAppStore((s) => s.buildForMe)
   const annotateMode = useAppStore((s) => s.annotateMode)
   const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
@@ -491,7 +508,7 @@ export default function WorkspaceLayout() {
       if (key === 'z') {
         e.preventDefault()
         if (e.shiftKey) useAppStore.getState().redo()
-        else useAppStore.getState().undo()
+        else smartUndo()
       } else if (key === 'y') {
         e.preventDefault()
         useAppStore.getState().redo()
@@ -499,7 +516,7 @@ export default function WorkspaceLayout() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [smartUndo])
 
   return (
     <div className={styles.root}>
@@ -520,7 +537,7 @@ export default function WorkspaceLayout() {
           have their own always-visible edge tab, so they're not icons here. */}
       <TopIcons
         onRebuild={buildForMe}
-        onUndo={undo}
+        onUndo={smartUndo}
         canUndo={canUndo}
       />
 
