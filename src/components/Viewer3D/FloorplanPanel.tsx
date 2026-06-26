@@ -1578,7 +1578,10 @@ export default function FloorplanPanel() {
             <>
               <span className={styles.stepLabel}>Catalog — tap an item, then tap the plan</span>
               <div className={styles.tray}>
-                {(activeTraceLayer === 'electrical' ? electricalTrayItems() : trayItems()).map((item) => (
+                {/* Doors/windows/stairs (the general catalog) are ALWAYS present;
+                    on the electrical layer the device boxes are ADDED in front,
+                    not swapped in (which used to hide doors & stairs). */}
+                {(activeTraceLayer === 'electrical' ? [...electricalTrayItems(), ...trayItems()] : trayItems()).map((item) => (
                   <button
                     key={item.type}
                     className={placeObjectType === item.type ? styles.trayCardActive : styles.trayCard}
