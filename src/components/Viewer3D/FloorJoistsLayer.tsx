@@ -168,6 +168,10 @@ export default function FloorJoistsLayer() {
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const translateFloorsArea = useAppStore((s) => s.translateFloorsArea)
+  // Once built, floor areas are LOCKED from dragging — a casual touch must never
+  // skate a placed floor across the workspace. Drag-to-move is a pre-build layout
+  // tool only; after Build 3D you can still select an area (delete/info), not fling it.
+  const modelReady = useAppStore((s) => s.model.status === 'ready')
   const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
   // sx/sz start null and are captured on the FIRST move over the catcher plane,
@@ -233,6 +237,7 @@ export default function FloorJoistsLayer() {
   }
   const onDownArea = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
+    if (modelReady) { selectArea('floor', area.id); return }   // locked after build — select only
     if (selectedArea?.kind === 'floor' && selectedArea.id === area.id) {
       // Arm a drag, but DON'T capture a start point from e.point here — that lands
       // on the area mesh (up at level×storeyHeight) and mismatching it with the

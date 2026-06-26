@@ -78,6 +78,8 @@ export default function RoofLayer() {
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const translateRoofArea = useAppStore((s) => s.translateRoofArea)
+  // Locked from dragging once built (same as floors) — no accidental flinging.
+  const modelReady = useAppStore((s) => s.model.status === 'ready')
   const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
 
@@ -114,6 +116,7 @@ export default function RoofLayer() {
   }
   const onDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
+    if (modelReady) { selectArea('roof', area.id); return }   // locked after build — select only
     if (selectedArea?.kind === 'roof' && selectedArea.id === area.id) {
       // Arm the drag; capture the reference on the first catcher-plane move (not
       // from e.point on the roof mesh up at wall height, which made it "shoot out").
