@@ -26,6 +26,22 @@ function snapSegmentAngle(start: StrokePoint, end: StrokePoint): StrokePoint {
   return { x: start.x + Math.cos(rad) * length, y: start.y + Math.sin(rad) * length }
 }
 
+/**
+ * Final squaring pass: if a finished wall is within `tolDeg` of horizontal or
+ * vertical, pin it EXACTLY square (keeps the start point; flattens the far end's
+ * off-axis coordinate). Runs after every other snap (print-line, ink, endpoint),
+ * so a trace that snapped onto a slightly-crooked reference wall still ends up
+ * straight. Genuine diagonals (> tolDeg off both axes) are left untouched.
+ */
+export function squareWallToAxis(w: ParsedWall, tolDeg = 7): ParsedWall {
+  const deg = Math.abs((Math.atan2(w.y2 - w.y1, w.x2 - w.x1) * 180) / Math.PI)
+  const offH = Math.min(deg, Math.abs(deg - 180))
+  const offV = Math.abs(deg - 90)
+  if (offH <= tolDeg && offH <= offV) return { ...w, y2: w.y1 }   // → horizontal
+  if (offV <= tolDeg) return { ...w, x2: w.x1 }                   // → vertical
+  return w
+}
+
 export function reduceStrokeToWall(
   points: StrokePoint[],
   options: WallTraceOptions = {},

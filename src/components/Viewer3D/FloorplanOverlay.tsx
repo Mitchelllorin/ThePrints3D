@@ -36,6 +36,7 @@ import {
   snapPointToWalls,
   snapTraceWallToExisting,
   snapWallToPrintLine,
+  squareWallToAxis,
 } from '../../services/wallTraceReducer'
 import { ensureInkBuffer, getInkBuffer, snapSegmentToInk } from '../../services/inkRaster'
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, VERTICAL_CIRCULATION, deviceMountHeightM } from '../../data/objectCatalog'
@@ -680,7 +681,10 @@ export default function FloorplanOverlay() {
         }
       }
       const snappedWall = snapTraceWallToExisting(reduced, refWalls)
-      const base = extendWallToNearbyWall(snappedWall, refWalls)
+      // Final squaring: a near-horizontal/vertical wall ends up EXACTLY square
+      // even if it snapped onto a slightly-crooked print/reference line. Genuine
+      // diagonals are left alone. Kills the "it drew me a crooked wall" case.
+      const base = squareWallToAxis(extendWallToNearbyWall(snappedWall, refWalls))
       // Stamp the picked framing/role/material onto the wall so the build frames
       // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
       const isMasonry = activeWallType === 'cmu'
