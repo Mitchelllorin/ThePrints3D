@@ -5,6 +5,7 @@
  * card so the workspace stays clear (toggled by its own pill button).
  */
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useAppStore } from '../../store/useAppStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { computeTakeoff } from '../../services/takeoff'
@@ -37,13 +38,20 @@ export default function TakeoffPanel() {
 
   const empty = sections.length === 0
 
-  return (
+  // Portal to <body> so the pill/panel live OUTSIDE the floorplan panel root
+  // (which sits under the 3D canvas with pointer-events:none) — otherwise the
+  // canvas paints over the pill and swallows every tap, so it looked dead.
+  return createPortal(
     <>
       <button
         onClick={() => setOpen((v) => !v)}
         title="Material takeoff — quantities for everything drawn"
         style={{
-          position: 'absolute', left: 12, bottom: 12, zIndex: 30,
+          // FIXED (not absolute) so it escapes the floorplan panel's z-12 /
+          // pointer-events:none stacking context — otherwise the 3D canvas paints
+          // over it and swallows the tap (the pill looked dead). Same pattern as
+          // the edge drawers. z above the drawers (55) so an open one can't bury it.
+          position: 'fixed', left: 12, bottom: 12, zIndex: 60,
           background: open ? '#f97316' : 'rgba(11,17,32,0.85)', color: '#fff',
           border: '1px solid rgba(255,255,255,0.18)', borderRadius: 8,
           padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
@@ -55,7 +63,7 @@ export default function TakeoffPanel() {
       {open && (
         <div
           style={{
-            position: 'absolute', left: 12, bottom: 52, zIndex: 30,
+            position: 'fixed', left: 12, bottom: 52, zIndex: 60,
             width: 300, maxHeight: '70vh', overflowY: 'auto',
             background: 'rgba(11,17,32,0.96)', color: '#e5e7eb',
             border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10,
@@ -86,6 +94,7 @@ export default function TakeoffPanel() {
           <p style={{ color: '#6b7280', fontSize: 10.5, margin: '6px 0 0' }}>Estimates from the drawn model — verify against local code & waste factors.</p>
         </div>
       )}
-    </>
+    </>,
+    document.body,
   )
 }

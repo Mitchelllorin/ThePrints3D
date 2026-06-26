@@ -397,11 +397,15 @@ export default function FloorplanPanel() {
   // tracing/building stay gated until then.
   useEffect(() => {
     if (!drawing || drawing.status !== 'ready') return
+    // Already has a real scale (presets carry scaleConfidence 'parsed'; PDFs can
+    // too) → calibration is pointless AND its full-workspace pointer catcher
+    // would steal taps from the Takeoff pill, trace, etc. Skip straight to work.
+    if (drawing.scaleMmPerPx != null && drawing.scaleConfidence !== 'fallback') return
     if (calibrationHandledIds.includes(drawing.id)) return
     if (overlay.calibrationMode || traceMode) return
     startCalibration()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawing?.id, drawing?.status, calibrationHandledIds, overlay.calibrationMode, traceMode])
+  }, [drawing?.id, drawing?.status, drawing?.scaleMmPerPx, drawing?.scaleConfidence, calibrationHandledIds, overlay.calibrationMode, traceMode])
 
   // Exclusive menus: while an object is selected or placement is armed, the
   // picker is render-gated out (showSteps === false), so menus never overlap.
