@@ -17,7 +17,9 @@ interface EdgeDrawerProps {
   onToggle: () => void
   tabLabel: string
   tabIcon?: ReactNode
-  /** Optional header title shown inside the body, with an ✕ that calls onToggle. */
+  /** Optional header title shown inside the body. (Closing is the tab's job — no
+   *  separate ✕: it's redundant with the always-visible toggle tab and dead in
+   *  click-through mode, where taps on it fall through to the workspace.) */
   title?: string
   /**
    * Let taps that land between controls fall THROUGH to the workspace behind.
@@ -48,7 +50,6 @@ export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, ti
         {title && (
           <div className={styles.header}>
             <span className={styles.title}>{title}</span>
-            <button className={styles.close} onClick={onToggle} aria-label="Close">✕</button>
           </div>
         )}
         <div className={styles.scroll}>{children}</div>
