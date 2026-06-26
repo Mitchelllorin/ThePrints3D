@@ -237,6 +237,62 @@ export default function ObjectModel({ type, w, h, d, color, subtype }: ModelProp
         </>
       )
     }
+    // ── Electrical devices (wall/ceiling mounted; centred on the mount height,
+    //    faceplate facing OUT of the wall at +d). ──
+    case 'duplex-outlet': {
+      const plate = '#ededed'
+      return (
+        <>
+          <Box args={[w, h, d * 0.5]} pos={[0, 0, d * 0.25]} color={plate} rough={0.6} />
+          {[h * 0.22, -h * 0.22].map((y, i) => (
+            <Box key={i} args={[w * 0.5, h * 0.28, d * 0.25]} pos={[0, y, d * 0.5]} color={shade(color, -0.25)} />
+          ))}
+        </>
+      )
+    }
+    case 'gfci-outlet': {
+      const plate = '#ededed'
+      return (
+        <>
+          <Box args={[w, h, d * 0.5]} pos={[0, 0, d * 0.25]} color={plate} rough={0.6} />
+          <Box args={[w * 0.55, h * 0.42, d * 0.25]} pos={[0, -h * 0.08, d * 0.5]} color={shade(color, -0.2)} />
+          <Box args={[w * 0.2, h * 0.12, d * 0.45]} pos={[0, h * 0.28, d * 0.45]} color="#ef4444" />
+          <Box args={[w * 0.2, h * 0.12, d * 0.45]} pos={[0, h * 0.14, d * 0.45]} color="#1f2937" />
+        </>
+      )
+    }
+    case 'switch': {
+      const plate = '#ededed'
+      return (
+        <>
+          <Box args={[w, h, d * 0.5]} pos={[0, 0, d * 0.25]} color={plate} rough={0.6} />
+          <Box args={[w * 0.22, h * 0.42, d * 0.6]} pos={[0, h * 0.04, d * 0.45]} color={shade(color, -0.1)} />
+        </>
+      )
+    }
+    case 'panel-box': {
+      const metal = shade(color, 0.05)
+      return (
+        <>
+          <Box args={[w, h, d]} pos={[0, 0, 0]} color={metal} rough={0.5} metal={0.4} />
+          <Box args={[w * 0.9, h * 0.92, d * 0.35]} pos={[0, 0, d * 0.4]} color={shade(color, 0.12)} rough={0.4} metal={0.5} />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Box key={i} args={[w * 0.3, h * 0.055, d * 0.2]} pos={[0, h * 0.32 - i * h * 0.12, d * 0.52]} color="#1f2937" />
+          ))}
+        </>
+      )
+    }
+    case 'device-box':
+    case 'junction-box':
+    case 'light-box': {
+      const boxc = '#2563eb'   // blue plastic rough-in box
+      return (
+        <>
+          <Box args={[w, h, d]} pos={[0, 0, 0]} color={boxc} rough={0.75} />
+          <Box args={[w * 0.78, h * 0.78, d * 0.5]} pos={[0, 0, d * 0.3]} color={shade(boxc, -0.45)} />
+        </>
+      )
+    }
     default:
       return null
   }
