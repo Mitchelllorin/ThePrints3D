@@ -13,6 +13,7 @@
  * render — just blockier — until they get a shape here.
  */
 import * as THREE from 'three'
+import { RoundedBox } from '@react-three/drei'
 
 interface ModelProps {
   type: string
@@ -42,11 +43,15 @@ interface PartProps {
 }
 
 function Box({ args, pos = [0, 0, 0], color, rough = 0.7, metal = 0.05 }: PartProps) {
+  // Bevel every part's edges so models read as objects, not hard blocks. The
+  // radius scales with the smallest dimension and is capped + clamped below half
+  // the thinnest side so thin parts (faceplates, slats) don't pinch or error.
+  const min = Math.min(args[0], args[1], args[2])
+  const radius = Math.max(0.0005, Math.min(min * 0.15, 0.04, min * 0.49))
   return (
-    <mesh position={pos} castShadow receiveShadow>
-      <boxGeometry args={args} />
+    <RoundedBox args={args} radius={radius} smoothness={3} position={pos} castShadow receiveShadow>
       <meshStandardMaterial color={color} roughness={rough} metalness={metal} />
-    </mesh>
+    </RoundedBox>
   )
 }
 
