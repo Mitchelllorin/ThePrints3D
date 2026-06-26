@@ -233,10 +233,9 @@ export default function FloorplanOverlay() {
   useEffect(() => {
     updateOverlay({
       // Click-lock model (in 3D): a tap places a point AND locks the workspace so
-      // the view holds still and taps land precisely; a double-tap UNLOCKS
-      // (tracePaused) so you can orbit/pan; a triple-tap ends the run. Freehand
-      // locks for the whole stroke (the drag IS the line); also calibrating,
-      // placing, or dragging a handle.
+      // the view holds still and taps land precisely; a double-tap (or the "End
+      // run" button) finishes the run. Freehand locks for the whole stroke (the
+      // drag IS the line); also calibrating, placing, or dragging a handle.
       orbitLocked: drag !== null
         || (traceMode && traceStyle === 'freehand')
         || (traceMode && traceStyle === 'line' && traceStart !== null && !tracePaused)
@@ -818,27 +817,26 @@ export default function FloorplanOverlay() {
       if (moved > limit) return
     }
     event.stopPropagation()
-    // Click-count model while a run is active:
-    //   1 tap  → place a point + LOCK the workspace (view frozen, precise taps)
-    //   2 taps → UNLOCK (free the camera to orbit/pan; the run is kept)
-    //   3 taps → terminate the run
-    // A tap after the window re-locks and places (resume after an unlock).
+    // Tap model while a run is active:
+    //   single tap  → place a point (each tap drops a corner; the run chains)
+    //   double tap  → END the run, so the rubber-band stops trailing the cursor
+    // Double-tap-to-finish is the natural "I'm done" gesture — you no longer have
+    // to hunt the cursor back onto the origin dot to stop. Window is generous so
+    // a phone double-tap (slower, less precise than a mouse) reliably ends it.
     if (traceMode && traceStart) {
       const now = performance.now()
       const sx = event.nativeEvent.clientX
       const sy = event.nativeEvent.clientY
       const lt = lastTapRef.current
-      const within = lt && now - lt.t < 380 && Math.hypot(sx - lt.x, sy - lt.y) < 46
+      const within = lt && now - lt.t < 500 && Math.hypot(sx - lt.x, sy - lt.y) < 50
       if (within) {
-        const count = (lt!.count) + 1
-        lastTapRef.current = { t: now, x: sx, y: sy, count }
-        if (count === 2) { setTracePaused(true); return }            // unlock — free the camera
+        // Second quick tap in ~the same spot → finish this run.
         setTraceStart(null); setTracePaused(false); setHoverPixel(null); lastTapRef.current = null
-        return                                                       // 3+ — terminate the run
+        return
       }
       lastTapRef.current = { t: now, x: sx, y: sy, count: 1 }
     }
-    if (tracePaused) setTracePaused(false)   // a placing tap re-locks (resume)
+    if (tracePaused) setTracePaused(false)
     commitTraceOrCalibrationPoint(event)
   }
 

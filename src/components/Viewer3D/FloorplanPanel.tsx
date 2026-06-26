@@ -605,13 +605,19 @@ export default function FloorplanPanel() {
           the Build drawer is retracted, so the workspace stays clear. The camera
           stays free (tap a corner, drag to orbit), so there's no pause: the chip
           reopens the picker (type / level), Build builds, Done finishes the run.
-          Double-tap the workspace to end the current run. */}
+          End run stops the rubber-band without dropping another wall; you can
+          also double-tap the workspace to end the current run. */}
       {tracingActive && showSteps && (
         <div className={styles.traceBar}>
           <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
             {framingActive ? `${activeLevel > 0 ? `L${activeLevel + 1} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
           </button>
+          {/* A run is active — let them stop the trailing rubber-band WITHOUT a
+              canvas tap, which would snap+drop one more wall where it lands. */}
+          {traceStart && (
+            <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => setTraceStart(null)} title="Stop this wall run">■ End run</button>
+          )}
           {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
             || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
             <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
