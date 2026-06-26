@@ -610,7 +610,7 @@ export default function FloorplanPanel() {
         <div className={styles.traceBar}>
           <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
-            {framingActive ? `${activeLevel > 0 ? `${activeLevelLabel} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
+            {framingActive ? `${activeLevel > 0 ? `L${activeLevel + 1} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
           </button>
           {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
             || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
