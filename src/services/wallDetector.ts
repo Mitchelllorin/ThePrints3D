@@ -258,33 +258,38 @@ export function detectWallPairs(segs: DetectedSeg[], axis: 'h' | 'v', maxSep: nu
   const paired = new Set<number>()
   for (let i = 0; i < segs.length; i++) {
     if (paired.has(i)) continue
+    const a = segs[i]
+    // Pair `a` with its NEAREST overlapping parallel partner — not just any face
+    // within range. The old greedy match consumed EVERY nearby parallel face
+    // (no break, last one wins), so a thin partition's face sitting close to a
+    // thicker wall got swallowed by that wall and never emitted as its own wall
+    // — exactly the "partitions sharing endpoints/overlaps" miss. Nearest-partner
+    // pairing leaves the other faces free to pair with their own true partners.
+    let bestJ = -1
+    let bestSep = Infinity
     for (let j = i + 1; j < segs.length; j++) {
       if (paired.has(j)) continue
-      const a = segs[i]
       const b = segs[j]
       if (axis === 'h') {
         const sep = Math.abs(b.y1 - a.y1)
         if (sep > maxSep) continue
-        // Check for overlap in X range
         const overlapStart = Math.max(a.x1, b.x1)
         const overlapEnd = Math.min(a.x2, b.x2)
-        if (overlapEnd - overlapStart > 20) {
-          a.thickness = sep
-          a.centerY = (a.y1 + b.y1) / 2
-          paired.add(j)
-        }
+        if (overlapEnd - overlapStart > 20 && sep < bestSep) { bestSep = sep; bestJ = j }
       } else {
         const sep = Math.abs(b.x1 - a.x1)
         if (sep > maxSep) continue
         const overlapStart = Math.max(a.y1, b.y1)
         const overlapEnd = Math.min(a.y2, b.y2)
-        if (overlapEnd - overlapStart > 20) {
-          a.thickness = sep
-          a.centerX = (a.x1 + b.x1) / 2
-          paired.add(j)
-        }
+        if (overlapEnd - overlapStart > 20 && sep < bestSep) { bestSep = sep; bestJ = j }
       }
     }
+    if (bestJ < 0) continue
+    const b = segs[bestJ]
+    a.thickness = bestSep
+    if (axis === 'h') a.centerY = (a.y1 + b.y1) / 2
+    else a.centerX = (a.x1 + b.x1) / 2
+    paired.add(bestJ)
   }
 }
 

@@ -51,4 +51,22 @@ describe('detectWallPairs — centerline from face pair', () => {
     expect(segs.every((s) => s.thickness === 1)).toBe(true)
     expect(segs.every((s) => s.centerY === undefined)).toBe(true)
   })
+
+  it('pairs a thin partition with its NEAREST face, not a thicker neighbour', () => {
+    // A 12px partition (y=100/112) with a third face (y=140) from another wall
+    // all within maxSep. The partition's top face must pair its own bottom face
+    // (sep 12), NOT swallow the y=140 face — which stays free for its own pair.
+    const segs = [
+      seg(10, 100, 230, 100), // partition top
+      seg(10, 112, 230, 112), // partition bottom (nearest partner, sep 12)
+      seg(10, 140, 230, 140), // a different wall's face (sep 40 — must stay free)
+    ]
+    detectWallPairs(segs, 'h', 48)
+
+    expect(segs[0].thickness).toBe(12)
+    expect(segs[0].centerY).toBe(106)
+    // The far face is not consumed by the partition — no false centerline.
+    expect(segs[2].thickness).toBe(1)
+    expect(segs[2].centerY).toBeUndefined()
+  })
 })
