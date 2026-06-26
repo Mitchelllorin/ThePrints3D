@@ -6,7 +6,7 @@
  * and seat it on top of the walls (eaves at wall-top height) so it sits where a
  * roof actually goes.
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useExplodeChildren } from './explodeRuntime'
@@ -82,19 +82,11 @@ export default function RoofLayer() {
   const roofAreas = useAppStore((s) => s.roofAreas)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
-  const translateRoofArea = useAppStore((s) => s.translateRoofArea)
-  // Locked from dragging once built (same as floors) — no accidental flinging.
-  const modelReady = useAppStore((s) => s.model.status === 'ready')
   const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'roof')
-
-  // Drag-move a selected roof area: select on first tap, drag on the next press.
-  // sx/sz captured on the first move over the catcher plane (not from the mesh),
-  // so a tap can't translate and there's no mesh-vs-ground plane mismatch.
-  const [drag, setDrag] = useState<{ id: string; sx: number | null; sz: number | null; dx: number; dz: number } | null>(null)
 
   const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
 
@@ -112,52 +104,17 @@ export default function RoofLayer() {
     return new THREE.Vector3(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
-  // World drag delta → pixel delta (un-rotate by the overlay rotation, scale).
-  const worldDeltaToPixel = (dx: number, dz: number): [number, number] => {
-    const c = Math.cos(-rotRad), s = Math.sin(-rotRad)
-    const lx = dx * c - dz * s
-    const lz = dx * s + dz * c
-    return [(lx / overlayW) * imageWidth, (lz / overlayD) * imageHeight]
-  }
+  // LOCKED: a press on a roof only SELECTS it (delete/info). Body drag-to-move
+  // was removed — a stray press+move kept skating placed roofs across the workspace.
   const onDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    if (modelReady) { selectArea('roof', area.id); return }   // locked after build — select only
-    if (selectedArea?.kind === 'roof' && selectedArea.id === area.id) {
-      // Arm the drag; capture the reference on the first catcher-plane move (not
-      // from e.point on the roof mesh up at wall height, which made it "shoot out").
-      setDrag({ id: area.id, sx: null, sz: null, dx: 0, dz: 0 })
-    } else {
-      selectArea('roof', area.id)
-    }
-  }
-  const onMove = (e: ThreeEvent<PointerEvent>) => {
-    if (!drag) return
-    e.stopPropagation()
-    if (drag.sx == null || drag.sz == null) {
-      setDrag({ ...drag, sx: e.point.x, sz: e.point.z, dx: 0, dz: 0 })   // first move = reference
-      return
-    }
-    setDrag({ ...drag, dx: e.point.x - drag.sx, dz: e.point.z - drag.sz })
-  }
-  const onUp = (e: ThreeEvent<PointerEvent>) => {
-    if (!drag) return
-    e.stopPropagation()
-    const [dpx, dpy] = worldDeltaToPixel(drag.dx, drag.dz)
-    if (Math.hypot(dpx, dpy) > 0.5) translateRoofArea(drag.id, dpx, dpy)
-    setDrag(null)
+    selectArea('roof', area.id)
   }
 
   if (!visibleLayers.has('roof') || roofAreas.length === 0) return null
 
   return (
     <group name="roof" ref={groupRef}>
-      {/* Ground catcher while dragging, so the move keeps tracking off the area. */}
-      {drag && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
-          <planeGeometry args={[4000, 4000]} />
-          <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-        </mesh>
-      )}
       {roofAreas.map((area) => (
         <RoofAreaMesh
           key={area.id}
@@ -170,7 +127,7 @@ export default function RoofLayer() {
           rotRad={rotRad}
           wallHeight={wallHeight}
           selected={selectedArea?.kind === 'roof' && selectedArea.id === area.id}
-          offset={drag && drag.id === area.id ? [drag.dx, drag.dz] : [0, 0]}
+          offset={[0, 0]}
           onDown={onDown(area)}
         />
       ))}

@@ -8,7 +8,7 @@
  * deck is modelled as individual 4'×8' sheets with visible joints, and each area
  * carries a sheet COUNT nameplate for material takeoff.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
@@ -167,17 +167,7 @@ export default function FloorJoistsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
-  const translateFloorsArea = useAppStore((s) => s.translateFloorsArea)
-  // Once built, floor areas are LOCKED from dragging — a casual touch must never
-  // skate a placed floor across the workspace. Drag-to-move is a pre-build layout
-  // tool only; after Build 3D you can still select an area (delete/info), not fling it.
-  const modelReady = useAppStore((s) => s.model.status === 'ready')
-  const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
-  // sx/sz start null and are captured on the FIRST move over the catcher plane,
-  // so the start reference and every subsequent move share one plane — a tap that
-  // never moves can't translate, and there's no mesh-vs-ground plane mismatch.
-  const [drag, setDrag] = useState<{ id: string; sx: number | null; sz: number | null; dx: number; dz: number } | null>(null)
 
   // Storey-to-storey rise = wall height + the floor assembly on top of it, so a
   // 2nd-floor deck's joists rest ON the lower wall's top plate.
@@ -228,43 +218,13 @@ export default function FloorJoistsLayer() {
     return map
   }, [placedObjects, floorsAreas, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad])
 
-  // World drag delta → pixel delta (un-rotate by overlay rotation, then scale).
-  const worldDeltaToPixel = (dx: number, dz: number): [number, number] => {
-    const c = Math.cos(-rotRad), s = Math.sin(-rotRad)
-    const lx = dx * c - dz * s
-    const lz = dx * s + dz * c
-    return [(lx / overlayW) * imageWidth, (lz / overlayD) * imageHeight]
-  }
+  // LOCKED: a press on a floor only SELECTS it (for delete/info). Body drag-to-move
+  // was removed — a stray press+move kept skating placed floors across the
+  // workspace. A deliberate move handle can return later if needed.
   const onDownArea = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
-    if (modelReady) { selectArea('floor', area.id); return }   // locked after build — select only
-    if (selectedArea?.kind === 'floor' && selectedArea.id === area.id) {
-      // Arm a drag, but DON'T capture a start point from e.point here — that lands
-      // on the area mesh (up at level×storeyHeight) and mismatching it with the
-      // y=0 move plane made the floor "shoot out". The reference is captured on the
-      // first move over the catcher plane instead, so a pure tap can't translate.
-      setDrag({ id: area.id, sx: null, sz: null, dx: 0, dz: 0 })
-    } else {
-      selectArea('floor', area.id)
-    }
+    selectArea('floor', area.id)
   }
-  const onMove = (e: ThreeEvent<PointerEvent>) => {
-    if (!drag) return
-    e.stopPropagation()
-    if (drag.sx == null || drag.sz == null) {
-      setDrag({ ...drag, sx: e.point.x, sz: e.point.z, dx: 0, dz: 0 })   // first move = reference
-      return
-    }
-    setDrag({ ...drag, dx: e.point.x - drag.sx, dz: e.point.z - drag.sz })
-  }
-  const onUp = (e: ThreeEvent<PointerEvent>) => {
-    if (!drag) return
-    e.stopPropagation()
-    const [dpx, dpy] = worldDeltaToPixel(drag.dx, drag.dz)
-    if (Math.hypot(dpx, dpy) > 0.5) translateFloorsArea(drag.id, dpx, dpy)
-    setDrag(null)
-  }
-  const offsetFor = (id: string): [number, number] => (drag && drag.id === id ? [drag.dx, drag.dz] : [0, 0])
 
   if (!visibleLayers.has('floors') || floorsAreas.length === 0) return null
 
@@ -275,17 +235,11 @@ export default function FloorJoistsLayer() {
 
   return (
     <>
-      {drag && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
-          <planeGeometry args={[4000, 4000]} />
-          <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-        </mesh>
-      )}
       <group name="floor-joists">
-        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={offsetFor(area.id)} onDown={onDownArea(area)} />)}
+        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} onDown={onDownArea(area)} />)}
       </group>
       <group name="floor-sheeting">
-        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={offsetFor(area.id)} onDown={onDownArea(area)} />)}
+        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} onDown={onDownArea(area)} />)}
       </group>
     </>
   )
