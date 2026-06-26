@@ -170,7 +170,10 @@ export default function FloorJoistsLayer() {
   const translateFloorsArea = useAppStore((s) => s.translateFloorsArea)
   const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
-  const [drag, setDrag] = useState<{ id: string; sx: number; sz: number; dx: number; dz: number } | null>(null)
+  // sx/sz start null and are captured on the FIRST move over the catcher plane,
+  // so the start reference and every subsequent move share one plane — a tap that
+  // never moves can't translate, and there's no mesh-vs-ground plane mismatch.
+  const [drag, setDrag] = useState<{ id: string; sx: number | null; sz: number | null; dx: number; dz: number } | null>(null)
 
   // Storey-to-storey rise = wall height + the floor assembly on top of it, so a
   // 2nd-floor deck's joists rest ON the lower wall's top plate.
@@ -231,14 +234,11 @@ export default function FloorJoistsLayer() {
   const onDownArea = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     if (selectedArea?.kind === 'floor' && selectedArea.id === area.id) {
-      // Start the drag from where the pointer ray meets the y=0 ground plane —
-      // the SAME plane onMove samples. e.point lands on the area MESH, which for
-      // an upper floor sits up at level×storeyHeight; mixing that start with a
-      // y=0 move made the first delta huge and the floor "shot out" into the
-      // workspace. Sampling one plane for both keeps the delta honest.
-      const hit = e.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3())
-      if (!hit) return
-      setDrag({ id: area.id, sx: hit.x, sz: hit.z, dx: 0, dz: 0 })   // selected → start drag
+      // Arm a drag, but DON'T capture a start point from e.point here — that lands
+      // on the area mesh (up at level×storeyHeight) and mismatching it with the
+      // y=0 move plane made the floor "shoot out". The reference is captured on the
+      // first move over the catcher plane instead, so a pure tap can't translate.
+      setDrag({ id: area.id, sx: null, sz: null, dx: 0, dz: 0 })
     } else {
       selectArea('floor', area.id)
     }
@@ -246,6 +246,10 @@ export default function FloorJoistsLayer() {
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     if (!drag) return
     e.stopPropagation()
+    if (drag.sx == null || drag.sz == null) {
+      setDrag({ ...drag, sx: e.point.x, sz: e.point.z, dx: 0, dz: 0 })   // first move = reference
+      return
+    }
     setDrag({ ...drag, dx: e.point.x - drag.sx, dz: e.point.z - drag.sz })
   }
   const onUp = (e: ThreeEvent<PointerEvent>) => {

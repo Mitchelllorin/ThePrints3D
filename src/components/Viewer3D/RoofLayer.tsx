@@ -85,7 +85,9 @@ export default function RoofLayer() {
   useExplodeChildren(groupRef, 'roof')
 
   // Drag-move a selected roof area: select on first tap, drag on the next press.
-  const [drag, setDrag] = useState<{ id: string; sx: number; sz: number; dx: number; dz: number } | null>(null)
+  // sx/sz captured on the first move over the catcher plane (not from the mesh),
+  // so a tap can't translate and there's no mesh-vs-ground plane mismatch.
+  const [drag, setDrag] = useState<{ id: string; sx: number | null; sz: number | null; dx: number; dz: number } | null>(null)
 
   const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
 
@@ -113,12 +115,9 @@ export default function RoofLayer() {
   const onDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
     if (selectedArea?.kind === 'roof' && selectedArea.id === area.id) {
-      // Start from the pointer's y=0 ground intersection — the SAME plane onMove
-      // samples. e.point lands on the roof mesh up at wall height, so mixing it
-      // with a y=0 move made the first delta huge and the roof "shot out".
-      const hit = e.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3())
-      if (!hit) return
-      setDrag({ id: area.id, sx: hit.x, sz: hit.z, dx: 0, dz: 0 })   // already selected → start drag
+      // Arm the drag; capture the reference on the first catcher-plane move (not
+      // from e.point on the roof mesh up at wall height, which made it "shoot out").
+      setDrag({ id: area.id, sx: null, sz: null, dx: 0, dz: 0 })
     } else {
       selectArea('roof', area.id)
     }
@@ -126,6 +125,10 @@ export default function RoofLayer() {
   const onMove = (e: ThreeEvent<PointerEvent>) => {
     if (!drag) return
     e.stopPropagation()
+    if (drag.sx == null || drag.sz == null) {
+      setDrag({ ...drag, sx: e.point.x, sz: e.point.z, dx: 0, dz: 0 })   // first move = reference
+      return
+    }
     setDrag({ ...drag, dx: e.point.x - drag.sx, dz: e.point.z - drag.sz })
   }
   const onUp = (e: ThreeEvent<PointerEvent>) => {
