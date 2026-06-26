@@ -7,7 +7,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import PanelBoard from './PanelBoard'
-import TakeoffPanel from './TakeoffPanel'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
@@ -1567,9 +1566,6 @@ export default function FloorplanPanel() {
           </button>
         </div>
       )}
-
-      {/* Live material takeoff — quantities for everything drawn (own pill). */}
-      {drawing && drawing.status === 'ready' && <TakeoffPanel />}
 
       {/* BOTTOM drawer — Place & Layers: trade-layer visibility toggles + the
           object catalog. Retracts to just its tab so it never covers the plan. */}

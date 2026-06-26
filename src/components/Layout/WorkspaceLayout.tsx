@@ -3,6 +3,7 @@ import { listPresetDefinitions, type PresetDifficulty } from '../../services/pre
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
+import TakeoffContent from '../Viewer3D/TakeoffPanel'
 import TopIcons from './TopIcons'
 import EdgeDrawer from './EdgeDrawer'
 import AssistantBubble from './AssistantBubble'
@@ -572,6 +573,8 @@ export default function WorkspaceLayout() {
         <button className={styles.specBtn} onClick={sharePng}>Share PNG</button>
         <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Export</button>
         <AnnotationPanel />
+        <p className={styles.sectionTitle}>Material takeoff</p>
+        <TakeoffContent />
         <p className={styles.sectionTitle}>Unit converter</p>
         <ConverterPanel />
       </EdgeDrawer>
