@@ -842,11 +842,11 @@ export default function FloorplanPanel() {
               )}
               {!areaActive && (
                 <>
-                  <span className={styles.stepHint}>Height</span>
+                  <span className={styles.stepHint}>Run in</span>
                   <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
                     {(['under-floor', 'in-wall', 'ceiling'] as const).map((band) => (
                       <button key={band} className={traceBand === band ? styles.action : styles.secondary} onClick={() => setTraceBand(band)}>
-                        {band === 'under-floor' ? 'Under-floor' : band === 'in-wall' ? 'In-wall' : 'Ceiling'}
+                        {band === 'under-floor' ? 'Under-floor' : band === 'in-wall' ? 'In-wall' : 'Overhead'}
                       </button>
                     ))}
                   </div>
@@ -1256,6 +1256,20 @@ export default function FloorplanPanel() {
                 <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
                   {HVAC_PICKER.material.map((m) => (
                     <button key={m} className={hvacMaterial === m ? styles.action : styles.secondary} onClick={() => setHvac({ hvacMaterial: m })}>{m}</button>
+                  ))}
+                </div>
+              </>
+            )}
+            {/* Where the run sits — pick it UP FRONT (also adjustable mid-trace).
+                Drives the run's 3D elevation + auto-risers between bands. */}
+            {(activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
+              <>
+                <span className={styles.stepHint}>Run in</span>
+                <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                  {(['under-floor', 'in-wall', 'ceiling'] as const).map((band) => (
+                    <button key={band} className={traceBand === band ? styles.action : styles.secondary} onClick={() => setTraceBand(band)}>
+                      {band === 'under-floor' ? 'Under-floor' : band === 'in-wall' ? 'In-wall' : 'Overhead'}
+                    </button>
                   ))}
                 </div>
               </>
