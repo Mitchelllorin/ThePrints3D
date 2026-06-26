@@ -173,9 +173,6 @@ export default function FloorplanPanel() {
   const lengthFormat   = useConfigStore((s) => s.lengthFormat)
   // Nudge step for moving a selected wall, expressed in the active unit.
   const [nudgeStep, setNudgeStep] = useState(1)
-  // Storeys where the user has already answered the "different plan?" prompt, so
-  // it asks once per floor instead of nagging every time you switch up.
-  const [planPromptHandled, setPlanPromptHandled] = useState<number[]>([])
 
   // Picking a framing type ONLY arms the next trace — it no longer flips the
   // global build config. The material/size/gauge are stamped per-wall (via
@@ -545,12 +542,6 @@ export default function FloorplanPanel() {
   const wallsBelowCount = drawing.parsedWalls.filter(
     (w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1,
   ).length
-  // Does this storey have its own imported plan? If not (and it's an upper
-  // floor), the AI asks how to handle it — upper floors often differ from below.
-  const levelHasOwnPrint = drawings.some((d) => d.floorNumber === activeLevel)
-  const showLevelPlanPrompt = activeLevel > 0 && !levelHasOwnPrint
-    && !planPromptHandled.includes(activeLevel)
-    && !overlay.calibrationMode && drawing.status === 'ready'
   const floorsActive = activeTraceLayer === 'floors'
   const roofActive = activeTraceLayer === 'roof'
   // Floors & roofs are "area" layers: pull a rectangle instead of tracing a line.
@@ -697,60 +688,6 @@ export default function FloorplanPanel() {
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
-          </div>
-        )}
-
-        {/* ── Upper-floor prompt: OFFER to carry the shell up (nothing happens
-              until you choose). Plumb is a given and flush is the default, so we
-              don't ask "plumb & flush?" — the choice is carry-up vs deviations. ── */}
-        {showLevelPlanPrompt && (
-          <div className={styles.step}>
-            <span className={styles.stepLabel}>You're on {activeLevelLabel}</span>
-            <span className={styles.stepText}>Carry {belowLevelLabel} up?</span>
-            <span className={styles.stepHint}>
-              Bring the exterior walls + floor straight up over {belowLevelLabel}
-              (same footprint, joists on the walls) and trace the interior. Or a
-              build-out / balcony / deck / overhang, a different plan, or trace it all.
-            </span>
-            <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
-              {wallsBelowCount > 0 && (
-                <button
-                  className={styles.action}
-                  onClick={() => {
-                    carryWallsUp(drawing.id, activeLevel - 1, true)   // exterior shell
-                    carryFloorUp(activeLevel - 1)
-                    updateOverlay({ printAtGround: true }, false)
-                    setPlanPromptHandled((prev) => [...prev, activeLevel])
-                  }}
-                  title={`Carry the ${belowLevelLabel} exterior walls + floor straight up`}
-                >
-                  ⤴ Carry shell up
-                </button>
-              )}
-              {wallsBelowCount > 0 && (
-                <button
-                  className={styles.secondary}
-                  onClick={() => {
-                    carryWallsUp(drawing.id, activeLevel - 1)         // every wall + floor
-                    carryFloorUp(activeLevel - 1)
-                    updateOverlay({ printAtGround: true }, false)
-                    setPlanPromptHandled((prev) => [...prev, activeLevel])
-                  }}
-                  title={`Copy ALL ${belowLevelLabel} walls + floor straight up`}
-                >
-                  Whole floor same
-                </button>
-              )}
-              <button className={styles.secondary} onClick={() => importPlanForLevel(activeLevel)}>
-                Different plan
-              </button>
-              <button
-                className={styles.secondary}
-                onClick={() => setPlanPromptHandled((prev) => [...prev, activeLevel])}
-              >
-                Trace it
-              </button>
-            </div>
           </div>
         )}
 
@@ -1078,6 +1015,16 @@ export default function FloorplanPanel() {
                 title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}, plumb`}
               >
                 ⤴ Carry {belowLevelLabel} walls up ({wallsBelowCount})
+              </button>
+            )}
+            {activeLevel > 0 && (
+              <button
+                className={styles.secondary}
+                style={{ alignSelf: 'flex-start' }}
+                onClick={() => importPlanForLevel(activeLevel)}
+                title={`Load a separate floor plan for ${activeLevelLabel} (build-outs, balconies, a different layout)`}
+              >
+                📄 Different plan for {activeLevelLabel}
               </button>
             )}
             {pendingWalls ? (
