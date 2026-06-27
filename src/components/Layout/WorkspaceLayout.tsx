@@ -7,6 +7,7 @@ import TakeoffContent from '../Viewer3D/TakeoffPanel'
 import TopIcons from './TopIcons'
 import EdgeDrawer from './EdgeDrawer'
 import AssistantBubble from './AssistantBubble'
+import TutorialCoach from './TutorialCoach'
 import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import { useAppStore } from '../../store/useAppStore'
@@ -429,6 +430,7 @@ export default function WorkspaceLayout() {
   const settingsDrawerOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
   const placeDrawerOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
+  const startTutorial = useFloorplanLocalStore((s) => s.startTutorial)
 
   // Re-enter calibration: reset picked points and let the ambient guide drive.
   const recalibrate = () => {
@@ -474,6 +476,12 @@ export default function WorkspaceLayout() {
     } catch (error) {
       console.error('Failed to load preset:', presetId, error)
     }
+  }
+  // Start the guided "build a whole house" walkthrough. Drops a starter plan
+  // first if the workspace is empty so step 1 (the plan) is already satisfied.
+  const startGuidedTour = () => {
+    if (drawings.length === 0) handleLoadPreset('easy')
+    startTutorial()
   }
   const hasDrawings = drawings.length > 0
   // Onboarding card persists until a plan is actually loaded — no dismiss.
@@ -560,6 +568,7 @@ export default function WorkspaceLayout() {
         <SettingsContent />
         <div className={styles.specDivider} />
         <p className={styles.sectionTitle}>Tools</p>
+        <button className={styles.specBtn} onClick={() => { setDrawerOpen('settings', false); startGuidedTour() }}>🎓 Guided tutorial</button>
         <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Load Preset</button>
         <PresetPanel onLoad={handleLoadPreset} />
         <button className={styles.specBtn} onClick={recalibrate}>
@@ -596,6 +605,10 @@ export default function WorkspaceLayout() {
           </div>
           <p className={styles.uploadHintSub} style={{ marginTop: 4 }}>Or start from a preset:</p>
           <PresetPanel onLoad={handleLoadPreset} />
+          <p className={styles.uploadHintSub} style={{ marginTop: 6 }}>New here? I'll walk you through it:</p>
+          <button className={styles.uploadHintBtn} onClick={startGuidedTour}>
+            🎓 Take the guided tour
+          </button>
         </div>
       )}
 
@@ -619,6 +632,9 @@ export default function WorkspaceLayout() {
 
       {/* The omnipresent assistant — proactive next-step coach (top-centre). */}
       <AssistantBubble />
+
+      {/* The guided "build a whole house" walkthrough (its own persistent card). */}
+      <TutorialCoach />
     </div>
   )
 }

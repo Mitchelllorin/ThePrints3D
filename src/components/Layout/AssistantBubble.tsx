@@ -51,6 +51,8 @@ export default function AssistantBubble() {
   const tracePaused = useFloorplanLocalStore((s) => s.tracePaused)
   const activePanel = useFloorplanLocalStore((s) => s.activePanel)
   const calibrationHandledIds = useFloorplanLocalStore((s) => s.calibrationHandledIds)
+  // The guided tutorial owns the coaching while it runs — don't double up.
+  const tutorialActive = useFloorplanLocalStore((s) => s.tutorialActive)
 
   const [dismissedId, setDismissedId] = useState<string | null>(null)
 
@@ -74,7 +76,7 @@ export default function AssistantBubble() {
     activePanel,
   }
 
-  const suggestion = nextSuggestion(ctx)
+  const suggestion = tutorialActive ? null : nextSuggestion(ctx)
   const visibleId = suggestion && suggestion.id !== dismissedId ? suggestion.id : null
 
   // Auto-hide after ~15s so it never lingers — it reappears on its own when the

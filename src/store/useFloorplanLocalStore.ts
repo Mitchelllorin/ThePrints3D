@@ -155,6 +155,12 @@ interface FloorplanLocalState {
   settingsDrawerOpen: boolean
   placeDrawerOpen: boolean
 
+  // ─── guided tutorial (the "build a whole house" walkthrough) ──────
+  /** Tutorial running — the coach card is shown and tracks the current step. */
+  tutorialActive: boolean
+  /** Index into TUTORIAL_STEPS. */
+  tutorialStep: number
+
   // ─── actions ─────────────────────────────────────────────────────
   setTraceMode: (v: boolean) => void
   setTracePaused: (v: boolean) => void
@@ -210,6 +216,9 @@ interface FloorplanLocalState {
   /** Open/close an edge drawer. On compact (phone / landscape-short) screens,
    *  opening one retracts the others so they never stack over the workspace. */
   setDrawerOpen: (which: 'build' | 'settings' | 'place', open: boolean) => void
+  startTutorial: () => void
+  exitTutorial: () => void
+  setTutorialStep: (n: number) => void
 }
 
 export type { CalibrationUnit, DragKind, DragState, TraceStyle }
@@ -268,6 +277,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   wizardOpen: false,
   buildDrawerOpen: false,
   settingsDrawerOpen: false,
+  tutorialActive: false,
+  tutorialStep: 0,
   placeDrawerOpen: false,
 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
@@ -352,4 +363,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
     const key = which === 'build' ? 'buildDrawerOpen' : which === 'settings' ? 'settingsDrawerOpen' : 'placeDrawerOpen'
     return { ...base, [key]: open } as Partial<FloorplanLocalState>
   }),
+  startTutorial: () => set({ tutorialActive: true, tutorialStep: 0 }),
+  exitTutorial: () => set({ tutorialActive: false }),
+  setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
 }))
