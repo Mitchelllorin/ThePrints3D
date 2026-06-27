@@ -21,6 +21,7 @@ export default function TutorialCoach() {
   const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
   const setTraceMode = useFloorplanLocalStore((s) => s.setTraceMode)
+  const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
 
   const drawings = useAppStore((s) => s.drawings)
   const overlay = useAppStore((s) => s.floorplanOverlay)
@@ -61,8 +62,10 @@ export default function TutorialCoach() {
     enteredStep.current = step
     const e: TutorialEnter | undefined = TUTORIAL_STEPS[step].enter
     if (!e) return
-    if (e === 'place') { setTraceMode(false); setDrawerOpen('place', true) }
-    else if (e === 'settings') { setTraceMode(false); setDrawerOpen('settings', true) }
+    // Clear any selection first — a selected wall/area otherwise forces the Build
+    // drawer open (selection-driven), fighting the drawer this step wants open.
+    if (e === 'place') { closeAllPanels(); setTraceMode(false); setDrawerOpen('place', true) }
+    else if (e === 'settings') { closeAllPanels(); setTraceMode(false); setDrawerOpen('settings', true) }
     else if (e === 'closeDrawers') { setTraceMode(false); setDrawerOpen('build', false) }
     else {
       // A tracing step (floors/framing/roof/plumbing/electrical): select the
@@ -72,7 +75,7 @@ export default function TutorialCoach() {
       setActiveTraceLayer(e)
       setTraceMode(true)
     }
-  }, [active, step, setActiveTraceLayer, setDrawerOpen, setTraceMode])
+  }, [active, step, setActiveTraceLayer, setDrawerOpen, setTraceMode, closeAllPanels])
 
   // ── Auto-advance only steps the user COMPLETES (not ones done on arrival) ────
   const arrivalDone = useRef<Record<number, boolean>>({})

@@ -1018,6 +1018,25 @@ export default function FloorplanOverlay() {
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
 
+  // Show the ghost IMMEDIATELY when an object is armed — parked at the plan
+  // centre — so you can see what you're placing right away. On touch there's no
+  // hover to reveal it first, so without this you'd pick a door and see nothing
+  // (then tap blindly). From here you drag it into place (or just tap a spot).
+  useEffect(() => {
+    if (!placeObjectType || !ghostItem) return
+    // Defer a frame so the ghost mesh has mounted before we position it.
+    const id = requestAnimationFrame(() => {
+      if (!ghostRef.current) return
+      const cx = overlay.position[0], cz = overlay.position[1]
+      const pose = devicePose(cx, cz)
+      ghostRef.current.position.set(pose.x, ghostY(placeObjectType, ghostItem.defaultH), pose.z)
+      ghostRef.current.rotation.y = pose.rotationY
+      ghostRef.current.visible = true
+    })
+    return () => cancelAnimationFrame(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeObjectType])
+
   // Colour of the line currently being traced, by active discipline/selection.
   const activeLineColor =
     activeTraceLayer === 'plumbing' ? plumbingColorFor(plumbElement, plumbTemp)
@@ -1274,7 +1293,10 @@ export default function FloorplanOverlay() {
           showed from far away). The hit point is ignored — moveGhost/placeAtPointer
           project the event ray to the y=0 ground for the true floor point. */}
       {placeObjectType && (
-        <mesh onPointerDown={placeAtPointer} onPointerMove={moveGhost}>
+        // Press shows + moves the ghost to the finger, drag follows it, release
+        // drops it there — so you DRAG the ghost into place instead of tapping
+        // blindly. A plain tap (press+release, no move) still places at the tap.
+        <mesh onPointerDown={moveGhost} onPointerMove={moveGhost} onPointerUp={placeAtPointer}>
           <sphereGeometry args={[800, 16, 12]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.BackSide} />
         </mesh>
