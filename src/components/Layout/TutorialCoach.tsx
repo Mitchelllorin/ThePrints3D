@@ -144,7 +144,9 @@ export default function TutorialCoach() {
             onClick={() => setStep(step + 1)}
             style={{ background: '#2f80ff', border: 'none', borderRadius: 7, color: '#fff', fontWeight: 600, padding: '6px 16px', fontSize: 12, cursor: 'pointer' }}
           >
-            {done ? 'Next →' : 'Skip →'}
+            {/* Always "Next" — the ✓/○ shows done-ness; "Skip" mislabels an
+                essential step as optional (e.g. skipping the foundation). */}
+            Next →
           </button>
         )}
       </div>
