@@ -562,6 +562,7 @@ export default function WorkspaceLayout() {
         title="Settings"
         tabLabel="Settings"
         tabIcon="⚙"
+        tourTab="settings-tab"
         open={settingsDrawerOpen}
         onToggle={() => setDrawerOpen('settings', !settingsDrawerOpen)}
       >

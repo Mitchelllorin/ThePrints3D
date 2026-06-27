@@ -28,18 +28,21 @@ interface EdgeDrawerProps {
    * drawer (up to 88vw on a phone) can't swallow taps meant for the print.
    */
   clickThrough?: boolean
+  /** `data-tour` value on the toggle tab, so the guided tutorial can spotlight it. */
+  tourTab?: string
   children: ReactNode
   className?: string
 }
 
 const SIDE_CLASS = { left: styles.left, right: styles.right, bottom: styles.bottom } as const
 
-export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, title, clickThrough, children, className }: EdgeDrawerProps) {
+export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, title, clickThrough, tourTab, children, className }: EdgeDrawerProps) {
   return (
     <div className={`${styles.root} ${SIDE_CLASS[side]} ${open ? styles.open : ''} ${clickThrough ? styles.clickThrough : ''} ${className ?? ''}`}>
       <button
         className={styles.tab}
         onClick={onToggle}
+        data-tour={tourTab}
         aria-label={`${open ? 'Hide' : 'Show'} ${tabLabel}`}
         aria-expanded={open}
       >

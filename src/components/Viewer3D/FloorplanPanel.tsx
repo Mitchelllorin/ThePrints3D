@@ -614,7 +614,7 @@ export default function FloorplanPanel() {
           )}
           {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
             || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
-            <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+            <button data-tour="build-3d" className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
           )}
           <button className={styles.traceBarBtn} onClick={cancelTracing} title="Finish tracing">✓ Done</button>
         </div>
@@ -1092,7 +1092,7 @@ export default function FloorplanPanel() {
                     </button>
                   )}
                   {hasTrace && (
-                    <button className={styles.action} onClick={handleSmartRefine} disabled={seedProcessing}>
+                    <button data-tour="find-rest" className={styles.action} onClick={handleSmartRefine} disabled={seedProcessing}>
                       {seedProcessing ? 'Finding…' : '✨ Find the rest'}
                     </button>
                   )}
@@ -1522,6 +1522,7 @@ export default function FloorplanPanel() {
           title="Place & Layers"
           tabLabel="Place"
           tabIcon="▦"
+          tourTab="place-tab"
           open={placeDrawerOpen}
           onToggle={() => setDrawerOpen('place', !placeDrawerOpen)}
         >

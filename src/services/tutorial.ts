@@ -27,6 +27,21 @@ export interface TutorialContext {
   electricalCount: number
 }
 
+/**
+ * What the coach should DO when a step opens, so the user lands exactly on the
+ * right tool instead of hunting. The UI maps each kind to real store actions
+ * (open a drawer + select a trace layer, etc.).
+ */
+export type TutorialEnter =
+  | 'floors'      // Build drawer → Floors layer
+  | 'framing'     // Build drawer → Framing layer
+  | 'roof'        // Build drawer → Roof layer
+  | 'plumbing'    // Build drawer → Plumbing layer
+  | 'electrical'  // Build drawer → Electrical layer
+  | 'place'       // Place drawer
+  | 'settings'    // Settings drawer
+  | 'closeDrawers'
+
 export interface TutorialStep {
   /** Stable id (progress + analytics). */
   id: string
@@ -38,6 +53,10 @@ export interface TutorialStep {
   hint: string
   /** Goal reached → the coach ticks it and auto-advances. */
   done: (c: TutorialContext) => boolean
+  /** Drive the UI to the right tool the moment the step opens (optional). */
+  enter?: TutorialEnter
+  /** `data-tour` value of the control to spotlight (optional). */
+  target?: string
 }
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
@@ -58,64 +77,75 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'floor',
     title: 'Lay the floor first',
-    body: 'Foundation before framing: the floor goes down first and the walls frame on top of it. Pick Floors, then pull a rectangle across the footprint — slab or wood-frame, your call.',
-    hint: 'Build drawer (left) → Floors → pull a rectangle over the footprint.',
+    body: "Foundation before framing: the floor goes down first and the walls frame on top of it. I've opened Floors for you — pull a rectangle across the footprint.",
+    hint: 'Pull a rectangle corner-to-corner across the footprint on the plan.',
+    enter: 'floors',
     done: (c) => c.hasFloor,
   },
   {
     id: 'wall',
     title: 'Trace your first wall',
-    body: 'Now the walls. Open Build → Framing, then tap one corner and the next to lay a wall over the print. It squares up automatically. Double-tap or "End run" to finish.',
-    hint: 'Build drawer → Framing → tap two corners on the plan.',
+    body: "Now the walls. I've switched you to Framing — tap one corner, then the next, to lay a wall over the print. It squares up automatically; double-tap or \"End run\" to finish.",
+    hint: 'Tap two corners on the plan to lay a wall.',
+    enter: 'framing',
     done: (c) => c.userWallCount >= 1,
   },
   {
     id: 'findRest',
     title: 'Find the rest',
-    body: 'Here’s the magic: trace one and let the detector find the matching walls across the whole plan. Tap “✨ Find the rest”.',
-    hint: 'Tap "✨ Find the rest" after your first wall.',
+    body: 'Here’s the magic: you traced one, now let the detector find the matching walls across the whole plan.',
+    hint: 'Tap the highlighted "✨ Find the rest" button.',
+    target: 'find-rest',
     done: (c) => c.totalWallCount > c.userWallCount,
   },
   {
     id: 'build',
     title: 'Build it in 3D',
-    body: 'Now stand it up. “Build 3D” frames every wall — studs, plates, headers — and raises the model so you can orbit it.',
-    hint: 'Tap "Build 3D →".',
+    body: 'Now stand it up. "Build 3D" frames every wall — studs, plates, headers — and raises the model so you can orbit it.',
+    hint: 'Tap the highlighted "Build 3D →" button.',
+    target: 'build-3d',
     done: (c) => c.built,
   },
   {
     id: 'roof',
     title: 'Put a roof on',
-    body: 'Pick Roof, choose a pitch, and pull the roof area over the footprint. Gable ends get a sloped rake automatically — no flat boxes.',
-    hint: 'Build drawer → Roof → pull the roof over the footprint.',
+    body: "Roof's open. Choose a pitch and pull the roof area over the footprint — gable ends get a sloped rake automatically, no flat boxes.",
+    hint: 'Pull the roof rectangle over the footprint on the plan.',
+    enter: 'roof',
     done: (c) => c.hasRoof,
   },
   {
     id: 'openings',
     title: 'Doors & windows',
-    body: 'Drop doors and windows from Place — set them on a wall and they frame right in with king studs, jacks and a header.',
-    hint: 'Place drawer (bottom) → a door or window → tap it onto a wall.',
+    body: "I've opened Place. Pick a door or window and tap it onto a wall — it frames right in with king studs, jacks and a header.",
+    hint: 'Pick a door or window, then tap it onto a wall.',
+    enter: 'place',
+    target: 'place-tab',
     done: (c) => c.openingCount >= 1,
   },
   {
     id: 'plumbing',
     title: 'Run the plumbing',
-    body: 'Pick Plumbing, choose supply or waste, and trace the runs. In-wall runs follow the studs so the pipe routes inside the wall.',
-    hint: 'Build drawer → Plumbing → trace a run.',
+    body: "Plumbing's open. Choose supply or waste and trace the runs — in-wall runs follow the studs so the pipe routes inside the wall.",
+    hint: 'Trace a pipe run across the plan.',
+    enter: 'plumbing',
     done: (c) => c.plumbingCount >= 1,
   },
   {
     id: 'electrical',
     title: 'Wire it up',
-    body: 'Last system: pick Electrical and run a circuit. Same trace-and-go as plumbing.',
-    hint: 'Build drawer → Electrical → trace a circuit.',
+    body: "Last system — Electrical's open. Run a circuit the same trace-and-go way as plumbing.",
+    hint: 'Trace a circuit across the plan.',
+    enter: 'electrical',
     done: (c) => c.electricalCount >= 1,
   },
   {
     id: 'takeoff',
     title: 'Read the takeoff',
-    body: 'That’s a whole house. Open Settings → Material Takeoff for the bill of materials — wall feet, studs, board, pipe, wire and fixtures, counted live.',
-    hint: 'Settings drawer (right) → Material takeoff.',
+    body: "That's a whole house. I've opened Settings — scroll to Material Takeoff for the live bill of materials: wall feet, studs, board, pipe, wire and fixtures.",
+    hint: 'Find "Material takeoff" in the Settings drawer.',
+    enter: 'settings',
+    target: 'settings-tab',
     // Terminal step — finishing is manual (there’s nothing left to "do").
     done: () => false,
   },
