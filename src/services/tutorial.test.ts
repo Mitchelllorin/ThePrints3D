@@ -18,7 +18,7 @@ describe('tutorial script', () => {
   it('covers the full house build in order', () => {
     const ids = TUTORIAL_STEPS.map((s) => s.id)
     expect(ids).toEqual([
-      'plan', 'scale', 'wall', 'findRest', 'floor',
+      'plan', 'scale', 'floor', 'wall', 'findRest',
       'build', 'roof', 'openings', 'plumbing', 'electrical', 'takeoff',
     ])
   })

@@ -238,7 +238,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   distanceInput: '',
   activeWallType: 'wood-2x6',
   activeWallRole: 'exterior-bearing',
-  activeTraceLayer: 'framing',
+  // Floors-first: the foundation/floor goes down before walls frame on top, so
+  // the Build drawer opens on Floors (not Framing) and guides the right order.
+  activeTraceLayer: 'floors',
   traceBand: 'under-floor',
   plumbElement: PLUMBING_DEFAULTS.element,
   plumbSize: PLUMBING_DEFAULTS.size,

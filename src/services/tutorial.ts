@@ -56,10 +56,17 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     done: (c) => c.calibrationCleared,
   },
   {
+    id: 'floor',
+    title: 'Lay the floor first',
+    body: 'Foundation before framing: the floor goes down first and the walls frame on top of it. Pick Floors, then pull a rectangle across the footprint — slab or wood-frame, your call.',
+    hint: 'Build drawer (left) → Floors → pull a rectangle over the footprint.',
+    done: (c) => c.hasFloor,
+  },
+  {
     id: 'wall',
     title: 'Trace your first wall',
-    body: 'Open Build → Framing, then tap one corner and the next to lay a wall over the print. It squares up automatically. Double-tap or "End run" to finish.',
-    hint: 'Build drawer (left) → Framing → tap two corners on the plan.',
+    body: 'Now the walls. Open Build → Framing, then tap one corner and the next to lay a wall over the print. It squares up automatically. Double-tap or "End run" to finish.',
+    hint: 'Build drawer → Framing → tap two corners on the plan.',
     done: (c) => c.userWallCount >= 1,
   },
   {
@@ -68,13 +75,6 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     body: 'Here’s the magic: trace one and let the detector find the matching walls across the whole plan. Tap “✨ Find the rest”.',
     hint: 'Tap "✨ Find the rest" after your first wall.',
     done: (c) => c.totalWallCount > c.userWallCount,
-  },
-  {
-    id: 'floor',
-    title: 'Lay the floor',
-    body: 'The walls frame on top of the floor. Pick Floors, then pull a rectangle across the footprint — slab or wood-frame, your call.',
-    hint: 'Build drawer → Floors → pull a rectangle over the footprint.',
-    done: (c) => c.hasFloor,
   },
   {
     id: 'build',
