@@ -20,6 +20,7 @@ export default function TutorialCoach() {
   const calibrationHandledIds = useFloorplanLocalStore((s) => s.calibrationHandledIds)
   const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
+  const setTraceMode = useFloorplanLocalStore((s) => s.setTraceMode)
 
   const drawings = useAppStore((s) => s.drawings)
   const overlay = useAppStore((s) => s.floorplanOverlay)
@@ -60,11 +61,18 @@ export default function TutorialCoach() {
     enteredStep.current = step
     const e: TutorialEnter | undefined = TUTORIAL_STEPS[step].enter
     if (!e) return
-    if (e === 'place') setDrawerOpen('place', true)
-    else if (e === 'settings') setDrawerOpen('settings', true)
-    else if (e === 'closeDrawers') setDrawerOpen('build', false)
-    else { setActiveTraceLayer(e); setDrawerOpen('build', true) }
-  }, [active, step, setActiveTraceLayer, setDrawerOpen])
+    if (e === 'place') { setTraceMode(false); setDrawerOpen('place', true) }
+    else if (e === 'settings') { setTraceMode(false); setDrawerOpen('settings', true) }
+    else if (e === 'closeDrawers') { setTraceMode(false); setDrawerOpen('build', false) }
+    else {
+      // A tracing step (floors/framing/roof/plumbing/electrical): select the
+      // layer AND drop straight into trace mode so a tap on the plan actually
+      // draws — selecting the layer alone leaves taps inert. Trace mode retracts
+      // the drawer (workspace clear); the coach guides the action.
+      setActiveTraceLayer(e)
+      setTraceMode(true)
+    }
+  }, [active, step, setActiveTraceLayer, setDrawerOpen, setTraceMode])
 
   // ── Auto-advance only steps the user COMPLETES (not ones done on arrival) ────
   const arrivalDone = useRef<Record<number, boolean>>({})

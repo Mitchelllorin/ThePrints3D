@@ -607,6 +607,14 @@ export default function FloorplanPanel() {
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
             {framingActive ? `${activeLevel > 0 ? `L${activeLevel + 1} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
           </button>
+          {/* "Find the rest" — reachable straight from the slim trace bar (it used
+              to live only in the Build panel, which retracts while you trace, so
+              you couldn't reach it mid-run). Shows once a framing wall is traced. */}
+          {framingActive && hasTrace && (
+            <button data-tour="find-rest" className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={handleSmartRefine} disabled={seedProcessing} title="Detect the matching walls across the plan">
+              {seedProcessing ? 'Finding…' : '✨ Find the rest'}
+            </button>
+          )}
           {/* A run is active — let them stop the trailing rubber-band WITHOUT a
               canvas tap, which would snap+drop one more wall where it lands. */}
           {traceStart && (
@@ -1092,7 +1100,7 @@ export default function FloorplanPanel() {
                     </button>
                   )}
                   {hasTrace && (
-                    <button data-tour="find-rest" className={styles.action} onClick={handleSmartRefine} disabled={seedProcessing}>
+                    <button className={styles.action} onClick={handleSmartRefine} disabled={seedProcessing}>
                       {seedProcessing ? 'Finding…' : '✨ Find the rest'}
                     </button>
                   )}
