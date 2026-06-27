@@ -62,10 +62,11 @@ export default function TutorialCoach() {
     enteredStep.current = step
     const e: TutorialEnter | undefined = TUTORIAL_STEPS[step].enter
     if (!e) return
-    // Clear any selection first — a selected wall/area otherwise forces the Build
-    // drawer open (selection-driven), fighting the drawer this step wants open.
-    if (e === 'place') { closeAllPanels(); setTraceMode(false); setDrawerOpen('place', true) }
-    else if (e === 'settings') { closeAllPanels(); setTraceMode(false); setDrawerOpen('settings', true) }
+    // Always clear any selection first — a selected wall/area otherwise forces the
+    // Build drawer open (selection-driven), fighting this step's intended state.
+    closeAllPanels()
+    if (e === 'place') { setTraceMode(false); setDrawerOpen('place', true) }
+    else if (e === 'settings') { setTraceMode(false); setDrawerOpen('settings', true) }
     else if (e === 'closeDrawers') { setTraceMode(false); setDrawerOpen('build', false) }
     else {
       // A tracing step (floors/framing/roof/plumbing/electrical): select the
