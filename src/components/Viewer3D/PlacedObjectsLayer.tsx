@@ -94,6 +94,9 @@ export default function PlacedObjectsLayer() {
   const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const editHover = useFloorplanLocalStore((s) => s.editHover)
+  const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
 
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
 
@@ -170,6 +173,7 @@ export default function PlacedObjectsLayer() {
         const live = drag && drag.id === obj.id ? { ...obj, x: drag.x, z: drag.z, rotationY: drag.rotationY } : obj
         const { w, d, h, color } = dims(live)
         const selected = obj.id === selectedObjectId
+        const editHovered = editMode && editHover?.kind === 'object' && editHover.id === obj.id
         // Doors/windows aren't furniture boxes — they're cut into the wall by
         // BuildingModel. Here they show only as a thin translucent opening
         // marker that stays selectable/draggable to reposition the cut.
@@ -203,6 +207,8 @@ export default function PlacedObjectsLayer() {
                 // select here so the editor still opens on a plain tap.
                 if (drag && drag.id === obj.id && !drag.moved) { e.stopPropagation(); select(obj.id); setDrag(null) }
               }}
+              onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'object', id: obj.id }) } : undefined}
+              onPointerOut={editMode ? () => setEditHover(null) : undefined}
             >
               {/* Procedural product model when we have a shape for this type;
                   openings and unmodelled types fall back to a plain box. The
@@ -224,12 +230,13 @@ export default function PlacedObjectsLayer() {
                   />
                 </mesh>
               )}
-              {/* Selection outline — an invisible bounding box carrying the edges. */}
-              {selected && (
+              {/* Selection outline — an invisible bounding box carrying the edges.
+                  Amber when selected; cyan when hovered in edit mode. */}
+              {(selected || editHovered) && (
                 <mesh>
                   <boxGeometry args={[w, h, boxD]} />
                   <meshBasicMaterial visible={false} />
-                  <Edges color="#facc15" lineWidth={2} />
+                  <Edges color={selected ? '#facc15' : '#22d3ee'} lineWidth={2} />
                 </mesh>
               )}
             </group>

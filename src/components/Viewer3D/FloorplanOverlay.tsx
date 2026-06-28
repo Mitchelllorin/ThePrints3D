@@ -170,6 +170,9 @@ export default function FloorplanOverlay() {
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const keepPlacing = useFloorplanLocalStore((s) => s.keepPlacing)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const editHover = useFloorplanLocalStore((s) => s.editHover)
+  const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
   const selectedLine = useFloorplanLocalStore((s) => s.selectedLine)
   const selectLineExclusive = useFloorplanLocalStore((s) => s.selectLineExclusive)
   const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
@@ -1322,19 +1325,24 @@ export default function FloorplanOverlay() {
         const len = Math.hypot(b[0] - a[0], b[2] - a[2])
         if (len < 0.05) return null
         const ang = Math.atan2(b[2] - a[2], b[0] - a[0])
+        const editHovered = editMode && editHover?.kind === 'wall' && editHover.id === String(i)
         return (
-          <mesh
-            key={`wall-pick-${i}`}
-            position={[(a[0] + b[0]) / 2, 0.06, (a[2] + b[2]) / 2]}
-            rotation={[0, -ang, 0]}
-            onPointerDown={(e) => {
-              e.stopPropagation()
-              selectWallExclusive(i)
-            }}
-          >
-            <boxGeometry args={[len, 0.08, wallPickWidthM]} />
-            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-          </mesh>
+          <group key={`wall-pick-${i}`}>
+            {editHovered && <Line points={[a, b]} color="#22d3ee" lineWidth={6} />}
+            <mesh
+              position={[(a[0] + b[0]) / 2, 0.06, (a[2] + b[2]) / 2]}
+              rotation={[0, -ang, 0]}
+              onPointerDown={(e) => {
+                e.stopPropagation()
+                selectWallExclusive(i)
+              }}
+              onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'wall', id: String(i) }) } : undefined}
+              onPointerOut={editMode ? () => setEditHover(null) : undefined}
+            >
+              <boxGeometry args={[len, 0.08, wallPickWidthM]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+            </mesh>
+          </group>
         )
       })}
 
