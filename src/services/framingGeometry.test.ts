@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped } from './framingGeometry'
 
 const meshCount = (g: THREE.Object3D) => {
   let n = 0
@@ -47,6 +47,49 @@ describe('gable-end rake termination', () => {
     for (const type of ['Hip', 'Flat', 'Shed', 'Gambrel', 'Saltbox']) {
       expect(infos(buildRoofByType(type, opts))).not.toContain('Rake fascia')
     }
+  })
+})
+
+describe('buildRidgeRoof — drag-the-ridge shapes', () => {
+  const base = { lenX: 9, lenZ: 7, pitch: 0.5, ocM: 0.6096 }
+  const infos = (g: THREE.Object3D) => {
+    const out: string[] = []
+    g.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push((o.userData?.info as string) ?? '') })
+    return out
+  }
+
+  it('centred, no inset → a plain gable (rafters + ridge + gable studs, no hips)', () => {
+    const g = buildRidgeRoof(base)
+    expect(meshCount(g)).toBeGreaterThan(0)
+    const i = infos(g)
+    expect(i).toContain('Ridge board')
+    expect(i).toContain('Gable stud')
+    expect(i).not.toContain('Hip rafter')
+  })
+
+  it('end insets add hip rafters and drop the gable studs on that end', () => {
+    const g = buildRidgeRoof({ ...base, insetA: 0.3, insetB: 0.3 })
+    expect(infos(g)).toContain('Hip rafter')
+    expect(infos(g)).not.toContain('Gable stud')   // both ends hipped
+  })
+
+  it('one inset → hip on that end, gable studs still on the flush end', () => {
+    const i = infos(buildRidgeRoof({ ...base, insetB: 0.3 }))
+    expect(i).toContain('Hip rafter')
+    expect(i).toContain('Gable stud')
+  })
+
+  it('cross-offset keeps a single ridge but skews the slopes (still renders)', () => {
+    const g = buildRidgeRoof({ ...base, crossFrac: 0.5 })
+    expect(meshCount(g)).toBeGreaterThan(0)
+    expect(infos(g)).toContain('Ridge board')
+  })
+
+  it('ridgeIsShaped flags only real shape changes', () => {
+    expect(ridgeIsShaped(undefined)).toBe(false)
+    expect(ridgeIsShaped({ crossFrac: 0, insetA: 0, insetB: 0 })).toBe(false)
+    expect(ridgeIsShaped({ crossFrac: 0.4 })).toBe(true)
+    expect(ridgeIsShaped({ insetA: 0.3 })).toBe(true)
   })
 })
 

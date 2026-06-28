@@ -971,6 +971,126 @@ export function buildSaltboxRoof(opts: {
 }
 
 /**
+ * General ridge roof — the model behind "drag the ridge". The ridge is a line at
+ * height `rise`, free to (a) sit off-centre across the span (`crossFrac`, → a
+ * saltbox / asymmetric gable) and (b) stop short of either run end (`insetA/B`,
+ * → a hipped end). crossFrac 0 + insets 0 reproduces a plain centred gable.
+ *
+ * Built canonically with the run (ridge direction) along X and the span along Z,
+ * then spun 90° so the ridge follows the footprint's LONGER side (matching the
+ * gable/hip builders). Pitch is nominal (rise = half-span · pitch); sliding the
+ * ridge across keeps the peak height and skews the two slope pitches — exactly
+ * what you'd see pulling a ridge sideways.
+ */
+export function buildRidgeRoof(opts: {
+  lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+  overhangM?: number
+  /** ridge cross-offset as a fraction of the half-span, -0.9..0.9 (0 = centred). */
+  crossFrac?: number
+  /** ridge end insets as a fraction of the run, 0..0.45 each (>0 = hipped end). */
+  insetA?: number
+  insetB?: number
+}): THREE.Group {
+  const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (lenX < 0.2 || lenZ < 0.2) return g
+  const mat = roofMat(opacity)
+
+  const ridgeAlongX = lenX >= lenZ
+  const L = Math.max(lenX, lenZ)          // run (ridge direction)
+  const W = Math.min(lenX, lenZ)          // span (slope direction)
+  const half = W / 2
+  const rise = Math.max(0.1, half * pitch)
+  const c = Math.max(-0.9, Math.min(0.9, opts.crossFrac ?? 0)) * half  // ridge z
+  const insetA = Math.max(0, Math.min(0.45, opts.insetA ?? 0))         // -X end
+  const insetB = Math.max(0, Math.min(0.45, opts.insetB ?? 0))         // +X end
+  const xA = -L / 2 + insetA * L          // ridge end toward -X
+  const xB = L / 2 - insetB * L           // ridge end toward +X
+  const ridgeLen = Math.max(ROOF_RW, xB - xA)
+
+  // Per-side slope geometry (the two long slopes have different runs when the
+  // ridge is off-centre).
+  const runPos = Math.max(0.1, half - c)  // +Z eave → ridge
+  const runNeg = Math.max(0.1, half + c)  // -Z eave → ridge
+  const anglePos = Math.atan2(rise, runPos)
+  const angleNeg = Math.atan2(rise, runNeg)
+  const lenPos = Math.hypot(runPos, rise)
+  const lenNeg = Math.hypot(runNeg, rise)
+  const info = `Rafter · ${Math.round(pitch * 12)}:12`
+
+  // Common rafters along the ridge portion [xA, xB], both long sides.
+  const ps = roofRun(ridgeLen, ocM, ROOF_RW).map((p) => p + (xA + xB) / 2)
+  for (const p of ps) {
+    addRoofBox(g, mat, ROOF_RW, ROOF_RT, lenPos, p, rise / 2, (half + c) / 2, anglePos, 0, 0, info)
+    addRoofBox(g, mat, ROOF_RW, ROOF_RT, lenNeg, p, rise / 2, (-half + c) / 2, -angleNeg, 0, 0, info)
+  }
+  // Ridge board.
+  addRoofBox(g, mat, ridgeLen, ROOF_RT, ROOF_RW, (xA + xB) / 2, rise, c, 0, 0, 0, 'Ridge board')
+
+  // Ceiling / rafter ties across the span at each common rafter.
+  const tieY = Math.min(rise * 0.2, 0.3)
+  for (const p of ps) addRoofBox(g, mat, ROOF_RW, 0.089, W, p, tieY, 0, 0, 0, 0, 'Ceiling/rafter tie')
+
+  // Hip rafters for any inset (hipped) end: the two eave corners up to the ridge
+  // end, plus a couple of jack rafters landing on each hip.
+  const hipRafter = (corner: THREE.Vector3, ridgeEnd: THREE.Vector3, lbl: string) => {
+    const dir = new THREE.Vector3().subVectors(ridgeEnd, corner)
+    const len = dir.length()
+    if (len < 1e-3) return
+    const m = new THREE.Mesh(new THREE.BoxGeometry(len, ROOF_RT, ROOF_RW), mat)
+    m.position.copy(corner).addScaledVector(dir, 0.5)
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), dir.clone().normalize())
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'roof'; m.userData.info = lbl
+    g.add(m)
+  }
+  const ends: Array<{ inset: number; wallX: number; ridgeX: number }> = [
+    { inset: insetA, wallX: -L / 2, ridgeX: xA },
+    { inset: insetB, wallX: L / 2, ridgeX: xB },
+  ]
+  for (const end of ends) {
+    if (end.inset > 0) {
+      // Hipped end → two hip rafters fanning to the ridge end.
+      hipRafter(new THREE.Vector3(end.wallX, 0, half), new THREE.Vector3(end.ridgeX, rise, c), 'Hip rafter')
+      hipRafter(new THREE.Vector3(end.wallX, 0, -half), new THREE.Vector3(end.ridgeX, rise, c), 'Hip rafter')
+    } else {
+      // Flush gable end → studs filling the triangle up to the ridge.
+      const studOC = 0.4064
+      for (let s = -half + studOC; s < half; s += studOC) {
+        // Slope height at across-position s: linear from each eave up to ridge z=c.
+        const h = s <= c
+          ? rise * (s + half) / Math.max(0.1, c + half)
+          : rise * (half - s) / Math.max(0.1, half - c)
+        const hAt = Math.max(0.05, h)
+        addRoofBox(g, mat, ROOF_RW, hAt, ROOF_RW, end.wallX, hAt / 2, s, 0, 0, 0, 'Gable stud')
+      }
+    }
+  }
+
+  if (!ridgeAlongX) g.rotation.y = Math.PI / 2
+
+  // Boxed eave overhang (four-side) — a freely-shaped ridge can have a hip or an
+  // off-centre gable end, so the simple sloped rake of a plain gable no longer
+  // applies; the boxed soffit wraps every edge cleanly.
+  const overhangM = opts.overhangM ?? 0.4
+  if (overhangM > 0) {
+    const wrapper = new THREE.Group()
+    wrapper.add(g)
+    const eave = new THREE.Group()
+    buildEaveOverhang(eave, { lenX, lenZ, overhang: overhangM, opacity })
+    wrapper.add(eave)
+    return wrapper
+  }
+  return g
+}
+
+/** True when a ridge override actually changes the roof shape (not just pitch). */
+export function ridgeIsShaped(r?: { crossFrac?: number; insetA?: number; insetB?: number }): boolean {
+  if (!r) return false
+  return Math.abs(r.crossFrac ?? 0) > 0.02 || (r.insetA ?? 0) > 0.02 || (r.insetB ?? 0) > 0.02
+}
+
+/**
  * Boxed-eave overhang: soffit panels, fascia around the outer edge, and
  * lookouts framing back to the wall (the "framing back to the wall" + blocking
  * in the overhang). Built axis-aligned to the footprint so it's added as a

@@ -162,6 +162,12 @@ export interface TracedLine {
 export interface RoofRidge {
   /** Pitch as rise/run (e.g. 0.5 = 6:12). Overrides the `size`-derived pitch. */
   pitch: number
+  /** Ridge cross-offset as a fraction of the half-span, -0.9..0.9 (0 = centred;
+   *  ± slides it sideways → a saltbox / asymmetric gable). */
+  crossFrac?: number
+  /** Ridge end insets as a fraction of the run, 0..0.45 each (>0 = hipped end). */
+  insetA?: number
+  insetB?: number
 }
 
 /** A room (enclosed region) detected by flood-filling the rasterized image. */
