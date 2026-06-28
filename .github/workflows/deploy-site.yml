@@ -10,6 +10,7 @@ on:
     paths:
       - 'public/landing.html'
       - 'public/privacy.html'
+      - 'public/datasafety.html'
       - 'public/favicon.svg'
       - 'public/CNAME'
       - '.github/workflows/deploy-site.yml'
@@ -38,8 +39,9 @@ jobs:
           # Landing page is the homepage; also keep /landing.html for existing links.
           cp public/landing.html _site/index.html
           cp public/landing.html _site/landing.html
-          cp public/privacy.html _site/privacy.html
-          cp public/favicon.svg  _site/favicon.svg
+          cp public/privacy.html     _site/privacy.html
+          cp public/datasafety.html  _site/datasafety.html
+          cp public/favicon.svg      _site/favicon.svg
           cp public/CNAME         _site/CNAME
 
       - name: Upload Pages artifact
