@@ -434,6 +434,9 @@ interface AppState {
   removeRoofArea: (id: string) => void
   /** Drag-move a roof area by a pixel-space delta (both corners). */
   translateRoofArea: (id: string, dxPx: number, dyPx: number) => void
+  /** Commit a ridge edit (pitch/shape) for a roof area. Pass null to clear the
+   *  override and fall back to the auto `size`-derived pitch. */
+  setRoofRidge: (id: string, ridge: import('../types').RoofRidge | null) => void
   toggleTradeLayerVisible: (layer: TraceLayer) => void
   // Electrical circuits
   addCircuit: (c: Circuit) => void
@@ -1686,6 +1689,16 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         const a = s.roofAreas.find((ar) => ar.id === id)
         if (a) { a.x1 += dxPx; a.y1 += dyPx; a.x2 += dxPx; a.y2 += dyPx }
+      })
+    },
+
+    setRoofRidge: (id, ridge) => {
+      pushHistory()
+      set((s) => {
+        const a = s.roofAreas.find((ar) => ar.id === id)
+        if (!a) return
+        if (ridge) a.ridge = ridge
+        else delete a.ridge
       })
     },
 

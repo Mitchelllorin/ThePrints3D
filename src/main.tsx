@@ -5,6 +5,15 @@ import * as THREE from 'three'
 import './index.css'
 import './styles/mobile.css'
 import App from './App.tsx'
+import { useAppStore } from './store/useAppStore'
+import { useFloorplanLocalStore } from './store/useFloorplanLocalStore'
+
+// Dev-only: expose the stores so verification scripts can inject state (e.g. a
+// roof area) and read it back without driving the full trace UI. Stripped in prod.
+if (import.meta.env.DEV) {
+  ;(window as unknown as Record<string, unknown>).__appStore = useAppStore
+  ;(window as unknown as Record<string, unknown>).__floorplanLocalStore = useFloorplanLocalStore
+}
 
 // Dev self-heal: the production build ships a PWA service worker that precaches
 // the app shell. If a built/preview version was ever served on this origin, that

@@ -151,6 +151,17 @@ export interface TracedLine {
   /** Storey this area belongs to (0 = ground, 1 = 2nd floor, …). Floors/roofs
    *  use it to sit at the right elevation on top of the walls below. */
   level?: number
+  /** Roof ridge override, set by dragging the ridge handle in 3D. Absent → the
+   *  roof's pitch comes from `size` (auto). Stage 1 carries `pitch` (rise/run);
+   *  later stages add cross-offset (saltbox) and end insets (hip). */
+  ridge?: RoofRidge
+}
+
+/** Editable roof ridge — the line the user drags to shape the roof. All values
+ *  are roof-relative so they survive moving/resizing the roof area. */
+export interface RoofRidge {
+  /** Pitch as rise/run (e.g. 0.5 = 6:12). Overrides the `size`-derived pitch. */
+  pitch: number
 }
 
 /** A room (enclosed region) detected by flood-filling the rasterized image. */
