@@ -376,6 +376,49 @@
 
 /* ── Persistent Explode slider — bottom-right, own SOLID surface (never fades
    with UI opacity), slim to match the rest of the chrome. ──────────────────── */
+.editBar {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+.editToggle {
+  height: 34px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bp-text, #f1f5f9);
+  background: rgba(8, 12, 24, 0.9);
+  border: 1px solid var(--bp-border);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+}
+.editToggle:hover { border-color: var(--bp-accent, #38bdf8); }
+.editToggleOn {
+  color: #052e16;
+  background: #22d3ee;
+  border-color: #22d3ee;
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.5);
+}
+.editHint {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bp-text-dim, #94a3b8);
+  white-space: nowrap;
+  background: rgba(8, 12, 24, 0.75);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+@media (max-width: 767px), (max-height: 600px) {
+  .editBar { bottom: 10px; left: 10px; }
+  .editHint { display: none; }
+}
+
 .explodeBar {
   position: absolute;
   bottom: 14px;

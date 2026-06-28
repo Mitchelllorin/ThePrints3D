@@ -25,6 +25,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildRoofByType, buildRidgeRoof, ridgeIsShaped, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { pitchToRatio } from '../../data/traceLayers'
+import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight } from './editHelpers'
 import type { RoofRidge, TracedLine } from '../../types'
 
 const RAFTER_OC_M = 0.4064   // 16" on-centre common rafters
@@ -66,12 +67,13 @@ interface RoofAreaMeshProps {
   wallHeight: number
   selected: boolean
   offset: [number, number]
-  onDown: (e: ThreeEvent<PointerEvent>) => void
+  /** Pointer handlers spread onto the roof body (down + edit-mode hover). */
+  bodyHandlers: Record<string, (e: ThreeEvent<PointerEvent>) => void>
 }
 
 function RoofAreaMesh({
   area, ridge, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad,
-  wallHeight, selected, offset, onDown,
+  wallHeight, selected, offset, bodyHandlers,
 }: RoofAreaMeshProps) {
   const lenX = (Math.abs(area.x2 - area.x1) / imageWidth) * overlayW
   const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
@@ -107,7 +109,7 @@ function RoofAreaMesh({
       object={roof}
       position={[centre.x + offset[0], eaveY, centre.z + offset[1]]}
       rotation={[0, rotRad, 0]}
-      onPointerDown={onDown}
+      {...bodyHandlers}
     >
       {selected && (
         <mesh position={[0, 0.2, 0]}>
@@ -241,8 +243,14 @@ export default function RoofLayer() {
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const setRoofRidge = useAppStore((s) => s.setRoofRidge)
+  const translateRoofArea = useAppStore((s) => s.translateRoofArea)
   const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const editHover = useFloorplanLocalStore((s) => s.editHover)
+  const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+  const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  const setEditSelected = useFloorplanLocalStore((s) => s.setEditSelected)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'roof')
@@ -263,9 +271,11 @@ export default function RoofLayer() {
     return new THREE.Vector3(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
-  // LOCKED: a press on a roof body only SELECTS it (delete/info). Body drag-to-move
-  // was removed — a stray press+move kept skating placed roofs across the workspace.
+  // Outside edit mode: a press on a roof body only SELECTS it (delete/info via the
+  // drawer card). Body drag-to-move is gated behind Edit-Everything mode so a stray
+  // press+move can't skate placed roofs during normal viewing.
   const onDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
+    if (editMode) return  // edit mode handles its own press → drag (below)
     e.stopPropagation()
     selectArea('roof', area.id)
   }
@@ -273,18 +283,59 @@ export default function RoofLayer() {
   // Live ridge draft for the area being dragged (committed to the store on release).
   const [draft, setDraft] = useState<{ id: string; ridge: RoofRidge } | null>(null)
 
+  // Edit-mode body drag: grab the roof and slide it on the ground plane. A live
+  // world offset moves the mesh each frame; the store is written ONCE on release.
+  const [bodyDrag, setBodyDrag] = useState<{ id: string; start: THREE.Vector3; offset: [number, number]; moved: boolean } | null>(null)
+
+  const onBodyDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
+    if (!editMode) return
+    e.stopPropagation()
+    setEditSelected({ kind: 'roof', id: area.id })
+    const g = rayToGround(e)
+    if (g) setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false })
+  }
+  const onBodyMove = (e: ThreeEvent<PointerEvent>) => {
+    if (!bodyDrag) return
+    e.stopPropagation()
+    const g = rayToGround(e)
+    if (!g) return
+    const dx = g.x - bodyDrag.start.x, dz = g.z - bodyDrag.start.z
+    const moved = bodyDrag.moved || Math.hypot(dx, dz) > 0.05
+    setBodyDrag({ ...bodyDrag, offset: [dx, dz], moved })
+  }
+  const onBodyUp = (e: ThreeEvent<PointerEvent>) => {
+    if (!bodyDrag) return
+    e.stopPropagation()
+    if (bodyDrag.moved) {
+      const [dpx, dpy] = worldDeltaToPixel(bodyDrag.offset[0], bodyDrag.offset[1], rotRad, overlayW, overlayD, imageWidth, imageHeight)
+      translateRoofArea(bodyDrag.id, dpx, dpy)
+    }
+    setBodyDrag(null)
+  }
+
+  const hoverHandlers = (area: TracedLine) => (editMode ? {
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'roof', id: area.id }) },
+    onPointerOut: () => setEditHover(null),
+  } : {})
+
   if (!visibleLayers.has('roof') || roofAreas.length === 0) return null
 
   return (
     <group name="roof" ref={groupRef}>
       {roofAreas.map((area) => {
-        const isSelected = selectedArea?.kind === 'roof' && selectedArea.id === area.id
+        const editSel = editMode && editSelected?.kind === 'roof' && editSelected.id === area.id
+        const isSelected = (selectedArea?.kind === 'roof' && selectedArea.id === area.id) || editSel
+        const isHovered = editMode && editHover?.kind === 'roof' && editHover.id === area.id
         const ridge = effectiveRidge(area, draft?.id === area.id ? draft.ridge : undefined)
         const isGable = GABLE_FAMILY.has((area.elementType || '').trim().toLowerCase())
         const lenX = (Math.abs(area.x2 - area.x1) / imageWidth) * overlayW
         const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
         const eaveY = wallHeight + (area.level ?? 0) * (wallHeight + FLOOR_ASSEMBLY_H)
         const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
+        const live: [number, number] = bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0]
+        const bodyHandlers = editMode
+          ? { onPointerDown: onBodyDown(area), ...hoverHandlers(area) }
+          : { onPointerDown: onDown(area) }
 
         return (
           <group key={area.id}>
@@ -299,12 +350,21 @@ export default function RoofLayer() {
               rotRad={rotRad}
               wallHeight={wallHeight}
               selected={isSelected}
-              offset={[0, 0]}
-              onDown={onDown(area)}
+              offset={live}
+              bodyHandlers={bodyHandlers}
             />
+            {editMode && (isHovered || editSel) && lenX > 0.2 && lenZ > 0.2 && (
+              <AreaHighlight
+                lenX={lenX}
+                lenZ={lenZ}
+                position={[centre.x + live[0], eaveY + 0.15, centre.z + live[1]]}
+                rotRad={rotRad}
+                hovered={isHovered && !editSel}
+              />
+            )}
             {isSelected && isGable && lenX > 0.2 && lenZ > 0.2 && (
               <RidgeHandle
-                centre={centre}
+                centre={new THREE.Vector3(centre.x + live[0], 0, centre.z + live[1])}
                 eaveY={eaveY}
                 rotRad={rotRad}
                 lenX={lenX}
@@ -317,6 +377,9 @@ export default function RoofLayer() {
           </group>
         )
       })}
+
+      {/* Edit-mode body-drag catcher — keeps move/up firing off the roof. */}
+      {bodyDrag && <EditDragCatcher onMove={onBodyMove} onUp={onBodyUp} />}
     </group>
   )
 }

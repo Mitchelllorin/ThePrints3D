@@ -141,6 +141,7 @@ export default function FloorplanPanel() {
   const setPlumb = useFloorplanLocalStore((s) => s.setPlumb)
   const selectedLine = useFloorplanLocalStore((s) => s.selectedLine)
   const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
+  const editModeActive = useFloorplanLocalStore((s) => s.editMode)
   const removeRoofArea = useAppStore((s) => s.removeRoofArea)
   const removeFloorsArea = useAppStore((s) => s.removeFloorsArea)
   const addRoofAreas = useAppStore((s) => s.addRoofAreas)
@@ -1303,7 +1304,7 @@ export default function FloorplanPanel() {
         )}
 
         {/* ── Selected floor/roof area (tap to select → delete or clone) ── */}
-        {selectedArea && (
+        {selectedArea && !editModeActive && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>{selectedArea.kind === 'roof' ? 'Roof' : 'Floor'} area selected</span>
             <span className={styles.stepHint}>Drag it to move; or delete / clone. Tap another to select.</span>

@@ -424,6 +424,20 @@ export default function WorkspaceLayout() {
   const updateOverlay = useAppStore((s) => s.updateFloorplanOverlay)
   const calibrationMode = useAppStore((s) => s.floorplanOverlay.calibrationMode)
 
+  // Edit-everything mode (post-build direct manipulation). The toggle only shows
+  // once there's a standing model to grab.
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
+  const buildResult = useAppStore((s) => s.buildResult)
+  const modelStatus = useAppStore((s) => s.model.status)
+  const floorCount = useAppStore((s) => s.floorsAreas.length)
+  const roofCount = useAppStore((s) => s.roofAreas.length)
+  const objectCount = useAppStore((s) => s.placedObjects.length)
+  // Reachable once there's anything to grab — a built model OR any placed
+  // floor/roof/object. (The auto-build can be empty on wall-less plans.)
+  const built = buildResult !== null || modelStatus === 'ready'
+    || floorCount > 0 || roofCount > 0 || objectCount > 0
+
   // Single source of truth: the chrome panels are driven by the store's
   // activePanel gate, the same gate every other overlay UI checks.
   const closePanels = useFloorplanLocalStore((s) => s.closeAllPanels)
@@ -610,6 +624,21 @@ export default function WorkspaceLayout() {
           <button className={styles.uploadHintBtn} onClick={startGuidedTour}>
             🎓 Take the guided tour
           </button>
+        </div>
+      )}
+
+      {/* Edit-everything toggle — bottom-left, only once a model is standing. ON
+          unlocks the whole model for hover-highlight + drag; OFF locks it back. */}
+      {hasDrawings && built && !calibrationMode && (
+        <div className={styles.editBar}>
+          <button
+            className={`${styles.editToggle} ${editMode ? styles.editToggleOn : ''}`}
+            onClick={() => setEditMode(!editMode)}
+            aria-pressed={editMode}
+          >
+            {editMode ? '✓ Done editing' : '✏️ Edit'}
+          </button>
+          {editMode && <span className={styles.editHint}>Drag anything to move it</span>}
         </div>
       )}
 

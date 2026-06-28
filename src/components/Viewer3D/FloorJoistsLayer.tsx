@@ -8,7 +8,7 @@
  * deck is modelled as individual 4'×8' sheets with visible joints, and each area
  * carries a sheet COUNT nameplate for material takeoff.
  */
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
@@ -23,6 +23,7 @@ import {
 } from '../../services/framingGeometry'
 import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import { VERTICAL_CIRCULATION, getCatalogItem } from '../../data/objectCatalog'
+import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight } from './editHelpers'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
 
@@ -86,8 +87,8 @@ interface PartProps {
   holes?: FloorHole[]
   /** Live drag offset (world X/Z) while this area is being moved. */
   offset?: [number, number]
-  /** Pointer-down on the area — selects, then drags on the next press. */
-  onDown?: (e: ThreeEvent<PointerEvent>) => void
+  /** Pointer handlers spread onto the area mesh (down + edit-mode hover). */
+  bodyHandlers?: Record<string, (e: ThreeEvent<PointerEvent>) => void>
 }
 
 /** Vertical explode for one floor part: the within-floor PEEL (deck up / joists
@@ -102,7 +103,7 @@ function useFloorExplode(ref: React.RefObject<THREE.Group | null>, baseY: number
 }
 
 /** The structure: joist field, or a concrete slab. */
-function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], onDown }: PartProps) {
+function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
   const holeKey = JSON.stringify(holes ?? [])
@@ -121,13 +122,13 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
   if (lenX < 0.1 || lenZ < 0.1) return null
   return (
     <group ref={ref}>
-      <primitive object={joists} position={[centre.x + offset[0], 0, centre.z + offset[1]]} rotation={[0, rotRad, 0]} onPointerDown={onDown} />
+      <primitive object={joists} position={[centre.x + offset[0], 0, centre.z + offset[1]]} rotation={[0, rotRad, 0]} {...(bodyHandlers ?? {})} />
     </group>
   )
 }
 
 /** The plywood subfloor deck (individual sheets) + a sheet-count nameplate. */
-function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], onDown }: PartProps) {
+function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const holeKey = JSON.stringify(holes ?? [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -147,7 +148,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
         object={deck}
         position={[centre.x + offset[0], -SUBFLOOR_T / 2, centre.z + offset[1]]}
         rotation={[0, rotRad, 0]}
-        onPointerDown={onDown}
+        {...(bodyHandlers ?? {})}
       />
       {sheetCount > 0 && (
         <Billboard position={[centre.x, 0.5, centre.z]}>
@@ -167,7 +168,14 @@ export default function FloorJoistsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const translateFloorsArea = useAppStore((s) => s.translateFloorsArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const editHover = useFloorplanLocalStore((s) => s.editHover)
+  const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+  const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  const setEditSelected = useFloorplanLocalStore((s) => s.setEditSelected)
+  const [bodyDrag, setBodyDrag] = useState<{ id: string; start: THREE.Vector3; offset: [number, number]; moved: boolean } | null>(null)
 
   // Storey-to-storey rise = wall height + the floor assembly on top of it, so a
   // 2nd-floor deck's joists rest ON the lower wall's top plate.
@@ -218,13 +226,49 @@ export default function FloorJoistsLayer() {
     return map
   }, [placedObjects, floorsAreas, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad])
 
-  // LOCKED: a press on a floor only SELECTS it (for delete/info). Body drag-to-move
-  // was removed — a stray press+move kept skating placed floors across the
-  // workspace. A deliberate move handle can return later if needed.
+  // Outside edit mode: a press on a floor only SELECTS it (drawer card). Body
+  // drag-to-move is gated behind Edit-Everything mode (below) so a stray press
+  // can't skate placed floors during normal viewing.
   const onDownArea = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
+    if (editMode) return
     e.stopPropagation()
     selectArea('floor', area.id)
   }
+
+  // Edit-mode body drag: grab the floor and slide it on the ground plane. Live
+  // world offset moves it each frame; the store is written ONCE on release.
+  const onBodyDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
+    if (!editMode) return
+    e.stopPropagation()
+    setEditSelected({ kind: 'floor', id: area.id })
+    const g = rayToGround(e)
+    if (g) setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false })
+  }
+  const onBodyMove = (e: ThreeEvent<PointerEvent>) => {
+    if (!bodyDrag) return
+    e.stopPropagation()
+    const g = rayToGround(e)
+    if (!g) return
+    const dx = g.x - bodyDrag.start.x, dz = g.z - bodyDrag.start.z
+    setBodyDrag({ ...bodyDrag, offset: [dx, dz], moved: bodyDrag.moved || Math.hypot(dx, dz) > 0.05 })
+  }
+  const onBodyUp = (e: ThreeEvent<PointerEvent>) => {
+    if (!bodyDrag) return
+    e.stopPropagation()
+    if (bodyDrag.moved) {
+      const [dpx, dpy] = worldDeltaToPixel(bodyDrag.offset[0], bodyDrag.offset[1], rotRad, overlayW, overlayD, imageWidth, imageHeight)
+      translateFloorsArea(bodyDrag.id, dpx, dpy)
+    }
+    setBodyDrag(null)
+  }
+  const handlersFor = (area: TracedLine) => editMode
+    ? {
+        onPointerDown: onBodyDown(area),
+        onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'floor', id: area.id }) },
+        onPointerOut: () => setEditHover(null),
+      }
+    : { onPointerDown: onDownArea(area) }
+  const liveFor = (area: TracedLine): [number, number] => (bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0])
 
   if (!visibleLayers.has('floors') || floorsAreas.length === 0) return null
 
@@ -236,11 +280,26 @@ export default function FloorJoistsLayer() {
   return (
     <>
       <group name="floor-joists">
-        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} onDown={onDownArea(area)} />)}
+        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} />)}
       </group>
       <group name="floor-sheeting">
-        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} onDown={onDownArea(area)} />)}
+        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} />)}
       </group>
+      {/* Edit-mode hover/selection highlight + the body-drag catcher. */}
+      {editMode && structural.map((area) => {
+        const isHov = editHover?.kind === 'floor' && editHover.id === area.id
+        const isSel = editSelected?.kind === 'floor' && editSelected.id === area.id
+        if (!isHov && !isSel) return null
+        const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
+        if (lenX < 0.1 || lenZ < 0.1) return null
+        const live = liveFor(area)
+        const y = (area.level ?? 0) * storeyHeight + 0.12
+        return (
+          <AreaHighlight key={`hl-${area.id}`} lenX={lenX} lenZ={lenZ}
+            position={[centre.x + live[0], y, centre.z + live[1]]} rotRad={rotRad} hovered={isHov && !isSel} />
+        )
+      })}
+      {bodyDrag && <EditDragCatcher onMove={onBodyMove} onUp={onBodyUp} />}
     </>
   )
 }

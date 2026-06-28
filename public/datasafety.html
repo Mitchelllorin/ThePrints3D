@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Safety — ThePrints3D</title>
+  <meta name="description" content="ThePrints3D data safety: no data collected, no data shared, all processing is 100% on-device." />
+  <meta property="og:title" content="Data Safety — ThePrints3D" />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://theprints3d.com/datasafety.html" />
+  <link rel="canonical" href="https://theprints3d.com/datasafety.html" />
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #0a0f1e;
+      --panel:  #111827;
+      --text:   #f1f5f9;
+      --muted:  #94a3b8;
+      --purple: #863bff;
+      --green:  #4ade80;
+      --border: #1e2d45;
+    }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 20px 0;
+      position: sticky;
+      top: 0;
+      background: rgba(10,15,30,0.88);
+      backdrop-filter: blur(8px);
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+    .brand img { width: 26px; height: 26px; }
+    main { padding: 56px 0 80px; }
+    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.02em; }
+    .updated { color: var(--muted); font-size: 0.9rem; margin-bottom: 40px; }
+    h2 { font-size: 1.2rem; font-weight: 700; margin: 36px 0 12px; color: #fff; }
+    p { margin-bottom: 14px; color: var(--text); font-size: 0.95rem; }
+    a { color: var(--purple); }
+    strong { color: #fff; }
+
+    .summary-banner {
+      background: rgba(74,222,128,0.08);
+      border: 1px solid rgba(74,222,128,0.25);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 40px;
+    }
+    .summary-banner h2 { margin-top: 0; color: var(--green); font-size: 1.1rem; }
+    .summary-banner p  { margin-bottom: 0; }
+
+    .ds-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 28px;
+      font-size: 0.9rem;
+    }
+    .ds-table th {
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .ds-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: top;
+    }
+    .ds-table tr:last-child td { border-bottom: none; }
+    .ds-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .yes { color: var(--green); font-weight: 600; }
+    .no  { color: var(--muted); }
+
+    .perm-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .perm-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .perm-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
+    .perm-card p  { font-size: 0.875rem; color: var(--muted); margin: 0; }
+
+    .back {
+      display: inline-block;
+      margin-top: 48px;
+      color: var(--purple);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 28px 0;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <a href="./landing.html" class="brand">
+        <img src="./favicon.svg" alt="ThePrints3D logo" />
+        ThePrints3D
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <h1>Data Safety</h1>
+      <p class="updated">Last updated: June 2026 &nbsp;·&nbsp; Package: <code style="background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-size:0.85em;">com.theprints3d.app</code></p>
+
+      <div class="summary-banner">
+        <h2>✓ No data collected or shared</h2>
+        <p>ThePrints3D runs entirely in the browser and on your device. Your architectural drawings are never uploaded. No account required, no analytics, no tracking.</p>
+      </div>
+
+      <h2>Data Collection Summary</h2>
+      <table class="ds-table">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Collected?</th>
+            <th>Shared?</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Personal info</strong> (name, email, etc.)</td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">—</td>
+          </tr>
+          <tr>
+            <td><strong>Drawing / floor plan files</strong></td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td>Processed locally on your device using WASM/WebGPU. Never uploaded.</td>
+          </tr>
+          <tr>
+            <td><strong>Project data</strong></td>
+            <td class="yes">Yes (local only)</td>
+            <td class="no">No</td>
+            <td>Saved to device IndexedDB so your projects persist between sessions</td>
+          </tr>
+          <tr>
+            <td><strong>Location</strong></td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">—</td>
+          </tr>
+          <tr>
+            <td><strong>App activity / analytics</strong></td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">—</td>
+          </tr>
+          <tr>
+            <td><strong>Device identifiers</strong></td>
+            <td class="no">No</td>
+            <td class="no">No</td>
+            <td class="no">—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>Data Sharing</h2>
+      <p>
+        ThePrints3D does <strong>not</strong> share any data with third parties.
+        There are no advertising networks, analytics providers, or data brokers
+        involved in this app.
+      </p>
+
+      <h2>Security Practices</h2>
+      <p>
+        All processing — including AI wall detection (U-Net ONNX model via WebGPU/WASM),
+        PDF rendering, and 3D model generation — happens locally on your device.
+        No network requests are made to external servers during normal operation.
+      </p>
+
+      <h2>Android Permissions</h2>
+      <div class="perm-grid">
+        <div class="perm-card">
+          <h3>INTERNET</h3>
+          <p>Required by the Capacitor app container to load the web view correctly. No external network requests are made to our servers during normal use.</p>
+        </div>
+        <div class="perm-card">
+          <h3>READ_MEDIA_IMAGES (Android 13+)</h3>
+          <p>Requested only when you choose to import a floor plan image from your device's media library. Not required to use the app.</p>
+        </div>
+        <div class="perm-card">
+          <h3>READ_EXTERNAL_STORAGE (Android ≤12)</h3>
+          <p>Requested only when importing files on older Android versions. No files are uploaded or transmitted.</p>
+        </div>
+      </div>
+
+      <h2>Data Deletion</h2>
+      <p>
+        Since no data is stored on our servers, there is nothing for us to delete on our end.
+        To clear locally saved projects, uninstall the app or go to
+        Android Settings → Apps → ThePrints3D → Clear Data.
+      </p>
+
+      <hr />
+
+      <h2>Contact</h2>
+      <p>
+        Questions about data safety?<br />
+        <strong>Mitchell Lorin McKnight</strong><br />
+        <a href="mailto:privacy@theprints3d.com">privacy@theprints3d.com</a>
+      </p>
+
+      <a href="./landing.html" class="back">← Back to ThePrints3D</a>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      © 2026 ThePrints3D. All processing is 100% on-device — your drawings never leave your device.
+    </div>
+  </footer>
+</body>
+</html>

@@ -23,6 +23,11 @@ type TraceStyle = 'line' | 'freehand'
 
 type DragKind = 'move' | 'corner' | 'edge' | 'rotate' | 'wall' | 'wall-end'
 
+/** What kind of model element an edit-mode hover/select points at. */
+export type EditKind = 'floor' | 'roof' | 'wall' | 'object' | 'line'
+/** A hovered/selected element in edit-everything mode. */
+export interface EditTarget { kind: EditKind; id: string }
+
 /**
  * An upper-floor wall that landed close to — but not lined up with — a wall on
  * the storey below. Surfaced as a gentle "line it up?" prompt so the app flags
@@ -137,6 +142,16 @@ interface FloorplanLocalState {
   selectedLine: { trade: 'plumbing' | 'electrical' | 'hvac'; id: string } | null
   /** Currently selected floor/roof area (tap to select → delete/clone), or null. */
   selectedArea: { kind: 'floor' | 'roof'; id: string } | null
+
+  // ─── edit-everything mode (post-build direct manipulation) ───────
+  /** Post-build "Edit Everything": hover-highlight + select + drag any element.
+   *  ON → the whole model is grabbable; OFF → locked back to normal viewing. */
+  editMode: boolean
+  /** Element currently hovered while in edit mode (drives the hover highlight). */
+  editHover: EditTarget | null
+  /** Element selected in edit mode (persistent highlight + modify chip). Kept
+   *  separate from `selectedArea` so it never opens the drawer "area" card. */
+  editSelected: EditTarget | null
   /**
    * THE single global panel gate — only one overlay UI shows at a time. Every
    * panel/card/picker checks this. Selection data (selectedObjectId /
@@ -219,6 +234,11 @@ interface FloorplanLocalState {
   startTutorial: () => void
   exitTutorial: () => void
   setTutorialStep: (n: number) => void
+  /** Toggle edit-everything mode. Leaving it clears the hover + any selection so
+   *  the workspace returns to a clean, locked viewing state. */
+  setEditMode: (v: boolean) => void
+  setEditHover: (h: EditTarget | null) => void
+  setEditSelected: (h: EditTarget | null) => void
 }
 
 export type { CalibrationUnit, DragKind, DragState, TraceStyle }
@@ -268,6 +288,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   wallDetailExplode: false,
   selectedArea: null,
   selectedLine: null,
+  editMode: false,
+  editHover: null,
+  editSelected: null,
   activePanel: null,
   calibrationHandledIds: [],
   distanceUnit: 'ft',
@@ -368,4 +391,15 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   startTutorial: () => set({ tutorialActive: true, tutorialStep: 0 }),
   exitTutorial: () => set({ tutorialActive: false }),
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
+  setEditMode: (v) => set(v
+    // Entering: start clean — drop any open card/selection so edit mode owns it.
+    ? { editMode: true, editHover: null, editSelected: null, activePanel: null, selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null }
+    // Leaving edit mode: drop the hover + every selection so nothing stays
+    // "grabbed" and the workspace returns to clean, locked viewing.
+    : {
+        editMode: false, editHover: null, editSelected: null, activePanel: null,
+        selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null,
+      }),
+  setEditHover: (h) => set({ editHover: h }),
+  setEditSelected: (h) => set({ editSelected: h }),
 }))
