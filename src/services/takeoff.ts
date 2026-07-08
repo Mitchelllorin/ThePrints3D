@@ -8,10 +8,16 @@
 // (1 ft = 304.8 mm). Line systems measure length; floors/roofs measure area.
 
 import type { ParsedWall, TracedLine } from '../types'
+import { generateRoofPlanes, summarizeRoof } from './roofPlanes'
+import { pitchToRatio } from '../data/traceLayers'
 
 const MM_PER_FT = 304.8
+const MM_PER_M = 1000
+const SQM_PER_SQFT = 0.09290304
+const M_PER_FT = 0.3048
 const STUD_OC_IN = 16
 const SHEET_SQFT = 32 // 4'×8'
+const DEFAULT_ROOF_OVERHANG_M = 0.4 // ~16" boxed eave (matches roofPlanes default)
 
 export interface TakeoffItem {
   key: string
@@ -38,6 +44,8 @@ export interface TakeoffInput {
   /** Roof areas — corner-pair rectangles. */
   roof: TracedLine[]
   placedObjects: Array<{ type: string }>
+  /** Eave overhang depth (m) used for the roof takeoff. Defaults to ~16". */
+  roofOverhangM?: number
 }
 
 const lineFt = (l: { x1: number; y1: number; x2: number; y2: number }, mmPerPx: number): number =>
@@ -95,6 +103,43 @@ function areaSection(title: string, areas: TracedLine[], mmPerPx: number, sheete
   return { title, items }
 }
 
+/**
+ * Roof takeoff — consumes the roofPlanes keystone so a steep or hipped roof
+ * reports its true SLOPED covering area (not the flat footprint), plus fascia
+ * and ridge/hip cap footage. Each roof area is a plan rectangle carrying its
+ * type (elementType), pitch (ridge override or `size`), so we regenerate the
+ * same plane model the renderer uses and sum the real quantities.
+ */
+function roofSection(roofs: TracedLine[], mmPerPx: number, overhangM: number): TakeoffSection | null {
+  if (roofs.length === 0) return null
+  const byType = bucket()
+  let surfaceSqFt = 0
+  let eaveFt = 0, ridgeFt = 0, hipFt = 0, valleyFt = 0
+  for (const r of roofs) {
+    const lenX = (Math.abs(r.x2 - r.x1) * mmPerPx) / MM_PER_M
+    const lenZ = (Math.abs(r.y2 - r.y1) * mmPerPx) / MM_PER_M
+    if (lenX <= 0 || lenZ <= 0) continue
+    const pitch = r.ridge?.pitch ?? pitchToRatio(r.size)
+    const structure = generateRoofPlanes({ lenX, lenZ }, r.elementType || 'gable', pitch, overhangM)
+    const q = summarizeRoof(structure)
+    const sqft = q.surfaceAreaM2 / SQM_PER_SQFT
+    surfaceSqFt += sqft
+    byType.add(r.elementType || 'Roof', sqft)
+    eaveFt += q.eaveM / M_PER_FT
+    ridgeFt += q.ridgeM / M_PER_FT
+    hipFt += q.hipM / M_PER_FT
+    valleyFt += q.valleyM / M_PER_FT
+  }
+  if (surfaceSqFt <= 0) return null
+  const items = byType.items('sq ft') // sloped covering area by roof type
+  items.push({ key: '__sheets', label: 'Roof sheathing (4×8)', quantity: Math.ceil(surfaceSqFt / SHEET_SQFT), unit: 'sheets' })
+  if (eaveFt > 0) items.push({ key: '__fascia', label: 'Fascia / eave', quantity: round1(eaveFt), unit: 'ft' })
+  const capFt = ridgeFt + hipFt
+  if (capFt > 0) items.push({ key: '__ridgecap', label: 'Ridge & hip cap', quantity: round1(capFt), unit: 'ft' })
+  if (valleyFt > 0) items.push({ key: '__valley', label: 'Valley flashing', quantity: round1(valleyFt), unit: 'ft' })
+  return { title: 'Roof', items }
+}
+
 export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
   const { scaleMmPerPx: mm, wallHeightM } = input
   const sections: TakeoffSection[] = []
@@ -122,7 +167,7 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
 
   const floor = areaSection('Floors', input.floors, mm, true)
   if (floor) sections.push(floor)
-  const roof = areaSection('Roof', input.roof, mm, true)
+  const roof = roofSection(input.roof, mm, input.roofOverhangM ?? DEFAULT_ROOF_OVERHANG_M)
   if (roof) sections.push(roof)
 
   const plumb = runSection('Plumbing', input.plumbing, mm)

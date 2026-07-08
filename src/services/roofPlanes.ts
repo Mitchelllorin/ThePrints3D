@@ -216,3 +216,64 @@ function flatRoof(lenX: number, lenZ: number, overhangM: number): RoofStructure 
     edges: [],
   }
 }
+
+// ── Quantities (material takeoff) ───────────────────────────────────────────
+
+/** Real quantities a roof takeoff needs, derived purely from the plane model. */
+export interface RoofQuantities {
+  /** Total SLOPED covering area (m²) — plan area stretched by the pitch, plus the
+   *  eave-overhang skirt. This is what actually gets sheathed/shingled. */
+  surfaceAreaM2: number
+  /** Plan (footprint) area (m²) — flat projection, for reference. */
+  planAreaM2: number
+  /** Fascia run along the eaves (m). */
+  eaveM: number
+  /** Ridge line length (m) — ridge cap. */
+  ridgeM: number
+  /** Hip line length (m) — hip cap / hip rafters. */
+  hipM: number
+  /** Valley line length (m) — valley flashing. */
+  valleyM: number
+}
+
+const dist2 = (a: Vec2, b: Vec2): number => Math.hypot(b[0] - a[0], b[1] - a[1])
+const dist3 = (a: Vec3, b: Vec3): number => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+
+/** Shoelace area of a plan polygon (m²), sign-independent. */
+function polyAreaM2(poly: Vec2[]): number {
+  let a = 0
+  for (let i = 0, n = poly.length; i < n; i++) {
+    const [x1, z1] = poly[i]
+    const [x2, z2] = poly[(i + 1) % n]
+    a += x1 * z2 - x2 * z1
+  }
+  return Math.abs(a) / 2
+}
+
+/**
+ * Sum the true covering area + ridge/hip/valley/eave footage across all planes.
+ * Pure — the keystone the takeoff and any fascia/ridge-cap estimate can consume,
+ * so a steep or hipped roof reports more sheathing than its flat footprint.
+ */
+export function summarizeRoof(structure: RoofStructure): RoofQuantities {
+  let surfaceAreaM2 = 0
+  let planAreaM2 = 0
+  let eaveM = 0
+  for (const p of structure.planes) {
+    const eaveLen = dist2(p.eave[0], p.eave[1])
+    // Slope factor: a run of R in plan is R·√(1+pitch²) up the slope.
+    const slope = Math.sqrt(1 + p.pitch * p.pitch)
+    const plan = polyAreaM2(p.footprint) + eaveLen * p.overhangM // skirt included
+    planAreaM2 += polyAreaM2(p.footprint) + eaveLen * p.overhangM
+    surfaceAreaM2 += plan * slope
+    eaveM += eaveLen
+  }
+  let ridgeM = 0, hipM = 0, valleyM = 0
+  for (const e of structure.edges) {
+    const len = dist3(e.a, e.b)
+    if (e.kind === 'ridge') ridgeM += len
+    else if (e.kind === 'hip') hipM += len
+    else valleyM += len
+  }
+  return { surfaceAreaM2, planAreaM2, eaveM, ridgeM, hipM, valleyM }
+}

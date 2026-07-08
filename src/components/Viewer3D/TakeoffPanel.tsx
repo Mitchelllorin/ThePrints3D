@@ -6,6 +6,7 @@
  */
 import { useMemo } from 'react'
 import { useAppStore } from '../../store/useAppStore'
+import { useConfigStore } from '../../store/useConfigStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { computeTakeoff } from '../../services/takeoff'
 import type { ParsedWall } from '../../types'
@@ -20,6 +21,7 @@ export default function TakeoffContent() {
   const roofAreas = useAppStore((s) => s.roofAreas)
   const placedObjects = useAppStore((s) => s.placedObjects)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const roofOverhangIn = useConfigStore((s) => s.roofOverhangIn)
 
   const sections = useMemo(() => {
     const active = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
@@ -31,8 +33,9 @@ export default function TakeoffContent() {
       plumbing: plumbingLines, electrical: electricalLines, hvac: hvacLines,
       floors: floorsAreas, roof: roofAreas,
       placedObjects: placedObjects.map((o) => ({ type: o.type })),
+      roofOverhangM: roofOverhangIn * 0.0254,
     })
-  }, [drawings, overlay.drawingId, plumbingLines, electricalLines, hvacLines, floorsAreas, roofAreas, placedObjects, wizardInputs])
+  }, [drawings, overlay.drawingId, plumbingLines, electricalLines, hvacLines, floorsAreas, roofAreas, placedObjects, wizardInputs, roofOverhangIn])
 
   const empty = sections.length === 0
 
