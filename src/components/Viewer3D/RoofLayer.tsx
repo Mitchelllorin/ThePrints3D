@@ -36,9 +36,19 @@ const MAX_PITCH = 18 / 12
 // Vertical drag sensitivity: metres of ridge rise per screen pixel dragged.
 const RISE_PER_PX = 0.012
 
-// Roof types whose ridge runs centred along the long side — the ones the ridge
-// handle can shape. Others (shed/flat/gambrel) come later.
+// Roof types whose ridge runs centred along the long side — these get the FULL
+// ridge handle (pitch + saltbox slide + hip end-knobs, via buildRidgeRoof).
 const GABLE_FAMILY = new Set(['', 'gable', 'truss', 'trusses'])
+// Types that have a single adjustable pitch but no ridge SHAPING (a barn's
+// gambrel has a fixed break; a shed is one slope). They get a PITCH-ONLY handle
+// — the bar sets slope, no hip/saltbox knobs. Flat has no pitch, so no handle.
+const PITCH_ONLY_FAMILY = new Set(['gambrel', 'shed', 'lean-to', 'mono', 'mono-pitch'])
+const roofHandleMode = (elementType: string): 'full' | 'pitch' | null => {
+  const t = (elementType || '').trim().toLowerCase()
+  if (GABLE_FAMILY.has(t)) return 'full'
+  if (PITCH_ONLY_FAMILY.has(t)) return 'pitch'
+  return null
+}
 
 const UP = new THREE.Vector3(0, 1, 0)
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
@@ -128,6 +138,9 @@ interface RidgeHandleProps {
   lenX: number
   lenZ: number
   ridge: RoofRidge
+  /** 'full' = pitch + saltbox slide + hip knobs (gable family). 'pitch' = a
+   *  single slope grip only (gambrel/shed) — no slide, no end knobs. */
+  mode: 'full' | 'pitch'
   onDraft: (r: RoofRidge) => void
   onCommit: (r: RoofRidge) => void
 }
@@ -139,7 +152,7 @@ interface RidgeHandleProps {
  * footprint's LONGER side), Z = span. Drags are resolved by projecting the
  * pointer onto the ridge-height plane, so they're camera-independent.
  */
-function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, onDraft, onCommit }: RidgeHandleProps) {
+function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, mode, onDraft, onCommit }: RidgeHandleProps) {
   const handleRotY = rotRad + (lenX >= lenZ ? 0 : Math.PI / 2)
   const L = Math.max(lenX, lenZ)
   const W = Math.min(lenX, lenZ)
@@ -181,11 +194,14 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, onDraft, onComm
     if (!d) return
     e.stopPropagation()
     if (d.kind === 'bar') {
-      // Pitch from vertical screen motion; cross from the projected pointer.
+      // Pitch from vertical screen motion. In FULL mode the bar also slides
+      // sideways (saltbox); PITCH mode locks it centred (gambrel/shed).
       const dRise = -e.nativeEvent.movementY * RISE_PER_PX
       d.work.pitch = clampPitch(d.work.pitch + dRise / Math.max(0.3, half))
-      const loc = toLocal(e)
-      if (loc) d.work.crossFrac = clamp(loc.z / Math.max(0.1, half), -0.9, 0.9)
+      if (mode === 'full') {
+        const loc = toLocal(e)
+        if (loc) d.work.crossFrac = clamp(loc.z / Math.max(0.1, half), -0.9, 0.9)
+      }
     } else {
       const loc = toLocal(e)
       if (loc) {
@@ -218,13 +234,8 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, onDraft, onComm
         <boxGeometry args={[ridgeLen, 0.16, 0.16]} />
         <meshStandardMaterial color="#22d3ee" emissive="#0891b2" emissiveIntensity={0.6} roughness={0.4} />
       </mesh>
-      {/* End knobs — pull inward to hip that end. */}
-      {(['endA', 'endB'] as const).map((k) => (
-        <mesh key={k} position={[k === 'endA' ? xA : xB, rise, c]} onPointerDown={start(k)}>
-          <sphereGeometry args={[0.17, 16, 12]} />
-          <meshStandardMaterial color="#f59e0b" emissive="#b45309" emissiveIntensity={0.65} roughness={0.35} />
-        </mesh>
-      ))}
+      {/* (Removed the amber hip end-knobs — they read as confusing floating
+          circles and the drag was unreliable. Ridge pitch is the one grip.) */}
       {/* Drag catcher — keeps move/up firing once the finger leaves the handle. */}
       {dragging && (
         <mesh onPointerMove={move} onPointerUp={end}>
@@ -327,7 +338,7 @@ export default function RoofLayer() {
         const isSelected = (selectedArea?.kind === 'roof' && selectedArea.id === area.id) || editSel
         const isHovered = editMode && editHover?.kind === 'roof' && editHover.id === area.id
         const ridge = effectiveRidge(area, draft?.id === area.id ? draft.ridge : undefined)
-        const isGable = GABLE_FAMILY.has((area.elementType || '').trim().toLowerCase())
+        const handleMode = roofHandleMode(area.elementType)
         const lenX = (Math.abs(area.x2 - area.x1) / imageWidth) * overlayW
         const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
         const eaveY = wallHeight + (area.level ?? 0) * (wallHeight + FLOOR_ASSEMBLY_H)
@@ -362,7 +373,7 @@ export default function RoofLayer() {
                 hovered={isHovered && !editSel}
               />
             )}
-            {isSelected && isGable && lenX > 0.2 && lenZ > 0.2 && (
+            {isSelected && handleMode && lenX > 0.2 && lenZ > 0.2 && (
               <RidgeHandle
                 centre={new THREE.Vector3(centre.x + live[0], 0, centre.z + live[1])}
                 eaveY={eaveY}
@@ -370,6 +381,7 @@ export default function RoofLayer() {
                 lenX={lenX}
                 lenZ={lenZ}
                 ridge={ridge}
+                mode={handleMode}
                 onDraft={(r) => setDraft({ id: area.id, ridge: r })}
                 onCommit={(r) => { setRoofRidge(area.id, r); setDraft(null) }}
               />
