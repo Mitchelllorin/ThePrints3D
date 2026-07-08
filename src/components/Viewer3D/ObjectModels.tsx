@@ -70,8 +70,9 @@ function Cyl({
 }
 
 /**
- * Pick a procedural model for the item type. Returns null for types without a
- * dedicated shape so the caller can fall back to a plain box.
+ * Pick a procedural model for the item type. Types without a dedicated shape
+ * fall back to a plain beveled box sized to the item, so every catalog entry
+ * renders (just blockier) until it gets a model.
  */
 export default function ObjectModel({ type, w, h, d, color, subtype }: ModelProps) {
   const floor = -h / 2
@@ -474,6 +475,9 @@ export default function ObjectModel({ type, w, h, d, color, subtype }: ModelProp
       )
     }
     default:
-      return null
+      // No dedicated shape yet — fall back to a plain beveled box sized to the
+      // item so EVERY catalog type still renders (just blockier) until it gets a
+      // model. Returning null here left unmodelled objects invisible.
+      return <Box args={[w, h, d]} pos={[0, 0, 0]} color={body} />
   }
 }

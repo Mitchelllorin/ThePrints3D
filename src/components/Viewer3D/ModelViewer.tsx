@@ -152,20 +152,26 @@ function DrawerRecenter() {
   const { camera, size } = useThree()
   const buildOpen = useFloorplanLocalStore((s) => s.buildDrawerOpen)
   const settingsOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
+  const placeOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera
     const w = size.width, h = size.height
     const drawerW = Math.min(248, 0.72 * w)   // matches the EdgeDrawer CSS width
-    // On a narrow screen the drawer can cover most of the width; shifting the
-    // plan into the sliver that's left would push it off-screen. Only recenter
-    // when the drawer is a minority of the width (e.g. landscape).
-    const tooWide = drawerW > w * 0.42
-    // Negative offsetX shifts content RIGHT (into the space beside a left drawer).
-    const offsetX = tooWide ? 0 : buildOpen ? -drawerW / 2 : settingsOpen ? drawerW / 2 : 0
-    if (offsetX === 0) cam.clearViewOffset()
-    else cam.setViewOffset(w, h, offsetX, 0, w, h)
+    // Shift the RENDERED framing (not the camera) so the plan re-centres in the
+    // area the open drawer leaves visible — the plan must stay centred in the
+    // workspace AT ALL TIMES, even on a phone where a drawer covers most of the
+    // width. Shifting by half the drawer size lands the plan dead-centre of the
+    // remaining sliver, so it's always fully on-screen (just smaller) rather
+    // than hidden behind the menu. Negative offsetX shifts content RIGHT (into
+    // the space beside a left drawer); positive offsetX shifts LEFT (beside a
+    // right drawer); positive offsetY shifts content UP (above the bottom Place
+    // drawer, whose height is ~40dvh of catalog).
+    const offsetX = buildOpen ? -drawerW / 2 : settingsOpen ? drawerW / 2 : 0
+    const offsetY = placeOpen ? h * 0.2 : 0
+    if (offsetX === 0 && offsetY === 0) cam.clearViewOffset()
+    else cam.setViewOffset(w, h, offsetX, offsetY, w, h)
     cam.updateProjectionMatrix()
-  }, [camera, size.width, size.height, buildOpen, settingsOpen])
+  }, [camera, size.width, size.height, buildOpen, settingsOpen, placeOpen])
   return null
 }
 

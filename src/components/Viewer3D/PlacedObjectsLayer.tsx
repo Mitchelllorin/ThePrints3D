@@ -210,9 +210,10 @@ export default function PlacedObjectsLayer() {
               onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'object', id: obj.id }) } : undefined}
               onPointerOut={editMode ? () => setEditHover(null) : undefined}
             >
-              {/* Procedural product model when we have a shape for this type;
-                  openings and unmodelled types fall back to a plain box. The
-                  X-ray wrapper makes the whole model see-through when toggled. */}
+              {/* Procedural product model for any real object (ObjectModel itself
+                  boxes-out types without a dedicated shape); only door/window
+                  openings use the thin translucent marker box below. The X-ray
+                  wrapper makes the whole model see-through when toggled. */}
               {!isOpening && model ? (
                 <XRay on={!!obj.transparent}>
                   <DetailExplode amount={obj.id === detailExplodeId ? 0.7 : 0}>{model}</DetailExplode>
