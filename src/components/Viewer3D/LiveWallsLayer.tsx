@@ -20,7 +20,7 @@ import { wallFramingSpec } from '../../services/constructionCode'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
-import type { ParsedWall, PlacedObject } from '../../types'
+import type { ParsedWall } from '../../types'
 
 const MIN_THICKNESS = 0.1     // metres — minimum visible thickness
 const DEFAULT_THICKNESS_MM = 140  // 2×4 stud + drywall both sides
@@ -204,60 +204,62 @@ export default function LiveWallsLayer() {
     }))
   }, [userWalls])
 
-  // Assign each placed door/window to its nearest wall (in pixel space) and
-  // record its position (t, 0..1) and rough-opening width — so the live framing
-  // frames the opening exactly where the door/window sits, just like on site.
+  // Assign each placed door/window to its nearest wall and record its position
+  // (t, 0..1) and rough-opening width — so the live framing frames the opening
+  // exactly where it sits, just like on site. Assignment is done in WORLD space
+  // from the object's live x/z: that stays correct after a drag-move (which
+  // updates x/z but not the cached pixel coords) and uses the same transform as
+  // the wall geometry, so the opening can't drift off the wall.
   const openingsByWall = useMemo(() => {
     const out: Array<Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>> = userWalls.map(() => [])
-    const doors = placedObjects.filter(
-      (o: PlacedObject) => (o.type === 'door' || o.type === 'window') && o.pxX != null && o.pxY != null,
-    )
-    for (const o of doors) {
-      const px = o.pxX as number, py = o.pxY as number
-      let best = -1, bestPerp = Infinity, bestT = 0
-      userWalls.forEach(({ wall: w }, i) => {
-        const dx = w.x2 - w.x1, dy = w.y2 - w.y1
-        const len2 = dx * dx + dy * dy
+    // Wall segments in world space (same transform that places the framing).
+    const wsegs = userWalls.map(({ wall: w }) => {
+      const a = pixelToWorld(w.x1, w.y1), b = pixelToWorld(w.x2, w.y2)
+      return { ax: a.x, az: a.z, dx: b.x - a.x, dz: b.z - a.z, thick: w.thickness }
+    })
+    // Average metres-per-pixel, to carry the pixel-derived snap tolerance into world.
+    const mPerPx = (overlayW / imageWidth + overlayD / imageHeight) / 2
+    // Nearest wall to a world point. `reach` (m) shifts the match from the wall
+    // centreline to a footprint near-edge (stairs/shafts sit edge-on to a wall).
+    const nearestWall = (wx: number, wz: number, reach: number, edgeBias: number) => {
+      let best = -1, bestScore = Infinity, bestT = 0
+      wsegs.forEach((s, i) => {
+        const len2 = s.dx * s.dx + s.dz * s.dz
         if (len2 < 1e-6) return
-        const t = ((px - w.x1) * dx + (py - w.y1) * dy) / len2
+        const t = ((wx - s.ax) * s.dx + (wz - s.az) * s.dz) / len2
         if (t < -0.02 || t > 1.02) return
-        const perp = Math.hypot(px - (w.x1 + t * dx), py - (w.y1 + t * dy))
-        const threshPx = Math.max((w.thickness || 8) * 2.5, 28)
-        if (perp < threshPx && perp < bestPerp) { best = i; bestPerp = perp; bestT = Math.max(0, Math.min(1, t)) }
+        const fx = s.ax + t * s.dx, fz = s.az + t * s.dz
+        const perp = Math.hypot(wx - fx, wz - fz)
+        const score = reach > 0 ? Math.abs(perp - reach) : perp
+        const thresh = Math.max((s.thick || 8) * 2.5, 28) * mPerPx + edgeBias
+        if (score < thresh && score < bestScore) { best = i; bestScore = score; bestT = Math.max(0, Math.min(1, t)) }
       })
+      return { best, t: bestT }
+    }
+    // Doors/windows: match by their centre.
+    for (const o of placedObjects) {
+      if (o.type !== 'door' && o.type !== 'window') continue
+      const { best, t } = nearestWall(o.x, o.z, 0, 0)
       if (best < 0) continue
       const item = getCatalogItem(o.type)
       const widthM = (item?.defaultW ?? 0.9) * o.scaleX
       const heightM = (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY
-      out[best].push({ t: bestT, widthM, type: o.type as 'door' | 'window', sillM: o.sillM, heightM })
+      out[best].push({ t, widthM, type: o.type as 'door' | 'window', sillM: o.sillM, heightM })
     }
     // Stairs/elevators cut a full-height opening where they sit flush against a
-    // wall. They're DEEP, so assign by the footprint's near EDGE (centre minus
+    // wall. They're DEEP, so match by the footprint's near EDGE (centre minus
     // half-depth), not the centre — otherwise a stair's centre is always too far.
-    const pxPerM = 1000 / (drawing?.scaleMmPerPx ?? 8)
     for (const o of placedObjects) {
-      if (!VERTICAL_CIRCULATION.has(o.type) || o.pxX == null || o.pxY == null) continue
-      const px = o.pxX as number, py = o.pxY as number
+      if (!VERTICAL_CIRCULATION.has(o.type)) continue
       const item = getCatalogItem(o.type)
-      const widthM = (item?.defaultW ?? 1) * o.scaleX     // along the wall (snap convention)
-      const reachPx = ((item?.defaultD ?? 1) * o.scaleZ / 2) * pxPerM   // half-depth toward the wall
-      let best = -1, bestEdge = Infinity, bestT = 0
-      userWalls.forEach(({ wall: w }, i) => {
-        const dx = w.x2 - w.x1, dy = w.y2 - w.y1
-        const len2 = dx * dx + dy * dy
-        if (len2 < 1e-6) return
-        const t = ((px - w.x1) * dx + (py - w.y1) * dy) / len2
-        if (t < -0.02 || t > 1.02) return
-        const perp = Math.hypot(px - (w.x1 + t * dx), py - (w.y1 + t * dy))
-        const edge = Math.abs(perp - reachPx)   // footprint near-edge to wall
-        const threshPx = Math.max((w.thickness || 8) * 2.5, 28) + 6
-        if (edge < threshPx && edge < bestEdge) { best = i; bestEdge = edge; bestT = Math.max(0, Math.min(1, t)) }
-      })
+      const widthM = (item?.defaultW ?? 1) * o.scaleX           // along the wall (snap convention)
+      const halfDepth = (item?.defaultD ?? 1) * o.scaleZ / 2    // half-depth toward the wall
+      const { best, t } = nearestWall(o.x, o.z, halfDepth, 6 * mPerPx)
       if (best < 0) continue
-      out[best].push({ t: bestT, widthM, type: 'door', sillM: 0, heightM: (item?.defaultH ?? 2.4) * o.scaleY })
+      out[best].push({ t, widthM, type: 'door', sillM: 0, heightM: (item?.defaultH ?? 2.4) * o.scaleY })
     }
     return out
-  }, [userWalls, placedObjects, drawing?.scaleMmPerPx])
+  }, [userWalls, placedObjects, pixelToWorld, overlayW, overlayD, imageWidth, imageHeight])
 
   // The traced walls ARE the build: instead of BuildingModel re-rendering them
   // through a different (engine) path that drops detail, the ghost walls persist

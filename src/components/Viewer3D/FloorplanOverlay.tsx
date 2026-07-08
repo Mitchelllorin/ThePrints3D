@@ -635,6 +635,23 @@ export default function FloorplanOverlay() {
         return
       }
 
+      // Walls belong ON the plan. The tap-catcher is far bigger than the drawing
+      // (so floors/roofs can pull past the edge), which means a tap out toward a
+      // menu used to drop a wall in empty space — the #1 "I built a wall by
+      // accident while reaching for a menu" case. So: a wall tap that lands well
+      // OUTSIDE the drawing image just ENDS the run (rubber-band stops trailing)
+      // instead of committing. Margin is generous (25% of the image) so a trace
+      // that runs a little past the printed edge still lands normally.
+      {
+        const rw = drawing.rasterWidth ?? 1400
+        const rh = drawing.rasterHeight ?? 900
+        const mx = rw * 0.25, my = rh * 0.25
+        if (pixel[0] < -mx || pixel[1] < -my || pixel[0] > rw + mx || pixel[1] > rh + my) {
+          setTraceStart(null); setHoverPixel(null); lastTapRef.current = null
+          return
+        }
+      }
+
       // Snap only against the PRINT lines + walls on the SAME storey, so a
       // 2nd-floor wall snaps to the plan and to its own level — never to the
       // ground-floor wall directly beneath it (same footprint, other level).
@@ -738,6 +755,16 @@ export default function FloorplanOverlay() {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     event.stopPropagation()
     const pixel = toPixel(event.point)
+    // While tracing WALLS, freeze the rubber-band once the cursor leaves the
+    // drawing (headed for a menu): don't drag the preview line out across the
+    // screen after the finger. It stays put on the plan until you come back —
+    // matching the rule that an off-plan tap ends the run rather than building.
+    if (traceMode && activeTraceLayer === 'framing' && traceStart) {
+      const rw = drawing.rasterWidth ?? 1400
+      const rh = drawing.rasterHeight ?? 900
+      const mx = rw * 0.25, my = rh * 0.25
+      if (pixel[0] < -mx || pixel[1] < -my || pixel[0] > rw + mx || pixel[1] > rh + my) return
+    }
     setHoverPixel(pixel)
     if (!traceMode || traceStyle !== 'freehand') return
     setTraceStroke((prev) => (prev.length === 0 ? prev : [...prev, pixel]))
@@ -940,8 +967,13 @@ export default function FloorplanOverlay() {
   // elevators snap flush against it; everything else drops where tapped. All
   // auto-orient to the nearest wall.
   const devicePose = (x: number, z: number) => {
-    if (VERTICAL_CIRCULATION.has(placeObjectType ?? '')) return circulationPose(x, z)
-    const snapped = WALL_MOUNTED_DEVICES.has(placeObjectType ?? '') ? snapToWall(x, z) : { x, z }
+    const type = placeObjectType ?? ''
+    if (VERTICAL_CIRCULATION.has(type)) return circulationPose(x, z)
+    // Doors/windows belong IN a wall — snap them onto the nearest wall centreline
+    // (like wall devices) so the opening lands exactly on the wall and frames in,
+    // instead of only framing when dropped pixel-perfectly on the line.
+    const snapsToWall = WALL_MOUNTED_DEVICES.has(type) || type === 'door' || type === 'window'
+    const snapped = snapsToWall ? snapToWall(x, z) : { x, z }
     return { x: snapped.x, z: snapped.z, rotationY: autoOrientYaw(snapped.x, snapped.z) }
   }
 
