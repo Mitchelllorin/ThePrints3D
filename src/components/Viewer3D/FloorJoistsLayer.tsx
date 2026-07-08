@@ -261,7 +261,7 @@ export default function FloorJoistsLayer() {
     }
     setBodyDrag(null)
   }
-  const handlersFor = (area: TracedLine) => editMode
+  const handlersFor = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => editMode
     ? {
         onPointerDown: onBodyDown(area),
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'floor', id: area.id }) },

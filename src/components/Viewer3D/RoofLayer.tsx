@@ -313,7 +313,7 @@ export default function RoofLayer() {
     setBodyDrag(null)
   }
 
-  const hoverHandlers = (area: TracedLine) => (editMode ? {
+  const hoverHandlers = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => (editMode ? {
     onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'roof', id: area.id }) },
     onPointerOut: () => setEditHover(null),
   } : {})
@@ -333,7 +333,7 @@ export default function RoofLayer() {
         const eaveY = wallHeight + (area.level ?? 0) * (wallHeight + FLOOR_ASSEMBLY_H)
         const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
         const live: [number, number] = bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0]
-        const bodyHandlers = editMode
+        const bodyHandlers: Record<string, (e: ThreeEvent<PointerEvent>) => void> = editMode
           ? { onPointerDown: onBodyDown(area), ...hoverHandlers(area) }
           : { onPointerDown: onDown(area) }
 
