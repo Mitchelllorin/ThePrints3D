@@ -4,6 +4,7 @@ import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TakeoffContent from '../Viewer3D/TakeoffPanel'
+import InferencePrompt from '../Viewer3D/InferencePrompt'
 import TopIcons from './TopIcons'
 import EdgeDrawer from './EdgeDrawer'
 import AssistantBubble from './AssistantBubble'
@@ -659,6 +660,9 @@ export default function WorkspaceLayout() {
           )}
         </div>
       )}
+
+      {/* Ambient inference nudge — gentle "snap flush?" prompt, bottom-centre. */}
+      <InferencePrompt />
 
       {/* The omnipresent assistant — proactive next-step coach (top-centre). */}
       <AssistantBubble />

@@ -40,6 +40,7 @@ import {
 import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReducer'
+import { suggestFlushEdge } from '../services/flushInference'
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
@@ -298,6 +299,9 @@ interface AppState {
   /** Traced roof areas (rectangles) that build a gable roof. Reuses TracedLine:
    *  (x1,y1)-(x2,y2) are opposite corners; elementType=roof type, size=pitch. */
   roofAreas: TracedLine[]
+  /** Pending flush-edge suggestion for the just-added floor area (ambient
+   *  inference). A gentle "snap flush?" prompt reads this; null = none. */
+  floorFlushSuggestion: { areaId: string; rect: { x1: number; y1: number; x2: number; y2: number }; message: string } | null
   /** Electrical branch circuits (auto-grouped by amperage + manual). */
   circuits: Circuit[]
   /** Which trade layers are currently shown in the 3D scene */
@@ -423,6 +427,10 @@ interface AppState {
   removeHvacLine: (id: string) => void
   // Floor areas (joist fields)
   addFloorsAreas: (areas: TracedLine[]) => void
+  /** Apply the pending flush-edge suggestion (snap the area's shared edge). */
+  applyFloorFlush: () => void
+  /** Dismiss the flush-edge suggestion without changing anything. */
+  dismissFloorFlush: () => void
   removeFloorsArea: (id: string) => void
   /** Drag-move a floor area by a pixel-space delta (both corners). */
   translateFloorsArea: (id: string, dxPx: number, dyPx: number) => void
@@ -663,6 +671,7 @@ export const useAppStore = create<AppState>()(
     electricalLines: [],
     hvacLines: [],
     floorsAreas: [],
+    floorFlushSuggestion: null,
     roofAreas: [],
     circuits: [],
     visibleLayers: new Set<TraceLayer>(TRACE_LAYER_ORDER),
@@ -1656,8 +1665,33 @@ export const useAppStore = create<AppState>()(
     addFloorsAreas: (areas) => {
       if (areas.length === 0) return
       pushHistory()
-      set((s) => { s.floorsAreas.push(...areas) })
+      set((s) => {
+        s.floorsAreas.push(...areas)
+        // Ambient inference: if the newly-added area sits just off an existing
+        // floor on the same level, offer to snap its shared edge flush (gentle
+        // prompt — never silent). Only the last area of a batch is considered.
+        const added = areas[areas.length - 1]
+        const level = added.level ?? 0
+        const neighbours = s.floorsAreas.filter((a) => a.id !== added.id && (a.level ?? 0) === level)
+        const sug = suggestFlushEdge(added, neighbours, 28)
+        s.floorFlushSuggestion = sug
+          ? { areaId: added.id, rect: sug.rect, message: sug.message }
+          : null
+      })
     },
+
+    applyFloorFlush: () => {
+      const sug = get().floorFlushSuggestion
+      if (!sug) return
+      pushHistory()
+      set((s) => {
+        const a = s.floorsAreas.find((ar) => ar.id === sug.areaId)
+        if (a) { a.x1 = sug.rect.x1; a.y1 = sug.rect.y1; a.x2 = sug.rect.x2; a.y2 = sug.rect.y2 }
+        s.floorFlushSuggestion = null
+      })
+    },
+
+    dismissFloorFlush: () => set((s) => { s.floorFlushSuggestion = null }),
 
     removeFloorsArea: (id) => {
       pushHistory()
