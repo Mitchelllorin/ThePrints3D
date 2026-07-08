@@ -91,6 +91,7 @@ export default function TutorialCoach() {
   // ── Track the spotlight target's on-screen rect (drawers animate, so poll) ───
   const target = current.target
   const [rect, setRect] = useState<DOMRect | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
   useEffect(() => {
     if (!active || !target) { setRect(null); return }
     const update = () => {
@@ -108,11 +109,15 @@ export default function TutorialCoach() {
   const total = TUTORIAL_STEPS.length
   const isLast = step >= total - 1
 
-  // Put the card opposite the spotlight so it never covers what you must tap.
-  const targetInTopHalf = rect ? rect.top < window.innerHeight / 2 : false
-  const cardVertical = targetInTopHalf
-    ? { bottom: 14 as number | undefined, top: undefined }
-    : { top: 14 as number | undefined, bottom: undefined }
+  // Dock the coach to a top corner, OUT of the centre column where the print and
+  // every trace gesture live — the old centered banner sat right over the
+  // footprint you were told to tap. All spotlight targets (trace bar, Place tab,
+  // Settings tab) sit along the bottom/right edges, so a top dock never covers
+  // them either. If a target ever lands in the top-left, flip to the right.
+  const targetTopLeft = rect ? rect.top < 220 && rect.left < window.innerWidth * 0.45 : false
+  const cardSide = targetTopLeft
+    ? { right: 14 as number | undefined, left: undefined }
+    : { left: 14 as number | undefined, right: undefined }
 
   return createPortal(
     <>
@@ -138,79 +143,96 @@ export default function TutorialCoach() {
 
       <div
         style={{
-          position: 'fixed', left: '50%', transform: 'translateX(-50%)',
-          ...cardVertical,
-          zIndex: 71, width: 'min(460px, calc(100vw - 24px))',
-          background: 'rgba(11,17,32,0.97)', color: '#e5e7eb',
-          border: '1px solid rgba(96,165,250,0.45)', borderRadius: 12,
-          boxShadow: '0 10px 34px rgba(0,0,0,0.6)', padding: '12px 14px',
-          fontSize: 13, lineHeight: 1.5,
+          position: 'fixed', top: 14, ...cardSide,
+          zIndex: 71, width: collapsed ? 'auto' : 'min(320px, calc(100vw - 28px))',
+          maxWidth: 'calc(100vw - 28px)',
+          background: 'rgba(11,17,32,0.94)', color: '#e5e7eb',
+          border: '1px solid rgba(96,165,250,0.4)', borderRadius: 10,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.5)', padding: collapsed ? '7px 10px' : '10px 12px',
+          fontSize: 12.5, lineHeight: 1.45, backdropFilter: 'blur(6px)',
         }}
         role="dialog"
         aria-label="Guided tutorial"
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: '#60a5fa', textTransform: 'uppercase' }}>
-            Guided build · {step + 1}/{total}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: '#60a5fa', textTransform: 'uppercase' }}>
+            Build · {step + 1}/{total}
           </span>
+          {collapsed && (
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#e5e7eb', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 150 }}>
+              {current.title}
+            </span>
+          )}
           <span style={{ flex: 1 }} />
-          <span style={{ fontSize: 16, color: done ? '#34d399' : '#475569' }} aria-hidden>
+          <span style={{ fontSize: 14, color: done ? '#34d399' : '#475569' }} aria-hidden>
             {done ? '✓' : '○'}
           </span>
           <button
+            onClick={() => setCollapsed((c) => !c)}
+            style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0 }}
+            aria-label={collapsed ? 'Expand tutorial' : 'Minimize tutorial'}
+            title={collapsed ? 'Expand' : 'Minimize'}
+          >
+            {collapsed ? '▢' : '–'}
+          </button>
+          <button
             onClick={exit}
-            style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 16, lineHeight: 1 }}
+            style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 15, lineHeight: 1, padding: 0 }}
             aria-label="Exit tutorial"
           >
             ✕
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 3, marginBottom: 8 }}>
-          {TUTORIAL_STEPS.map((s, i) => (
-            <span
-              key={s.id}
-              style={{
-                flex: 1, height: 3, borderRadius: 2,
-                background: i < step ? '#34d399' : i === step ? '#60a5fa' : 'rgba(255,255,255,0.12)',
-              }}
-            />
-          ))}
-        </div>
+        {!collapsed && (
+          <>
+            <div style={{ display: 'flex', gap: 3, margin: '7px 0 7px' }}>
+              {TUTORIAL_STEPS.map((s, i) => (
+                <span
+                  key={s.id}
+                  style={{
+                    flex: 1, height: 3, borderRadius: 2,
+                    background: i < step ? '#34d399' : i === step ? '#60a5fa' : 'rgba(255,255,255,0.12)',
+                  }}
+                />
+              ))}
+            </div>
 
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>{current.title}</div>
-        <div style={{ color: '#cbd5e1', marginBottom: 6 }}>{current.body}</div>
-        <div style={{ color: '#93a4b6', fontSize: 12, fontStyle: 'italic', marginBottom: 10 }}>👉 {current.hint}</div>
+            <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 3 }}>{current.title}</div>
+            <div style={{ color: '#cbd5e1', marginBottom: 6 }}>{current.body}</div>
+            <div style={{ color: '#93a4b6', fontSize: 11.5, fontStyle: 'italic', marginBottom: 9 }}>👉 {current.hint}</div>
 
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
-          <button
-            onClick={() => setStep(step - 1)}
-            disabled={step === 0}
-            style={{
-              background: 'none', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 7,
-              color: step === 0 ? '#475569' : '#cbd5e1', padding: '5px 12px', fontSize: 12,
-              cursor: step === 0 ? 'default' : 'pointer',
-            }}
-          >
-            ← Back
-          </button>
-          <span style={{ flex: 1 }} />
-          {isLast ? (
-            <button
-              onClick={exit}
-              style={{ background: '#34d399', border: 'none', borderRadius: 7, color: '#06281c', fontWeight: 700, padding: '6px 16px', fontSize: 12, cursor: 'pointer' }}
-            >
-              Finish 🎉
-            </button>
-          ) : (
-            <button
-              onClick={() => setStep(step + 1)}
-              style={{ background: '#2f80ff', border: 'none', borderRadius: 7, color: '#fff', fontWeight: 600, padding: '6px 16px', fontSize: 12, cursor: 'pointer' }}
-            >
-              Next →
-            </button>
-          )}
-        </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                onClick={() => setStep(step - 1)}
+                disabled={step === 0}
+                style={{
+                  background: 'none', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 7,
+                  color: step === 0 ? '#475569' : '#cbd5e1', padding: '4px 11px', fontSize: 11.5,
+                  cursor: step === 0 ? 'default' : 'pointer',
+                }}
+              >
+                ← Back
+              </button>
+              <span style={{ flex: 1 }} />
+              {isLast ? (
+                <button
+                  onClick={exit}
+                  style={{ background: '#34d399', border: 'none', borderRadius: 7, color: '#06281c', fontWeight: 700, padding: '5px 15px', fontSize: 11.5, cursor: 'pointer' }}
+                >
+                  Finish 🎉
+                </button>
+              ) : (
+                <button
+                  onClick={() => setStep(step + 1)}
+                  style={{ background: '#2f80ff', border: 'none', borderRadius: 7, color: '#fff', fontWeight: 600, padding: '5px 15px', fontSize: 11.5, cursor: 'pointer' }}
+                >
+                  Next →
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </>,
     document.body,

@@ -77,8 +77,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'floor',
     title: 'Lay the floor first',
-    body: "Foundation before framing: the floor goes down first and the walls frame on top of it. I've opened Floors for you — pull a rectangle across the footprint.",
-    hint: 'Pull a rectangle corner-to-corner across the footprint on the plan.',
+    body: "Foundation before framing: the floor goes down first and the walls frame on top of it. I've opened Floors for you — tap two opposite corners to box in the footprint.",
+    hint: 'Tap one corner, then the opposite corner, to drop the floor.',
     enter: 'floors',
     done: (c) => c.hasFloor,
   },
@@ -109,8 +109,8 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'roof',
     title: 'Put a roof on',
-    body: "Roof's open. Choose a pitch and pull the roof area over the footprint — gable ends get a sloped rake automatically, no flat boxes.",
-    hint: 'Pull the roof rectangle over the footprint on the plan.',
+    body: "Roof's open. Choose a pitch, then tap two opposite corners over the footprint — gable ends get a sloped rake automatically, no flat boxes.",
+    hint: 'Tap one corner, then the opposite corner, over the footprint.',
     enter: 'roof',
     done: (c) => c.hasRoof,
   },
