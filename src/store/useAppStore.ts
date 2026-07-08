@@ -41,6 +41,36 @@ import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReducer'
 import { suggestFlushEdge } from '../services/flushInference'
+import { suggestWallCorner } from '../services/cornerInference'
+
+/** A rectangle/segment in image pixels (opposite corners or endpoints). */
+interface InferRect { x1: number; y1: number; x2: number; y2: number }
+
+/**
+ * The ambient-inference suggestion channel — ONE slot, many producers. The app
+ * infers likely intent while tracing/editing and offers a gentle one-tap prompt
+ * (see InferencePrompt). Each kind carries what applyInferenceSuggestion needs.
+ */
+export type InferenceSuggestion =
+  | { kind: 'floor-flush'; message: string; areaId: string; rect: InferRect }
+  | { kind: 'wall-corner'; message: string; drawingId: string; from: InferRect; rect: InferRect }
+
+/** Corner-awareness: if the just-traced wall (last user wall) runs past a
+ *  perpendicular wall by a small stub, return a "trim to the corner?" suggestion. */
+function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): InferenceSuggestion | null {
+  const userWalls = parsedWalls.filter((w) => w.source === 'user')
+  if (userWalls.length < 2) return null
+  const last = userWalls[userWalls.length - 1]
+  const sug = suggestWallCorner(last, userWalls.slice(0, -1))
+  if (!sug) return null
+  return {
+    kind: 'wall-corner',
+    message: sug.message,
+    drawingId,
+    from: { x1: last.x1, y1: last.y1, x2: last.x2, y2: last.y2 },
+    rect: sug.rect,
+  }
+}
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
@@ -299,9 +329,9 @@ interface AppState {
   /** Traced roof areas (rectangles) that build a gable roof. Reuses TracedLine:
    *  (x1,y1)-(x2,y2) are opposite corners; elementType=roof type, size=pitch. */
   roofAreas: TracedLine[]
-  /** Pending flush-edge suggestion for the just-added floor area (ambient
-   *  inference). A gentle "snap flush?" prompt reads this; null = none. */
-  floorFlushSuggestion: { areaId: string; rect: { x1: number; y1: number; x2: number; y2: number }; message: string } | null
+  /** Pending ambient-inference suggestion (flush-edge, corner trim, …). A gentle
+   *  one-tap prompt (InferencePrompt) reads this; null = none. */
+  inferenceSuggestion: InferenceSuggestion | null
   /** Electrical branch circuits (auto-grouped by amperage + manual). */
   circuits: Circuit[]
   /** Which trade layers are currently shown in the 3D scene */
@@ -427,10 +457,10 @@ interface AppState {
   removeHvacLine: (id: string) => void
   // Floor areas (joist fields)
   addFloorsAreas: (areas: TracedLine[]) => void
-  /** Apply the pending flush-edge suggestion (snap the area's shared edge). */
-  applyFloorFlush: () => void
-  /** Dismiss the flush-edge suggestion without changing anything. */
-  dismissFloorFlush: () => void
+  /** Apply the pending ambient-inference suggestion (snap flush / trim corner). */
+  applyInferenceSuggestion: () => void
+  /** Dismiss the inference suggestion without changing anything. */
+  dismissInferenceSuggestion: () => void
   removeFloorsArea: (id: string) => void
   /** Drag-move a floor area by a pixel-space delta (both corners). */
   translateFloorsArea: (id: string, dxPx: number, dyPx: number) => void
@@ -671,7 +701,7 @@ export const useAppStore = create<AppState>()(
     electricalLines: [],
     hvacLines: [],
     floorsAreas: [],
-    floorFlushSuggestion: null,
+    inferenceSuggestion: null,
     roofAreas: [],
     circuits: [],
     visibleLayers: new Set<TraceLayer>(TRACE_LAYER_ORDER),
@@ -826,6 +856,7 @@ export const useAppStore = create<AppState>()(
         ]
         const userWalls = cornerInferEnabled ? inferCorners(combined, cornerTolerancePx) : combined
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+        s.inferenceSuggestion = cornerSuggestionFor(d.parsedWalls, id)
       })
     },
 
@@ -846,6 +877,7 @@ export const useAppStore = create<AppState>()(
           ...walls.map((w) => ({ ...w, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole, interiorMaterial: 'drywall', exteriorMaterial })),
         ])
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+        s.inferenceSuggestion = cornerSuggestionFor(d.parsedWalls, id)
       })
     },
 
@@ -1674,24 +1706,39 @@ export const useAppStore = create<AppState>()(
         const level = added.level ?? 0
         const neighbours = s.floorsAreas.filter((a) => a.id !== added.id && (a.level ?? 0) === level)
         const sug = suggestFlushEdge(added, neighbours, 28)
-        s.floorFlushSuggestion = sug
-          ? { areaId: added.id, rect: sug.rect, message: sug.message }
+        s.inferenceSuggestion = sug
+          ? { kind: 'floor-flush', areaId: added.id, rect: sug.rect, message: sug.message }
           : null
       })
     },
 
-    applyFloorFlush: () => {
-      const sug = get().floorFlushSuggestion
+    applyInferenceSuggestion: () => {
+      const sug = get().inferenceSuggestion
       if (!sug) return
       pushHistory()
       set((s) => {
-        const a = s.floorsAreas.find((ar) => ar.id === sug.areaId)
-        if (a) { a.x1 = sug.rect.x1; a.y1 = sug.rect.y1; a.x2 = sug.rect.x2; a.y2 = sug.rect.y2 }
-        s.floorFlushSuggestion = null
+        if (sug.kind === 'floor-flush') {
+          const a = s.floorsAreas.find((ar) => ar.id === sug.areaId)
+          if (a) { a.x1 = sug.rect.x1; a.y1 = sug.rect.y1; a.x2 = sug.rect.x2; a.y2 = sug.rect.y2 }
+        } else if (sug.kind === 'wall-corner') {
+          const d = s.drawings.find((dr) => dr.id === sug.drawingId)
+          if (d) {
+            // Match the traced wall by its endpoints (robust to index shifts from
+            // corner inference / merges), then trim it to the corner.
+            const matches = (w: ParsedWall): boolean => {
+              const near = (a: number, b: number) => Math.abs(a - b) < 3
+              return (near(w.x1, sug.from.x1) && near(w.y1, sug.from.y1) && near(w.x2, sug.from.x2) && near(w.y2, sug.from.y2))
+                || (near(w.x1, sug.from.x2) && near(w.y1, sug.from.y2) && near(w.x2, sug.from.x1) && near(w.y2, sug.from.y1))
+            }
+            const w = d.parsedWalls.find((ww) => ww.source === 'user' && matches(ww))
+            if (w) { w.x1 = sug.rect.x1; w.y1 = sug.rect.y1; w.x2 = sug.rect.x2; w.y2 = sug.rect.y2 }
+          }
+        }
+        s.inferenceSuggestion = null
       })
     },
 
-    dismissFloorFlush: () => set((s) => { s.floorFlushSuggestion = null }),
+    dismissInferenceSuggestion: () => set((s) => { s.inferenceSuggestion = null }),
 
     removeFloorsArea: (id) => {
       pushHistory()

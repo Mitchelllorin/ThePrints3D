@@ -8,11 +8,13 @@
 import { useAppStore } from '../../store/useAppStore'
 
 export default function InferencePrompt() {
-  const suggestion = useAppStore((s) => s.floorFlushSuggestion)
-  const apply = useAppStore((s) => s.applyFloorFlush)
-  const dismiss = useAppStore((s) => s.dismissFloorFlush)
+  const suggestion = useAppStore((s) => s.inferenceSuggestion)
+  const apply = useAppStore((s) => s.applyInferenceSuggestion)
+  const dismiss = useAppStore((s) => s.dismissInferenceSuggestion)
 
   if (!suggestion) return null
+  // Verb on the confirm button matches the suggestion kind.
+  const verb = suggestion.kind === 'wall-corner' ? 'Trim' : 'Snap'
 
   return (
     <div
@@ -47,7 +49,7 @@ export default function InferencePrompt() {
           background: '#22d3ee', color: '#083344', fontWeight: 600, fontSize: 12.5, cursor: 'pointer',
         }}
       >
-        Snap
+        {verb}
       </button>
       <button
         onClick={dismiss}
