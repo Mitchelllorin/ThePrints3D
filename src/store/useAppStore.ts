@@ -1433,7 +1433,21 @@ export const useAppStore = create<AppState>()(
 
       try {
         const raster = await rasterizeFile(drawing.file, () => {})
-        const seeds = extractSeedFromTraces(traces)
+        let seeds = extractSeedFromTraces(traces)
+        if (seeds.length === 0) {
+          // "Find the rest" fires after the user TRACES a wall — but tracing
+          // commits via addUserTracedWall → parsedWalls (source 'user') and does
+          // NOT populate userTraces, so the seed list was empty and the detector
+          // found nothing ("does not find anything ever"). Fall back to the
+          // user-traced walls themselves as seeds so a traced wall actually seeds.
+          seeds = drawing.parsedWalls
+            .filter((w) => w.source === 'user' && Math.hypot(w.x2 - w.x1, w.y2 - w.y1) >= 20)
+            .map((w) => ({
+              x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2,
+              thicknessPx: w.thickness && w.thickness > 1 ? w.thickness : 4,
+              confidence: 1,
+            }))
+        }
         const result = detectWalls(raster.imageData, seeds, types, drawing.scaleMmPerPx, {
           edgeThreshold: 20,
           minWallLengthPx: 40,

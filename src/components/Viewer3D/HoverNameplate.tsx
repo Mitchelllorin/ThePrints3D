@@ -12,6 +12,14 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 
+interface Plate {
+  pos: [number, number, number]
+  text: string
+  /** World-AABB of the hovered element, so we can draw a highlight box on it. */
+  center: [number, number, number]
+  size: [number, number, number]
+}
+
 const LAYER_NAMES: Record<string, string> = {
   floors: 'Floor joist',
   'floor-sheeting': 'Subfloor sheet',
@@ -37,7 +45,7 @@ export default function HoverNameplate() {
   const { camera, scene, raycaster, pointer } = useThree()
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
-  const [plate, setPlate] = useState<{ pos: [number, number, number]; text: string } | null>(null)
+  const [plate, setPlate] = useState<Plate | null>(null)
   const lastObj = useRef<THREE.Object3D | null>(null)
   const lastPtr = useRef({ x: 2, y: 2 })
 
@@ -59,15 +67,34 @@ export default function HoverNameplate() {
     if (!obj || !text) { setPlate(null); return }
     const box = new THREE.Box3().setFromObject(obj)
     const c = box.getCenter(new THREE.Vector3())
-    setPlate({ pos: [c.x, box.max.y + 0.22, c.z], text })
+    const s = box.getSize(new THREE.Vector3())
+    setPlate({
+      pos: [c.x, box.max.y + 0.22, c.z],
+      text,
+      center: [c.x, c.y, c.z],
+      size: [s.x, s.y, s.z],
+    })
   })
 
   if (!plate) return null
+  // A small padding so the highlight box reads as a halo around the element
+  // rather than z-fighting its own faces.
+  const pad = 0.06
   return (
-    <Billboard position={plate.pos}>
-      <Text fontSize={0.24 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.024 * labelScale} outlineColor="#0b1120">
-        {plate.text}
-      </Text>
-    </Billboard>
+    <>
+      {/* Hover highlight — a translucent cyan box on the element under the
+          pointer, so pointing at anything shows what you'd select. Works for
+          every built element (walls/floors/roof/objects/MEP) because it reads the
+          same userData the nameplate does. Non-destructive: no material edits. */}
+      <mesh position={plate.center} renderOrder={997}>
+        <boxGeometry args={[plate.size[0] + pad, plate.size[1] + pad, plate.size[2] + pad]} />
+        <meshBasicMaterial color="#22d3ee" transparent opacity={0.22} depthWrite={false} depthTest={false} />
+      </mesh>
+      <Billboard position={plate.pos}>
+        <Text fontSize={0.24 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.024 * labelScale} outlineColor="#0b1120">
+          {plate.text}
+        </Text>
+      </Billboard>
+    </>
   )
 }
