@@ -97,19 +97,33 @@ function Wordmark({ opacity }: { opacity: number }) {
   )
 }
 
-export default function Logo3DBadge() {
+/**
+ * variant:
+ *  - 'watermark' (default): the large floating badge, opacity from settings
+ *    (defaults almost-invisible now).
+ *  - 'mark': an EXACT replica of the same 3D wordmark, rendered SMALL and crisp,
+ *    pinned top-left in line with the top-right icon row (top:10, 36px tall).
+ */
+export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'watermark' | 'mark' } = {}) {
   const visible = useUISettingsStore((s) => s.logo3DVisible)
   const opacityRaw = useUISettingsStore((s) => s.logo3DOpacity)
   // Honour the setting down to almost-invisible (was floored at 0.7, which made
   // the "faint watermark" default impossible). Keep a hair above 0 so it never
   // fully disappears when visible.
-  const opacity = Math.max(0.02, opacityRaw)
-  if (!visible) return null
+  const watermarkOpacity = Math.max(0.02, opacityRaw)
+  const isMark = variant === 'mark'
+  // The small replica is always crisp (opacity 1); the watermark honours setting.
+  const opacity = isMark ? 1 : watermarkOpacity
+  // The watermark can be toggled off; the small mark always shows (it's the
+  // legible brand mark). Same wordmark either way — an exact replica.
+  if (!isMark && !visible) return null
+  const box = isMark
+    ? { top: 10, left: 10, width: 150, height: 36, zIndex: 100 }
+    : { top: 8, left: 12, width: 252, height: 64, zIndex: 40 }
   return (
     <div
       style={{
-        position: 'fixed', top: 8, left: 12, width: 252, height: 64,
-        zIndex: 40, pointerEvents: 'none',
+        position: 'fixed', ...box, pointerEvents: 'none',
       }}
     >
       <Canvas

@@ -10,7 +10,6 @@ import EdgeDrawer from './EdgeDrawer'
 import AssistantBubble from './AssistantBubble'
 import TutorialCoach from './TutorialCoach'
 import Logo3DBadge from './Logo3DBadge'
-import LogoMark from './LogoMark'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -560,11 +559,11 @@ export default function WorkspaceLayout() {
         <ModelViewer />
       </div>
 
-      {/* Brand mark — the 3D extruded wordmark floats as an almost-invisible
-          watermark; the small crisp LogoMark (below) is the legible mark, top-left
+      {/* Brand mark — the SAME 3D extruded wordmark twice: a large almost-invisible
+          floating watermark, and an exact replica rendered small & crisp top-left,
           in line with the top-right icon row. */}
       <Logo3DBadge />
-      <LogoMark />
+      <Logo3DBadge variant="mark" />
 
       {/* Persistent global actions, top-right. Build / Settings / Place each
           have their own always-visible edge tab, so they're not icons here. */}
