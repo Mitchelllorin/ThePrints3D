@@ -14,7 +14,9 @@ export default function InferencePrompt() {
 
   if (!suggestion) return null
   // Verb on the confirm button matches the suggestion kind.
-  const verb = suggestion.kind === 'wall-corner' ? 'Trim' : 'Snap'
+  const verb = suggestion.kind === 'wall-corner' ? 'Trim'
+    : suggestion.kind === 'wall-line-snap' ? 'Align'
+    : 'Snap'
 
   return (
     <div

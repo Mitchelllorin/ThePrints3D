@@ -42,6 +42,7 @@ import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReducer'
 import { suggestFlushEdge } from '../services/flushInference'
 import { suggestWallCorner } from '../services/cornerInference'
+import { suggestLineSnap } from '../services/lineSnapInference'
 
 /** A rectangle/segment in image pixels (opposite corners or endpoints). */
 interface InferRect { x1: number; y1: number; x2: number; y2: number }
@@ -54,22 +55,21 @@ interface InferRect { x1: number; y1: number; x2: number; y2: number }
 export type InferenceSuggestion =
   | { kind: 'floor-flush'; message: string; areaId: string; rect: InferRect }
   | { kind: 'wall-corner'; message: string; drawingId: string; from: InferRect; rect: InferRect }
+  | { kind: 'wall-line-snap'; message: string; drawingId: string; from: InferRect; rect: InferRect }
 
-/** Corner-awareness: if the just-traced wall (last user wall) runs past a
- *  perpendicular wall by a small stub, return a "trim to the corner?" suggestion. */
+/** Wall inference for the just-traced wall (last user wall): first a corner-trim
+ *  ("runs past the corner"), else a line-snap ("align onto this wall line"). */
 function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): InferenceSuggestion | null {
   const userWalls = parsedWalls.filter((w) => w.source === 'user')
   if (userWalls.length < 2) return null
   const last = userWalls[userWalls.length - 1]
-  const sug = suggestWallCorner(last, userWalls.slice(0, -1))
-  if (!sug) return null
-  return {
-    kind: 'wall-corner',
-    message: sug.message,
-    drawingId,
-    from: { x1: last.x1, y1: last.y1, x2: last.x2, y2: last.y2 },
-    rect: sug.rect,
-  }
+  const others = userWalls.slice(0, -1)
+  const from: InferRect = { x1: last.x1, y1: last.y1, x2: last.x2, y2: last.y2 }
+  const corner = suggestWallCorner(last, others)
+  if (corner) return { kind: 'wall-corner', message: corner.message, drawingId, from, rect: corner.rect }
+  const line = suggestLineSnap(last, others)
+  if (line) return { kind: 'wall-line-snap', message: line.message, drawingId, from, rect: line.rect }
+  return null
 }
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
@@ -1727,7 +1727,7 @@ export const useAppStore = create<AppState>()(
         if (sug.kind === 'floor-flush') {
           const a = s.floorsAreas.find((ar) => ar.id === sug.areaId)
           if (a) { a.x1 = sug.rect.x1; a.y1 = sug.rect.y1; a.x2 = sug.rect.x2; a.y2 = sug.rect.y2 }
-        } else if (sug.kind === 'wall-corner') {
+        } else if (sug.kind === 'wall-corner' || sug.kind === 'wall-line-snap') {
           const d = s.drawings.find((dr) => dr.id === sug.drawingId)
           if (d) {
             // Match the traced wall by its endpoints (robust to index shifts from
