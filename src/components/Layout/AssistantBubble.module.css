@@ -3,7 +3,9 @@
    trace HUDs (measureHud/offPrintToast) are hidden, so they never collide. */
 .wrap {
   position: absolute;
-  top: 14px;
+  /* Sit BELOW the top icon row (top:10 + 36px = 46) so no text card ever
+     overlaps the icons/logo strip. */
+  top: 52px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 55;

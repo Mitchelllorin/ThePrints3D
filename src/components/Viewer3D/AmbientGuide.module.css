@@ -441,7 +441,8 @@
 /* ── Live measurement readout — running length while tracing ─────────────── */
 .measureHud {
   position: absolute;
-  top: 12px;
+  /* Below the top icon row (bottom at 46px) so it never overlaps the icons. */
+  top: 52px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 45;
