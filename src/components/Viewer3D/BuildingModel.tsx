@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import type { Drawing, FloorLevel, FloorplanOverlayState, Layer, ParsedRoom, ParsedWall } from '../../types'
 import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
@@ -760,7 +761,11 @@ export default function BuildingModel({ layers }: Props) {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const floorsAreas = useAppStore((s) => s.floorsAreas)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
-  const explodeAmount = useAppStore((s) => s.explodeAmount)
+  const explodeAmountRaw = useAppStore((s) => s.explodeAmount)
+  const traceModeExplode = useFloorplanLocalStore((s) => s.traceMode)
+  // Tracing forces the model ASSEMBLED — an exploded scene during a trace stacks
+  // per-level content into "layered prints" and ruins tapping.
+  const explodeAmount = traceModeExplode ? 0 : explodeAmountRaw
   const explodeSpeed = useConfigStore((s) => s.explodeSpeed)
   const explodeSpread = useConfigStore((s) => s.explodeSpread)
   const explodeMults = useConfigStore((s) => s.explodeSystemMultipliers)

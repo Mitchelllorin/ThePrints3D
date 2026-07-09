@@ -649,7 +649,7 @@ export default function WorkspaceLayout() {
           (so it can't vanish at low UI opacity), bottom-right. RETAINED on mobile
           even with the Place sheet open (Android parity) — it just lifts above the
           sheet so it never overlaps. Hidden only during calibration. */}
-      {hasDrawings && !calibrationMode && (
+      {hasDrawings && !calibrationMode && !traceMode && (
         <div className={`${styles.explodeBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
           <span className={styles.explodeLabel}>Explode</span>
           <input

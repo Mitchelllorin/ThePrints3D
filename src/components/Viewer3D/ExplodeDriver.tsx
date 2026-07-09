@@ -12,6 +12,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { explodeRuntime } from './explodeRuntime'
 
 export default function ExplodeDriver() {
@@ -19,6 +20,9 @@ export default function ExplodeDriver() {
   const modelStatus = useAppStore((s) => s.model.status)
   const explodeSpeed = useConfigStore((s) => s.explodeSpeed)
   const explodeSpread = useConfigStore((s) => s.explodeSpread)
+  // While tracing, keep the scene ASSEMBLED (flat) — an exploded view during a
+  // trace stacks the per-level content into "layered prints" and wrecks tapping.
+  const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const cur = useRef(0)
 
   useFrame((_, delta) => {
@@ -38,7 +42,8 @@ export default function ExplodeDriver() {
       }
       return
     }
-    cur.current = THREE.MathUtils.damp(cur.current, explodeAmount, Math.max(0.1, explodeSpeed), delta)
+    const target = traceMode ? 0 : explodeAmount
+    cur.current = THREE.MathUtils.damp(cur.current, target, Math.max(0.1, explodeSpeed), delta)
     const t = cur.current
     explodeRuntime.eased = t * t * (3 - 2 * t)   // smoothstep
     explodeRuntime.spread = explodeSpread
