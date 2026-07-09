@@ -1571,24 +1571,31 @@ export const useAppStore = create<AppState>()(
     // ─── Construction Engine ──────────────────────────────────────────
     buildForMe: () => {
       const result = computeFramingResult(get().drawings, get().placedObjects)
-      if (!result) return
       const buildAutoEnableFraming = useConfigStore.getState().buildAutoEnableFraming
 
       pushHistory()
       set((s) => {
-        s.buildResult = result
-        s.constructionDecisions = result.decisions
-        // Auto-enable the framing layer (configurable)
-        const framingLayer = s.layers.find((l) => l.id === 'framing')
-        if (framingLayer && buildAutoEnableFraming) framingLayer.visible = true
+        // Rebuild ALWAYS shows the model and re-derives floor levels — even when
+        // there are no walls to frame (floors/roofs/objects-only). Previously it
+        // silently returned when framing was null, so "Rebuild did nothing".
+        const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
+        s.floorGroupingLog = floorGroupingLog
+        s.model.floorLevels = levels
+        if (result) {
+          s.buildResult = result
+          s.constructionDecisions = result.decisions
+          const framingLayer = s.layers.find((l) => l.id === 'framing')
+          if (framingLayer && buildAutoEnableFraming) framingLayer.visible = true
+        }
         s.model.status = 'ready'
         s.view = 'model'
       })
 
       logEvent('construction.build_for_me', {
-        componentCount: result.components.length,
-        decisionCount: result.decisions.length,
-        suggestionCount: result.suggestions.length,
+        componentCount: result?.components.length ?? 0,
+        decisionCount: result?.decisions.length ?? 0,
+        suggestionCount: result?.suggestions.length ?? 0,
+        framed: result !== null,
       })
     },
 
