@@ -451,7 +451,11 @@
   cursor: pointer;
 }
 .explodeReset:hover { color: var(--bp-text, #f1f5f9); }
+/* When the bottom Place sheet is open, float the explode control ABOVE it so it
+   stays reachable (Android parity) instead of hiding behind the sheet. */
+.explodeBarLifted { bottom: calc(42dvh + 14px); }
 @media (max-width: 767px), (max-height: 600px) {
   .explodeBar { bottom: 10px; right: 10px; }
+  .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { width: 90px; }
 }

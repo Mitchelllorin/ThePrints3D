@@ -646,10 +646,11 @@ export default function WorkspaceLayout() {
       )}
 
       {/* Persistent Explode slider — always reachable on its own SOLID surface
-          (so it can't vanish at low UI opacity), bottom-right. Hidden during
-          calibration and while the bottom Place drawer is open (avoid overlap). */}
-      {hasDrawings && !calibrationMode && !placeDrawerOpen && (
-        <div className={styles.explodeBar}>
+          (so it can't vanish at low UI opacity), bottom-right. RETAINED on mobile
+          even with the Place sheet open (Android parity) — it just lifts above the
+          sheet so it never overlaps. Hidden only during calibration. */}
+      {hasDrawings && !calibrationMode && (
+        <div className={`${styles.explodeBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
           <span className={styles.explodeLabel}>Explode</span>
           <input
             className={styles.explodeSlider}
