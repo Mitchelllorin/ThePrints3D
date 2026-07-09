@@ -11,7 +11,10 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 import { blockMaterial } from '../../services/framingGeometry'
-import { explodeRuntime, FLOOR_SEP } from './explodeRuntime'
+import { explodeRuntime, FLOOR_SEP, systemOffset } from './explodeRuntime'
+
+/** Reused scratch vector for the per-system explode offset (one per frame). */
+const explodeOffsetTmp = new THREE.Vector3()
 
 /** Wall finishes that should render as block courses, not a flat colour. */
 const MASONRY_FINISHES = new Set(['brick', 'exposedBrick', 'stone', 'concrete'])
@@ -1114,15 +1117,20 @@ export default function BuildingModel({ layers }: Props) {
     // matching the shared layer runtime. Independent of the radial multiplier so
     // storeys split even when a system's spread is low.
     const sep = explodeSpread * eased * FLOOR_SEP
+    const off = explodeOffsetTmp
     for (const child of group.children) {
       const base = child.userData.basePos as THREE.Vector3 | undefined
       if (!base) continue
-      const mult = (explodeMults[explodeSystemKey(child.userData.layer)] ?? 1) * explodeSpread * eased
+      const sysKey = explodeSystemKey(child.userData.layer)
+      const mult = (explodeMults[sysKey] ?? 1) * explodeSpread * eased
       const level = (child.userData.level as number) ?? 0
+      // Distinct per-system push so each system separates into its own zone —
+      // nothing runs through anything (the whole point of exploding).
+      systemOffset(sysKey, off)
       child.position.set(
-        base.x + (base.x - center.x) * mult,
-        base.y + (base.y - center.y) * mult + level * sep,
-        base.z + (base.z - center.z) * mult,
+        base.x + (base.x - center.x) * mult + off.x,
+        base.y + (base.y - center.y) * mult + level * sep + off.y,
+        base.z + (base.z - center.z) * mult + off.z,
       )
     }
   })

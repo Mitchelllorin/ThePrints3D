@@ -31,6 +31,36 @@ const baseMap = new WeakMap<THREE.Object3D, THREE.Vector3>()
 // BuildingModel's own (authoritative) explode driver lifts by the same amount.
 export const FLOOR_SEP = 3.2
 
+// Per-SYSTEM push DIRECTION. Radial explode alone keeps co-located systems
+// overlapping (a pipe still runs through the wall it sits in). Pushing each
+// system a distinct way pulls them into their OWN zone so each can be inspected
+// on its own — nothing running through anything. Walls stay central (reference);
+// framing lifts up out of the walls; floors/subfloor/foundation stack below;
+// ceiling/roof rise above; MEP and openings/furniture pull to the sides.
+export const SYSTEM_DIR: Record<string, [number, number, number]> = {
+  walls:            [0, 0, 0],
+  structure:        [0, 0.3, 0],
+  framing:          [0, 1, 0],
+  ceiling:          [0, 1.4, 0],
+  roof:             [0, 2, 0],
+  floors:           [0, -1, 0],
+  'floor-sheeting': [0, -1.5, 0],
+  foundation:       [0, -2, 0],
+  mep:              [1.6, 0.2, 0],
+  'doors-windows':  [0, 0.2, 1.6],
+  products:         [0, 0, -1.6],
+}
+/** Metres of system separation per unit direction at full explode. */
+export const SYSTEM_SEP = 2.6
+
+/** The extra per-system offset at the current explode progress (metres). */
+export function systemOffset(key: string, out: THREE.Vector3): THREE.Vector3 {
+  const d = SYSTEM_DIR[key]
+  const s = SYSTEM_SEP * explodeRuntime.spread * explodeRuntime.eased
+  if (!d) return out.set(0, 0, 0)
+  return out.set(d[0] * s, d[1] * s, d[2] * s)
+}
+
 /**
  * Fan a group's direct children out from the shared explode centre each frame,
  * scaled by the layer's explode-system multiplier. Children's assembled
@@ -43,6 +73,7 @@ export function useExplodeChildren(
 ) {
   const mults = useConfigStore((s) => s.explodeSystemMultipliers)
   const tmp = useRef(new THREE.Vector3())
+  const off = useRef(new THREE.Vector3())
   useFrame(() => {
     const g = groupRef.current
     if (!g) return
@@ -50,6 +81,8 @@ export function useExplodeChildren(
     // Per-storey vertical separation (floor-by-floor) — independent of the radial
     // multiplier so storeys peel apart even when a system's spread is dialled low.
     const sep = explodeRuntime.spread * explodeRuntime.eased * FLOOR_SEP
+    // Distinct per-system push so this system separates into its own zone.
+    systemOffset(systemKey, off.current)
     const c = explodeRuntime.center
     for (const child of g.children) {
       let base = baseMap.get(child)
@@ -61,9 +94,9 @@ export function useExplodeChildren(
       }
       const level = (child.userData.level as number) ?? 0
       tmp.current.set(
-        base.x + (base.x - c.x) * mult,
-        base.y + (base.y - c.y) * mult + level * sep,
-        base.z + (base.z - c.z) * mult,
+        base.x + (base.x - c.x) * mult + off.current.x,
+        base.y + (base.y - c.y) * mult + level * sep + off.current.y,
+        base.z + (base.z - c.z) * mult + off.current.z,
       )
       child.position.copy(tmp.current)
     }
