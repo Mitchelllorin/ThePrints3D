@@ -9,8 +9,10 @@ export const WALL_THICKNESS_M: Record<string, number> = {
   'wood-2x4': 0.0889,   // 3.5"
   'wood-2x6': 0.1397,   // 5.5"
   'wood-2x8': 0.1905,   // 7.5"
+  'steel-1-5-8': 0.0413, // 1-5/8" furring channel (towers: furr out for space)
   'steel-3-5-8': 0.0921, // 3-5/8"
   'steel-6': 0.1524,    // 6"
+  'steel-8': 0.2032,    // 8" heavy-gauge (structural / truss-like exterior, roofs, ceilings)
   'cmu': 0.1905,        // 8" standard block
 }
 
@@ -44,8 +46,10 @@ const FRAMING_TYPE_SPEC: Record<string, { material: 'wood' | 'steel'; studSize: 
   'wood-2x4':    { material: 'wood',  studSize: '2x4' },
   'wood-2x6':    { material: 'wood',  studSize: '2x6' },
   'wood-2x8':    { material: 'wood',  studSize: '2x8' },
+  'steel-1-5-8': { material: 'steel', studSize: '2x4', steelWidth: '1-5/8' }, // furring
   'steel-3-5-8': { material: 'steel', studSize: '2x4', steelWidth: '3-5/8' },
   'steel-6':     { material: 'steel', studSize: '2x6', steelWidth: '6' },
+  'steel-8':     { material: 'steel', studSize: '2x8', steelWidth: '8' }, // heavy structural
   'cmu':         { material: 'wood',  studSize: '2x6', isMasonry: true },
 }
 

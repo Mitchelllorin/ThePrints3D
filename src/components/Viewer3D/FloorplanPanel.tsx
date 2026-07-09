@@ -47,8 +47,10 @@ const FRAMING_TYPES = [
   { key: 'wood-2x4',    label: 'Wood 2×4 (3.5")',  short: 'Wood 2×4' },
   { key: 'wood-2x6',    label: 'Wood 2×6 (5.5")',  short: 'Wood 2×6' },
   { key: 'wood-2x8',    label: 'Wood 2×8 (7.5")',  short: 'Wood 2×8' },
+  { key: 'steel-1-5-8', label: 'Steel 1-5/8" (furring)', short: 'Steel 1⅝"' },
   { key: 'steel-3-5-8', label: 'Steel 3-5/8"',      short: 'Steel 3⅝"' },
   { key: 'steel-6',     label: 'Steel 6"',          short: 'Steel 6"' },
+  { key: 'steel-8',     label: 'Steel 8" (heavy)',  short: 'Steel 8"' },
   { key: 'cmu',         label: 'CMU Block',         short: 'CMU' },
 ] as const
 
