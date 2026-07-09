@@ -429,6 +429,8 @@ export default function WorkspaceLayout() {
   // once there's a standing model to grab.
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
+  // Happy-place invariant: no drawer over the workspace while tracing.
+  const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const buildResult = useAppStore((s) => s.buildResult)
   const modelStatus = useAppStore((s) => s.model.status)
   const floorCount = useAppStore((s) => s.floorsAreas.length)
@@ -578,7 +580,7 @@ export default function WorkspaceLayout() {
         tabLabel="Settings"
         tabIcon="⚙"
         tourTab="settings-tab"
-        open={settingsDrawerOpen}
+        open={settingsDrawerOpen && !traceMode}
         onToggle={() => setDrawerOpen('settings', !settingsDrawerOpen)}
       >
         <SettingsContent />

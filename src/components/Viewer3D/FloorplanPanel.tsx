@@ -412,19 +412,21 @@ export default function FloorplanPanel() {
   // excluded here (see the retract effect below) so the menu never sits over the
   // workspace while you tap. Edge-triggered so a drawer you closed stays shut.
   // MUST sit above the early return below so hook order is stable across renders.
+  // Workspace-clear rule: while you're actively tracing (tapping corners on the
+  // print), NO drawer may sit over the workspace — the slim floating trace bar
+  // carries the live controls. This is THE happy-place invariant: an action owns
+  // the workspace; menus retract and cannot pop back until the action ends.
+  const tracingActive = traceMode && !tracePaused && !pickerOpen && !pendingWalls
+
   const buildCtx = overlay.calibrationMode || pickerOpen || selectedWallIndex != null || !!selectedLine || !!selectedArea
   const prevBuildCtx = useRef(false)
   useEffect(() => {
-    if (buildCtx && !prevBuildCtx.current) setDrawerOpen('build', true)
+    // Open on a new choose/read context — but NEVER while actively tracing (a
+    // selection made mid-trace used to pop the drawer open over the print).
+    if (buildCtx && !prevBuildCtx.current && !tracingActive) setDrawerOpen('build', true)
     prevBuildCtx.current = buildCtx
-  }, [buildCtx, setDrawerOpen])
+  }, [buildCtx, tracingActive, setDrawerOpen])
 
-  // Workspace-clear rule: while you're actively tracing (tapping corners on the
-  // print), the Build drawer RETRACTS so the workspace is fully clear — the slim
-  // floating trace bar carries the live controls then. Leaving active tracing
-  // (pause, a pending-walls confirm, reopening the picker, or finishing) brings
-  // the drawer back so the next choice/step is visible.
-  const tracingActive = traceMode && !tracePaused && !pickerOpen && !pendingWalls
   const prevTracingActive = useRef(false)
   useEffect(() => {
     if (tracingActive !== prevTracingActive.current) {
@@ -673,7 +675,10 @@ export default function FloorplanPanel() {
         title="Build"
         tabLabel="Build"
         tabIcon="✏"
-        open={buildDrawerOpen}
+        /* Hard invariant: the drawer can NEVER be open while actively tracing —
+           even if some state briefly sets buildDrawerOpen, the workspace stays
+           clear and the slim trace bar is the interface. */
+        open={buildDrawerOpen && !tracingActive}
         onToggle={() => setDrawerOpen('build', !buildDrawerOpen)}
         /* Click-through is the NARROW FALLBACK, not the default. During active
            tracing the drawer already RETRACTS (see the tracingActive effect), so
@@ -1532,7 +1537,9 @@ export default function FloorplanPanel() {
           tabLabel="Place"
           tabIcon="▦"
           tourTab="place-tab"
-          open={placeDrawerOpen}
+          /* Same happy-place invariant as Build: no drawer over the workspace
+             while actively tracing. */
+          open={placeDrawerOpen && !tracingActive}
           onToggle={() => setDrawerOpen('place', !placeDrawerOpen)}
         >
           <span className={styles.stepLabel}>Layers</span>
