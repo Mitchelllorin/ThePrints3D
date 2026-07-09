@@ -29,6 +29,21 @@ export const LAYER_LABELS: Record<TraceLayer, string> = {
   hvac: 'HVAC',
 }
 
+/**
+ * ONE standard trace flow, TRADE-SPECIFIC prompts. This is the "what to do now"
+ * line shown for each system so every trade traces the same way but with wording
+ * that fits it. (Plumbing/electrical/HVAC hint the real spatial run — source →
+ * up through floors → into walls → fixture.)
+ */
+export const LAYER_TRACE_HINT: Record<TraceLayer, string> = {
+  framing: 'Tap each wall corner — walls square up and snap to the print. Double-tap or End run to finish.',
+  floors: 'Tap one corner, then the opposite corner to lay the joist field.',
+  roof: 'Tap one corner, then the opposite corner to set the roof footprint.',
+  plumbing: 'Tap the pipe path — start at the source (or the outside tie-in), run up through the floor and into the walls to the fixture.',
+  electrical: 'Place boxes/outlets first, then tap the run from the panel through each device.',
+  hvac: 'Tap the duct run — from the air handler out to each register.',
+}
+
 /** Pre-trace picker rows for plumbing. */
 export const PLUMBING_PICKER = {
   element: ['Supply Line', 'Fixture Branch', 'Drain Line', 'Waste Stack', 'Vent Stack', 'Gas Line', 'Cleanout'],

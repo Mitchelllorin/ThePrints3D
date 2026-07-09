@@ -12,7 +12,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import {
-  TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS,
+  TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS, LAYER_TRACE_HINT,
   PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER, FLOORS_PICKER, ROOF_PICKER, LEVEL_OPTIONS,
 } from '../../data/traceLayers'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
@@ -779,13 +779,7 @@ export default function FloorplanPanel() {
                 <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
                 {tradeIndicator}
               </button>
-              <span className={styles.stepHint}>
-                {floorsActive
-                  ? 'Tap one corner, then the opposite corner to lay the joist field. Esc cancels.'
-                  : roofActive
-                    ? 'Tap one corner, then the opposite corner to build the gable roof. Esc cancels.'
-                    : 'Tap a start point, then tap to extend. Esc ends the run.'}
-              </span>
+              <span className={styles.stepHint}>{LAYER_TRACE_HINT[activeTraceLayer]}</span>
               {floorsActive && (
                 <>
                   <span className={styles.stepHint}>Level — which storey this floor sits on</span>
