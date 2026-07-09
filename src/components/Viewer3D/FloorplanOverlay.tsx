@@ -835,10 +835,14 @@ export default function FloorplanOverlay() {
       pointerDownScreen.current = null
       return
     }
-    // While LOCKED (a run active, not paused) the camera can't orbit, so a
+    // While LOCKED (a wall run active, not paused) the camera can't orbit, so a
     // wandering finger is still a tap — place it. While UNLOCKED, a travelled
-    // pointer was an orbit/pan, not a point.
+    // pointer was an orbit/pan, not a point. AREA layers (floors/roof) never lock
+    // the camera — you orbit freely between the two corner taps — so a moved
+    // pointer there is ALWAYS an orbit, never a corner. Excluding them stops
+    // "island floors" dropping every time you move the workspace.
     const lockedRun = traceMode && traceStyle === 'line' && traceStart !== null && !tracePaused
+      && activeTraceLayer !== 'floors' && activeTraceLayer !== 'roof'
     const down = pointerDownScreen.current
     pointerDownScreen.current = null
     if (down && !lockedRun) {
