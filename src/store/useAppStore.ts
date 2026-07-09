@@ -43,6 +43,7 @@ import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReduce
 import { suggestFlushEdge } from '../services/flushInference'
 import { suggestWallCorner } from '../services/cornerInference'
 import { suggestLineSnap } from '../services/lineSnapInference'
+import { pitchToRatio } from '../data/traceLayers'
 
 /** A rectangle/segment in image pixels (opposite corners or endpoints). */
 interface InferRect { x1: number; y1: number; x2: number; y2: number }
@@ -475,6 +476,8 @@ interface AppState {
   /** Commit a ridge edit (pitch/shape) for a roof area. Pass null to clear the
    *  override and fall back to the auto `size`-derived pitch. */
   setRoofRidge: (id: string, ridge: import('../types').RoofRidge | null) => void
+  /** Per-roof eave overhang (metres); null clears back to the global default. */
+  setRoofOverhang: (id: string, overhangM: number | null) => void
   toggleTradeLayerVisible: (layer: TraceLayer) => void
   // Electrical circuits
   addCircuit: (c: Circuit) => void
@@ -1801,6 +1804,22 @@ export const useAppStore = create<AppState>()(
         if (!a) return
         if (ridge) a.ridge = ridge
         else delete a.ridge
+      })
+    },
+
+    /** Per-roof eave overhang (metres). Merges into the ridge override so it
+     *  survives alongside pitch/shape; null clears back to the global default. */
+    setRoofOverhang: (id, overhangM) => {
+      pushHistory()
+      set((s) => {
+        const a = s.roofAreas.find((ar) => ar.id === id)
+        if (!a) return
+        const base = a.ridge ?? { pitch: pitchToRatio(a.size) }
+        if (overhangM == null) {
+          if (a.ridge) { const { overhangM: _drop, ...rest } = a.ridge; a.ridge = rest }
+        } else {
+          a.ridge = { ...base, overhangM }
+        }
       })
     },
 

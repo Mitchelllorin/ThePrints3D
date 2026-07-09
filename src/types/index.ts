@@ -168,6 +168,9 @@ export interface RoofRidge {
   /** Ridge end insets as a fraction of the run, 0..0.45 each (>0 = hipped end). */
   insetA?: number
   insetB?: number
+  /** Per-roof eave overhang (metres). Overrides the global Settings default so
+   *  each roof can pull its own overhang. Undefined → use the global setting. */
+  overhangM?: number
 }
 
 /** A room (enclosed region) detected by flood-filling the rasterized image. */

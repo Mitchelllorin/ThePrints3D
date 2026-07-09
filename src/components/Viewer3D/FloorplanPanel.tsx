@@ -77,6 +77,7 @@ export default function FloorplanPanel() {
   const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
   const carryWallsUp    = useAppStore((s) => s.carryWallsUp)
   const carryFloorUp    = useAppStore((s) => s.carryFloorUp)
+  const setRoofOverhang = useAppStore((s) => s.setRoofOverhang)
   const assignDrawingToLevel = useAppStore((s) => s.assignDrawingToLevel)
   const undoAction      = useAppStore((s) => s.undo)
   const canUndo         = useAppStore((s) => s.historyPast.length > 0)
@@ -174,6 +175,7 @@ export default function FloorplanPanel() {
   // The ONE active unit — calibration estimate, input, and label all read it.
   const activeUnit     = useConfigStore((s) => s.activeUnit)
   const lengthFormat   = useConfigStore((s) => s.lengthFormat)
+  const roofOverhangIn = useConfigStore((s) => s.roofOverhangIn)
   // Nudge step for moving a selected wall, expressed in the active unit.
   const [nudgeStep, setNudgeStep] = useState(1)
 
@@ -1315,6 +1317,24 @@ export default function FloorplanPanel() {
           <div className={styles.step}>
             <span className={styles.stepLabel}>{selectedArea.kind === 'roof' ? 'Roof' : 'Floor'} area selected</span>
             <span className={styles.stepHint}>Drag it to move; or delete / clone. Tap another to select.</span>
+            {selectedArea.kind === 'roof' && (() => {
+              const roof = roofAreas.find((a) => a.id === selectedArea.id)
+              const curIn = Math.round(((roof?.ridge?.overhangM ?? roofOverhangIn * 0.0254) / 0.0254))
+              return (
+                <>
+                  <span className={styles.stepHint}>Eave overhang</span>
+                  <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+                    {[0, 8, 12, 16, 24, 36].map((inch) => (
+                      <button
+                        key={inch}
+                        className={curIn === inch ? styles.action : styles.secondary}
+                        onClick={() => setRoofOverhang(selectedArea.id, inch === roofOverhangIn ? null : inch * 0.0254)}
+                      >{inch}&quot;</button>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
             <div className={styles.btnRow}>
               <button className={styles.cancel} onClick={deleteSelectedArea}>Delete</button>
               <button className={styles.secondary} onClick={cloneSelectedArea}>Clone</button>

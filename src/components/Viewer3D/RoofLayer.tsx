@@ -62,6 +62,7 @@ function effectiveRidge(area: TracedLine, draft: RoofRidge | undefined): RoofRid
     crossFrac: base?.crossFrac ?? 0,
     insetA: base?.insetA ?? 0,
     insetB: base?.insetB ?? 0,
+    overhangM: base?.overhangM, // undefined → RoofAreaMesh falls back to the global setting
   }
 }
 
@@ -89,7 +90,9 @@ function RoofAreaMesh({
   const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
   const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
 
-  const overhangM = useConfigStore((s) => s.roofOverhangIn) * 0.0254
+  // Per-roof overhang override (set on this roof) wins over the global default.
+  const globalOverhangM = useConfigStore((s) => s.roofOverhangIn) * 0.0254
+  const overhangM = ridge.overhangM ?? globalOverhangM
   const isGable = GABLE_FAMILY.has((area.elementType || '').trim().toLowerCase())
   const shaped = isGable && ridgeIsShaped(ridge)
 
