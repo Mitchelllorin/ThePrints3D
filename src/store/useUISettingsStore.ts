@@ -54,7 +54,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   logoOpacity: 1,
   logoSize: 1,
   logo3DVisible: true,
-  logo3DOpacity: 0.85,
+  logo3DOpacity: 0.06, // floating workspace logo defaults to ALMOST invisible
   logo3DFloatSpeed: 0.7,
   logo3DFloatHeight: 0.25,
   gridVisible: true,

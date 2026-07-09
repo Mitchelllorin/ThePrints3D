@@ -100,7 +100,10 @@ function Wordmark({ opacity }: { opacity: number }) {
 export default function Logo3DBadge() {
   const visible = useUISettingsStore((s) => s.logo3DVisible)
   const opacityRaw = useUISettingsStore((s) => s.logo3DOpacity)
-  const opacity = Math.max(0.7, opacityRaw)
+  // Honour the setting down to almost-invisible (was floored at 0.7, which made
+  // the "faint watermark" default impossible). Keep a hair above 0 so it never
+  // fully disappears when visible.
+  const opacity = Math.max(0.02, opacityRaw)
   if (!visible) return null
   return (
     <div
