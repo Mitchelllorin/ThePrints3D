@@ -431,6 +431,15 @@ export default function WorkspaceLayout() {
   const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
   // Happy-place invariant: no drawer over the workspace while tracing.
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
+  const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
+  // Lock-driven edit: an ACTION owns the workspace. Any active action (tracing,
+  // calibrating, arming a placement) locks it — edit/select is NOT available and
+  // auto-disarms. Only when IDLE is edit offered. (User: edit "can't be on all
+  // the time — it needs to be smart".)
+  const actionActive = traceMode || calibrationMode || placeObjectType != null
+  useEffect(() => {
+    if (editMode && actionActive) setEditMode(false)
+  }, [editMode, actionActive, setEditMode])
   const buildResult = useAppStore((s) => s.buildResult)
   const modelStatus = useAppStore((s) => s.model.status)
   const floorCount = useAppStore((s) => s.floorsAreas.length)
@@ -632,9 +641,10 @@ export default function WorkspaceLayout() {
         </div>
       )}
 
-      {/* Edit-everything toggle — bottom-left, only once a model is standing. ON
-          unlocks the whole model for hover-highlight + drag; OFF locks it back. */}
-      {hasDrawings && built && !calibrationMode && (
+      {/* Edit toggle — bottom-left, only when a model is standing AND the
+          workspace is IDLE (no trace/calibration/placement owning it). An action
+          locks the workspace, so edit is only offered between actions. */}
+      {hasDrawings && built && !actionActive && (
         <div className={styles.editBar}>
           <button
             className={`${styles.editToggle} ${editMode ? styles.editToggleOn : ''}`}
