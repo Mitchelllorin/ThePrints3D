@@ -235,13 +235,14 @@ export default function FloorplanOverlay() {
   // the controls directly). Pan/orbit resumes when you leave these modes.
   useEffect(() => {
     updateOverlay({
-      // Click-lock model (in 3D): a tap places a point AND locks the workspace so
-      // the view holds still and taps land precisely; a double-tap (or the "End
-      // run" button) finishes the run. Freehand locks for the whole stroke (the
-      // drag IS the line); also calibrating, placing, or dragging a handle.
+      // STANDARD CLICK MODEL: the camera stays FREE during line tracing — DRAG to
+      // look around, a stationary TAP places a point, double-tap finishes. (The
+      // old click-lock froze the view during a run, so a wandering cursor felt
+      // "sticky" and dropped errant walls.) We only lock when the drag/gesture IS
+      // the interaction: freehand (the drag draws the line), dragging a handle,
+      // placing (press-drag moves the ghost), or the guided calibration taps.
       orbitLocked: drag !== null
         || (traceMode && traceStyle === 'freehand')
-        || (traceMode && traceStyle === 'line' && traceStart !== null && !tracePaused)
         || overlay.calibrationMode
         || placeObjectType !== null,
     }, false)
@@ -835,17 +836,14 @@ export default function FloorplanOverlay() {
       pointerDownScreen.current = null
       return
     }
-    // While LOCKED (a wall run active, not paused) the camera can't orbit, so a
-    // wandering finger is still a tap — place it. While UNLOCKED, a travelled
-    // pointer was an orbit/pan, not a point. AREA layers (floors/roof) never lock
-    // the camera — you orbit freely between the two corner taps — so a moved
-    // pointer there is ALWAYS an orbit, never a corner. Excluding them stops
-    // "island floors" dropping every time you move the workspace.
-    const lockedRun = traceMode && traceStyle === 'line' && traceStart !== null && !tracePaused
-      && activeTraceLayer !== 'floors' && activeTraceLayer !== 'roof'
+    // STANDARD CLICK MODEL: only a STATIONARY tap places a point — a travelled
+    // pointer is always an orbit/pan (look around), never a point. This is
+    // uniform for every trace type (line walls, areas, trades); it's the
+    // definitive fix for the "sticky cursor drops errant walls" — a wandering or
+    // drifting cursor can no longer commit a point.
     const down = pointerDownScreen.current
     pointerDownScreen.current = null
-    if (down && !lockedRun) {
+    if (down) {
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
       if (moved > limit) return

@@ -780,6 +780,10 @@ export default function FloorplanPanel() {
                 {tradeIndicator}
               </button>
               <span className={styles.stepHint}>{LAYER_TRACE_HINT[activeTraceLayer]}</span>
+              {/* The standard click model, always explained while tracing. */}
+              <span className={styles.stepHint} style={{ opacity: 0.85 }}>
+                👆 <b>Tap</b> to place a point · <b>drag</b> to look around · <b>double-tap</b> to finish
+              </span>
               {floorsActive && (
                 <>
                   <span className={styles.stepHint}>Level — which storey this floor sits on</span>
