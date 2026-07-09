@@ -427,6 +427,9 @@ export default function FloorplanPanel() {
   useEffect(() => {
     // Open on a new choose/read context — but NEVER while actively tracing (a
     // selection made mid-trace used to pop the drawer open over the print).
+    // Open on a new choose/read context — but NEVER while actively tracing (a
+    // selection mid-run used to pop the drawer over the print). The user-invoked
+    // picker still opens the drawer (pickerOpen flips tracingActive off).
     if (buildCtx && !prevBuildCtx.current && !tracingActive) setDrawerOpen('build', true)
     prevBuildCtx.current = buildCtx
   }, [buildCtx, tracingActive, setDrawerOpen])
@@ -1134,6 +1137,14 @@ export default function FloorplanPanel() {
               <span className={styles.stepLabel}>{layerLabel} type</span>
               <button className={styles.cardClose} onClick={() => closeAllPanels()} aria-label="Close">✕</button>
             </div>
+            {/* Primary action FIRST so it's always visible on a phone — the long
+                options below can scroll, but "Start tracing" never hides. */}
+            <div className={styles.btnRow}>
+              <button className={styles.action} onClick={confirmWallType}>
+                {traceMode ? 'Apply' : 'Start Tracing →'}
+              </button>
+              <button className={styles.secondary} onClick={() => closeAllPanels()}>Cancel</button>
+            </div>
             {framingActive && (
               <>
                 <span className={styles.stepHint}>Framing</span>
@@ -1291,12 +1302,6 @@ export default function FloorplanPanel() {
                 </div>
               </>
             )}
-            <div className={styles.btnRow}>
-              <button className={styles.action} onClick={confirmWallType}>
-                {traceMode ? 'Apply' : 'Start Tracing →'}
-              </button>
-              <button className={styles.secondary} onClick={() => closeAllPanels()}>Cancel</button>
-            </div>
           </div>
         )}
 
