@@ -421,7 +421,7 @@
 
 .explodeBar {
   position: absolute;
-  bottom: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   right: 14px;
   z-index: 56;
   display: flex;
@@ -455,7 +455,9 @@
    stays reachable (Android parity) instead of hiding behind the sheet. */
 .explodeBarLifted { bottom: calc(42dvh + 14px); }
 @media (max-width: 767px), (max-height: 600px) {
-  .explodeBar { bottom: 10px; right: 10px; }
+  /* Lift clear of the phone's bottom edge / nav bar AND the Place drawer's peek
+     tab so it's actually visible on Android. */
+  .explodeBar { bottom: calc(62px + env(safe-area-inset-bottom, 0px)); right: 10px; }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { width: 90px; }
 }

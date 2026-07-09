@@ -109,7 +109,7 @@
 .left {
   top: 56px;
   left: 0;
-  bottom: 8px;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   width: min(248px, 72vw);
   transform: translateX(-100%);
   border-radius: 0 12px 12px 0;
@@ -132,7 +132,7 @@
 .right {
   top: 56px;
   right: 0;
-  bottom: 8px;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   width: min(248px, 72vw);
   transform: translateX(100%);
   border-radius: 12px 0 0 12px;
@@ -159,7 +159,10 @@
   right: 0;
   bottom: 0;
   max-height: 60dvh;
-  transform: translateY(100%);
+  /* Closed: don't slide FULLY off — leave the tab + a small peek above the
+     bottom edge (and the phone's nav/gesture bar via safe-area) so the Place
+     tab stays reachable on Android instead of being clipped at the edge. */
+  transform: translateY(calc(100% - 16px - env(safe-area-inset-bottom, 0px)));
   border-radius: 12px 12px 0 0;
   border-bottom: none;
 }
