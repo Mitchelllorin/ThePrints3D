@@ -159,12 +159,16 @@ function DrawerRecenter() {
   // away" and can drop a point at the wrong spot (a stray wall). Taps must map
   // 1:1 to what the user sees during a run.
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
+  const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const calibrationMode = useAppStore((s) => s.calibrationMode)
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera
     const w = size.width, h = size.height
     const drawerW = Math.min(248, 0.72 * w)   // matches the EdgeDrawer CSS width
-    if (traceMode || calibrationMode) { cam.clearViewOffset(); cam.updateProjectionMatrix(); return }
+    // No view-offset while an ACTION owns the pointer (tracing, calibrating, or
+    // PLACING) — shifting the plan makes the tap land off where you aimed, so a
+    // placed object appears to "disappear" (lands elsewhere / the view jumps).
+    if (traceMode || calibrationMode || placeObjectType) { cam.clearViewOffset(); cam.updateProjectionMatrix(); return }
     // Shift the RENDERED framing (not the camera) so the plan re-centres in the
     // area the open drawer leaves visible — the plan must stay centred in the
     // workspace AT ALL TIMES, even on a phone where a drawer covers most of the
@@ -179,7 +183,7 @@ function DrawerRecenter() {
     if (offsetX === 0 && offsetY === 0) cam.clearViewOffset()
     else cam.setViewOffset(w, h, offsetX, offsetY, w, h)
     cam.updateProjectionMatrix()
-  }, [camera, size.width, size.height, buildOpen, settingsOpen, placeOpen, traceMode, calibrationMode])
+  }, [camera, size.width, size.height, buildOpen, settingsOpen, placeOpen, traceMode, calibrationMode, placeObjectType])
   return null
 }
 
