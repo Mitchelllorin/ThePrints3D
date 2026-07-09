@@ -5,6 +5,7 @@
  * Plain-text tooltip to the LEFT on hover (CSS ::before). No emoji, no SVG.
  */
 import styles from './TopIcons.module.css'
+import { zoomCamera } from '../Viewer3D/cameraControls'
 
 interface BtnProps {
   label: string
@@ -39,6 +40,8 @@ export default function TopIcons(p: Props) {
     <div className={styles.bar}>
       <IconBtn label="Rebuild" glyph="⟳" onClick={p.onRebuild} />
       <IconBtn label="Undo" glyph="↩" disabled={!p.canUndo} onClick={p.onUndo} />
+      <IconBtn label="Zoom in" glyph="+" onClick={() => zoomCamera(0.83)} />
+      <IconBtn label="Zoom out" glyph="−" onClick={() => zoomCamera(1.2)} />
     </div>
   )
 }

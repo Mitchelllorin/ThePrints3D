@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
+import { cameraControls } from './cameraControls'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -351,16 +352,8 @@ export default function ModelViewer() {
   // panel (Annotate/Share/Measure/Recalibrate). Flag kept for quick reference.
   const SHOW_LEGACY_TOOLBAR = false
 
-  // Zoom in/out by dollying the camera along its view direction toward target.
-  const zoomBy = (factor: number) => {
-    const c = controlsRef.current
-    if (!c) return
-    const cam = c.object
-    const offset = cam.position.clone().sub(c.target)
-    offset.multiplyScalar(factor)
-    cam.position.copy(c.target).add(offset)
-    c.update()
-  }
+  // Zoom is driven from TopIcons (DOM) via the cameraControls singleton, which
+  // mirrors the OrbitControls ref above — so the +/- sit inline with Undo/Redo.
 
   // The camera stays free to orbit/pan even mid-trace/calibration — it's only
   // locked while a gesture must own the pointer (dragging an overlay handle or
@@ -536,13 +529,7 @@ export default function ModelViewer() {
       {/* Camera preset HUD — retired in the UI reset. */}
       {SHOW_LEGACY_TOOLBAR && (model.status === 'ready' || model.status === 'building') && <CameraHud />}
 
-      {/* Zoom — small, near-transparent, blends into the corner. */}
-      {(model.status === 'ready' || model.status === 'building') && (
-        <div className={styles.zoomControls}>
-          <button className={styles.zoomBtn} onClick={() => zoomBy(0.83)} title="Zoom in" aria-label="Zoom in">+</button>
-          <button className={styles.zoomBtn} onClick={() => zoomBy(1.2)} title="Zoom out" aria-label="Zoom out">−</button>
-        </div>
-      )}
+      {/* Zoom moved to TopIcons (top-right, inline with Undo/Redo, same style). */}
 
       {measureMode && model.status === 'ready' && (
         <aside
@@ -697,7 +684,7 @@ export default function ModelViewer() {
         )}
 
         <OrbitControls
-          ref={controlsRef}
+          ref={(r) => { controlsRef.current = r; cameraControls.current = r }}
           makeDefault
           enabled={orbitEnabled}
           enableDamping
