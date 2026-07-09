@@ -100,37 +100,44 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
     }
   }
 
-  if (!ctx.built) {
-    if (ctx.userWallCount > 0) {
-      return {
-        id: 'build',
-        message: `Nice — ${ctx.userWallCount} wall${ctx.userWallCount === 1 ? '' : 's'} traced. Ready to see it in 3D?`,
-        actionLabel: 'Build 3D',
-        actionKind: 'build',
-        tone: 'idle',
-      }
-    }
-    if (ctx.hasWalls) {
-      return {
-        id: 'autoBuild',
-        message: `I found ${ctx.detectedWallCount} wall${ctx.detectedWallCount === 1 ? '' : 's'} in the plan. Want me to build the whole 3D from them?`,
-        actionLabel: 'Build it for me',
-        actionKind: 'autoBuild',
-        tone: 'idle',
-      }
-    }
+  // "Model's standing" is the TERMINAL step — only declare it once there are real
+  // WALLS in the model. `ctx.built` is sticky (a fresh auto-build on load, or
+  // building right after laying a floor, flips it true), so gating the terminal
+  // on build status alone made the coach jump straight to "your model's ready"
+  // out of sequence — right after a floor, before any walls. Requiring walls
+  // keeps the coach in step: floor → walls → build → done.
+  const hasRealWalls = ctx.userWallCount > 0 || ctx.hasWalls
+  if (ctx.built && hasRealWalls) {
     return {
-      id: 'trace',
-      message: "Now trace the walls over the plan — or pick a type and I'll guide you.",
-      actionLabel: 'Start tracing',
-      actionKind: 'trace',
-      tone: 'idle',
+      id: 'built',
+      message: "Your model's standing. Tap a wall to tweak it, or add doors, windows and fixtures from Place.",
+      tone: 'success',
     }
   }
 
+  if (ctx.userWallCount > 0) {
+    return {
+      id: 'build',
+      message: `Nice — ${ctx.userWallCount} wall${ctx.userWallCount === 1 ? '' : 's'} traced. Ready to see it in 3D?`,
+      actionLabel: 'Build 3D',
+      actionKind: 'build',
+      tone: 'idle',
+    }
+  }
+  if (ctx.hasWalls) {
+    return {
+      id: 'autoBuild',
+      message: `I found ${ctx.detectedWallCount} wall${ctx.detectedWallCount === 1 ? '' : 's'} in the plan. Want me to build the whole 3D from them?`,
+      actionLabel: 'Build it for me',
+      actionKind: 'autoBuild',
+      tone: 'idle',
+    }
+  }
   return {
-    id: 'built',
-    message: "Your model's standing. Tap a wall to tweak it, or add doors, windows and fixtures from Place.",
-    tone: 'success',
+    id: 'trace',
+    message: "Now trace the walls over the plan — or pick a type and I'll guide you.",
+    actionLabel: 'Start tracing',
+    actionKind: 'trace',
+    tone: 'idle',
   }
 }
