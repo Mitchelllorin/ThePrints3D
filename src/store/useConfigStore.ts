@@ -70,6 +70,11 @@ export interface AppConfig {
   buildType: BuildingType
   /** Automatically reveal the framing layer after "Build for me". */
   buildAutoEnableFraming: boolean
+  /** Complete the shell on Build: derive slab, floor deck, ceiling and roof
+   *  (and with it the boxed eave — soffit + fascia) from the wall footprint,
+   *  so a print builds slab-to-fascia without hand-tracing every area. Only
+   *  ever FILLS IN what the user hasn't traced; it never replaces their work. */
+  buildAutoShell: boolean
 
   // ── Roof ──────────────────────────────────────────────────────────────────
   /** Eave/soffit overhang (inches) the roof automatically extends PAST the wall
@@ -123,6 +128,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   buildFloorHeightM: 2.7,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,
+  buildAutoShell: true,
   roofOverhangIn: 16,
   studSpacingIn: 16,
   defaultStudSize: '2x4',

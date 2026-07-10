@@ -222,6 +222,7 @@ function SettingsContent() {
         <Slider label="Floor height" val={cfg.buildFloorHeightM} min={2} max={6} step={0.1} unit="m" onChange={(v) => setCfg({ buildFloorHeightM: v })} />
         <Select label="Type" val={cfg.buildType} options={BUILD_TYPE_OPTIONS} onChange={(v) => setCfg({ buildType: v as BuildingType })} />
         <Toggle label="Auto framing" val={cfg.buildAutoEnableFraming} onChange={(v) => setCfg({ buildAutoEnableFraming: v })} />
+        <Toggle label="Auto shell (slab → fascia)" val={cfg.buildAutoShell} onChange={(v) => setCfg({ buildAutoShell: v })} />
       </CollapsibleSection>
 
       <CollapsibleSection id="trades" title="Plumbing / Electrical" openId={openId} setOpenId={setOpenId}>

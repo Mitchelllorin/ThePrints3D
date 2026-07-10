@@ -30,6 +30,7 @@ import { type TraceLayer, TRACE_LAYER_ORDER } from '../data/traceLayers'
 import type { ProductCatalogItem, ProductPlacement } from '../types/products'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import { buildFraming } from '../services/constructionEngine'
+import { deriveBuildAreas } from '../services/autoBuildAreas'
 import { getCatalogItem } from '../data/objectCatalog'
 import {
   groupByFloorWithLog,
@@ -1081,7 +1082,8 @@ export const useAppStore = create<AppState>()(
       // Frame the walls as part of the 3D build — Build 3D and Build-for-me now
       // produce the same framed result; the Framing toggle controls visibility.
       const framing = computeFramingResult(get().drawings, get().placedObjects)
-      const autoFraming = useConfigStore.getState().buildAutoEnableFraming
+      const cfg = useConfigStore.getState()
+      const autoFraming = cfg.buildAutoEnableFraming
       set((s) => {
         s.model.status = s.drawings.length > 0 ? 'building' : 'idle'
         s.model.generatedAt = null
@@ -1099,11 +1101,29 @@ export const useAppStore = create<AppState>()(
           if (framingLayer && autoFraming) framingLayer.visible = true
         }
 
+        // Complete the shell: the engine only frames WALLS, so without this a
+        // build stands on nothing under open sky. Derive the slab / deck /
+        // ceiling / roof from the wall footprint — the roof's eave overhang is
+        // what carries the soffit + fascia. Strictly additive: an area kind the
+        // user already traced is left exactly as they drew it.
+        let shell: ReturnType<typeof deriveBuildAreas> | null = null
+        if (cfg.buildAutoShell) {
+          const walls = s.drawings.flatMap((d) => d.parsedWalls)
+          shell = deriveBuildAreas(walls, {
+            levels: Math.max(1, levels.length),
+            makeId: (role, level) => `auto-${role}-${level}-${genId()}`,
+          })
+          if (s.floorsAreas.length === 0) s.floorsAreas.push(...shell.floors)
+          if (s.roofAreas.length === 0) s.roofAreas.push(...shell.roofs)
+        }
+
         logEvent('model.build.started', {
           drawingCount: s.drawings.length,
           floorCount: levels.length,
           framed: framing !== null,
           uncalibratedCount: s.drawings.filter((d) => !d.scaleMmPerPx).length,
+          autoShellFloors: shell?.floors.length ?? 0,
+          autoShellRoofs: shell?.roofs.length ?? 0,
         })
       })
     },
