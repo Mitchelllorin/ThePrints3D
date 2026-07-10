@@ -105,12 +105,32 @@
 }
 .tabIcon { font-size: 15px; line-height: 1; }
 
+/* Bottom clearance for the side drawers. The bottom (Place) drawer keeps a peek
+   strip + its tab protruding above the screen edge, and it paints ON TOP of the
+   side drawers. Without this the last row of the Build menu sits underneath the
+   Place strip and is unreachable. 16px peek + 34px tab + breathing room. */
+.left, .right {
+  top: 56px;
+  bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  width: min(248px, 72vw);
+}
+
+/* Side tabs are one shared shape — Build and Settings must be the SAME size and
+   sit at the SAME height. The explicit height (not min-height) keeps them equal
+   even though "Settings" is a longer label than "Build" and would otherwise
+   stretch its tab taller. */
+.left .tab, .right .tab {
+  top: 14px;
+  width: 34px;
+  height: 112px;
+  padding: 10px 0;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+}
+
 /* ── Left edge ───────────────────────────────────────────────────────────── */
 .left {
-  top: 56px;
   left: 0;
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  width: min(248px, 72vw);
   transform: translateX(-100%);
   border-radius: 0 12px 12px 0;
   border-left: none;
@@ -118,22 +138,13 @@
 .left.open { transform: translateX(0); }
 .left .tab {
   right: -34px;
-  top: 14px;
-  width: 34px;
-  min-height: 84px;
-  padding: 10px 0;
   border-left: none;
   border-radius: 0 10px 10px 0;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
 }
 
 /* ── Right edge (mirror of left) ─────────────────────────────────────────── */
 .right {
-  top: 56px;
   right: 0;
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  width: min(248px, 72vw);
   transform: translateX(100%);
   border-radius: 12px 0 0 12px;
   border-right: none;
@@ -141,16 +152,8 @@
 .right.open { transform: translateX(0); }
 .right .tab {
   left: -34px;
-  /* Clear the top-right global-action icons (Rebuild / Undo) so they don't sit
-     on top of this tab. */
-  top: 64px;
-  width: 34px;
-  min-height: 84px;
-  padding: 10px 0;
   border-right: none;
   border-radius: 10px 0 0 10px;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
 }
 
 /* ── Bottom edge ─────────────────────────────────────────────────────────── */
@@ -209,6 +212,7 @@
    nearly the full height and scroll internally (matches the existing
    max-height:600px treatment elsewhere). */
 @media (max-height: 600px) {
-  .left, .right { top: 8px; bottom: 8px; }
+  /* Still clear the Place peek + tab — see the .left/.right rule above. */
+  .left, .right { top: 8px; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
   .bottom { max-height: 78dvh; }
 }
