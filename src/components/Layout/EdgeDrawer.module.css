@@ -208,11 +208,22 @@
 .clickThrough .scroll textarea,
 .clickThrough .scroll a { pointer-events: auto; }
 
+/* Phones: the very bottom edge is unreliable — a gesture/nav bar and (in the
+   emulator) window chrome eat the last ~40px, clipping the Place tab. So on a
+   phone the closed Place drawer keeps a taller peek, lifting its tab into a
+   clearly visible band. The side drawers then need MORE bottom clearance so
+   their last row doesn't disappear under that taller Place tab (same overlap
+   the 58px rule fixed, just scaled up to the new peek). */
+@media (max-width: 767px) {
+  .bottom { transform: translateY(calc(100% - 46px - env(safe-area-inset-bottom, 0px))); }
+  .left, .right { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
+
 /* Landscape phones / short viewports: wide but short — let the side drawers use
    nearly the full height and scroll internally (matches the existing
    max-height:600px treatment elsewhere). */
 @media (max-height: 600px) {
   /* Still clear the Place peek + tab — see the .left/.right rule above. */
-  .left, .right { top: 8px; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
+  .left, .right { top: 8px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
   .bottom { max-height: 78dvh; }
 }

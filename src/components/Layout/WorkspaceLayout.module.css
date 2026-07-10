@@ -415,7 +415,11 @@
   border-radius: 6px;
 }
 @media (max-width: 767px), (max-height: 600px) {
-  .editBar { bottom: 10px; left: 10px; }
+  /* Lift Edit off the bottom edge into the same visible band as the Place tab —
+     the phone's gesture bar (and the emulator's window chrome) clip anything
+     within ~40px of the bottom. Left column, so no conflict with Place (centre)
+     or Explode (right, lifted higher still). */
+  .editBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); left: 10px; }
   .editHint { display: none; }
 }
 
@@ -455,9 +459,9 @@
    stays reachable (Android parity) instead of hiding behind the sheet. */
 .explodeBarLifted { bottom: calc(42dvh + 14px); }
 @media (max-width: 767px), (max-height: 600px) {
-  /* Lift clear of the phone's bottom edge / nav bar AND the Place drawer's peek
-     tab so it's actually visible on Android. */
-  .explodeBar { bottom: calc(62px + env(safe-area-inset-bottom, 0px)); right: 10px; }
+  /* Sits one row ABOVE the Edit + Place band: Explode (right) and the Place tab
+     (centre) overlap horizontally, so they can't share a height. */
+  .explodeBar { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); right: 10px; }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { width: 90px; }
 }
