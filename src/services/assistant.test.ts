@@ -15,6 +15,9 @@ const base: AssistantContext = {
   traceMode: false,
   tracePaused: false,
   activePanel: null,
+  exteriorFinished: false,
+  insulationFinished: false,
+  drywallFinished: false,
 }
 const ctx = (over: Partial<AssistantContext>): AssistantContext => ({ ...base, ...over })
 

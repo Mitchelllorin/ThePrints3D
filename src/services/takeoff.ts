@@ -10,6 +10,7 @@
 import type { ParsedWall, TracedLine } from '../types'
 import { generateRoofPlanes, summarizeRoof } from './roofPlanes'
 import { pitchToRatio } from '../data/traceLayers'
+import { CLADDING_LABELS, type CladdingKey } from './buildingSystemsInference'
 
 const MM_PER_FT = 304.8
 const MM_PER_M = 1000
@@ -17,6 +18,9 @@ const SQM_PER_SQFT = 0.09290304
 const M_PER_FT = 0.3048
 const STUD_OC_IN = 16
 const SHEET_SQFT = 32 // 4'×8'
+const SQFT_PER_SQUARE = 100 // 1 "square" of cladding = 100 sq ft
+const WRB_ROLL_SQFT = 500 // typical 9' housewrap roll
+const BATT_BAG_SQFT = 40  // approx 40 sq ft per batt bag (2×4 cavity)
 const DEFAULT_ROOF_OVERHANG_M = 0.4 // ~16" boxed eave (matches roofPlanes default)
 
 export interface TakeoffItem {
@@ -46,6 +50,10 @@ export interface TakeoffInput {
   placedObjects: Array<{ type: string }>
   /** Eave overhang depth (m) used for the roof takeoff. Defaults to ~16". */
   roofOverhangM?: number
+  /** Chosen cladding key — when present adds an Exterior Envelope section. */
+  claddingKey?: CladdingKey
+  /** Whether insulation has been placed — when true adds an Insulation section. */
+  insulationFinished?: boolean
 }
 
 const lineFt = (l: { x1: number; y1: number; x2: number; y2: number }, mmPerPx: number): number =>
@@ -140,6 +148,54 @@ function roofSection(roofs: TracedLine[], mmPerPx: number, overhangM: number): T
   return { title: 'Roof', items }
 }
 
+/** Exterior envelope takeoff: cladding squares, OSB sheathing sheets, WRB rolls. */
+function exteriorSection(
+  walls: ParsedWall[],
+  mmPerPx: number,
+  wallHeightM: number,
+  claddingKey: CladdingKey,
+): TakeoffSection | null {
+  if (walls.length === 0) return null
+  let totalFt = 0
+  for (const w of walls) totalFt += lineFt(w, mmPerPx)
+  const wallFaceH = wallHeightM * M_PER_FT / M_PER_FT // already in m, keep as-is
+  const faceSqFt = totalFt * (wallHeightM / M_PER_FT)
+  const squares = Math.ceil(faceSqFt / SQFT_PER_SQUARE)
+  const sheathingSheets = Math.ceil(faceSqFt / SHEET_SQFT)
+  const wrbRolls = Math.ceil(faceSqFt / WRB_ROLL_SQFT)
+  const claddingLabel = (claddingKey in CLADDING_LABELS) ? CLADDING_LABELS[claddingKey] : claddingKey
+  return {
+    title: 'Exterior Envelope',
+    items: [
+      { key: 'cladding', label: `${claddingLabel} (1 square = 100 sq ft)`, quantity: squares, unit: 'squares' },
+      { key: 'sheathing', label: 'OSB/plywood sheathing (4×8)', quantity: sheathingSheets, unit: 'sheets' },
+      { key: 'wrb', label: 'Weather-resistive barrier rolls', quantity: wrbRolls, unit: 'rolls' },
+    ],
+  }
+}
+
+/** Insulation takeoff: batt bags by cavity type (2×4 or 2×6). */
+function insulationSection(walls: ParsedWall[], mmPerPx: number, wallHeightM: number): TakeoffSection | null {
+  if (walls.length === 0) return null
+  const twoByFour = bucket()
+  const twoBySix = bucket()
+  for (const w of walls) {
+    if (w.wallType === 'masonry-thick' || w.framingType === 'cmu') continue
+    const ft = lineFt(w, mmPerPx)
+    const faceSqFt = ft * (wallHeightM / M_PER_FT)
+    const bags = Math.ceil(faceSqFt / BATT_BAG_SQFT)
+    const thickMm = (w.thickness ?? 0) * mmPerPx
+    if (thickMm >= 130) {
+      twoBySix.add('2×6 R-22 batts', bags)
+    } else {
+      twoByFour.add('2×4 R-14 batts', bags)
+    }
+  }
+  const items = [...twoByFour.items('bags'), ...twoBySix.items('bags')]
+  if (items.length === 0) return null
+  return { title: 'Insulation', items }
+}
+
 export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
   const { scaleMmPerPx: mm, wallHeightM } = input
   const sections: TakeoffSection[] = []
@@ -176,6 +232,16 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
   if (elec) sections.push(elec)
   const hvac = runSection('HVAC', input.hvac, mm)
   if (hvac) sections.push(hvac)
+
+  if (input.claddingKey) {
+    const ext = exteriorSection(input.walls, mm, wallHeightM, input.claddingKey)
+    if (ext) sections.push(ext)
+  }
+
+  if (input.insulationFinished) {
+    const ins = insulationSection(input.walls, mm, wallHeightM)
+    if (ins) sections.push(ins)
+  }
 
   // ── Fixtures / placed objects: count by type ──
   if (input.placedObjects.length > 0) {

@@ -589,6 +589,17 @@ function placeCornerAssemblies(
 
 // ─── Decisions ──────────────────────────────────────────────────────────────
 
+import {
+  inferBuildingSystems,
+  CLADDING_LABELS,
+  SHEATHING_LABELS,
+  INSULATION_TYPE_LABELS,
+  HEATING_LABELS,
+  COOLING_LABELS,
+  PLUMBING_LABELS,
+  type ClimateZone,
+} from './buildingSystemsInference'
+
 function buildFramingDecisions(
   buildingType: BuildingType,
   wallCount: number,
@@ -679,6 +690,243 @@ function buildFramingDecisions(
     ],
     confidence: 0.95,
     dependsOn: [],
+  })
+
+  return decisions
+}
+
+/**
+ * Build decisions for ALL non-framing trade layers using the unified AI
+ * inference engine. Returns decisions for exterior, insulation, MEP, drywall
+ * and finishes — every layer in LAYER_ORDER after 'framing'. High-confidence
+ * inferences are auto-resolved by the Wizard (≥ 0.9); lower ones surface as
+ * questions.
+ */
+function buildSystemsDecisions(
+  buildingType: BuildingType,
+  climateZone?: ClimateZone,
+): Decision[] {
+  const spec = inferBuildingSystems({ buildingType, climateZone })
+  const decisions: Decision[] = []
+
+  // ── Exterior envelope ─────────────────────────────────────────────────────
+
+  decisions.push({
+    id: 'exterior.cladding',
+    layer: 'exterior',
+    question: 'What exterior cladding material?',
+    default: spec.cladding.value,
+    chosen: spec.cladding.value,
+    options: (Object.entries(CLADDING_LABELS) as Array<[string, string]>).map(([value, label]) => ({ value, label })),
+    confidence: spec.cladding.confidence,
+    dependsOn: ['framing.studSize'],
+  })
+
+  decisions.push({
+    id: 'exterior.sheathing',
+    layer: 'exterior',
+    question: 'What type of structural wall sheathing?',
+    default: spec.sheathing.value,
+    chosen: spec.sheathing.value,
+    options: (Object.entries(SHEATHING_LABELS) as Array<[string, string]>).map(([value, label]) => ({ value, label })),
+    confidence: spec.sheathing.confidence,
+    dependsOn: ['framing.studSize'],
+  })
+
+  // ── Insulation ────────────────────────────────────────────────────────────
+
+  decisions.push({
+    id: 'insulation.type',
+    layer: 'insulation',
+    question: 'Wall insulation type?',
+    default: spec.wallInsulationType.value,
+    chosen: spec.wallInsulationType.value,
+    options: (Object.entries(INSULATION_TYPE_LABELS) as Array<[string, string]>).map(([value, label]) => ({ value, label })),
+    confidence: spec.wallInsulationType.confidence,
+    dependsOn: ['framing.studSize', 'exterior.sheathing'],
+  })
+
+  const rValueOptions: DecisionOption<number>[] = [13, 15, 19, 20, 21, 25, 30].map((r) => ({
+    value: r,
+    label: `R-${r}`,
+  }))
+  decisions.push({
+    id: 'insulation.rValue',
+    layer: 'insulation',
+    question: 'Wall insulation R-value?',
+    default: spec.wallInsulationRValue.value,
+    chosen: spec.wallInsulationRValue.value,
+    options: rValueOptions,
+    confidence: spec.wallInsulationRValue.confidence,
+    dependsOn: ['insulation.type'],
+  })
+
+  // ── Electrical ────────────────────────────────────────────────────────────
+
+  const panelOptions: DecisionOption<number>[] = [100, 150, 200, 400].map((a) => ({
+    value: a,
+    label: `${a}A service`,
+  }))
+  decisions.push({
+    id: 'electrical.panelAmps',
+    layer: 'electrical',
+    question: 'Main electrical service size?',
+    default: spec.electricalPanelAmps.value,
+    chosen: spec.electricalPanelAmps.value,
+    options: panelOptions,
+    confidence: spec.electricalPanelAmps.confidence,
+    dependsOn: [],
+  })
+
+  decisions.push({
+    id: 'electrical.wireGauge',
+    layer: 'electrical',
+    question: 'Branch circuit wire gauge?',
+    default: '12',
+    chosen: '12',
+    options: [
+      { value: '12', label: '#12 AWG (20A circuits — recommended)' },
+      { value: '14', label: '#14 AWG (15A circuits)' },
+    ],
+    confidence: 0.88,
+    dependsOn: ['electrical.panelAmps'],
+  })
+
+  // ── Plumbing ──────────────────────────────────────────────────────────────
+
+  decisions.push({
+    id: 'plumbing.material',
+    layer: 'plumbing',
+    question: 'Supply plumbing material?',
+    default: spec.plumbingMaterial.value,
+    chosen: spec.plumbingMaterial.value,
+    options: (Object.entries(PLUMBING_LABELS) as Array<[string, string]>).map(([value, label]) => ({ value, label })),
+    confidence: spec.plumbingMaterial.confidence,
+    dependsOn: [],
+  })
+
+  decisions.push({
+    id: 'plumbing.drainMaterial',
+    layer: 'plumbing',
+    question: 'Drain / waste / vent (DWV) material?',
+    default: 'pvc',
+    chosen: 'pvc',
+    options: [
+      { value: 'pvc', label: 'PVC (standard)' },
+      { value: 'abs', label: 'ABS plastic' },
+      { value: 'cast-iron', label: 'Cast iron (quiet, commercial)' },
+    ],
+    confidence: 0.85,
+    dependsOn: ['plumbing.material'],
+  })
+
+  // ── HVAC ──────────────────────────────────────────────────────────────────
+
+  decisions.push({
+    id: 'hvac.heatingSystem',
+    layer: 'hvac',
+    question: 'Primary heating system?',
+    default: spec.heatingSystem.value,
+    chosen: spec.heatingSystem.value,
+    options: (Object.entries(HEATING_LABELS) as Array<[string, string]>).map(([value, label]) => ({ value, label })),
+    confidence: spec.heatingSystem.confidence,
+    dependsOn: [],
+  })
+
+  decisions.push({
+    id: 'hvac.coolingSystem',
+    layer: 'hvac',
+    question: 'Cooling / air-conditioning system?',
+    default: spec.coolingSystem.value,
+    chosen: spec.coolingSystem.value,
+    options: (Object.entries(COOLING_LABELS) as Array<[string, string]>).map(([value, label]) => ({ value, label })),
+    confidence: spec.coolingSystem.confidence,
+    dependsOn: ['hvac.heatingSystem'],
+  })
+
+  decisions.push({
+    id: 'hvac.ventilation',
+    layer: 'hvac',
+    question: 'Mechanical ventilation strategy?',
+    default: 'hrv',
+    chosen: 'hrv',
+    options: [
+      { value: 'hrv', label: 'Heat-recovery ventilator (HRV)' },
+      { value: 'erv', label: 'Energy-recovery ventilator (ERV)' },
+      { value: 'exhaust-only', label: 'Exhaust-only (code minimum)' },
+      { value: 'none', label: 'Natural / operable windows only' },
+    ],
+    confidence: 0.75,
+    dependsOn: ['hvac.heatingSystem'],
+  })
+
+  // ── Drywall ───────────────────────────────────────────────────────────────
+
+  const drywallIn = spec.drywallThicknessIn.value
+  decisions.push({
+    id: 'drywall.thickness',
+    layer: 'drywall',
+    question: 'Interior drywall thickness?',
+    default: drywallIn,
+    chosen: drywallIn,
+    options: [
+      { value: 1 / 2, label: '1/2" standard (residential)' },
+      { value: 5 / 8, label: '5/8" Type X (fire-rated / commercial)' },
+    ],
+    confidence: spec.drywallThicknessIn.confidence,
+    dependsOn: ['insulation.type'],
+  })
+
+  decisions.push({
+    id: 'drywall.finish',
+    layer: 'drywall',
+    question: 'Drywall finish level?',
+    default: 4,
+    chosen: 4,
+    options: [
+      { value: 3, label: 'Level 3 — textured ceilings / concealed areas' },
+      { value: 4, label: 'Level 4 — standard painted walls (recommended)' },
+      { value: 5, label: 'Level 5 — skim coat / gloss paint / critical lighting' },
+    ],
+    confidence: 0.88,
+    dependsOn: ['drywall.thickness'],
+  })
+
+  // ── Finishes ──────────────────────────────────────────────────────────────
+
+  decisions.push({
+    id: 'finishes.interior',
+    layer: 'finishes',
+    question: 'Primary interior wall finish?',
+    default: spec.interiorFinish.value,
+    chosen: spec.interiorFinish.value,
+    options: [
+      { value: 'drywall',      label: 'Painted drywall (standard)' },
+      { value: 'plaster',      label: 'Venetian plaster / skim coat' },
+      { value: 'tile',         label: 'Ceramic / porcelain tile' },
+      { value: 'exposedBrick', label: 'Exposed brick accent' },
+      { value: 'concrete',     label: 'Polished / sealed concrete' },
+      { value: 'woodPanelling', label: 'Wood panelling' },
+    ],
+    confidence: spec.interiorFinish.confidence,
+    dependsOn: ['drywall.thickness'],
+  })
+
+  decisions.push({
+    id: 'finishes.flooring',
+    layer: 'finishes',
+    question: 'Primary flooring material?',
+    default: 'hardwood',
+    chosen: 'hardwood',
+    options: [
+      { value: 'hardwood',  label: 'Hardwood / engineered wood' },
+      { value: 'tile',      label: 'Tile / stone' },
+      { value: 'lvp',       label: 'Luxury vinyl plank (LVP)' },
+      { value: 'carpet',    label: 'Carpet' },
+      { value: 'concrete',  label: 'Polished concrete' },
+    ],
+    confidence: 0.65,
+    dependsOn: ['finishes.interior'],
   })
 
   return decisions
@@ -922,8 +1170,11 @@ export function buildFraming(
     })
   }
 
-  // Decisions
-  const decisions = buildFramingDecisions(buildingType, framedWalls.length, openings.length)
+  // Decisions — framing + all other trade layers via unified inference
+  const decisions = [
+    ...buildFramingDecisions(buildingType, framedWalls.length, openings.length),
+    ...buildSystemsDecisions(buildingType),
+  ]
 
   // Suggestions
   if (framedWalls.length < walls.length) {

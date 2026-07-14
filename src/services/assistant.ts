@@ -7,6 +7,9 @@
  *
  * Tone: omnipresent but never pushy — helpful, friendly, professional. One CTA
  * at a time, and it goes quiet the moment the user is actually working.
+ *
+ * Build sequence (all systems):
+ *   calibrate → floor → walls → build → exterior → insulation → drywall → done
  */
 
 export type AssistantTone = 'idle' | 'progress' | 'success'
@@ -19,6 +22,9 @@ export type AssistantActionKind =
   | 'autoBuild'
   | 'build'
   | 'trace'
+  | 'finishExterior'
+  | 'finishInsulation'
+  | 'finishDrywall'
 
 export interface Suggestion {
   /** Stable per logical step — drives "don't nag the same step" dismiss memory. */
@@ -43,6 +49,12 @@ export interface AssistantContext {
   traceMode: boolean
   tracePaused: boolean
   activePanel: string | null
+  /** True once the exterior assembly (sheathing + WRB + cladding) has been applied. */
+  exteriorFinished: boolean
+  /** True once insulation batts have been applied to wall cavities. */
+  insulationFinished: boolean
+  /** True once interior drywall boarding has been enabled / applied. */
+  drywallFinished: boolean
 }
 
 /** Panels that mean "the user is mid-action" — stay silent so we're not pushy. */
@@ -50,7 +62,8 @@ const BUSY_PANELS = new Set(['picker', 'object', 'wall', 'line', 'panelBoard'])
 
 /**
  * The next thing worth saying — or null to stay quiet. First match wins, so the
- * order encodes the build sequence (calibrate → floor → walls → build).
+ * order encodes the full build sequence (calibrate → floor → walls → build →
+ * exterior → insulation → drywall → done).
  */
 export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
   // No plan yet — the onboarding card already guides this; don't double up.
@@ -100,18 +113,58 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
     }
   }
 
-  // "Model's standing" is the TERMINAL step — only declare it once there are real
-  // WALLS in the model. `ctx.built` is sticky (a fresh auto-build on load, or
-  // building right after laying a floor, flips it true), so gating the terminal
-  // on build status alone made the coach jump straight to "your model's ready"
-  // out of sequence — right after a floor, before any walls. Requiring walls
-  // keeps the coach in step: floor → walls → build → done.
   const hasRealWalls = ctx.userWallCount > 0 || ctx.hasWalls
+
+  // Terminal success — all systems complete.
+  if (ctx.built && hasRealWalls && ctx.exteriorFinished && ctx.insulationFinished && ctx.drywallFinished) {
+    return {
+      id: 'complete',
+      message: "Building complete — structure, envelope, insulation and interior all done. Check the Takeoff for materials.",
+      tone: 'success',
+    }
+  }
+
+  // Exterior not yet done — wrap the shell before insulation goes in.
+  if (ctx.built && hasRealWalls && !ctx.exteriorFinished) {
+    return {
+      id: 'exterior',
+      message: "Frame's up. Want me to wrap the exterior — sheathing, weather barrier and cladding — in one shot?",
+      actionLabel: 'Finish exterior',
+      actionKind: 'finishExterior',
+      tone: 'idle',
+    }
+  }
+
+  // Insulation — goes in once the exterior is weather-tight.
+  if (ctx.built && hasRealWalls && ctx.exteriorFinished && !ctx.insulationFinished) {
+    return {
+      id: 'insulation',
+      message: "Exterior's wrapped. Ready to fill the wall cavities with insulation?",
+      actionLabel: 'Install insulation',
+      actionKind: 'finishInsulation',
+      tone: 'idle',
+    }
+  }
+
+  // Drywall — interior boarding goes on after insulation is inspected.
+  if (ctx.built && hasRealWalls && ctx.insulationFinished && !ctx.drywallFinished) {
+    return {
+      id: 'drywall',
+      message: "Insulation in. Time to board the interior — I'll apply your drywall layer.",
+      actionLabel: 'Apply drywall',
+      actionKind: 'finishDrywall',
+      tone: 'idle',
+    }
+  }
+
+  // Framing done (pre-envelope) — kept for backward-compat with the existing "built" step.
   if (ctx.built && hasRealWalls) {
     return {
-      id: 'built',
-      message: "Your model's standing. Tap a wall to tweak it, or add doors, windows and fixtures from Place.",
-      tone: 'success',
+      id: 'exterior',
+      message: "Frame's up. Want me to wrap the exterior — sheathing, weather barrier and cladding — in one shot?",
+      actionLabel: 'Finish exterior',
+      actionKind: 'finishExterior',
+      tone: 'idle',
     }
   }
 

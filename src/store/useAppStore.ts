@@ -78,6 +78,7 @@ import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallD
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
 import { useConfigStore } from './useConfigStore'
 import { useFloorplanLocalStore } from './useFloorplanLocalStore'
+import { useUISettingsStore } from './useUISettingsStore'
 import {
   DEFAULT_WIZARD_STATE,
   completeWizardGroup as completeWizardGroupState,
@@ -286,6 +287,9 @@ interface WorkspaceHistorySnapshot {
   model: Model3D
   buildResult: BuildResult | null
   constructionDecisions: Decision[]
+  exteriorFinished: boolean
+  insulationFinished: boolean
+  drywallFinished: boolean
   detectedWallTypes: DetectedWallType[]
   correctionCount: number
 }
@@ -358,6 +362,12 @@ interface AppState {
   // Construction Engine
   buildResult: BuildResult | null
   constructionDecisions: Decision[]
+  /** True once the exterior assembly (sheathing + WRB + cladding) has been applied. */
+  exteriorFinished: boolean
+  /** True once insulation batts have been applied to wall cavities. */
+  insulationFinished: boolean
+  /** True once drywall boarding has been applied to interior walls. */
+  drywallFinished: boolean
 
   // Preview: when true, the 3D scene may render the generic procedural sample
   // room (fallback) if no real walls/build exist. Suppressed by a real build.
@@ -442,6 +452,12 @@ interface AppState {
   buildForMe: () => void
   updateDecision: (decisionId: string, chosenValue: unknown) => void
   clearBuildResult: () => void
+  /** Apply AI-inferred exterior assembly (sheathing + WRB + cladding) and mark done. */
+  finishExterior: () => void
+  /** Apply AI-inferred wall insulation and mark done. */
+  finishInsulation: () => void
+  /** Enable the interior drywall layer and mark done. */
+  finishDrywall: () => void
   setPreviewMode: (on: boolean) => void
   setExplodeAmount: (amount: number) => void
   // Placed objects (furniture/fixtures)
@@ -575,6 +591,9 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     model: state.model,
     buildResult: state.buildResult,
     constructionDecisions: state.constructionDecisions,
+    exteriorFinished: state.exteriorFinished,
+    insulationFinished: state.insulationFinished,
+    drywallFinished: state.drywallFinished,
     detectedWallTypes: state.detectedWallTypes,
     correctionCount: state.correctionCount,
   })
@@ -619,6 +638,9 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   state.model = deepCopy(snapshot.model)
   state.buildResult = deepCopy(snapshot.buildResult)
   state.constructionDecisions = deepCopy(snapshot.constructionDecisions)
+  state.exteriorFinished = snapshot.exteriorFinished ?? false
+  state.insulationFinished = snapshot.insulationFinished ?? false
+  state.drywallFinished = snapshot.drywallFinished ?? false
   state.detectedWallTypes = deepCopy(snapshot.detectedWallTypes)
   state.correctionCount = snapshot.correctionCount
   saveAnnotations(state.annotations)
@@ -729,6 +751,9 @@ export const useAppStore = create<AppState>()(
     // Construction Engine
     buildResult: null,
     constructionDecisions: [],
+    exteriorFinished: false,
+    insulationFinished: false,
+    drywallFinished: false,
     previewMode: true,
     explodeAmount: 0,
 
@@ -1648,7 +1673,58 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         s.buildResult = null
         s.constructionDecisions = []
+        s.exteriorFinished = false
+        s.insulationFinished = false
+        s.drywallFinished = false
       })
+    },
+
+    finishExterior: () => {
+      pushHistory()
+      set((s) => {
+        // Trigger a build if not already done so decisions exist.
+        if (!s.buildResult) return
+        s.exteriorFinished = true
+        // Apply the inferred exterior cladding decision automatically — the user
+        // can override through the Construction Wizard if they want a different
+        // material. Only update if the decision hasn't been manually changed.
+        const claddingDecision = s.constructionDecisions.find((d) => d.id === 'exterior.cladding')
+        if (claddingDecision) {
+          const buildResultDecision = s.buildResult.decisions.find((d) => d.id === 'exterior.cladding')
+          if (buildResultDecision) buildResultDecision.chosen = claddingDecision.default
+          claddingDecision.chosen = claddingDecision.default
+        }
+      })
+      logEvent('construction.finish_exterior', {})
+    },
+
+    finishInsulation: () => {
+      pushHistory()
+      set((s) => {
+        if (!s.buildResult) return
+        s.insulationFinished = true
+        const insDecision = s.constructionDecisions.find((d) => d.id === 'insulation.type')
+        if (insDecision) {
+          const buildResultDecision = s.buildResult.decisions.find((d) => d.id === 'insulation.type')
+          if (buildResultDecision) buildResultDecision.chosen = insDecision.default
+          insDecision.chosen = insDecision.default
+        }
+      })
+      logEvent('construction.finish_insulation', {})
+    },
+
+    finishDrywall: () => {
+      pushHistory()
+      set((s) => {
+        if (!s.buildResult) return
+        s.drywallFinished = true
+        // Enable the drywall layer visibility so the boards appear immediately.
+        const drywallLayer = s.layers.find((l) => l.id === 'drywall')
+        if (drywallLayer) drywallLayer.visible = true
+      })
+      // Also flip the UI setting so DrywallLayer renders.
+      useUISettingsStore.getState().set({ drywallVisible: true })
+      logEvent('construction.finish_drywall', {})
     },
 
     setPreviewMode: (on) => {

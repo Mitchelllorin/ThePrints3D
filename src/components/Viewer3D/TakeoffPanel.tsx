@@ -22,20 +22,25 @@ export default function TakeoffContent() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const roofOverhangIn = useConfigStore((s) => s.roofOverhangIn)
+  const constructionDecisions = useAppStore((s) => s.constructionDecisions)
+  const insulationFinished = useAppStore((s) => s.insulationFinished)
 
   const sections = useMemo(() => {
     const active = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
     const scaleMmPerPx = active?.scaleMmPerPx ?? 23.5
     const walls: ParsedWall[] = drawings.flatMap((d) => d.parsedWalls)
     const wallHeightM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
+    const claddingDecision = constructionDecisions.find((d) => d.id === 'exterior.cladding')
     return computeTakeoff({
       scaleMmPerPx, wallHeightM, walls,
       plumbing: plumbingLines, electrical: electricalLines, hvac: hvacLines,
       floors: floorsAreas, roof: roofAreas,
       placedObjects: placedObjects.map((o) => ({ type: o.type })),
       roofOverhangM: roofOverhangIn * 0.0254,
+      claddingKey: claddingDecision?.chosen as import('../../services/takeoff').TakeoffInput['claddingKey'],
+      insulationFinished,
     })
-  }, [drawings, overlay.drawingId, plumbingLines, electricalLines, hvacLines, floorsAreas, roofAreas, placedObjects, wizardInputs, roofOverhangIn])
+  }, [drawings, overlay.drawingId, plumbingLines, electricalLines, hvacLines, floorsAreas, roofAreas, placedObjects, wizardInputs, roofOverhangIn, constructionDecisions, insulationFinished])
 
   const empty = sections.length === 0
 

@@ -8,6 +8,7 @@ const LAYER_LABELS: Record<ConstructionLayer, string> = {
   excavation: 'Excavation',
   foundation: 'Foundation',
   framing: 'Framing',
+  exterior: 'Exterior Envelope',
   electrical: 'Electrical',
   plumbing: 'Plumbing',
   hvac: 'HVAC',

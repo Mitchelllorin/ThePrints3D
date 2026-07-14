@@ -46,6 +46,8 @@ export const SYSTEM_DIR: Record<string, [number, number, number]> = {
   floors:           [0, -1, 0],
   'floor-sheeting': [0, -1.5, 0],
   foundation:       [0, -2, 0],
+  exterior:         [0, 0.2, 1.8],
+  insulation:       [-1.6, 0.2, 0],
   mep:              [1.6, 0.2, 0],
   'doors-windows':  [0, 0.2, 1.6],
   products:         [0, 0, -1.6],

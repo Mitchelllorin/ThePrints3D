@@ -14,6 +14,7 @@ export type ConstructionLayer =
   | 'excavation'
   | 'foundation'
   | 'framing'
+  | 'exterior'
   | 'electrical'
   | 'plumbing'
   | 'hvac'
@@ -26,6 +27,7 @@ export const LAYER_ORDER: readonly ConstructionLayer[] = [
   'excavation',
   'foundation',
   'framing',
+  'exterior',   // sheathing → WRB → cladding; comes right after framing, before MEP rough-in
   'electrical',
   'plumbing',
   'hvac',
@@ -70,6 +72,12 @@ export type FramingComponentType =
   | 'cripple-stud'
   | 'corner-assembly'
   | 'blocking'
+  // Exterior assembly (sheathing → WRB → cladding)
+  | 'sheathing-panel'
+  | 'wrb-marker'
+  | 'cladding-panel'
+  // Insulation
+  | 'insulation-batt'
 
 export interface PlacedComponent {
   id: string

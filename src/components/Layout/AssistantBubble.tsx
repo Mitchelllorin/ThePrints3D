@@ -38,6 +38,15 @@ function runAction(kind: AssistantActionKind) {
     case 'build':
       app.buildModel()
       break
+    case 'finishExterior':
+      app.finishExterior()
+      break
+    case 'finishInsulation':
+      app.finishInsulation()
+      break
+    case 'finishDrywall':
+      app.finishDrywall()
+      break
   }
 }
 
@@ -47,6 +56,9 @@ export default function AssistantBubble() {
   const floorsAreas = useAppStore((s) => s.floorsAreas)
   const buildResult = useAppStore((s) => s.buildResult)
   const modelStatus = useAppStore((s) => s.model.status)
+  const exteriorFinished = useAppStore((s) => s.exteriorFinished)
+  const insulationFinished = useAppStore((s) => s.insulationFinished)
+  const drywallFinished = useAppStore((s) => s.drywallFinished)
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const tracePaused = useFloorplanLocalStore((s) => s.tracePaused)
   const activePanel = useFloorplanLocalStore((s) => s.activePanel)
@@ -74,6 +86,9 @@ export default function AssistantBubble() {
     traceMode,
     tracePaused,
     activePanel,
+    exteriorFinished,
+    insulationFinished,
+    drywallFinished,
   }
 
   const suggestion = tutorialActive ? null : nextSuggestion(ctx)

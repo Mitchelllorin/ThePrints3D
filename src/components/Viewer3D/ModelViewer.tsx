@@ -25,6 +25,8 @@ import RoofLayer from './RoofLayer'
 import HoverNameplate from './HoverNameplate'
 import ExplodeDriver from './ExplodeDriver'
 import DrywallLayer from './DrywallLayer'
+import ExteriorCladdingLayer from './ExteriorCladdingLayer'
+import InsulationLayer from './InsulationLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
 import styles from './ModelViewer.module.css'
@@ -677,6 +679,8 @@ export default function ModelViewer() {
         <CeilingLayer />
         <RoofLayer />
         <HoverNameplate />
+        <ExteriorCladdingLayer />
+        <InsulationLayer />
         <DrywallLayer />
         <PlacedObjectsLayer />
         <TradeLayersRenderer />
