@@ -119,6 +119,14 @@ interface FloorplanLocalState {
   roofElement: string
   roofSize: string
 
+  // ─── floor isolation / ghost ─────────────────────────────────────
+  /** When non-null, only this floor level is fully visible; others are hidden.
+   *  Toggling the same floor again returns to show-all (null). */
+  isolatedFloor: number | null
+  /** Set of floor levels that are semi-transparent ("ghosted") via double-tap.
+   *  Lets the user see through a level to inspect the one below it. */
+  ghostedLevels: number[]
+
   // ─── editing / selection ─────────────────────────────────────────
   /** Index (within a drawing's user walls) of the selected wall, or null. */
   selectedWallIndex: number | null
@@ -202,6 +210,11 @@ interface FloorplanLocalState {
   setFloors: (patch: Partial<{ floorsElement: string; floorsSize: string }>) => void
   setRoof: (patch: Partial<{ roofElement: string; roofSize: string }>) => void
   setActiveLevel: (v: number) => void
+  /** Set (or clear) the isolated floor. Passing the currently isolated floor
+   *  clears isolation so all floors are visible again. */
+  setIsolatedFloor: (v: number | null) => void
+  /** Toggle ghost transparency on a floor level (double-tap gesture). */
+  toggleGhostedLevel: (level: number) => void
   setDrag: (v: DragState | null) => void
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
@@ -278,6 +291,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   roofElement: ROOF_DEFAULTS.element,
   roofSize: ROOF_DEFAULTS.size,
   activeLevel: 0,
+  isolatedFloor: null,
+  ghostedLevels: [],
   selectedWallIndex: null,
   placeObjectType: null,
   keepPlacing: false,
@@ -349,6 +364,12 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setFloors: (patch) => set(patch),
   setRoof: (patch) => set(patch),
   setActiveLevel: (v) => set({ activeLevel: v }),
+  setIsolatedFloor: (v) => set((s) => ({ isolatedFloor: s.isolatedFloor === v ? null : v })),
+  toggleGhostedLevel: (level) => set((s) => ({
+    ghostedLevels: s.ghostedLevels.includes(level)
+      ? s.ghostedLevels.filter((l) => l !== level)
+      : [...s.ghostedLevels, level],
+  })),
   setDrag: (v) => set({ drag: v }),
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v, activePanel: v != null ? 'wall' : null }),
   setPlaceObjectType: (v) => set({ placeObjectType: v, placeGhost: null }),

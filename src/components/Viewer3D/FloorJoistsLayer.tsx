@@ -89,6 +89,8 @@ interface PartProps {
   offset?: [number, number]
   /** Pointer handlers spread onto the area mesh (down + edit-mode hover). */
   bodyHandlers?: Record<string, (e: ThreeEvent<PointerEvent>) => void>
+  /** 0..1 opacity override for ghost mode (1 = opaque). */
+  ghostOpacity?: number
 }
 
 /** Vertical explode for one floor part: the within-floor PEEL (deck up / joists
@@ -103,7 +105,7 @@ function useFloorExplode(ref: React.RefObject<THREE.Group | null>, baseY: number
 }
 
 /** The structure: joist field, or a concrete slab. */
-function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers }: PartProps) {
+function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
   const holeKey = JSON.stringify(holes ?? [])
@@ -119,6 +121,17 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
   useFloorExplode(ref, level * storeyHeight + structureY, level, -JOIST_DROP)
   useEffect(() => () => disposeGroup(joists), [joists])
   useInstallReveal(joists, JOIST_PHASE)
+  // Apply ghost opacity whenever it changes.
+  useEffect(() => {
+    joists.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        const m = o.material as THREE.MeshStandardMaterial
+        const base: number = (o.userData.baseMaterialOpacity ??= m.opacity)
+        m.transparent = ghostOpacity !== undefined && ghostOpacity < 1
+        m.opacity = ghostOpacity ?? base
+      }
+    })
+  }, [joists, ghostOpacity])
   if (lenX < 0.1 || lenZ < 0.1) return null
   return (
     <group ref={ref}>
@@ -128,7 +141,7 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
 }
 
 /** The plywood subfloor deck (individual sheets) + a sheet-count nameplate. */
-function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers }: PartProps) {
+function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const holeKey = JSON.stringify(holes ?? [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,6 +153,17 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   useFloorExplode(ref, level * storeyHeight, level, DECK_LIFT)
   useEffect(() => () => disposeGroup(deck), [deck])
   useInstallReveal(deck, SHEET_PHASE, DECK_DELAY)
+  // Apply ghost opacity whenever it changes.
+  useEffect(() => {
+    deck.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        const m = o.material as THREE.MeshStandardMaterial
+        const base: number = (o.userData.baseMaterialOpacity ??= m.opacity)
+        m.transparent = ghostOpacity !== undefined && ghostOpacity < 1
+        m.opacity = ghostOpacity ?? base
+      }
+    })
+  }, [deck, ghostOpacity])
   if (lenX < 0.1 || lenZ < 0.1) return null
   const sheetCount = (deck.userData.sheetCount as number) ?? 0
   return (
@@ -175,6 +199,9 @@ export default function FloorJoistsLayer() {
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
   const setEditSelected = useFloorplanLocalStore((s) => s.setEditSelected)
+  const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
+  const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
+  const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
   const [bodyDrag, setBodyDrag] = useState<{ id: string; start: THREE.Vector3; offset: [number, number]; moved: boolean } | null>(null)
 
   // Storey-to-storey rise = wall height + the floor assembly on top of it, so a
@@ -267,7 +294,10 @@ export default function FloorJoistsLayer() {
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'floor', id: area.id }) },
         onPointerOut: () => setEditHover(null),
       }
-    : { onPointerDown: onDownArea(area) }
+    : {
+        onPointerDown: onDownArea(area),
+        onDoubleClick: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); toggleGhostedLevel(area.level ?? 0) },
+      }
   const liveFor = (area: TracedLine): [number, number] => (bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0])
 
   if (!visibleLayers.has('floors') || floorsAreas.length === 0) return null
@@ -277,13 +307,29 @@ export default function FloorJoistsLayer() {
   const structural = floorsAreas.filter((a) => !CEILING_TYPES.has(a.elementType))
   const decked = structural.filter((a) => !FLOOR_SLAB_TYPES.has(a.elementType))
 
+  // Isolation: only show areas on the active floor. Ghosted: semi-transparent.
+  const areaOpacity = (area: TracedLine) => {
+    const level = area.level ?? 0
+    if (isolatedFloor !== null && level !== isolatedFloor) return 0
+    if (ghostedLevels.includes(level)) return 0.15
+    return undefined // default (fully opaque)
+  }
+
   return (
     <>
       <group name="floor-joists">
-        {structural.map((area) => <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} />)}
+        {structural.map((area) => {
+          const gop = areaOpacity(area)
+          if (gop === 0) return null
+          return <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} />
+        })}
       </group>
       <group name="floor-sheeting">
-        {decked.map((area) => <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} />)}
+        {decked.map((area) => {
+          const gop = areaOpacity(area)
+          if (gop === 0) return null
+          return <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} />
+        })}
       </group>
       {/* Edit-mode hover/selection highlight + the body-drag catcher. */}
       {editMode && structural.map((area) => {

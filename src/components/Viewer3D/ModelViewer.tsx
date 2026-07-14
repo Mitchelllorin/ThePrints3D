@@ -347,6 +347,7 @@ export default function ModelViewer() {
   // Construction wizard is opened from Settings → "Re-run Wizard" via the store.
   const wizardOpen     = useFloorplanLocalStore((s) => s.wizardOpen)
   const setWizardOpen  = useFloorplanLocalStore((s) => s.setWizardOpen)
+  const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
   const [exportOpen, setExportOpen]     = useState(false)
   const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
@@ -359,11 +360,12 @@ export default function ModelViewer() {
   // Zoom is driven from TopIcons (DOM) via the cameraControls singleton, which
   // mirrors the OrbitControls ref above — so the +/- sit inline with Undo/Redo.
 
-  // The camera stays free to orbit/pan even mid-trace/calibration — it's only
-  // locked while a gesture must own the pointer (dragging an overlay handle or
-  // freehand-drawing). Trace/calibration points are placed on a tap, so a drag
-  // moves the view instead of dropping a point.
+  // The camera stays free to orbit even mid-trace — it's only locked while a
+  // gesture must own the pointer (dragging an overlay handle or freehand-drawing).
+  // Pan is disabled during trace mode so accidental two-finger swipes don't shift
+  // the camera target while the user is tapping trace points on the print.
   const orbitEnabled = !overlay.orbitLocked
+  const panEnabled = !traceMode
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
@@ -700,7 +702,7 @@ export default function ModelViewer() {
           zoomSpeed={0.7}
           minDistance={1}
           maxDistance={200}
-          enablePan
+          enablePan={panEnabled}
           screenSpacePanning
         />
         <CameraPresetApplier controlsRef={controlsRef} />

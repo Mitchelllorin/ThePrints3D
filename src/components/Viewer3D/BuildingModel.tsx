@@ -772,6 +772,8 @@ export default function BuildingModel({ layers }: Props) {
   const explodeSpeed = useConfigStore((s) => s.explodeSpeed)
   const explodeSpread = useConfigStore((s) => s.explodeSpread)
   const explodeMults = useConfigStore((s) => s.explodeSystemMultipliers)
+  const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
+  const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
 
   // Explode animation state that must persist across frames (not re-rendered).
   const explodeCurrentRef = useRef(0)
@@ -1080,6 +1082,32 @@ export default function BuildingModel({ layers }: Props) {
     }, 1500)
     return () => clearTimeout(timer)
   }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects, floorsAreas])
+
+  // Apply floor isolation and ghost transparency whenever those states change.
+  // Isolation hides all levels except the focused one. Ghost makes a level
+  // semi-transparent so you can see through it to the one below.
+  useEffect(() => {
+    const group = groupRef.current
+    if (!group) return
+    for (const child of group.children) {
+      const level = (child.userData.level as number) ?? 0
+      const hidden = isolatedFloor !== null && level !== isolatedFloor
+      const ghosted = !hidden && ghostedLevels.includes(level)
+      child.visible = !hidden
+      child.traverse((node) => {
+        const mesh = node as Partial<THREE.Mesh>
+        if (!mesh.material) return
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        for (const m of mats) {
+          const sm = m as THREE.MeshStandardMaterial
+          sm.transparent = ghosted || sm.opacity < 1
+          sm.opacity = ghosted ? 0.15 : sm.userData.baseOpacity ?? sm.opacity
+          // Store original opacity the first time we touch it so we can restore it.
+          if (sm.userData.baseOpacity === undefined && !ghosted) sm.userData.baseOpacity = sm.opacity
+        }
+      })
+    }
+  }, [isolatedFloor, ghostedLevels])
 
   // Explode driver: each frame, ease the current progress toward the slider
   // target and fan every component out along its vector from the model centre,
