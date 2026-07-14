@@ -10,7 +10,7 @@ import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
-import { blockMaterial } from '../../services/framingGeometry'
+import { blockMaterial, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { explodeRuntime, FLOOR_SEP, systemOffset } from './explodeRuntime'
 
 /** Reused scratch vector for the per-system explode offset (one per frame). */
@@ -793,6 +793,10 @@ export default function BuildingModel({ layers }: Props) {
     const layerMap = new Map(layers.map((l) => [l.id, l]))
     const sceneConfig = deriveWorkspaceSceneConfig(wizardInputs)
     const floorHeight = sceneConfig.wallHeightM
+    // Floor-to-floor height includes the wall height PLUS the floor assembly
+    // (joists + subfloor) so engine geometry aligns with FloorJoistsLayer and
+    // LiveWallsLayer which both use the same storeyHeight formula.
+    const storeyHeight = floorHeight + FLOOR_ASSEMBLY_H
 
     const seededLevels = model.floorLevels.length > 0
       ? model.floorLevels
@@ -803,13 +807,13 @@ export default function BuildingModel({ layers }: Props) {
       (_, index) => seededLevels[index] ?? {
         id: `floor-${index}`,
         label: index === 0 ? 'Ground Floor' : `Level ${index}`,
-        elevation: index * floorHeight,
+        elevation: index * storeyHeight,
         height: floorHeight,
         drawingIds: index === 0 ? drawings.map((d) => d.id) : [],
       },
     ).map((level, index) => ({
       ...level,
-      elevation: index * floorHeight,
+      elevation: index * storeyHeight,
       height: floorHeight,
     }))
 
