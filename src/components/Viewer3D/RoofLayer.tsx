@@ -187,6 +187,7 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, mode, onDraft, 
         crossFrac: ridge.crossFrac ?? 0,
         insetA: ridge.insetA ?? 0,
         insetB: ridge.insetB ?? 0,
+        overhangM: ridge.overhangM ?? 0,
       },
     }
     setDragging(true)

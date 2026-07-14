@@ -160,7 +160,7 @@ function DrawerRecenter() {
   // 1:1 to what the user sees during a run.
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
-  const calibrationMode = useAppStore((s) => s.calibrationMode)
+  const calibrationMode = useAppStore((s) => s.floorplanOverlay.calibrationMode)
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera
     const w = size.width, h = size.height
@@ -348,6 +348,7 @@ export default function ModelViewer() {
   const wizardOpen     = useFloorplanLocalStore((s) => s.wizardOpen)
   const setWizardOpen  = useFloorplanLocalStore((s) => s.setWizardOpen)
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
+  const tracePaused    = useFloorplanLocalStore((s) => s.tracePaused)
   const [exportOpen, setExportOpen]     = useState(false)
   const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
@@ -358,14 +359,16 @@ export default function ModelViewer() {
   const SHOW_LEGACY_TOOLBAR = false
 
   // Zoom is driven from TopIcons (DOM) via the cameraControls singleton, which
-  // mirrors the OrbitControls ref above — so the +/- sit inline with Undo/Redo.
+  // mirrors the OrbitControls ref above — so the +/- sat inline with Undo/Redo.
 
   // The camera stays free to orbit even mid-trace — it's only locked while a
   // gesture must own the pointer (dragging an overlay handle or freehand-drawing).
-  // Pan is disabled during trace mode so accidental two-finger swipes don't shift
-  // the camera target while the user is tapping trace points on the print.
+  // Pan is disabled while actively tracing (not paused) so accidental two-finger
+  // swipes don't shift the camera target while tapping trace points. When trace
+  // is paused (double-tap to look around) pan is re-enabled so users can
+  // re-center the print if it has drifted out of view.
   const orbitEnabled = !overlay.orbitLocked
-  const panEnabled = !traceMode
+  const panEnabled = !traceMode || tracePaused
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
