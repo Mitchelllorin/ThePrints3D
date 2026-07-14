@@ -1,4 +1,4 @@
-/* Global actions (Rebuild · Undo), fixed in the top-right corner, horizontally
+/* Global actions (Undo + Zoom), fixed in the top-right corner, horizontally
    aligned and flush to the perimeter. */
 .bar {
   position: fixed;

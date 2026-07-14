@@ -485,14 +485,16 @@ export default function ModelViewer() {
           </div>
           {hasWalls && (
             <>
-              <button
-                className={styles.toolBtn}
-                onClick={() => { buildForMe(); setWizardOpen(false) }}
-                title="Auto-build framing from detected walls — takes all defaults"
-                data-testid="build-for-me-btn"
-              >
-                {buildResult ? 'Rebuild' : 'Build for me'}
-              </button>
+              {!buildResult && (
+                <button
+                  className={styles.toolBtn}
+                  onClick={() => { buildForMe(); setWizardOpen(false) }}
+                  title="Auto-build framing from detected walls — takes all defaults"
+                  data-testid="build-for-me-btn"
+                >
+                  Build for me
+                </button>
+              )}
               {/* Wizard only while setup is incomplete (before a build exists). */}
               {!buildResult && (
                 <button
