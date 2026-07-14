@@ -54,6 +54,7 @@ interface WallMeshProps {
 function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, storeyHeight, detailExplode }: WallMeshProps) {
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
+  const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
   // Thickness first — it sets how far to extend ends into a corner.
   const mmPerPx = scaleMmPerPx ?? DEFAULT_THICKNESS_MM / (wall.thickness || 8)
@@ -119,7 +120,12 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
 
   return (
     <>
-      <primitive object={framing} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />
+      <primitive
+        object={framing}
+        position={[cx, baseY, cz]}
+        rotation={[0, -angle, 0]}
+        onDoubleClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleGhostedLevel(wall.level ?? 0) }}
+      />
       {/* Nameplate — the wall's real length while tracing; hidden once built. */}
       {!built && (
         <Billboard position={[cx, baseY + wallHeight + 0.28, cz]}>
@@ -148,6 +154,8 @@ export default function LiveWallsLayer() {
 
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
   const wallDetailExplode = useFloorplanLocalStore((s) => s.wallDetailExplode)
+  const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
+  const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'framing')
@@ -292,7 +300,12 @@ export default function LiveWallsLayer() {
           topTrackStyle={steelTrackTop === 'double' ? 'deep' : steelTrackTop}
           deflectionGapMm={steelTrackTop === 'slotted' ? steelDeflectionGapMm : 0}
           openings={openingsByWall[i] ?? []}
-          opacity={wall.transparent ? 0.16 : built ? 1 : 0.7}
+          opacity={(() => {
+            const level = wall.level ?? 0
+            if (isolatedFloor !== null && level !== isolatedFloor) return 0
+            if (ghostedLevels.includes(level)) return 0.15
+            return wall.transparent ? 0.16 : built ? 1 : 0.7
+          })()}
           built={built}
           activeUnit={activeUnit}
           lengthFormat={lengthFormat}

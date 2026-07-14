@@ -1104,8 +1104,9 @@ export const useAppStore = create<AppState>()(
         // Complete the shell: the engine only frames WALLS, so without this a
         // build stands on nothing under open sky. Derive the slab / deck /
         // ceiling / roof from the wall footprint — the roof's eave overhang is
-        // what carries the soffit + fascia. Strictly additive: an area kind the
-        // user already traced is left exactly as they drew it.
+        // what carries the soffit + fascia. Auto areas are ALWAYS regenerated
+        // so a 2nd/3rd floor rebuild gets the correct deck areas. User-traced
+        // areas (IDs not starting with "auto-") are preserved as-is.
         let shell: ReturnType<typeof deriveBuildAreas> | null = null
         if (cfg.buildAutoShell) {
           const walls = s.drawings.flatMap((d) => d.parsedWalls)
@@ -1113,9 +1114,15 @@ export const useAppStore = create<AppState>()(
             levels: Math.max(1, levels.length),
             makeId: (role, level) => `auto-${role}-${level}-${genId()}`,
           })
-          if (s.floorsAreas.length === 0) s.floorsAreas.push(...shell.floors)
-          if (s.roofAreas.length === 0) s.roofAreas.push(...shell.roofs)
+          // Keep user-traced areas; refresh auto-derived areas for the current
+          // storey count so every floor gets its slab/deck on every rebuild.
+          const userFloors = s.floorsAreas.filter((a) => !a.id.startsWith('auto-'))
+          const userRoofs = s.roofAreas.filter((a) => !a.id.startsWith('auto-'))
+          s.floorsAreas = [...userFloors, ...shell.floors]
+          s.roofAreas = [...userRoofs, ...shell.roofs]
         }
+        // Always start assembled so the fresh build isn't pre-exploded.
+        s.explodeAmount = 0
 
         logEvent('model.build.started', {
           drawingCount: s.drawings.length,

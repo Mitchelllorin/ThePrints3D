@@ -458,10 +458,47 @@
 /* When the bottom Place sheet is open, float the explode control ABOVE it so it
    stays reachable (Android parity) instead of hiding behind the sheet. */
 .explodeBarLifted { bottom: calc(42dvh + 14px); }
+
+/* Floor isolation bar — sits above the explode bar (bottom-right) so both
+   controls are reachable without overlap. */
+.floorBar {
+  position: absolute;
+  bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+  right: 14px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  background: rgba(8, 12, 24, 0.9);
+  border: 1px solid var(--bp-border);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+.floorBtn {
+  background: none;
+  border: none;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.12s, color 0.12s;
+}
+.floorBtn:hover { color: var(--bp-text, #f1f5f9); }
+.floorBtnActive {
+  background: var(--bp-accent, #38bdf8);
+  color: #0b1120;
+}
+
 @media (max-width: 767px), (max-height: 600px) {
   /* Sits one row ABOVE the Edit + Place band: Explode (right) and the Place tab
      (centre) overlap horizontally, so they can't share a height. */
   .explodeBar { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); right: 10px; }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { width: 90px; }
+  .floorBar { bottom: calc(130px + env(safe-area-inset-bottom, 0px)); right: 10px; }
 }

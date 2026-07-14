@@ -446,10 +446,13 @@ export default function WorkspaceLayout() {
   const floorCount = useAppStore((s) => s.floorsAreas.length)
   const roofCount = useAppStore((s) => s.roofAreas.length)
   const objectCount = useAppStore((s) => s.placedObjects.length)
+  const floorLevels = useAppStore((s) => s.model.floorLevels)
   // Reachable once there's anything to grab — a built model OR any placed
   // floor/roof/object. (The auto-build can be empty on wall-less plans.)
   const built = buildResult !== null || modelStatus === 'ready'
     || floorCount > 0 || roofCount > 0 || objectCount > 0
+  const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
+  const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
 
   // Single source of truth: the chrome panels are driven by the store's
   // activePanel gate, the same gate every other overlay UI checks.
@@ -674,6 +677,27 @@ export default function WorkspaceLayout() {
           {explodeAmount > 0 && (
             <button className={styles.explodeReset} onClick={() => setExplodeAmount(0)} aria-label="Reset explode">Reset</button>
           )}
+        </div>
+      )}
+
+      {/* Floor isolation buttons — shown when there are multiple floors. Tap a
+          floor number to isolate it; tap the same one again to show all. */}
+      {hasDrawings && !calibrationMode && !traceMode && floorLevels.length > 1 && (
+        <div className={`${styles.floorBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
+          <span className={styles.explodeLabel}>Floor</span>
+          <button
+            className={`${styles.floorBtn} ${isolatedFloor === null ? styles.floorBtnActive : ''}`}
+            onClick={() => setIsolatedFloor(null)}
+            aria-label="Show all floors"
+          >All</button>
+          {floorLevels.map((_, i) => (
+            <button
+              key={i}
+              className={`${styles.floorBtn} ${isolatedFloor === i ? styles.floorBtnActive : ''}`}
+              onClick={() => setIsolatedFloor(i)}
+              aria-label={`Isolate floor ${i + 1}`}
+            >{i + 1}</button>
+          ))}
         </div>
       )}
 
