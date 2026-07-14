@@ -114,28 +114,41 @@ function framePrintPreset(
  * footprint settles (after the scale estimate / calibration) — so the plan
  * lands centred and full and the user never has to position it. Edge-triggered
  * per drawing+footprint so it doesn't fight manual camera moves afterwards.
+ * Also re-frames when trace mode starts so the print is always in view before
+ * the user taps (pan is disabled during active trace, so this is the last
+ * chance to guarantee the plan is visible).
  */
 function PrintAutoFrame() {
   const { size } = useThree()
   const drawingId = useAppStore((s) => s.floorplanOverlay.drawingId)
   const scale = useAppStore((s) => s.floorplanOverlay.scale)
   const position = useAppStore((s) => s.floorplanOverlay.position)
+  const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const setCameraPreset = useAppStore((s) => s.setCameraPreset)
   const lastKey = useRef<string | null>(null)
+  const lastFramedForTrace = useRef(false)
 
   useEffect(() => {
     if (!drawingId) { lastKey.current = null; return }
     const [w, d] = scale
     if (!w || !d) return
-    // Reframe on a new drawing OR when its rounded footprint changes (scale
-    // estimate / calibration) — not on every tiny jitter, so we don't yank the
-    // camera while the user works.
+    // Don't frame until the canvas has a real size — without this guard the
+    // effect can fire before R3F's ResizeObserver delivers the first measurement
+    // (size = 0×0), which produces aspect = NaN and places the camera at
+    // [NaN, NaN, NaN].  When the real size arrives the key already matches so
+    // the camera is never corrected, leaving the print permanently invisible.
+    if (!size.width || !size.height) return
+    // Reframe on a new drawing, a changed footprint, OR when trace mode starts
+    // (to always bring the print into view before the first tap — pan is locked
+    // during an active trace run, so this is the last chance to centre the plan).
     const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}`
-    if (lastKey.current === key) return
+    const traceModeStarted = traceMode && !lastFramedForTrace.current
+    lastFramedForTrace.current = traceMode
+    if (lastKey.current === key && !traceModeStarted) return
     lastKey.current = key
     const mobile = typeof window !== 'undefined' && window.innerWidth < 768
     setCameraPreset(framePrintPreset(w, d, position, size.width / size.height, 55, mobile))
-  }, [drawingId, scale, position, size.width, size.height, setCameraPreset])
+  }, [drawingId, scale, position, size.width, size.height, traceMode, setCameraPreset])
 
   return null
 }
