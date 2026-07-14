@@ -119,7 +119,7 @@ export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'wate
   if (!isMark && !visible) return null
   const box = isMark
     ? { top: 10, left: 10, width: 150, height: 36, zIndex: 100 }
-    : { top: 8, left: 12, width: 252, height: 64, zIndex: 40 }
+    : { top: '50%', left: '50%', width: 'min(70vw, 680px)', height: 'min(20vh, 190px)', zIndex: 40, transform: 'translate(-50%, -50%)' }
   return (
     <div
       style={{
