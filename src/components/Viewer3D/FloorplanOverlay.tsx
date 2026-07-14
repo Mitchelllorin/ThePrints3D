@@ -235,18 +235,16 @@ export default function FloorplanOverlay() {
   // the controls directly). Pan/orbit resumes when you leave these modes.
   useEffect(() => {
     updateOverlay({
-      // STANDARD CLICK MODEL: the camera stays FREE during line tracing — DRAG to
-      // look around, a stationary TAP places a point, double-tap finishes. (The
-      // old click-lock froze the view during a run, so a wandering cursor felt
-      // "sticky" and dropped errant walls.) We only lock when the drag/gesture IS
-      // the interaction: freehand (the drag draws the line), dragging a handle,
-      // placing (press-drag moves the ghost), or the guided calibration taps.
+      // Lock the camera whenever a gesture or active mode must own the pointer:
+      // any trace session (line or freehand), dragging a handle, placing an
+      // object, or the guided calibration taps. Zoom +/- still works.
+      // Pan/orbit resumes when you leave these modes.
       orbitLocked: drag !== null
-        || (traceMode && traceStyle === 'freehand')
+        || (traceMode && !tracePaused)
         || overlay.calibrationMode
         || placeObjectType !== null,
     }, false)
-  }, [drag, traceMode, traceStyle, traceStart, tracePaused, overlay.calibrationMode, placeObjectType, updateOverlay])
+  }, [drag, traceMode, tracePaused, overlay.calibrationMode, placeObjectType, updateOverlay])
 
   // Safety net: a drag that releases OFF its handle/catcher (fast flick, pointer
   // leaves the window) could leave `drag` set forever — which keeps the camera
