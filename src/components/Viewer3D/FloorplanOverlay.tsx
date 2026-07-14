@@ -116,6 +116,84 @@ function TraceArrow({ start, end, color = '#38bdf8' }: {
   )
 }
 
+/** Module-level pure helper — no component closure needed. */
+function raiseRectPts(pts: [number, number, number][], dy: number): [number, number, number][] {
+  return dy ? pts.map(([x, y, z]) => [x, y + dy, z] as [number, number, number]) : pts
+}
+
+/**
+ * RubberBandPreview — the three live "cursor following" previews:
+ *   1. Trace line preview (last anchor → cursor)
+ *   2. Floors/roof rectangle preview (corner A → cursor)
+ *   3. Calibration arrow (calibration point A → cursor)
+ *
+ * Isolated into its own component so that only this tiny component re-renders
+ * on every pointermove — the large FloorplanOverlay parent is spared the
+ * per-frame reconciliation cost that was causing the choppy rubber-band.
+ */
+function RubberBandPreview({
+  planeLocalToTrace,
+  floorsRectWorld,
+  traceElevation,
+  activeLineColor,
+  calibrationMode,
+}: {
+  planeLocalToTrace: (pixel: [number, number]) => [number, number, number]
+  floorsRectWorld: (x1: number, y1: number, x2: number, y2: number) => [number, number, number][]
+  traceElevation: number
+  activeLineColor: string
+  calibrationMode: boolean
+}) {
+  const hoverPixel      = useFloorplanLocalStore((s) => s.hoverPixel)
+  const traceMode       = useFloorplanLocalStore((s) => s.traceMode)
+  const tracePaused     = useFloorplanLocalStore((s) => s.tracePaused)
+  const traceStyle      = useFloorplanLocalStore((s) => s.traceStyle)
+  const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
+  const traceStart      = useFloorplanLocalStore((s) => s.traceStart)
+  const calibrationA    = useFloorplanLocalStore((s) => s.calibrationA)
+  const calibrationB    = useFloorplanLocalStore((s) => s.calibrationB)
+
+  const tracePreviewPoints = useMemo(() => {
+    if (!traceMode || tracePaused || traceStyle !== 'line' || activeTraceLayer === 'floors' || activeTraceLayer === 'roof' || !traceStart || !hoverPixel) return null
+    return [planeLocalToTrace(traceStart), planeLocalToTrace(hoverPixel)] as
+      [[number, number, number], [number, number, number]]
+  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace])
+
+  const floorsPreviewRect = useMemo(() => {
+    if (!traceMode || tracePaused || (activeTraceLayer !== 'floors' && activeTraceLayer !== 'roof') || !traceStart || !hoverPixel) return null
+    return floorsRectWorld(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
+  }, [traceMode, tracePaused, activeTraceLayer, traceStart, hoverPixel, floorsRectWorld])
+
+  const calibrationPreviewPoints = useMemo(() => {
+    const start = calibrationA ? planeLocalToTrace(calibrationA) : null
+    const endPixel = calibrationB ?? (calibrationMode ? hoverPixel : null)
+    const end = endPixel ? planeLocalToTrace(endPixel) : null
+    if (!start || !end) return null
+    return [start, end] as [[number, number, number], [number, number, number]]
+  }, [calibrationA, calibrationB, hoverPixel, calibrationMode, planeLocalToTrace])
+
+  return (
+    <>
+      {tracePreviewPoints && (
+        <Line points={tracePreviewPoints} color={activeLineColor} lineWidth={4} />
+      )}
+      {floorsPreviewRect && (
+        <Line
+          points={raiseRectPts(floorsPreviewRect, traceElevation)}
+          color={activeTraceLayer === 'roof' ? LAYER_COLORS.roof : LAYER_COLORS.floors}
+          lineWidth={3}
+          dashed
+          dashSize={0.25}
+          gapSize={0.15}
+        />
+      )}
+      {calibrationPreviewPoints && (
+        <TraceArrow start={calibrationPreviewPoints[0]} end={calibrationPreviewPoints[1]} color="#f59e0b" />
+      )}
+    </>
+  )
+}
+
 export default function FloorplanOverlay() {
   const drawings = useAppStore((s) => s.drawings)
   const overlay = useAppStore((s) => s.floorplanOverlay)
@@ -157,7 +235,6 @@ export default function FloorplanOverlay() {
   const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
   const pendingWalls = useFloorplanLocalStore((s) => s.pendingWalls)
   const setPendingWalls = useFloorplanLocalStore((s) => s.setPendingWalls)
-  const hoverPixel = useFloorplanLocalStore((s) => s.hoverPixel)
   const setHoverPixel = useFloorplanLocalStore((s) => s.setHoverPixel)
   const calibrationA = useFloorplanLocalStore((s) => s.calibrationA)
   const setCalibrationA = useFloorplanLocalStore((s) => s.setCalibrationA)
@@ -295,8 +372,6 @@ export default function FloorplanOverlay() {
   const wallTop = ceilingM
   const areaElevation = (level: number, atWallTop: boolean) =>
     level * storeyHeight + (atWallTop ? wallTop : 0)
-  const raiseRect = (pts: [number, number, number][], dy: number): [number, number, number][] =>
-    dy ? pts.map(([x, y, z]) => [x, y + dy, z] as [number, number, number]) : pts
 
   // Multi-floor tiered tracing: the ACTIVE storey's print, the tap-catcher and
   // the LIVE previews all sit at this elevation, so you trace ON the plane the
@@ -369,33 +444,11 @@ export default function FloorplanOverlay() {
     [traceStroke, planeLocalToTrace],
   )
 
-  const calibrationPreviewPoints = useMemo(() => {
-    const start = calibrationA ? planeLocalToTrace(calibrationA) : null
-    const endPixel = calibrationB ?? (overlay.calibrationMode ? hoverPixel : null)
-    const end = endPixel ? planeLocalToTrace(endPixel) : null
-    if (!start || !end) return null
-    return [start, end] as [[number, number, number], [number, number, number]]
-  }, [calibrationA, calibrationB, hoverPixel, overlay.calibrationMode, planeLocalToTrace])
-
-  // Rubber-band trace preview — same stretchy interaction as calibration.
-  // Floors preview as a rectangle (below), not a diagonal line, so it's skipped here.
-  const tracePreviewPoints = useMemo(() => {
-    if (!traceMode || tracePaused || traceStyle !== 'line' || activeTraceLayer === 'floors' || activeTraceLayer === 'roof' || !traceStart || !hoverPixel) return null
-    return [planeLocalToTrace(traceStart), planeLocalToTrace(hoverPixel)] as
-      [[number, number, number], [number, number, number]]
-  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace])
-
   // A floor area's 4 pixel corners → a closed world-space rectangle loop.
   const floorsRectWorld = useCallback((x1: number, y1: number, x2: number, y2: number) =>
     ([[x1, y1], [x2, y1], [x2, y2], [x1, y2], [x1, y1]] as [number, number][])
       .map(planeLocalToWorld) as [number, number, number][],
   [planeLocalToWorld])
-
-  // Live rectangle preview while pulling a floor or roof area (corner A → cursor).
-  const floorsPreviewRect = useMemo(() => {
-    if (!traceMode || tracePaused || (activeTraceLayer !== 'floors' && activeTraceLayer !== 'roof') || !traceStart || !hoverPixel) return null
-    return floorsRectWorld(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
-  }, [traceMode, tracePaused, activeTraceLayer, traceStart, hoverPixel, floorsRectWorld])
 
   // ─── drag handlers ─────────────────────────────────────────────────────
 
@@ -1231,25 +1284,22 @@ export default function FloorplanOverlay() {
         <TraceArrow start={traceWorldPoints[0]} end={traceWorldPoints[traceWorldPoints.length - 1]} />
       )}
 
-      {tracePreviewPoints && (
-        <Line points={tracePreviewPoints} color={activeLineColor} lineWidth={4} />
-      )}
-
-      {/* Floor/roof area being pulled — rubber-band rectangle, lifted to the
-          ACTIVE storey so it hugs the cursor on the raised print/catcher (which
-          now sit at the same tier). The print, catcher and this preview are all
-          coplanar at traceElevation, so the outline tracks the tap exactly — no
-          perspective offset. Committed areas (below) use their own per-area
-          elevation. */}
-      {floorsPreviewRect && (
-        <Line points={raiseRect(floorsPreviewRect, traceElevation)} color={activeTraceLayer === 'roof' ? LAYER_COLORS.roof : LAYER_COLORS.floors} lineWidth={3} dashed dashSize={0.25} gapSize={0.15} />
-      )}
+      {/* Live rubber-band previews (trace line, floors/roof rect, calibration arrow).
+          Isolated in a sub-component so only it re-renders on every pointermove —
+          the large FloorplanOverlay parent is spared the per-frame reconciliation. */}
+      <RubberBandPreview
+        planeLocalToTrace={planeLocalToTrace}
+        floorsRectWorld={floorsRectWorld}
+        traceElevation={traceElevation}
+        activeLineColor={activeLineColor}
+        calibrationMode={overlay.calibrationMode}
+      />
 
       {/* Committed floor areas — outlines at each area's storey elevation. */}
       {visibleLayers.has('floors') && floorsAreas.map((a) => (
         <Line
           key={`floor-${a.id}`}
-          points={raiseRect(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, CEILING_TYPES.has(a.elementType)))}
+          points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, CEILING_TYPES.has(a.elementType)))}
           color={LAYER_COLORS.floors}
           lineWidth={2.5}
         />
@@ -1259,7 +1309,7 @@ export default function FloorplanOverlay() {
       {visibleLayers.has('roof') && roofAreas.map((a) => (
         <Line
           key={`roof-${a.id}`}
-          points={raiseRect(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, true))}
+          points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, true))}
           color={LAYER_COLORS.roof}
           lineWidth={2.5}
         />
@@ -1423,10 +1473,6 @@ export default function FloorplanOverlay() {
           <sphereGeometry args={[800, 8, 6]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.BackSide} />
         </mesh>
-      )}
-
-      {calibrationPreviewPoints && (
-        <TraceArrow start={calibrationPreviewPoints[0]} end={calibrationPreviewPoints[1]} color="#f59e0b" />
       )}
 
       {/* Calibration point markers — you need to SEE where A and B landed, not
