@@ -418,7 +418,6 @@ export default function WorkspaceLayout() {
     }
     useAppStore.getState().undo()
   }, [])
-  const buildForMe = useAppStore((s) => s.buildForMe)
   const annotateMode = useAppStore((s) => s.annotateMode)
   const setAnnotateMode = useAppStore((s) => s.setAnnotateMode)
   const explodeAmount = useAppStore((s) => s.explodeAmount)
@@ -578,7 +577,6 @@ export default function WorkspaceLayout() {
       {/* Persistent global actions, top-right. Build / Settings / Place each
           have their own always-visible edge tab, so they're not icons here. */}
       <TopIcons
-        onRebuild={buildForMe}
         onUndo={smartUndo}
         canUndo={canUndo}
       />
