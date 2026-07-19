@@ -199,6 +199,18 @@ A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smo
 
 ---
 
+## 🧩 Part of the 3D Learning Family
+
+ThePrints3D is one of a family of interactive 3D apps built by Mitchell Lorin McKnight, each making an abstract, hands-on trade visual and tangible:
+
+| App | What it does | Links |
+|---|---|---|
+| **ThePrints3D** *(this app)* | Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely in the browser | [theprints3d.com](https://theprints3d.com) · [Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app) |
+| **CircuiTry3D** | Build and simulate electrical circuits in 3D — from macro current flow to the atomic scale, with the FUSE™ failure engine | [circuitry3d.net](https://www.circuitry3d.net) · [Google Play](https://play.google.com/store/apps/details?id=com.circuitry3d.app) |
+| **Automotive3D** | Build real engines in 3D, swap branded parts, and diagnose faults with live DTC codes | [automotive3d.ca](https://automotive3d.ca) · [Google Play](https://play.google.com/store/apps/details?id=com.automotive3d.app) |
+
+---
+
 ## 🤝 Contributing
 
 1. Fork the repo and create a feature branch (`git checkout -b feature/my-thing`)
