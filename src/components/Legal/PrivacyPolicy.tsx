@@ -13,7 +13,7 @@ export default function PrivacyPolicy({ onClose }: Props) {
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close privacy policy">✕</button>
         </div>
         <div className={styles.content}>
-          <p className={styles.lastUpdated}>Last updated: May 2025</p>
+          <p className={styles.lastUpdated}>Last updated: July 2026</p>
 
           <h3>Overview</h3>
           <p>
@@ -35,20 +35,38 @@ export default function PrivacyPolicy({ onClose }: Props) {
             any personally identifiable information.
           </p>
 
+          <h3>Product Placement and Affiliate Links</h3>
+          <p>
+            The App includes a catalog of building products &mdash; doors, windows, plumbing fixtures,
+            HVAC equipment, kitchen and bath fittings, flooring and lighting &mdash; that you can place
+            into your model. Browsing and placing products happens entirely on your device.
+          </p>
+          <p>
+            Some catalog entries link out to a manufacturer's or retailer's own web page, and some of
+            those are affiliate links, meaning we may earn a commission if you buy something after
+            following one. If you tap through, that destination site is outside the App and governed by
+            its own privacy policy; an affiliate link may carry a referral identifier so the referral can
+            be attributed. We are not told which products you place, and we receive no personal
+            information about you from these links.
+          </p>
+
           <h3>Third-Party Services</h3>
           <p>
             The App does not integrate with third-party analytics, advertising, or tracking SDKs.
-            No data is shared with third parties.
+            No data is shared with third parties. The only third parties involved are Google Play,
+            which distributes the App, and any product website you choose to open from the catalog.
           </p>
 
           <h3>Permissions</h3>
           <p>
-            <strong>Internet:</strong> Required for the app to load correctly inside its WebView
-            container. No outbound network requests to external servers are made during normal use.
+            <strong>Internet:</strong> Required for the App to load correctly inside its WebView
+            container, and to open product links when you tap them. It is not used to transmit your
+            drawings or projects &mdash; there is no upload endpoint in the App.
           </p>
           <p>
-            <strong>Storage (Android 13+):</strong> Read access to media files is requested only when
-            you choose to import images from your device.
+            <strong>Storage (Android 13+):</strong> Read access to image files is requested only when
+            you choose to import a drawing from your device. The App reads the file you pick and
+            nothing else.
           </p>
 
           <h3>Children's Privacy</h3>
@@ -64,10 +82,19 @@ export default function PrivacyPolicy({ onClose }: Props) {
 
           <h3>Contact</h3>
           <p>
-            Questions? Contact us at{' '}
-            <a href="mailto:privacy@theprints3d.app" className={styles.link}>
-              privacy@theprints3d.app
+            Questions, or a request to access or delete your data? Contact us at{' '}
+            <a href="mailto:info@theprints3D.com" className={styles.link}>
+              info@theprints3D.com
             </a>
+            . We respond within 30 days.
+          </p>
+          <p>
+            The full policy is published at{' '}
+            <a href="https://theprints3D.com/privacy" className={styles.link}
+               target="_blank" rel="noopener noreferrer">
+              theprints3D.com/privacy
+            </a>
+            .
           </p>
         </div>
       </div>

@@ -39,15 +39,27 @@ button {
 }
 
 @media (max-width: 768px) {
-  button,
-  [role="button"] {
+  /*
+   * Component selectors such as .action and .zoomBtn have greater specificity
+   * than a plain `button` selector, so they had been shrinking the actual
+   * touch box back to 22–36px. Keep the visual treatment compact, but make the
+   * element receiving the event at least the platform-recommended 44px square.
+   * The selectors deliberately outrank a single CSS-module class.
+   */
+  :root button:not([data-touch-target="compact"]),
+  :root [role="button"]:not([data-touch-target="compact"]),
+  :root a[href]:not([data-touch-target="compact"]),
+  :root input:not([type="hidden"]):not([data-touch-target="compact"]),
+  :root select:not([data-touch-target="compact"]),
+  :root textarea:not([data-touch-target="compact"]) {
+    min-width: 44px;
     min-height: 44px;
   }
+
   input[type="text"],
   input[type="number"],
   input[type="search"],
   textarea {
-    min-height: 44px;
     font-size: 16px; /* prevent iOS Safari auto-zoom on focus */
   }
 }

@@ -97,5 +97,9 @@
 
 @media (max-width: 767px), (max-height: 600px) {
   .message { font-size: 12px; }
-  .wrap { max-width: 92vw; }
+  /* Leave the right edge tab unobstructed now that its hit target is 44px. */
+  .wrap {
+    left: calc(50% - 24px);
+    max-width: calc(100vw - 88px);
+  }
 }

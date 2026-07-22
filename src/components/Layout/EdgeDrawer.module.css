@@ -121,7 +121,7 @@
    stretch its tab taller. */
 .left .tab, .right .tab {
   top: 14px;
-  width: 34px;
+  width: 44px;
   height: 112px;
   padding: 10px 0;
   writing-mode: vertical-rl;
@@ -137,7 +137,7 @@
 }
 .left.open { transform: translateX(0); }
 .left .tab {
-  right: -34px;
+  right: -45px;
   border-left: none;
   border-radius: 0 10px 10px 0;
 }
@@ -151,7 +151,7 @@
 }
 .right.open { transform: translateX(0); }
 .right .tab {
-  left: -34px;
+  left: -45px;
   border-right: none;
   border-radius: 10px 0 0 10px;
 }
@@ -171,10 +171,10 @@
 }
 .bottom.open { transform: translateY(0); }
 .bottom .tab {
-  top: -34px;
+  top: -44px;
   left: 50%;
   transform: translateX(-50%);
-  height: 34px;
+  height: 44px;
   min-width: 96px;
   padding: 0 16px;
   border-bottom: none;

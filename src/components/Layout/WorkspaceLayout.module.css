@@ -497,7 +497,12 @@
 @media (max-width: 767px), (max-height: 600px) {
   /* Sits one row ABOVE the Edit + Place band: Explode (right) and the Place tab
      (centre) overlap horizontally, so they can't share a height. */
-  .explodeBar { bottom: calc(92px + env(safe-area-inset-bottom, 0px)); right: 10px; }
+  .explodeBar {
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    min-height: 44px;
+    height: 44px;
+    right: 10px;
+  }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { width: 90px; }
   .floorBar { bottom: calc(130px + env(safe-area-inset-bottom, 0px)); right: 10px; }

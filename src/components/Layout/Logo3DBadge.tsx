@@ -129,7 +129,13 @@ export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'wate
       <Canvas
         camera={{ position: [0, 0, 6], fov: 32 }}
         gl={{ alpha: true, antialias: true }}
-        style={{ background: 'transparent' }}
+        style={{ background: 'transparent', pointerEvents: 'none' }}
+        onCreated={({ gl }) => {
+          // R3F gives its canvas an explicit `pointer-events: auto`, which
+          // overrides the click-through wrapper. This decorative canvas sits
+          // above the workspace, so it must never become an input surface.
+          gl.domElement.style.pointerEvents = 'none'
+        }}
         dpr={[1, 2]}
       >
         <ambientLight intensity={0.9} />
