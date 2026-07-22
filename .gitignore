@@ -26,3 +26,6 @@ dist-ssr
 # local UI dev artifacts (throwaway)
 qr-phone.png
 ui-shots/
+.venv-train/
+data/cubicasa5k*
+checkpoints/

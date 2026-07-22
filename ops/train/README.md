@@ -18,9 +18,29 @@ exports to a **~6 MB** ONNX file, small enough for a browser asset.
 
 ## Dataset — CubiCasa5k
 
+> ### ⚠️ LICENCE BLOCKER — DO NOT SHIP A MODEL TRAINED ON THIS
+>
+> An earlier version of this file claimed CubiCasa5k is CC BY 4.0. **That is
+> wrong.** The dataset's own LICENCE file
+> (<https://github.com/CubiCasa/CubiCasa5k/blob/master/LICENSE>) and its Zenodo
+> record (<https://zenodo.org/record/2613548>) both state
+> **Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)**.
+>
+> ThePrints3D is a commercial product (paid distribution, affiliate links).
+> Training a shipped model on CC BY-NC data is a licence violation. Weights
+> derived from the dataset inherit the NonCommercial restriction.
+>
+> Before using this pipeline for a shippable model, do ONE of:
+> 1. Obtain a commercial licence from CubiCasa directly, or
+> 2. Train on a permissively-licensed or self-generated corpus instead, or
+> 3. Use it for **research/evaluation only** and never ship the weights.
+>
+> The training code below is licence-agnostic and works with any dataset in
+> the expected layout — the blocker is the data, not the pipeline.
+
 CubiCasa5k is an open dataset of ~5 000 annotated floor-plan images released
 by Cubicasa under the
-[Creative Commons Attribution 4.0 International licence][cc-by-4.0].
+[Creative Commons Attribution-NonCommercial 4.0 International licence][cc-by-nc-4.0].
 
 - **Paper**: *CubiCasa5K: A Dataset and an Improved Multi-Task Model for
   Floorplan Image Analysis* (Kalervo et al., 2019)
@@ -28,24 +48,16 @@ by Cubicasa under the
 
 ### Download
 
-**Option A — git clone** (recommended, ~1.8 GB):
+Subject to the licence blocker above.
+
+The images are **not** in the GitHub repo — that holds only the loader code.
+The actual data is one 5.5 GB zip on Zenodo:
 
 ```bash
-git clone --depth 1 https://github.com/CubiCasa/CubiCasa5k data/cubicasa5k
-```
-
-**Option B — Hugging Face Hub**:
-
-```bash
-pip install huggingface_hub
-python - <<'EOF'
-from huggingface_hub import snapshot_download
-snapshot_download(
-    'cubicasa/cubicasa5k',
-    repo_type='dataset',
-    local_dir='data/cubicasa5k',
-)
-EOF
+# https://zenodo.org/record/2613548  —  cubicasa5k.zip, 5.5 GB
+# md5 0ce0b203d1e3c125b51087b219bd23b9
+curl -L -o data/cubicasa5k.zip 'https://zenodo.org/records/2613548/files/cubicasa5k.zip?download=1'
+unzip data/cubicasa5k.zip -d data/cubicasa5k
 ```
 
 The loader expects each floor plan in its own directory with:
@@ -112,4 +124,4 @@ run locally and commit the resulting
 
 ---
 
-[cc-by-4.0]: https://creativecommons.org/licenses/by/4.0/
+[cc-by-nc-4.0]: https://creativecommons.org/licenses/by-nc/4.0/
