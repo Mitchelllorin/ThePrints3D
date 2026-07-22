@@ -1,9 +1,13 @@
-// Ambient inference — flush-edge suggestion. When a new floor (or roof) area is
-// placed beside an existing one, construction logic says the shared edge should
-// sit FLUSH with the neighbour, not leave a sliver gap or overlap. This computes
-// that suggestion purely (pixel-space rects) so the UI can offer a gentle
-// "snap flush to the existing floor?" prompt with one-tap confirm — never a
-// silent move. See ambient-inference-prompts memory.
+// Ambient inference — shared-edge suggestion. When a new floor (or roof) area is
+// placed beside an existing one, the shared edge should meet the neighbour with
+// no sliver gap or overlap. This computes that suggestion purely (pixel-space
+// rects) so the UI can offer a gentle "butt tight to the floor beside it?"
+// prompt with one-tap confirm — never a silent move.
+//
+// Prompt copy deliberately says "butt tight", not "flush": on site "flush" means
+// two faces landing in the same plane (a stud cut to the same height as the one
+// it nails to). Closing a gap between two areas in plan is butting them tight.
+// See ambient-inference-prompts memory.
 
 export interface Rect {
   x1: number
@@ -53,7 +57,7 @@ export function suggestFlushEdge(candidate: Rect, existing: Rect[], tolPx = 24):
     const g = Math.abs(gap)
     if (g < 0.5 || g > tolPx) return // already flush, or too far to be intentional
     if (best && g >= best.gapPx) return
-    best = { rect, edge, gapPx: g, message: `Snap flush to the ${neighbourWord}?` }
+    best = { rect, edge, gapPx: g, message: `Butt tight to the ${neighbourWord}?` }
   }
 
   for (const e of existing) {
