@@ -29,3 +29,4 @@ ui-shots/
 .venv-train/
 data/cubicasa5k*
 checkpoints/
+data/synth*
