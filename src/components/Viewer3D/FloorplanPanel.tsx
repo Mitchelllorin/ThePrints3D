@@ -558,6 +558,7 @@ export default function FloorplanPanel() {
   const areaActive = floorsActive || roofActive
   // Construction order in the guided flow: floor goes in before the walls.
   const hasFloor = floorsAreas.length > 0
+  const hasRoof = roofAreas.length > 0
   // Floors/roofs reuse the same trace flow as the trades (start/pause/picker/done),
   // just committing rectangles instead of lines.
   const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac' || areaActive
@@ -629,7 +630,10 @@ export default function FloorplanPanel() {
           {traceStart && (
             <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => setTraceStart(null)} title="Stop this wall run">■ End run</button>
           )}
-          {/* No "Build 3D" — the model rebuilds itself as walls land. */}
+          {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
+            || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
+            <button data-tour="build-3d" className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+          )}
           <button className={styles.traceBarBtn} onClick={cancelTracing} title="Finish tracing">✓ Done</button>
         </div>
       )}
@@ -817,8 +821,17 @@ export default function FloorplanPanel() {
               <div className={styles.btnRow}>
                 {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}
-                {/* No "Build 3D" here — the model stands itself up as you trace
-                    (useAutoBuild). The slab becomes the built floor on its own. */}
+                {/* Make this step real — e.g. the poured slab becomes the built floor. */}
+                {floorsActive && hasFloor && (
+                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+                )}
+                {roofActive && hasRoof && (
+                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+                )}
+                {/* Trades render live, but give the same positive "it's in" commit. */}
+                {(activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
+                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
+                )}
                 <button className={styles.cancel} onClick={cancelTracing}>Done</button>
               </div>
             </div>
@@ -963,10 +976,13 @@ export default function FloorplanPanel() {
                       : `${drawing.parsedWalls.length} walls detected`}
                   </span>
                   <span className={styles.stepHint}>
-                    {userWallCount > 0 ? 'Trace more, or edit what’s there' : 'Trace manually to correct anything wrong'}
+                    {userWallCount > 0 ? 'Build, or trace more' : 'Trace manually to correct, or build now'}
                   </span>
                   <div className={styles.btnRow}>
-                    <button className={styles.action} onClick={openPicker}>
+                    <button className={styles.action} onClick={() => buildModel()}>
+                      Build 3D →
+                    </button>
+                    <button className={styles.secondary} onClick={openPicker}>
                       {userWallCount > 0 ? 'Trace more' : 'Trace walls'}
                     </button>
                     <button className={styles.secondary} onClick={startCalibration}>
@@ -1084,6 +1100,11 @@ export default function FloorplanPanel() {
                   )}
                 </div>
                 <div className={styles.btnRow}>
+                  {userWallCount > 0 && (
+                    <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>
+                      Build 3D →
+                    </button>
+                  )}
                   {traceStyle === 'line' && traceStart && (
                     <button className={styles.secondary} onClick={() => setTraceStart(null)}>
                       End run
@@ -1491,11 +1512,16 @@ export default function FloorplanPanel() {
             </button>
             <button className={styles.secondary} onClick={deleteSelectedObject}>Delete</button>
           </div>
-          {/* No re-build step: moving a door or window re-frames the opening on
-              its own (useAutoBuild tracks placed openings). Done just closes
-              the editor. */}
+          {/* Positive confirm — the placement is already live, but there was no
+              commit affordance (you had to ✕ out). Done closes the editor;
+              Build 3D re-finalises the model so the opening is cut into framing. */}
           <div className={styles.btnRow}>
-            <button className={styles.action} onClick={() => setSelectedObjectId(null)}>
+            {modelReady && (
+              <button className={styles.action} onClick={() => { buildModel(); setSelectedObjectId(null) }}>
+                Build 3D →
+              </button>
+            )}
+            <button className={modelReady ? styles.secondary : styles.action} onClick={() => setSelectedObjectId(null)}>
               Done ✓
             </button>
           </div>
