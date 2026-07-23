@@ -30,7 +30,7 @@ from tqdm import tqdm
 
 # Allow running from repo root or from ops/train/
 sys.path.insert(0, str(Path(__file__).parent))
-from dataset import CubiCasa5kDataset
+from dataset import build_dataset
 from model import build_model
 
 
@@ -104,14 +104,22 @@ def main() -> None:
         help='Limit dataset size for quick tests',
     )
     parser.add_argument('--resume', default=None, help='Path to checkpoint to resume from')
+    parser.add_argument(
+        '--dataset',
+        default='auto',
+        choices=('auto', 'synthetic', 'cubicasa'),
+        help="Which loader to use. 'auto' detects the synthetic images/masks layout.",
+    )
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device: {device}')
 
     # ── Datasets ──
-    train_ds = CubiCasa5kDataset(args.data, img_size=args.img_size, split='train', augment=True)
-    val_ds = CubiCasa5kDataset(args.data, img_size=args.img_size, split='val', augment=False)
+    train_ds = build_dataset(args.data, img_size=args.img_size, split='train',
+                             augment=True, kind=args.dataset)
+    val_ds = build_dataset(args.data, img_size=args.img_size, split='val',
+                           augment=False, kind=args.dataset)
 
     if args.max_samples is not None and args.max_samples < len(train_ds):
         from torch.utils.data import Subset

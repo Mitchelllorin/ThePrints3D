@@ -317,11 +317,154 @@ class CubiCasa5kDataset(Dataset):
         return img_t, mask_t
 
 
+class SyntheticWallDataset(Dataset):
+    """PyTorch Dataset for the procedurally generated corpus from ``synth.py``.
+
+    Why a second loader
+    -------------------
+    ``CubiCasa5kDataset`` pairs a raster with an *SVG annotation* and derives
+    the mask by parsing the SVG.  The synthetic generator already knows the
+    exact wall pixels, so it writes a PNG mask directly — round-tripping that
+    through SVG would only lose precision.  This loader therefore reads
+    image/mask PNG pairs instead.  Everything downstream (tensor shapes,
+    normalisation, augmentation semantics) is identical to
+    ``CubiCasa5kDataset`` so ``train.py`` can use either.
+
+    Expected layout (produced by ``python ops/train/synth.py --out <root>``)::
+
+        <root>/
+          train/images/plan_000000.png
+          train/masks/plan_000000.png
+          val/images/...
+          val/masks/...
+
+    If ``<root>`` has no ``train``/``val`` subdirectories, a flat
+    ``images/``+``masks/`` layout is accepted and split 80/20.
+    """
+
+    def __init__(
+        self,
+        root: str,
+        img_size: int = 256,
+        split: str = 'train',
+        augment: bool = True,
+        transform: Optional[Callable] = None,
+    ) -> None:
+        super().__init__()
+        self.img_size = img_size
+        self.augment = augment and split == 'train'
+        self.transform = transform
+
+        root_p = Path(root)
+        pairs: List[Tuple[Path, Path]] = []
+
+        def collect(img_dir: Path, mask_dir: Path) -> List[Tuple[Path, Path]]:
+            out: List[Tuple[Path, Path]] = []
+            if not img_dir.is_dir() or not mask_dir.is_dir():
+                return out
+            for img_p in sorted(img_dir.iterdir()):
+                if img_p.suffix.lower() not in ('.png', '.jpg', '.jpeg'):
+                    continue
+                mask_p = mask_dir / img_p.name
+                if not mask_p.exists():
+                    stem_hits = list(mask_dir.glob(img_p.stem + '.*'))
+                    if not stem_hits:
+                        continue
+                    mask_p = stem_hits[0]
+                out.append((img_p, mask_p))
+            return out
+
+        if (root_p / 'train').is_dir() or (root_p / 'val').is_dir():
+            sub = 'train' if split in ('train', 'all') else 'val'
+            if split == 'all':
+                pairs = (collect(root_p / 'train' / 'images', root_p / 'train' / 'masks')
+                         + collect(root_p / 'val' / 'images', root_p / 'val' / 'masks'))
+            else:
+                pairs = collect(root_p / sub / 'images', root_p / sub / 'masks')
+        else:
+            all_pairs = collect(root_p / 'images', root_p / 'masks')
+            n_train = int(len(all_pairs) * 0.8)
+            if split == 'train':
+                pairs = all_pairs[:n_train]
+            elif split == 'val':
+                pairs = all_pairs[n_train:]
+            else:
+                pairs = all_pairs
+
+        if not pairs:
+            raise FileNotFoundError(
+                f'No synthetic image/mask pairs found under {root!r} for split '
+                f'{split!r}. Generate some with:\n'
+                f'  python ops/train/synth.py --out {root} --count 2000 --augment'
+            )
+        self.pairs = pairs
+
+    def __len__(self) -> int:
+        return len(self.pairs)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        img_path, mask_path = self.pairs[idx]
+
+        img = Image.open(img_path).convert('RGB')
+        mask = Image.open(mask_path).convert('L')
+        if img.size != (self.img_size, self.img_size):
+            img = img.resize((self.img_size, self.img_size), Image.BILINEAR)
+        if mask.size != (self.img_size, self.img_size):
+            mask = mask.resize((self.img_size, self.img_size), Image.NEAREST)
+
+        if self.augment:
+            if torch.rand(1) < 0.5:
+                img = TF.hflip(img)
+                mask = TF.hflip(mask)
+            if torch.rand(1) < 0.5:
+                img = TF.vflip(img)
+                mask = TF.vflip(mask)
+            if torch.rand(1) < 0.5:
+                k = int(torch.randint(1, 4, (1,)))
+                img = img.rotate(90 * k, expand=False)
+                mask = mask.rotate(90 * k, expand=False)
+            img = TF.adjust_brightness(img, 1.0 + float(torch.empty(1).uniform_(-0.3, 0.3)))
+            img = TF.adjust_contrast(img, 1.0 + float(torch.empty(1).uniform_(-0.2, 0.2)))
+
+        img_t: torch.Tensor = TF.to_tensor(img)
+        img_t = TF.normalize(img_t, _IMG_MEAN, _IMG_STD)
+        mask_t = (TF.to_tensor(mask) > 0.5).float()
+
+        if self.transform:
+            img_t = self.transform(img_t)
+
+        return img_t, mask_t
+
+
+def build_dataset(
+    root: str,
+    img_size: int = 256,
+    split: str = 'train',
+    augment: bool = True,
+    kind: str = 'auto',
+) -> Dataset:
+    """Pick the right loader for *root*.
+
+    ``kind`` is ``'auto'`` (detect), ``'synthetic'`` or ``'cubicasa'``.
+    Auto-detection looks for the synthetic ``images/``+``masks/`` layout first.
+    """
+    root_p = Path(root)
+    if kind == 'auto':
+        looks_synth = any(
+            (root_p / sub / 'images').is_dir()
+            for sub in ('train', 'val', '.')
+        )
+        kind = 'synthetic' if looks_synth else 'cubicasa'
+    if kind == 'synthetic':
+        return SyntheticWallDataset(root, img_size=img_size, split=split, augment=augment)
+    return CubiCasa5kDataset(root, img_size=img_size, split=split, augment=augment)
+
+
 if __name__ == '__main__':
     import sys
 
     root = sys.argv[1] if len(sys.argv) > 1 else 'data/cubicasa5k'
-    ds = CubiCasa5kDataset(root, split='train')
+    ds = build_dataset(root, split='train')
     print(f'Train samples : {len(ds)}')
     img, mask = ds[0]
     print(f'Image shape   : {img.shape}  dtype={img.dtype}')

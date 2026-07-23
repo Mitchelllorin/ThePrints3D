@@ -397,7 +397,14 @@ interface AppState {
   setLayerOpacity: (id: LayerId, opacity: number) => void
   setSidebarOpen: (open: boolean) => void
   setModelStatus: (status: Model3D['status']) => void
-  buildModel: () => void
+  /**
+   * Stand the 3D model up from the current walls/areas.
+   *
+   * `auto: true` marks an automatic rebuild — one the user didn't ask for by
+   * pressing anything. Those must not disturb what the user is looking at, so
+   * they leave the current view and explode position alone. See useAutoBuild.
+   */
+  buildModel: (opts?: { auto?: boolean }) => void
   update3DModel: (finalInputs: WorkspaceWizardInputs) => void
   setFloorplanOverlayDrawing: (drawingId: string | null) => void
   updateFloorplanOverlay: (patch: Partial<FloorplanOverlayState>, recordHistory?: boolean) => void
@@ -1078,16 +1085,20 @@ export const useAppStore = create<AppState>()(
         s.model.status = status
       }),
 
-    buildModel: () => {
-      // Frame the walls as part of the 3D build — Build 3D and Build-for-me now
-      // produce the same framed result; the Framing toggle controls visibility.
+    buildModel: (opts) => {
+      // Frame the walls as part of the 3D build — Build-for-me and the automatic
+      // rebuild produce the same framed result; the Framing toggle controls
+      // visibility.
+      const auto = opts?.auto === true
       const framing = computeFramingResult(get().drawings, get().placedObjects)
       const cfg = useConfigStore.getState()
       const autoFraming = cfg.buildAutoEnableFraming
       set((s) => {
         s.model.status = s.drawings.length > 0 ? 'building' : 'idle'
         s.model.generatedAt = null
-        s.view = 'model'
+        // An automatic rebuild must not yank the user somewhere else — it fires
+        // while they're still working on the print.
+        if (!auto) s.view = 'model'
 
         // Build floor levels from sheet numbers
         const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
@@ -1121,8 +1132,9 @@ export const useAppStore = create<AppState>()(
           s.floorsAreas = [...userFloors, ...shell.floors]
           s.roofAreas = [...userRoofs, ...shell.roofs]
         }
-        // Always start assembled so the fresh build isn't pre-exploded.
-        s.explodeAmount = 0
+        // A build the user asked for starts assembled so it isn't pre-exploded.
+        // An automatic one leaves the explode slider where they put it.
+        if (!auto) s.explodeAmount = 0
 
         logEvent('model.build.started', {
           drawingCount: s.drawings.length,

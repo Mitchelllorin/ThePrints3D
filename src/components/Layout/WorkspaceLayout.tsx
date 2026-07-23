@@ -12,6 +12,7 @@ import TutorialCoach from './TutorialCoach'
 import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import { useAppStore } from '../../store/useAppStore'
+import { useAutoBuild } from '../../store/useAutoBuild'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useConfigStore, type ActiveUnit } from '../../store/useConfigStore'
@@ -395,6 +396,9 @@ function ConverterPanel() {
 // ── Layout ───────────────────────────────────────────────────────────────────
 export default function WorkspaceLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // The model stands itself up as the user traces — no "Build 3D" step.
+  useAutoBuild()
 
   const drawings            = useAppStore((s) => s.drawings)
   const addDrawings         = useAppStore((s) => s.addDrawings)
