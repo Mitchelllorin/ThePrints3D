@@ -178,7 +178,9 @@ function DrawerRecenter() {
     // the space beside a left drawer); positive offsetX shifts LEFT (beside a
     // right drawer); positive offsetY shifts content UP (above the bottom Place
     // drawer, whose height is ~40dvh of catalog).
-    const offsetX = buildOpen ? -drawerW / 2 : settingsOpen ? drawerW / 2 : 0
+    // Build and Settings both open from the LEFT now (beside the rail), so both
+    // shift the plan RIGHT into the visible sliver.
+    const offsetX = buildOpen || settingsOpen ? -drawerW / 2 : 0
     const offsetY = placeOpen ? h * 0.2 : 0
     if (offsetX === 0 && offsetY === 0) cam.clearViewOffset()
     else cam.setViewOffset(w, h, offsetX, offsetY, w, h)
@@ -713,14 +715,8 @@ export default function ModelViewer() {
 
       </Canvas>
 
-      {model.status === 'building' && (
-        <div className={styles.overlay}>
-          <div className={styles.buildingMsg}>
-            <span className={styles.spinner}>⬡</span>
-            Building 3D model…
-          </div>
-        </div>
-      )}
+      {/* No "Building 3D model…" popup — the 3D just updates as you trace; a
+          flashing build banner on every rebuild is noise. */}
 
       {/* Drag-over border — only a thin ring, never blocks the workspace */}
       {isDragOver && (

@@ -1,0 +1,268 @@
+/* AskAI — PANEL-LESS. Not a drawer: a floating overlay docked to the bottom-left.
+   No frame, no full-height box. Answers rise as compact, readable bubbles over
+   the workspace; the transparent gaps between them are click-through, so the 3D
+   model stays fully usable behind the chat. */
+
+.root {
+  position: fixed;
+  left: 52px;                 /* clear the 46px rail + a gap */
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  width: min(330px, calc(100vw - 64px));
+  max-height: 50dvh;
+  z-index: 54;                /* under the rail (56), over the workspace */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* The container catches nothing — only the actual bubbles/controls do, so
+     taps in the gaps fall through to the model. */
+  pointer-events: none;
+}
+.userMsg,
+.aiMsg,
+.askRow,
+.exampleChip,
+.tagline,
+.typing {
+  pointer-events: auto;
+}
+
+/* ── ask row (slim floating input) ── */
+.askRow {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 12px;
+  font-size: 14px;
+  color: var(--bp-text);
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.97);
+  border: 1px solid var(--bp-border-strong);
+  border-radius: 999px;
+  outline: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.input:focus {
+  border-color: var(--bp-accent);
+}
+.askBtn {
+  flex: 0 0 auto;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--bp-accent);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.askBtn:disabled { opacity: 0.5; cursor: default; }
+.askBtn:not(:disabled):active { transform: translateY(1px); }
+
+/* ── intro / examples (empty state) ── */
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.tagline {
+  margin: 0;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--bp-text);
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.97);
+  border: 1px solid var(--bp-border);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.examplesTitle { display: none; }        /* the tagline already invites input */
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.exampleChip {
+  pointer-events: auto;
+  padding: 6px 9px;
+  font-size: 12px;
+  color: var(--bp-text);
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.97);
+  border: 1px solid var(--bp-border);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.exampleChip:hover { border-color: var(--bp-accent); }
+
+/* ── thread (floating bubbles, newest at the bottom) ── */
+.thread {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 8px;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.thread::-webkit-scrollbar { display: none; }
+
+.userMsg {
+  align-self: flex-end;
+  max-width: 88%;
+  padding: 7px 11px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #fff;
+  background: var(--bp-accent);
+  border-radius: 13px 13px 3px 13px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  word-break: break-word;
+}
+
+.aiMsg {
+  align-self: flex-start;
+  max-width: 94%;
+  padding: 9px 11px;
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.97);
+  border: 1px solid var(--bp-border);
+  border-radius: 13px 13px 13px 3px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+.aiText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--bp-text);
+}
+
+.sourceLine {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 11px;
+  font-style: italic;
+  color: var(--bp-text-dim);
+}
+.tradeTag {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 700;
+  font-style: normal;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: #fff;
+  background: var(--bp-accent);
+}
+.trade_electrical { background: #d97706; }
+.trade_plumbing   { background: #2563eb; }
+.trade_framing    { background: #a16207; }
+.trade_hvac       { background: #0891b2; }
+.trade_insulation { background: #db2777; }
+.trade_drywall    { background: #6b7280; }
+.trade_finishes   { background: #7c3aed; }
+.trade_excavation { background: #78716c; }
+.trade_symbols    { background: #059669; }
+
+.related {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--bp-border);
+}
+.relatedCard { display: flex; flex-direction: column; gap: 1px; }
+.relatedTitle { font-size: 11px; font-weight: 600; color: var(--bp-text); }
+.relatedAnswer { font-size: 11px; line-height: 1.4; color: var(--bp-text-dim); }
+
+.typing {
+  align-self: flex-start;
+  padding: 7px 11px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--bp-text-dim);
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.97);
+  border-radius: 13px;
+}
+
+/* No standing disclaimer bar in the overlay — it's a permanent line of clutter.
+   The per-answer source citation already carries the caveat. */
+.disclaimer { display: none; }
+
+/* ── AI key affordance (own-key-on-device) ── */
+.enableAi {
+  align-self: flex-start;
+  pointer-events: auto;
+  padding: 5px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bp-accent, #38bdf8) 35%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.enableAi:hover { background: color-mix(in srgb, var(--bp-accent, #38bdf8) 20%, transparent); }
+
+.keyRow {
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+}
+.keyInput {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  font-size: 12px;
+  color: var(--bp-text);
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.97);
+  border: 1px solid var(--bp-border-strong);
+  border-radius: 999px;
+  outline: none;
+}
+.keyInput:focus { border-color: var(--bp-accent, #38bdf8); }
+
+.aiStatus {
+  margin: 0;
+  align-self: flex-start;
+  pointer-events: auto;
+  font-size: 11px;
+  color: var(--bp-accent, #38bdf8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.aiLink {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--bp-text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ✦ tag on brain-produced answers */
+.aiTag {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.03em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bp-accent, #38bdf8) 40%, transparent);
+}

@@ -1,0 +1,60 @@
+/* EdgeRail — persistent, vertically-scrolling icon rail hugging the left edge.
+   Width (46px) must match the `.inRail` panel inset in EdgeDrawer.module.css so
+   panels open flush against the rail without covering it. */
+
+.rail {
+  position: fixed;
+  left: 0;
+  top: 56px;
+  bottom: calc(58px + env(safe-area-inset-bottom, 0px));
+  width: 46px;
+  z-index: 56;                 /* above the drawers (55) — belt & suspenders; the
+                                  inset already keeps panels off the rail */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;      /* don't chain-scroll into the 3D canvas */
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-panel-opacity, 0.95));
+  backdrop-filter: blur(var(--bp-blur, 10px));
+  border-right: 1px solid var(--bp-border);
+  border-radius: 0 12px 12px 0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  /* Slim: the rail scrolls but hides its scrollbar. */
+  scrollbar-width: none;
+}
+.rail::-webkit-scrollbar { display: none; }
+
+.item {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 0 5px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--bp-text-dim, #94a3b8);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.item:hover { background: rgba(255, 255, 255, 0.06); }
+.item:active { transform: translateY(1px); }
+
+.active {
+  color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 16%, transparent);
+  border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 45%, transparent);
+}
+
+.icon { font-size: 18px; line-height: 1; }
+.label {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}

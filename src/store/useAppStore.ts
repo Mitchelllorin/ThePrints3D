@@ -397,7 +397,7 @@ interface AppState {
   setLayerOpacity: (id: LayerId, opacity: number) => void
   setSidebarOpen: (open: boolean) => void
   setModelStatus: (status: Model3D['status']) => void
-  buildModel: () => void
+  buildModel: (opts?: { auto?: boolean }) => void
   update3DModel: (finalInputs: WorkspaceWizardInputs) => void
   setFloorplanOverlayDrawing: (drawingId: string | null) => void
   updateFloorplanOverlay: (patch: Partial<FloorplanOverlayState>, recordHistory?: boolean) => void
@@ -469,6 +469,10 @@ interface AppState {
   /** Clone the floor area(s) on `fromLevel` up to the next storey — a guaranteed
    *  full upper floor matching the one below (no perspective-prone re-tracing). */
   carryFloorUp: (fromLevel: number) => void
+  /** Wipe a storey back to blank — drop the user walls and user floor/roof areas
+   *  on `level`. Backs "Custom": start this floor from scratch instead of the
+   *  typical straight-up stack of the one below. */
+  clearFloorLevel: (id: string, level: number) => void
   // Roof areas (gable roofs)
   addRoofAreas: (areas: TracedLine[]) => void
   removeRoofArea: (id: string) => void
@@ -1078,16 +1082,20 @@ export const useAppStore = create<AppState>()(
         s.model.status = status
       }),
 
-    buildModel: () => {
-      // Frame the walls as part of the 3D build — Build 3D and Build-for-me now
-      // produce the same framed result; the Framing toggle controls visibility.
+    buildModel: (opts) => {
+      // Frame the walls as part of the 3D build — Build-for-me and the automatic
+      // rebuild produce the same framed result; the Framing toggle controls
+      // visibility. `auto: true` = a rebuild the user didn't press for (the model
+      // stands itself up as they trace); it must not yank the camera or reset the
+      // explode slider out from under them.
+      const auto = opts?.auto === true
       const framing = computeFramingResult(get().drawings, get().placedObjects)
       const cfg = useConfigStore.getState()
       const autoFraming = cfg.buildAutoEnableFraming
       set((s) => {
         s.model.status = s.drawings.length > 0 ? 'building' : 'idle'
         s.model.generatedAt = null
-        s.view = 'model'
+        if (!auto) s.view = 'model'
 
         // Build floor levels from sheet numbers
         const { levels, floorGroupingLog } = computeFloorLevels(s.drawings)
@@ -1118,11 +1126,18 @@ export const useAppStore = create<AppState>()(
           // storey count so every floor gets its slab/deck on every rebuild.
           const userFloors = s.floorsAreas.filter((a) => !a.id.startsWith('auto-'))
           const userRoofs = s.roofAreas.filter((a) => !a.id.startsWith('auto-'))
-          s.floorsAreas = [...userFloors, ...shell.floors]
-          s.roofAreas = [...userRoofs, ...shell.roofs]
+          // Auto-build the SLAB (and upper-storey decks) only — walls need
+          // something to stand on. The CEILING and ROOF are deliberate steps the
+          // user traces (like the roof, a ceiling shouldn't appear on its own), so
+          // drop every auto-ceiling here and every auto-roof below. Any stale one
+          // from a previous build is cleared because it isn't re-added.
+          const shellFloors = shell.floors.filter((a) => !a.id.startsWith('auto-ceiling'))
+          s.floorsAreas = [...userFloors, ...shellFloors]
+          s.roofAreas = userRoofs
         }
-        // Always start assembled so the fresh build isn't pre-exploded.
-        s.explodeAmount = 0
+        // A build the user asked for starts assembled so it isn't pre-exploded;
+        // an automatic one leaves the explode slider where they put it.
+        if (!auto) s.explodeAmount = 0
 
         logEvent('model.build.started', {
           drawingCount: s.drawings.length,
@@ -1802,6 +1817,18 @@ export const useAppStore = create<AppState>()(
           .filter((a) => !s.floorsAreas.some((b) => (b.level ?? 0) === toLevel && same(a, b)))
           .map((a) => ({ ...a, id: `${a.id}-up-${Date.now()}-${Math.round(Math.random() * 1e5)}`, level: toLevel }))
         s.floorsAreas.push(...clones)
+      })
+    },
+
+    clearFloorLevel: (id, level) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (d) d.parsedWalls = d.parsedWalls.filter((w) => !(w.source === 'user' && (w.level ?? 0) === level))
+        // Keep auto-derived areas (they regenerate on build); drop only what the
+        // user placed on this storey so "Custom" truly starts it blank.
+        s.floorsAreas = s.floorsAreas.filter((a) => !(!a.id.startsWith('auto-') && (a.level ?? 0) === level))
+        s.roofAreas = s.roofAreas.filter((a) => !(!a.id.startsWith('auto-') && (a.level ?? 0) === level))
       })
     },
 

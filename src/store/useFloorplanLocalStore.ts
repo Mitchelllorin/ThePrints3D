@@ -177,6 +177,7 @@ interface FloorplanLocalState {
   buildDrawerOpen: boolean
   settingsDrawerOpen: boolean
   placeDrawerOpen: boolean
+  askDrawerOpen: boolean
 
   // ─── guided tutorial (the "build a whole house" walkthrough) ──────
   /** Tutorial running — the coach card is shown and tracks the current step. */
@@ -243,7 +244,7 @@ interface FloorplanLocalState {
   setWizardOpen: (v: boolean) => void
   /** Open/close an edge drawer. On compact (phone / landscape-short) screens,
    *  opening one retracts the others so they never stack over the workspace. */
-  setDrawerOpen: (which: 'build' | 'settings' | 'place', open: boolean) => void
+  setDrawerOpen: (which: 'build' | 'settings' | 'place' | 'ask', open: boolean) => void
   startTutorial: () => void
   exitTutorial: () => void
   setTutorialStep: (n: number) => void
@@ -320,6 +321,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   tutorialActive: false,
   tutorialStep: 0,
   placeDrawerOpen: false,
+  askDrawerOpen: false,
 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
@@ -404,9 +406,13 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
     // Globally exclusive: opening any drawer closes the other two, so only one
     // menu is ever over the workspace (was small-screen-only; now always).
     const base = open
-      ? { buildDrawerOpen: false, settingsDrawerOpen: false, placeDrawerOpen: false }
+      ? { buildDrawerOpen: false, settingsDrawerOpen: false, placeDrawerOpen: false, askDrawerOpen: false }
       : {}
-    const key = which === 'build' ? 'buildDrawerOpen' : which === 'settings' ? 'settingsDrawerOpen' : 'placeDrawerOpen'
+    const key =
+      which === 'build' ? 'buildDrawerOpen'
+      : which === 'settings' ? 'settingsDrawerOpen'
+      : which === 'place' ? 'placeDrawerOpen'
+      : 'askDrawerOpen'
     return { ...base, [key]: open } as Partial<FloorplanLocalState>
   }),
   startTutorial: () => set({ tutorialActive: true, tutorialStep: 0 }),

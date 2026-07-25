@@ -11,10 +11,12 @@
   flex-direction: column;
   overflow: visible;            /* don't clip the protruding tab */
   pointer-events: auto;
-  background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-panel-opacity, 0.95));
-  backdrop-filter: blur(var(--bp-blur, 10px));
-  border: 1px solid var(--bp-border);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* Almost transparent by default — frosted glass, not a solid box. The heavy
+     backdrop blur keeps content legible over the 3D model without a panel. */
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.2);
+  backdrop-filter: blur(18px);
+  border: none;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
   transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -34,16 +36,16 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;       /* don't chain scroll into the 3D canvas */
-  padding: 6px 8px 14px;
+  padding: 4px 6px 8px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   /* Always-visible, grabbable scrollbar — the explicit ask. Firefox: */
   scrollbar-width: thin;
   scrollbar-color: var(--bp-accent, #38bdf8) rgba(255, 255, 255, 0.08);
 }
 /* WebKit/Blink (incl. Android Chrome, which otherwise auto-hides touch scrollbars). */
-.scroll::-webkit-scrollbar { width: 12px; }
+.scroll::-webkit-scrollbar { width: 8px; }
 .scroll::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.06); border-radius: 6px; }
 .scroll::-webkit-scrollbar-thumb {
   background: var(--bp-accent, #38bdf8);
@@ -142,6 +144,12 @@
   border-radius: 0 10px 10px 0;
 }
 
+/* A second drawer sharing the LEFT edge (Ask) stacks its tab BELOW the Build tab
+   rather than on top of it. Build tab spans top 14 → 126 (14 + 112 tall); start
+   this one at 136 to clear it. Placed after `.left .tab` so it wins the
+   equal-specificity `top` on source order. */
+.stackedLeft .tab { top: 136px; }
+
 /* ── Right edge (mirror of left) ─────────────────────────────────────────── */
 .right {
   right: 0;
@@ -227,3 +235,17 @@
   .left, .right { top: 8px; bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
   .bottom { max-height: 78dvh; }
 }
+
+/* ── In-rail mode ────────────────────────────────────────────────────────────
+   The drawer is driven by the persistent EdgeRail (EdgeRail.tsx), not its own
+   tab. It renders no tab and opens BESIDE the 46px rail so an open panel can
+   never cover the toggles. Keep 46px in sync with the rail's width. The closed
+   transforms are unchanged (left slides fully off; bottom sheet, having no peek
+   strip anymore, hides completely). `:not(.open)` scopes the bottom rule to the
+   closed state regardless of rule order. */
+.inRail.left { left: 46px; }
+/* Closed: push fully off-screen PAST the 46px inset (else the panel's right edge
+   peeks a 46px strip over the rail). */
+.inRail.left:not(.open) { transform: translateX(calc(-100% - 48px)); }
+.inRail.bottom { left: 46px; }               /* clear the rail on the bottom sheet too */
+.inRail.bottom:not(.open) { transform: translateY(100%); }

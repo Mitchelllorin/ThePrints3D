@@ -18,102 +18,82 @@
 }
 
 /* ── Onboarding card (no plan loaded yet) ──────────────────────────────────── */
+/* Near-invisible onboarding hint — no card. A centred whisper + a row of small
+   chips, floating over the empty grid; the grid itself is the drop target. */
 .uploadHint {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(var(--bp-panel-rgb, 10, 16, 30), var(--bp-panel-opacity, 0.94));
-  border: 1px solid rgba(30, 41, 59, 0.7);
-  border-radius: 14px;
-  backdrop-filter: blur(calc(var(--bp-panel-opacity, 0.94) * 14px));
-  padding: 16px;
   z-index: 50;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  width: min(92vw, 320px);
-  max-height: 80dvh;
-  overflow-y: auto;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
-}
-
-.uploadHintHeader {
-  display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  max-width: min(90vw, 300px);
+  pointer-events: none;            /* only the chips catch taps */
 }
-
-.uploadHintTitle {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--bp-text, #f1f5f9);
-}
+.uploadHint > * { pointer-events: auto; }
 
 .uploadHintSub {
-  font-size: 11px;
-  color: var(--bp-text-dim, #64748b);
-  line-height: 1.5;
   margin: 0;
+  font-size: 11px;
+  color: var(--bp-text-dim, #94a3b8);
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .uploadHintActions {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
 }
 
-.uploadHintBtn {
-  width: 100%;
-  background: var(--bp-accent, #38bdf8);
-  color: #0f172a;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  text-align: left;
-  transition: opacity 0.15s;
-}
-.uploadHintBtn:hover { opacity: 0.85; }
-
-.uploadHintBtnSecondary {
-  width: 100%;
-  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
-  border: 1px solid rgba(51, 65, 85, 0.5);
-  color: var(--bp-text, #94a3b8);
-  border-radius: 8px;
-  padding: 8px 14px;
+/* Small floating pill — faint tint, not a slab. */
+.uploadHintChip {
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 14%, transparent);
+  color: var(--bp-accent, #38bdf8);
+  border: 1px solid color-mix(in srgb, var(--bp-accent, #38bdf8) 40%, transparent);
+  border-radius: 999px;
+  padding: 4px 13px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  text-align: left;
-  transition: background 0.15s, color 0.15s;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  transition: background 0.12s;
 }
-.uploadHintBtnSecondary:hover { background: #1e293b; color: var(--bp-text, #f1f5f9); }
+.uploadHintChip:hover { background: color-mix(in srgb, var(--bp-accent, #38bdf8) 24%, transparent); }
 
 /* ── Preset picker (in the onboarding card + Settings drawer) ──────────────── */
+/* Small floating pills — wrap in a row, not stacked slabs. */
 .presetList {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
-  padding: 4px 4px 10px;
+  padding: 2px 4px;
 }
 
 .presetBtn {
-  flex: 1;
-  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
-  border: 1px solid rgba(30, 41, 59, 0.7);
-  color: var(--bp-text, #94a3b8);
-  border-radius: 7px;
-  padding: 6px 4px;
-  font-size: 11px;
+  flex: 0 0 auto;
+  background: color-mix(in srgb, var(--bp-text, #94a3b8) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bp-text, #94a3b8) 22%, transparent);
+  color: var(--bp-text, #e2e8f0);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   text-align: center;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  transition: background 0.12s, border-color 0.12s;
 }
-.presetBtn:hover { background: #1e293b; color: var(--bp-text-dim, #94a3b8); border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 30%, transparent); }
+.presetBtn:hover {
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 18%, transparent);
+  border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 40%, transparent);
+}
 
 /* ── Section heading inside the Settings drawer ────────────────────────────── */
 .sectionTitle {
@@ -432,11 +412,10 @@
   align-items: center;
   gap: 8px;
   height: 34px;
-  padding: 0 12px;
-  background: rgba(8, 12, 24, 0.9);
-  border: 1px solid var(--bp-border);
-  border-radius: 8px;
-  backdrop-filter: blur(6px);
+  padding: 0 4px;
+  /* No box — floats over the model. */
+  background: none;
+  border: none;
   pointer-events: auto;
 }
 .explodeLabel {
@@ -444,6 +423,7 @@
   font-weight: 600;
   color: var(--bp-text, #f1f5f9);
   white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
 .explodeSlider { width: 120px; accent-color: var(--bp-accent, #38bdf8); cursor: pointer; }
 .explodeReset {
@@ -470,11 +450,10 @@
   align-items: center;
   gap: 4px;
   height: 30px;
-  padding: 0 10px;
-  background: rgba(8, 12, 24, 0.9);
-  border: 1px solid var(--bp-border);
-  border-radius: 8px;
-  backdrop-filter: blur(6px);
+  padding: 0 4px;
+  /* No box — floats over the model. */
+  background: none;
+  border: none;
   pointer-events: auto;
 }
 .floorBtn {

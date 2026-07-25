@@ -14,17 +14,15 @@
   max-width: min(86vw, 420px);
 }
 
+/* No box — the coach's words float over the model, next to its living dot. */
 .bubble {
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px 8px 12px;
-  border-radius: 10px;
-  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.92));
-  border: 1px solid var(--bp-border);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  gap: 9px;
+  padding: 4px 6px;
+  background: none;
+  border: none;
   animation: bubbleIn 0.24s cubic-bezier(0.4, 0, 0.2, 1);
 }
 @keyframes bubbleIn {
@@ -61,6 +59,7 @@
   font-size: 12.5px;
   line-height: 1.35;
   color: var(--bp-text, #f1f5f9);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95), 0 0 2px rgba(0, 0, 0, 0.8);
 }
 
 .action {

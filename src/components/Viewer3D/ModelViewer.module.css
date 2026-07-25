@@ -136,12 +136,11 @@
   z-index: 45;
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.92));
-  border: 1px solid #1e293b;
-  border-radius: 10px;
-  padding: 6px 10px;
-  backdrop-filter: blur(calc(var(--bp-panel-opacity, 0.92) * 6px));
+  gap: 10px;
+  /* No box — the controls float over the model. */
+  background: none;
+  border: none;
+  padding: 2px 4px;
   pointer-events: all;
   /* Never wrap/stack — scroll horizontally if it overflows (mobile landscape). */
   flex-wrap: nowrap;
@@ -171,29 +170,31 @@
   .toolBtn { min-height: 44px; font-size: 14px; }
 }
 
+/* Near-invisible floating action — no box, legible from a shadow. */
 .toolBtn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: none;
+  border: none;
   color: #ffffff;
   font-size: 13px;
-  font-weight: 500;
-  padding: 6px 12px;
-  border-radius: 6px;
+  font-weight: 600;
+  padding: 6px 8px;
+  border-radius: 999px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition: opacity 0.15s, color 0.15s;
   white-space: nowrap;
   min-height: 32px;
+  opacity: 0.85;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .toolBtn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  opacity: 1;
   color: #f1f5f9;
 }
 
 .toolBtnActive {
-  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 22%, #0f172a) !important;
-  border-color: var(--bp-accent, #38bdf8) !important;
   color: var(--bp-accent, #38bdf8) !important;
+  opacity: 1 !important;
 }
 
 .toolBadge {
@@ -223,9 +224,10 @@
   gap: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: #cbd5e1;
   padding-left: 4px;
   white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
 .explodeSlider {

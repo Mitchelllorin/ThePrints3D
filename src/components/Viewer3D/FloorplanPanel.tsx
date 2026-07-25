@@ -77,6 +77,7 @@ export default function FloorplanPanel() {
   const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
   const carryWallsUp    = useAppStore((s) => s.carryWallsUp)
   const carryFloorUp    = useAppStore((s) => s.carryFloorUp)
+  const clearFloorLevel = useAppStore((s) => s.clearFloorLevel)
   const setRoofOverhang = useAppStore((s) => s.setRoofOverhang)
   const assignDrawingToLevel = useAppStore((s) => s.assignDrawingToLevel)
   const undoAction      = useAppStore((s) => s.undo)
@@ -178,6 +179,10 @@ export default function FloorplanPanel() {
   const roofOverhangIn = useConfigStore((s) => s.roofOverhangIn)
   // Nudge step for moving a selected wall, expressed in the active unit.
   const [nudgeStep, setNudgeStep] = useState(1)
+  // Storeys the user marked "Custom" (trace/import their own) instead of the
+  // default "Typical" — the floor below stacked straight up. Drives the auto-
+  // stack below so an upper floor defaults to a copy of the one under it.
+  const [customLevels, setCustomLevels] = useState<number[]>([])
 
   // Picking a framing type ONLY arms the next trace — it no longer flips the
   // global build config. The material/size/gauge are stamped per-wall (via
@@ -207,6 +212,22 @@ export default function FloorplanPanel() {
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const userWallCount = drawing?.parsedWalls.filter((w) => w.source === 'user').length ?? 0
+
+  // Upper floors default to "Typical": switch to an empty storey above one that
+  // has walls and the floor below stacks straight up (plumb) on its own — a 2nd
+  // floor is the 1st floor over again unless you mark it Custom. Idempotent
+  // (carry* dedupe by footprint) and guarded on the storey being empty, so it
+  // fires once on entry and never loops.
+  useEffect(() => {
+    if (!drawing || activeLevel <= 0 || customLevels.includes(activeLevel)) return
+    const userWalls = drawing.parsedWalls.filter((w) => w.source === 'user')
+    const below = userWalls.filter((w) => (w.level ?? 0) === activeLevel - 1).length
+    const here = userWalls.filter((w) => (w.level ?? 0) === activeLevel).length
+    if (below === 0 || here > 0) return
+    carryWallsUp(drawing.id, activeLevel - 1)
+    carryFloorUp(activeLevel - 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLevel, drawing?.id, customLevels])
   // "Find the rest" can fire as soon as one wall is traced — in either Line
   // (2-point) or Freehand mode. (Was gated on an 8+ point freehand stroke,
   // which never matched line-mode tracing.)
@@ -430,9 +451,11 @@ export default function FloorplanPanel() {
     // Open on a new choose/read context — but NEVER while actively tracing (a
     // selection mid-run used to pop the drawer over the print). The user-invoked
     // picker still opens the drawer (pickerOpen flips tracingActive off).
-    if (buildCtx && !prevBuildCtx.current && !tracingActive) setDrawerOpen('build', true)
+    // ...but NOT while an object is armed for placement — placing selects the
+    // wall/area under it, which used to pop the Build drawer open mid-place.
+    if (buildCtx && !prevBuildCtx.current && !tracingActive && !placeObjectType) setDrawerOpen('build', true)
     prevBuildCtx.current = buildCtx
-  }, [buildCtx, tracingActive, setDrawerOpen])
+  }, [buildCtx, tracingActive, placeObjectType, setDrawerOpen])
 
   const prevTracingActive = useRef(false)
   useEffect(() => {
@@ -552,13 +575,61 @@ export default function FloorplanPanel() {
   const wallsBelowCount = drawing.parsedWalls.filter(
     (w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1,
   ).length
+  const wallsAtActiveLevel = drawing.parsedWalls.filter(
+    (w) => w.source === 'user' && (w.level ?? 0) === activeLevel,
+  ).length
+  const floorMode: 'typical' | 'custom' = customLevels.includes(activeLevel) ? 'custom' : 'typical'
+  const chooseTypical = () => {
+    setCustomLevels((prev) => prev.filter((l) => l !== activeLevel))
+    if (wallsBelowCount > 0 && wallsAtActiveLevel === 0) {
+      carryWallsUp(drawing.id, activeLevel - 1)
+      carryFloorUp(activeLevel - 1)
+    }
+  }
+  const chooseCustom = () => {
+    setCustomLevels((prev) => (prev.includes(activeLevel) ? prev : [...prev, activeLevel]))
+    clearFloorLevel(drawing.id, activeLevel)
+  }
+  // Typical (default) vs Custom choice for an upper storey — Typical stacks the
+  // floor below straight up; Custom wipes it so you trace/import your own. Shown
+  // wherever you pick a level, so it reads the same in the Floors and Walls steps.
+  const upperFloorControl = activeLevel > 0 && wallsBelowCount > 0 ? (
+    <>
+      <span className={styles.stepHint}>{activeLevelLabel} — how it's laid out</span>
+      <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
+        <button
+          className={floorMode === 'typical' ? styles.action : styles.secondary}
+          onClick={chooseTypical}
+          title={`Stack ${belowLevelLabel} straight up onto ${activeLevelLabel}, plumb`}
+        >
+          Typical · same as {belowLevelLabel}
+        </button>
+        <button
+          className={floorMode === 'custom' ? styles.action : styles.secondary}
+          onClick={chooseCustom}
+          title={`Start ${activeLevelLabel} blank — trace or import its own layout`}
+        >
+          Custom
+        </button>
+      </div>
+      {floorMode === 'custom' && (
+        <button
+          className={styles.secondary}
+          style={{ alignSelf: 'flex-start' }}
+          onClick={() => importPlanForLevel(activeLevel)}
+          title={`Load a separate floor plan for ${activeLevelLabel} (build-outs, balconies, a different layout)`}
+        >
+          📄 Different plan for {activeLevelLabel}
+        </button>
+      )}
+    </>
+  ) : null
   const floorsActive = activeTraceLayer === 'floors'
   const roofActive = activeTraceLayer === 'roof'
   // Floors & roofs are "area" layers: pull a rectangle instead of tracing a line.
   const areaActive = floorsActive || roofActive
   // Construction order in the guided flow: floor goes in before the walls.
   const hasFloor = floorsAreas.length > 0
-  const hasRoof = roofAreas.length > 0
   // Floors/roofs reuse the same trace flow as the trades (start/pause/picker/done),
   // just committing rectangles instead of lines.
   const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac' || areaActive
@@ -607,10 +678,9 @@ export default function FloorplanPanel() {
 
       {/* Slim floating trace controls — shown ONLY while actively tracing, when
           the Build drawer is retracted, so the workspace stays clear. The camera
-          stays free (tap a corner, drag to orbit), so there's no pause: the chip
-          reopens the picker (type / level), Build builds, Done finishes the run.
-          End run stops the rubber-band without dropping another wall; you can
-          also double-tap the workspace to end the current run. */}
+          stays free (tap a corner, drag to orbit): the chip reopens the picker
+          (type / level), Done finishes tracing. To end the current wall run,
+          double-tap the workspace (stops the trailing rubber-band). */}
       {tracingActive && showSteps && (
         <div className={styles.traceBar}>
           <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
@@ -625,15 +695,8 @@ export default function FloorplanPanel() {
               {seedProcessing ? 'Finding…' : '✨ Find the rest'}
             </button>
           )}
-          {/* A run is active — let them stop the trailing rubber-band WITHOUT a
-              canvas tap, which would snap+drop one more wall where it lands. */}
-          {traceStart && (
-            <button className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => setTraceStart(null)} title="Stop this wall run">■ End run</button>
-          )}
-          {((framingActive && userWallCount > 0) || (floorsActive && hasFloor) || (roofActive && hasRoof)
-            || activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
-            <button data-tour="build-3d" className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
-          )}
+          {/* No "End run" button — double-tapping the workspace ends the current
+              wall run (the natural "I'm done with this line" gesture). */}
           <button className={styles.traceBarBtn} onClick={cancelTracing} title="Finish tracing">✓ Done</button>
         </div>
       )}
@@ -679,6 +742,7 @@ export default function FloorplanPanel() {
           selected-wall / selected-run editors. Retracts to just its tab. */}
       <EdgeDrawer
         side="left"
+        inRail
         title="Build"
         tabLabel="Build"
         tabIcon="✏"
@@ -792,18 +856,9 @@ export default function FloorplanPanel() {
                       <button key={lv.value} className={activeLevel === lv.value ? styles.action : styles.secondary} onClick={() => setActiveLevel(lv.value)}>{lv.label}</button>
                     ))}
                   </div>
-                  {/* Guaranteed full upper floor — clone the storey below instead of
-                      re-tracing it (which comes up short in perspective). */}
-                  {activeLevel > 0 && floorsAreas.some((a) => (a.level ?? 0) === activeLevel - 1) && (
-                    <button
-                      className={styles.action}
-                      style={{ alignSelf: 'flex-start' }}
-                      onClick={() => { carryFloorUp(activeLevel - 1); updateOverlay({ printAtGround: true }, false) }}
-                      title="Drop a full floor matching the storey below — no tracing"
-                    >
-                      ⤴ Floor over {belowLevelLabel}
-                    </button>
-                  )}
+                  {/* Upper floor defaults to Typical (the storey below stacked
+                      straight up); Custom starts it blank. */}
+                  {upperFloorControl}
                 </>
               )}
               {!areaActive && (
@@ -819,19 +874,9 @@ export default function FloorplanPanel() {
                 </>
               )}
               <div className={styles.btnRow}>
-                {traceStart && <button className={styles.secondary} onClick={() => setTraceStart(null)}>End run</button>}
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel</button>}
-                {/* Make this step real — e.g. the poured slab becomes the built floor. */}
-                {floorsActive && hasFloor && (
-                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
-                )}
-                {roofActive && hasRoof && (
-                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
-                )}
-                {/* Trades render live, but give the same positive "it's in" commit. */}
-                {(activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac') && (
-                  <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>Build 3D →</button>
-                )}
+                {/* No "End run" (double-tap ends a run) and no "Build 3D": the 3D
+                    shows the walls you trace as you trace them. */}
                 <button className={styles.cancel} onClick={cancelTracing}>Done</button>
               </div>
             </div>
@@ -976,13 +1021,10 @@ export default function FloorplanPanel() {
                       : `${drawing.parsedWalls.length} walls detected`}
                   </span>
                   <span className={styles.stepHint}>
-                    {userWallCount > 0 ? 'Build, or trace more' : 'Trace manually to correct, or build now'}
+                    {userWallCount > 0 ? 'Trace more, or edit what’s there' : 'Trace manually to correct anything wrong'}
                   </span>
                   <div className={styles.btnRow}>
-                    <button className={styles.action} onClick={() => buildModel()}>
-                      Build 3D →
-                    </button>
-                    <button className={styles.secondary} onClick={openPicker}>
+                    <button className={styles.action} onClick={openPicker}>
                       {userWallCount > 0 ? 'Trace more' : 'Trace walls'}
                     </button>
                     <button className={styles.secondary} onClick={startCalibration}>
@@ -1024,28 +1066,9 @@ export default function FloorplanPanel() {
                 <button key={lv.value} className={activeLevel === lv.value ? styles.action : styles.secondary} onClick={() => setActiveLevel(lv.value)}>{lv.label}</button>
               ))}
             </div>
-            {/* Carry the build up: clone the storey below onto this level so it
-                stands plumb on top — real construction, not stacked boxes. */}
-            {activeLevel > 0 && wallsBelowCount > 0 && (
-              <button
-                className={styles.secondary}
-                style={{ alignSelf: 'flex-start' }}
-                onClick={() => carryWallsUp(drawing.id, activeLevel - 1)}
-                title={`Copy the ${belowLevelLabel} walls straight up onto ${activeLevelLabel}, plumb`}
-              >
-                ⤴ Carry {belowLevelLabel} walls up ({wallsBelowCount})
-              </button>
-            )}
-            {activeLevel > 0 && (
-              <button
-                className={styles.secondary}
-                style={{ alignSelf: 'flex-start' }}
-                onClick={() => importPlanForLevel(activeLevel)}
-                title={`Load a separate floor plan for ${activeLevelLabel} (build-outs, balconies, a different layout)`}
-              >
-                📄 Different plan for {activeLevelLabel}
-              </button>
-            )}
+            {/* Upper floor defaults to Typical (storey below stacked straight up,
+                plumb); Custom starts it blank to trace/import its own layout. */}
+            {upperFloorControl}
             {pendingWalls ? (
               <>
                 <span className={styles.stepText}>
@@ -1100,16 +1123,6 @@ export default function FloorplanPanel() {
                   )}
                 </div>
                 <div className={styles.btnRow}>
-                  {userWallCount > 0 && (
-                    <button className={styles.action} onClick={() => { cancelTracing(); buildModel() }}>
-                      Build 3D →
-                    </button>
-                  )}
-                  {traceStyle === 'line' && traceStart && (
-                    <button className={styles.secondary} onClick={() => setTraceStart(null)}>
-                      End run
-                    </button>
-                  )}
                   {hasTrace && (
                     <button className={styles.action} onClick={handleSmartRefine} disabled={seedProcessing}>
                       {seedProcessing ? 'Finding…' : '✨ Find the rest'}
@@ -1512,16 +1525,11 @@ export default function FloorplanPanel() {
             </button>
             <button className={styles.secondary} onClick={deleteSelectedObject}>Delete</button>
           </div>
-          {/* Positive confirm — the placement is already live, but there was no
-              commit affordance (you had to ✕ out). Done closes the editor;
-              Build 3D re-finalises the model so the opening is cut into framing. */}
+          {/* No re-build step: moving a door or window re-frames the opening on
+              its own (useAutoBuild tracks placed openings). Done just closes
+              the editor. */}
           <div className={styles.btnRow}>
-            {modelReady && (
-              <button className={styles.action} onClick={() => { buildModel(); setSelectedObjectId(null) }}>
-                Build 3D →
-              </button>
-            )}
-            <button className={modelReady ? styles.secondary : styles.action} onClick={() => setSelectedObjectId(null)}>
+            <button className={styles.action} onClick={() => setSelectedObjectId(null)}>
               Done ✓
             </button>
           </div>
@@ -1558,6 +1566,7 @@ export default function FloorplanPanel() {
       {drawing && drawing.status === 'ready' && (
         <EdgeDrawer
           side="bottom"
+          inRail
           title="Place & Layers"
           tabLabel="Place"
           tabIcon="▦"

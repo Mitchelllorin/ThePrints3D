@@ -110,6 +110,13 @@ export interface WallFramingOpts {
    *  rough-opening width. Studs are dropped through the opening and replaced with
    *  king + jack studs, a header, cripples (and a sill for windows). */
   openings?: WallOpening[]
+  /** Corner cap-plate lap. At each end that meets a corner, the upper (cap) top
+   *  plate either extends OVER the adjoining wall by one framing-member width
+   *  ('lap') or is pulled back that far so it receives the neighbour's lapping
+   *  cap ('back'). Perpendicular walls take opposite modes, so the two double
+   *  top plates overlap and tie the corner. Undefined ends keep a full-length cap
+   *  (lower top plate always runs full length and butts at the corner). */
+  capLap?: { start?: 'lap' | 'back'; end?: 'lap' | 'back' }
 }
 
 export interface WallOpening {
@@ -140,6 +147,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     deflectionGapMm = 0,
     opacity = 1,
     openings = [],
+    capLap,
   } = opts
 
   const group = new THREE.Group()
@@ -204,8 +212,20 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     const plateGeo = new THREE.BoxGeometry(length, PLATE_H_M, depth)
     add(plateGeo, 0, PLATE_H_M / 2, 0)            // sole plate
     add(plateGeo, 0, PLATE_H_M * 1.5, 0)          // 2nd bottom plate
-    add(plateGeo, 0, height - PLATE_H_M / 2, 0)   // upper top plate
-    add(plateGeo, 0, height - PLATE_H_M * 1.5, 0) // lower top plate
+    add(plateGeo, 0, height - PLATE_H_M * 1.5, 0) // lower top plate (butts at corner)
+    // Upper (cap) plate — laps the corner. Each end that meets a corner either
+    // extends OVER the adjoining wall by one member width ('lap') or pulls back
+    // that far ('back') to receive the neighbour's lapping cap. Perpendicular
+    // walls take opposite modes, so the two caps interlock and tie the corner.
+    const capLapAmt = depth // one framing-member width (≈ 3.5" for 2x4, 5.5" for 2x6)
+    let capL = -length / 2
+    let capR = length / 2
+    if (capLap?.start === 'lap') capL -= capLapAmt
+    else if (capLap?.start === 'back') capL += capLapAmt
+    if (capLap?.end === 'lap') capR += capLapAmt
+    else if (capLap?.end === 'back') capR -= capLapAmt
+    const capLen = Math.max(0.02, capR - capL)
+    add(new THREE.BoxGeometry(capLen, PLATE_H_M, depth), (capL + capR) / 2, height - PLATE_H_M / 2, 0)
   }
 
   const studH = Math.max(0.02, studTop - studBottom)

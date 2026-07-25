@@ -30,27 +30,36 @@ interface EdgeDrawerProps {
   clickThrough?: boolean
   /** `data-tour` value on the toggle tab, so the guided tutorial can spotlight it. */
   tourTab?: string
+  /**
+   * Driven by the persistent EdgeRail instead of its own protruding tab: renders
+   * NO tab and opens BESIDE the rail (inset by the rail width — see `.inRail` in
+   * the CSS). This is how all the edge menus work now; the standalone tab is kept
+   * only as a fallback for a drawer that isn't in the rail.
+   */
+  inRail?: boolean
   children: ReactNode
   className?: string
 }
 
 const SIDE_CLASS = { left: styles.left, right: styles.right, bottom: styles.bottom } as const
 
-export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, title, clickThrough, tourTab, children, className }: EdgeDrawerProps) {
+export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, title, clickThrough, tourTab, inRail, children, className }: EdgeDrawerProps) {
   return (
-    <div className={`${styles.root} ${SIDE_CLASS[side]} ${open ? styles.open : ''} ${clickThrough ? styles.clickThrough : ''} ${className ?? ''}`}>
-      <button
-        className={styles.tab}
-        onClick={onToggle}
-        data-tour={tourTab}
-        aria-label={`${open ? 'Hide' : 'Show'} ${tabLabel}`}
-        aria-expanded={open}
-      >
-        {tabIcon && <span className={styles.tabIcon}>{tabIcon}</span>}
-        <span className={styles.tabLabel}>{tabLabel}</span>
-      </button>
+    <div className={`${styles.root} ${SIDE_CLASS[side]} ${open ? styles.open : ''} ${clickThrough ? styles.clickThrough : ''} ${inRail ? styles.inRail : ''} ${className ?? ''}`}>
+      {!inRail && (
+        <button
+          className={styles.tab}
+          onClick={onToggle}
+          data-tour={tourTab}
+          aria-label={`${open ? 'Hide' : 'Show'} ${tabLabel}`}
+          aria-expanded={open}
+        >
+          {tabIcon && <span className={styles.tabIcon}>{tabIcon}</span>}
+          <span className={styles.tabLabel}>{tabLabel}</span>
+        </button>
+      )}
       <div className={styles.inner}>
-        {title && (
+        {title && !inRail && (
           <div className={styles.header}>
             <span className={styles.title}>{title}</span>
           </div>

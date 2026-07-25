@@ -75,6 +75,15 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   const cz = (az + bz) / 2
   const angle = Math.atan2(bz - az, bx - ax)
 
+  // Cap-plate corner lap: at a corner, the caps of walls on the dominant axis lap
+  // OVER the corner while the perpendicular walls pull their cap back one member
+  // width to receive them — so the two double top plates interlock (the tie).
+  const capMode: 'lap' | 'back' = Math.abs(ux) >= Math.abs(uz) ? 'lap' : 'back'
+  const capLap = {
+    start: startCorner ? capMode : undefined,
+    end: endCorner ? capMode : undefined,
+  }
+
   // Masonry (CMU/brick/concrete) is a solid block; framed walls get studs.
   const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
   const framing = useMemo(() => {
@@ -87,11 +96,11 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       f = buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity, kind })
     } else {
       const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-      f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity })
+      f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity, capLap })
     }
     f.userData.level = wall.level ?? 0  // so the shared explode lifts it floor-by-floor
     return f
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level])
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level, startCorner, endCorner, capMode])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {

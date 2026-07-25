@@ -7,11 +7,13 @@ import TakeoffContent from '../Viewer3D/TakeoffPanel'
 import InferencePrompt from '../Viewer3D/InferencePrompt'
 import TopIcons from './TopIcons'
 import EdgeDrawer from './EdgeDrawer'
-import AssistantBubble from './AssistantBubble'
+import RailCascade from './RailCascade'
 import TutorialCoach from './TutorialCoach'
 import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
+import AskAI from './AskAI'
 import { useAppStore } from '../../store/useAppStore'
+import { useAutoBuild } from '../../store/useAutoBuild'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useConfigStore, type ActiveUnit } from '../../store/useConfigStore'
@@ -396,6 +398,10 @@ function ConverterPanel() {
 export default function WorkspaceLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // The model stands itself up as the user traces — no "Build 3D" step, and it
+  // never auto-adds a roof (buildModel drops auto-roofs; roofs are user-traced).
+  useAutoBuild()
+
   const drawings            = useAppStore((s) => s.drawings)
   const addDrawings         = useAppStore((s) => s.addDrawings)
   const loadPresetDrawing   = useAppStore((s) => s.loadPresetDrawing)
@@ -457,6 +463,7 @@ export default function WorkspaceLayout() {
   // activePanel gate, the same gate every other overlay UI checks.
   const closePanels = useFloorplanLocalStore((s) => s.closeAllPanels)
   const settingsDrawerOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
+  const askDrawerOpen = useFloorplanLocalStore((s) => s.askDrawerOpen)
   const placeDrawerOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
   const startTutorial = useFloorplanLocalStore((s) => s.startTutorial)
@@ -529,6 +536,7 @@ export default function WorkspaceLayout() {
       if (e.key !== 'Escape') return
       const st = useFloorplanLocalStore.getState()
       if (st.settingsDrawerOpen) st.setDrawerOpen('settings', false)
+      if (st.askDrawerOpen) st.setDrawerOpen('ask', false)
     }
     window.addEventListener('keydown', onEsc)
     return () => window.removeEventListener('keydown', onEsc)
@@ -571,10 +579,9 @@ export default function WorkspaceLayout() {
         <ModelViewer />
       </div>
 
-      {/* Brand mark — the SAME 3D extruded wordmark twice: a large almost-invisible
-          floating watermark, and an exact replica rendered small & crisp top-left,
-          in line with the top-right icon row. */}
-      <Logo3DBadge />
+      {/* Brand mark — the 3D extruded wordmark, small & crisp, pinned top-left.
+          (The large centered watermark was removed — it parked a big element dead
+          in the workspace; the top-left mark carries the brand.) */}
       <Logo3DBadge variant="mark" />
 
       {/* Persistent global actions, top-right. Build / Settings / Place each
@@ -587,8 +594,15 @@ export default function WorkspaceLayout() {
       {/* RIGHT drawer — Settings & view. Always mounted so its tab stays on the
           edge; the body retracts off-screen until opened. The Explode control
           folds in here (single home — no separate floating bar). */}
+      {/* SPIKE: the whole UI as a slim persistent rail with cascading sub-columns
+          (RailCascade). Representative content for now — feeling out the pattern
+          before real menus migrate in. Temporarily stands in for the tabbed
+          drawers below. */}
+      <RailCascade />
+
       <EdgeDrawer
-        side="right"
+        side="left"
+        inRail
         title="Settings"
         tabLabel="Settings"
         tabIcon="⚙"
@@ -619,27 +633,21 @@ export default function WorkspaceLayout() {
         <ConverterPanel />
       </EdgeDrawer>
 
-      {/* Onboarding card — only when no drawings are loaded. */}
+      {/* Ask is panel-less: a floating bottom overlay (AskAI positions itself),
+          mounted only while open so it never leaks over the workspace. */}
+      {askDrawerOpen && !traceMode && <AskAI />}
+
+      {/* Onboarding hint — near-invisible, only when no drawings are loaded. The
+          grid itself is the drop target, so this is just a whisper + a few chips. */}
       {showUploadHint && (
         <div className={styles.uploadHint}>
-          <div className={styles.uploadHintHeader}>
-            <span className={styles.uploadHintTitle}>Get started</span>
-          </div>
-          <p className={styles.uploadHintSub}>Drag a floor plan onto the grid, import one, or start from a preset.</p>
+          <p className={styles.uploadHintSub}>Drop a plan on the grid, or start from a preset</p>
           <div className={styles.uploadHintActions}>
-            <button className={styles.uploadHintBtn} onClick={() => fileInputRef.current?.click()}>
-              Browse files
-            </button>
-            <button className={styles.uploadHintBtnSecondary} onClick={() => fileInputRef.current?.click()}>
-              Scan with camera
-            </button>
+            <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Browse</button>
+            <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Scan</button>
+            <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Tour</button>
           </div>
-          <p className={styles.uploadHintSub} style={{ marginTop: 4 }}>Or start from a preset:</p>
           <PresetPanel onLoad={handleLoadPreset} />
-          <p className={styles.uploadHintSub} style={{ marginTop: 6 }}>New here? I'll walk you through it:</p>
-          <button className={styles.uploadHintBtn} onClick={startGuidedTour}>
-            🎓 Take the guided tour
-          </button>
         </div>
       )}
 
@@ -702,8 +710,8 @@ export default function WorkspaceLayout() {
       {/* Ambient inference nudge — gentle "snap flush?" prompt, bottom-centre. */}
       <InferencePrompt />
 
-      {/* The omnipresent assistant — proactive next-step coach (top-centre). */}
-      <AssistantBubble />
+      {/* (Removed: the proactive "next-step" coach cards — redundant with Ask,
+          they floated over other menus and their suggestion order was off.) */}
 
       {/* The guided "build a whole house" walkthrough (its own persistent card). */}
       <TutorialCoach />

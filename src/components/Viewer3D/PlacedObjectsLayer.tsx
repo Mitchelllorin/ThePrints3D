@@ -226,9 +226,12 @@ export default function PlacedObjectsLayer() {
                     roughness={0.6}
                     metalness={0.05}
                     transparent={isOpening || !!obj.transparent}
-                    opacity={obj.transparent ? 0.18 : isOpening ? 0.35 : 1}
+                    opacity={obj.transparent ? 0.18 : isOpening ? 0.55 : 1}
                     depthWrite={!(isOpening || obj.transparent)}
                   />
+                  {/* An opening is a thin panel — edge-on from the top-down plan
+                      view it disappears, so outline it so it always reads. */}
+                  {isOpening && !obj.transparent && <Edges color={color} lineWidth={1.5} />}
                 </mesh>
               )}
               {/* Selection outline — an invisible bounding box carrying the edges.
@@ -242,24 +245,49 @@ export default function PlacedObjectsLayer() {
               )}
             </group>
 
-            {/* Door swing arc — quarter circle from the hinge (LH/RH) plus the
-                open leaf, drawn on the floor so it reads like a plan symbol. */}
+            {/* Door plan symbol — jambs marking the opening + the swing leaf and
+                its quarter-circle arc, drawn FLAT on the floor so the door reads
+                from straight overhead (the vertical panel above is edge-on and
+                invisible top-down). Bold + opaque so it never looks "missing". */}
             {obj.type === 'door' && (() => {
               const swing = obj.swing ?? 'left'
               const hinge = swing === 'left' ? -w / 2 : w / 2
               const sign = swing === 'left' ? 1 : -1
-              const y = 0.06
-              const N = 18
+              const y = 0.07
+              const N = 20
               const arc: [number, number, number][] = []
               for (let i = 0; i <= N; i++) {
                 const t = (i / N) * (Math.PI / 2)
                 arc.push([hinge + sign * w * Math.cos(t), y, w * Math.sin(t)])
               }
               const leaf: [number, number, number][] = [[hinge, y, 0], [hinge, y, w]]
+              const jambL: [number, number, number][] = [[-w / 2, y, -0.09], [-w / 2, y, 0.09]]
+              const jambR: [number, number, number][] = [[w / 2, y, -0.09], [w / 2, y, 0.09]]
               return (
                 <>
-                  <Line points={arc} color={color} lineWidth={2} />
-                  <Line points={leaf} color={color} lineWidth={2.5} />
+                  <Line points={jambL} color={color} lineWidth={4} />
+                  <Line points={jambR} color={color} lineWidth={4} />
+                  <Line points={leaf} color={color} lineWidth={4} />
+                  <Line points={arc} color={color} lineWidth={3} />
+                </>
+              )
+            })()}
+
+            {/* Window plan symbol — a double bar across the opening between two
+                jambs, flat on the floor so a window reads top-down just like a
+                door (it has no swing to draw). */}
+            {obj.type === 'window' && (() => {
+              const y = 0.07
+              const barA: [number, number, number][] = [[-w / 2, y, -0.05], [w / 2, y, -0.05]]
+              const barB: [number, number, number][] = [[-w / 2, y, 0.05], [w / 2, y, 0.05]]
+              const jambL: [number, number, number][] = [[-w / 2, y, -0.12], [-w / 2, y, 0.12]]
+              const jambR: [number, number, number][] = [[w / 2, y, -0.12], [w / 2, y, 0.12]]
+              return (
+                <>
+                  <Line points={jambL} color={color} lineWidth={4} />
+                  <Line points={jambR} color={color} lineWidth={4} />
+                  <Line points={barA} color={color} lineWidth={3} />
+                  <Line points={barB} color={color} lineWidth={3} />
                 </>
               )
             })()}
