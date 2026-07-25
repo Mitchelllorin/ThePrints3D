@@ -13,7 +13,6 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useAppStore } from '../../store/useAppStore'
-import { useAutoBuild } from '../../store/useAutoBuild'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useConfigStore, type ActiveUnit } from '../../store/useConfigStore'
@@ -398,9 +397,10 @@ function ConverterPanel() {
 export default function WorkspaceLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // The model stands itself up as the user traces — no "Build 3D" step, and it
-  // never auto-adds a roof (buildModel drops auto-roofs; roofs are user-traced).
-  useAutoBuild()
+  // Auto-build DISABLED — the user builds by tracing (this "model builds itself"
+  // behaviour was deliberately reverted; re-enabling it auto-laid slabs coplanar
+  // with existing floors, causing z-fighting/flashing as the camera moved).
+  // useAutoBuild()
 
   const drawings            = useAppStore((s) => s.drawings)
   const addDrawings         = useAppStore((s) => s.addDrawings)
