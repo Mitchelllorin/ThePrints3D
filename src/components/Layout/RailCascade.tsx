@@ -68,8 +68,14 @@ export default function RailCascade() {
   }
 
   const armObject = (type: string) => {
-    if (placeObjectType === type) setPlaceObjectType(null)
-    else armPlaceExclusive(type)
+    if (placeObjectType === type) {
+      setPlaceObjectType(null)
+    } else {
+      armPlaceExclusive(type)
+      // Selecting an item is the start of an action → retract the menu so the
+      // workspace is clear to place (the hi-vis ghost is now on the plan).
+      setPlaceOpen(false)
+    }
   }
 
   // Retract entirely while tracing — the workspace stays clear during an action.

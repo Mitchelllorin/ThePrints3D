@@ -445,15 +445,21 @@ export default function FloorplanPanel() {
 
   const buildCtx = overlay.calibrationMode || pickerOpen || selectedWallIndex != null || !!selectedLine || !!selectedArea
   const prevBuildCtx = useRef(false)
+  const prevPlaceType = useRef<string | null>(null)
   useEffect(() => {
-    // Open on a new choose/read context — but NEVER while actively tracing (a
-    // selection made mid-trace used to pop the drawer open over the print).
-    // Open on a new choose/read context — but NEVER while actively tracing (a
-    // selection mid-run used to pop the drawer over the print). The user-invoked
-    // picker still opens the drawer (pickerOpen flips tracingActive off).
-    // ...but NOT while an object is armed for placement — placing selects the
-    // wall/area under it, which used to pop the Build drawer open mid-place.
-    if (buildCtx && !prevBuildCtx.current && !tracingActive && !placeObjectType) setDrawerOpen('build', true)
+    // Open Build's edit panel on a NEW choose/read context (select a wall/area/
+    // line, or open the picker). Guards:
+    //  • not while actively tracing (would pop over the print),
+    //  • not while an object is armed for placement,
+    //  • and NOT on the frame a placement just disarmed — clearing placeObjectType
+    //    and the selection happens across two stores, so for one frame buildCtx
+    //    can read stale-true while placeObjectType is already null, which popped
+    //    Build open the instant you dropped an object.
+    const justPlaced = prevPlaceType.current !== null && placeObjectType === null
+    prevPlaceType.current = placeObjectType
+    if (buildCtx && !prevBuildCtx.current && !tracingActive && !placeObjectType && !justPlaced) {
+      setDrawerOpen('build', true)
+    }
     prevBuildCtx.current = buildCtx
   }, [buildCtx, tracingActive, placeObjectType, setDrawerOpen])
 
