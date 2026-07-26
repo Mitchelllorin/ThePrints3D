@@ -1,12 +1,16 @@
 /**
  * ThePrints3D — Ask AI proxy (Cloudflare Worker).
  *
- * The app calls THIS instead of Anthropic directly, so your Anthropic key lives
- * server-side (a Worker secret) and never ships in the APK. The Worker owns the
- * construction system prompt, so a caller can only ask construction questions —
- * they can't use your key for arbitrary prompts. A simple per-device daily cap
- * (KV) is the free tier; beyond it, the Worker returns 429 and the app falls back
- * to the offline grounded specs + shows an upgrade nudge.
+ * The app calls THIS instead of Google directly, so YOUR Gemini key lives
+ * server-side (a Worker secret) and never ships in the app — users need no key.
+ * The Worker owns the construction system prompt, so a caller can only ask
+ * construction questions — they can't use your key for arbitrary prompts. A
+ * simple per-device daily cap (KV) is the free tier; beyond it, the Worker
+ * returns 429 and the app falls back to the offline grounded specs.
+ *
+ * Portable: the only Cloudflare-specific bits are the KV rate-cap and the
+ * `export default { fetch }` shape. On Vercel/Netlify/Deno, swap KV for that
+ * host's store (or drop the cap for v1); the Gemini call is identical.
  *
  * Request  (POST, JSON): { messages: {role,content}[], specs?: string, deviceId?: string }
  * Response (JSON):        { text, remaining }   |   429 { error:"free_limit", remaining:0 }
@@ -16,7 +20,8 @@
  */
 
 export interface Env {
-  ANTHROPIC_API_KEY: string
+  /** YOUR Google AI Studio (Gemini) key — stored as a Worker secret, never shipped. */
+  GEMINI_API_KEY: string
   ASK_KV: KVNamespace
   /** Free AI questions per device per day (default 10). */
   FREE_PER_DAY?: string
@@ -27,7 +32,7 @@ interface Msg {
   content: string
 }
 
-const MODEL = 'claude-opus-4-8'
+const MODEL = 'gemini-2.0-flash'
 const MAX_TOKENS = 1024
 
 const CORS: Record<string, string> = {
@@ -91,33 +96,38 @@ export default {
     const used = Number((await env.ASK_KV.get(kvKey)) ?? '0')
     if (used >= cap) return json({ error: 'free_limit', remaining: 0 }, 429)
 
-    // ── call Anthropic with YOUR key (never leaves the Worker) ──
+    // ── call Gemini with YOUR key (never leaves the Worker) ──
+    // Gemini uses role "model" (not "assistant") + a separate system_instruction.
+    const contents = messages.map((m) => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: String(m.content) }],
+    }))
     let upstream: Response
     try {
-      upstream = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': env.ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
+      upstream = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent` +
+          `?key=${encodeURIComponent(env.GEMINI_API_KEY)}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemPrompt(body.specs ?? '') }] },
+            contents,
+            generationConfig: { maxOutputTokens: MAX_TOKENS, temperature: 0.3 },
+          }),
         },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          system: systemPrompt(body.specs ?? ''),
-          messages: messages.map((m) => ({ role: m.role, content: String(m.content) })),
-        }),
-      })
+      )
     } catch {
       return json({ error: 'upstream_unreachable' }, 502)
     }
 
     if (!upstream.ok) return json({ error: 'upstream', status: upstream.status }, 502)
 
-    const data = (await upstream.json()) as { content?: { type: string; text?: string }[] }
-    const text = (data.content ?? [])
-      .filter((b) => b.type === 'text')
-      .map((b) => b.text ?? '')
+    const data = (await upstream.json()) as {
+      candidates?: { content?: { parts?: { text?: string }[] } }[]
+    }
+    const text = (data.candidates?.[0]?.content?.parts ?? [])
+      .map((p) => p.text ?? '')
       .join('')
       .trim()
     if (!text) return json({ error: 'empty' }, 502)

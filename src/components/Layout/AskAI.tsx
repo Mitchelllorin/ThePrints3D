@@ -8,19 +8,28 @@
  * See src/services/askBrain.ts and src/services/aiKey.ts.
  */
 import { useState, useRef, useEffect, type FormEvent } from 'react'
-import { answer, type Turn } from '../../services/askBrain'
+import { answer, reviewBuild, summarizeBuild, AI_PROXIED, type Turn } from '../../services/askBrain'
 import { knowledgeCardCount, EXAMPLE_QUESTIONS } from '../../services/constructionKnowledge'
 import { hasAiKey, setAiKey } from '../../services/aiKey'
+import { useAppStore } from '../../store/useAppStore'
 import styles from './AskAI.module.css'
 
 export default function AskAI() {
   const [turns, setTurns] = useState<Turn[]>([])
   const [input, setInput] = useState('')
   const [pending, setPending] = useState(false)
-  const [keyed, setKeyed] = useState(hasAiKey())
+  // Proxy configured → AI is on for everyone, no key to manage.
+  const [keyed, setKeyed] = useState(AI_PROXIED || hasAiKey())
   const [keyOpen, setKeyOpen] = useState(false)
   const [keyInput, setKeyInput] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
+
+  // Build state for the "Check my build" review.
+  const drawings = useAppStore((s) => s.drawings)
+  const floorsAreas = useAppStore((s) => s.floorsAreas)
+  const roofAreas = useAppStore((s) => s.roofAreas)
+  const placedObjects = useAppStore((s) => s.placedObjects)
+  const hasBuild = drawings.some((d) => d.parsedWalls.length > 0) || placedObjects.length > 0
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
@@ -35,6 +44,25 @@ export default function AskAI() {
     setPending(true)
     try {
       const reply = await answer(query, history)
+      setTurns((t) => [...t, { role: 'assistant', reply }])
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const check = async () => {
+    if (pending) return
+    setTurns((t) => [...t, { role: 'user', text: '⚠ Check my build' }])
+    setPending(true)
+    try {
+      const summary = summarizeBuild({
+        scaleMmPerPx: drawings.find((d) => d.parsedWalls.length > 0)?.scaleMmPerPx ?? null,
+        walls: drawings.flatMap((d) => d.parsedWalls),
+        floorsCount: floorsAreas.length,
+        roofsCount: roofAreas.length,
+        objects: placedObjects.map((o) => ({ type: o.type, label: o.label })),
+      })
+      const reply = await reviewBuild(summary)
       setTurns((t) => [...t, { role: 'assistant', reply }])
     } finally {
       setPending(false)
@@ -64,10 +92,15 @@ export default function AskAI() {
           </p>
           {keyed ? (
             <p className={styles.aiStatus}>
-              ✦ AI on ·{' '}
-              <button className={styles.aiLink} onClick={clearKey}>
-                remove key
-              </button>
+              ✦ AI on
+              {!AI_PROXIED && (
+                <>
+                  {' · '}
+                  <button className={styles.aiLink} onClick={clearKey}>
+                    remove key
+                  </button>
+                </>
+              )}
             </p>
           ) : keyOpen ? (
             <form className={styles.keyRow} onSubmit={saveKey}>
@@ -75,10 +108,10 @@ export default function AskAI() {
                 className={styles.keyInput}
                 type="password"
                 autoComplete="off"
-                placeholder="Anthropic API key (sk-ant-…)"
+                placeholder="Google AI Studio key (AIza…)"
                 value={keyInput}
                 onChange={(e) => setKeyInput(e.target.value)}
-                aria-label="Anthropic API key"
+                aria-label="Google AI Studio API key"
               />
               <button className={styles.askBtn} type="submit" disabled={!keyInput.trim()}>
                 Save
@@ -86,7 +119,7 @@ export default function AskAI() {
             </form>
           ) : (
             <button className={styles.enableAi} onClick={() => setKeyOpen(true)}>
-              ✦ Turn on the AI — paste your Anthropic key
+              ✦ Turn on the AI — free Google Gemini key
             </button>
           )}
 
@@ -161,6 +194,12 @@ export default function AskAI() {
           Ask
         </button>
       </form>
+
+      {hasBuild && (
+        <button className={styles.checkBuild} onClick={check} disabled={pending}>
+          ⚠ Check my build for mistakes
+        </button>
+      )}
     </div>
   )
 }

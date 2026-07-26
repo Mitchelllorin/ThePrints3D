@@ -6,10 +6,10 @@
  * Dragging uses transient local state and only commits to the store (one
  * undoable step) on pointer-up, so a drag doesn't flood the history stack.
  */
-import { useState, useRef, useLayoutEffect } from 'react'
+import { useState, useRef, useLayoutEffect, useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
-import { Edges, Line } from '@react-three/drei'
+import { Edges, Line, TransformControls, Html } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
 import { createDoubleTapState, detectDoubleTap } from './doubleTap'
 import { useAppStore } from '../../store/useAppStore'
@@ -76,6 +76,87 @@ function DetailExplode({ amount, children }: { amount: number; children: React.R
   return <group ref={ref}>{children}</group>
 }
 
+/** The transform the gizmo is writing live (before it's committed to the store). */
+type GizmoLive = {
+  id: string
+  x: number
+  z: number
+  rotationY: number
+  scaleX: number
+  scaleY: number
+  scaleZ: number
+}
+type GizmoMode = 'translate' | 'rotate' | 'scale'
+
+/**
+ * ObjectGizmo — the R/G/B axis gizmo (drei TransformControls) for the selected
+ * object in edit mode. It drives an invisible proxy that mirrors the object's
+ * stored transform; on drag it reports live values up (rendered transiently) and
+ * commits once on release. OrbitControls is `makeDefault`, so drei suspends
+ * orbit automatically while a handle is dragged.
+ *
+ *  • Move   → X/Z arrows (objects live on the floor; Y-translate has no store
+ *             field yet — arrives when this extends to walls/multi-floor).
+ *  • Rotate → the yaw ring (rotationY).
+ *  • Stretch→ X/Y/Z scale (scaleY taller = the "extrude / extend" the user wants).
+ */
+function ObjectGizmo({
+  obj,
+  mountY,
+  mode,
+  onLive,
+  onCommit,
+}: {
+  obj: PlacedObject
+  mountY: number
+  mode: GizmoMode
+  onLive: (v: GizmoLive) => void
+  onCommit: (v: GizmoLive) => void
+}) {
+  const proxy = useMemo(() => new THREE.Object3D(), [])
+  const [ready, setReady] = useState(false)
+  const dragging = useRef(false)
+
+  useEffect(() => setReady(true), [])
+
+  // Seed the proxy from the store whenever the stored transform changes and we
+  // aren't mid-drag (so a live edit isn't clobbered by a re-render).
+  useLayoutEffect(() => {
+    if (dragging.current) return
+    proxy.position.set(obj.x, mountY, obj.z)
+    proxy.rotation.set(0, obj.rotationY, 0)
+    proxy.scale.set(obj.scaleX, obj.scaleY, obj.scaleZ)
+    proxy.updateMatrixWorld()
+  }, [obj.x, obj.z, obj.rotationY, obj.scaleX, obj.scaleY, obj.scaleZ, mountY, proxy])
+
+  const read = (): GizmoLive => ({
+    id: obj.id,
+    x: proxy.position.x,
+    z: proxy.position.z,
+    rotationY: proxy.rotation.y,
+    scaleX: Math.max(0.05, proxy.scale.x),
+    scaleY: Math.max(0.05, proxy.scale.y),
+    scaleZ: Math.max(0.05, proxy.scale.z),
+  })
+
+  return (
+    <>
+      <primitive object={proxy} />
+      {ready && (
+        <TransformControls
+          object={proxy}
+          mode={mode}
+          size={0.75}
+          showY={mode !== 'translate'}
+          onMouseDown={() => { dragging.current = true }}
+          onObjectChange={() => onLive(read())}
+          onMouseUp={() => { dragging.current = false; onCommit(read()) }}
+        />
+      )}
+    </>
+  )
+}
+
 function dims(obj: PlacedObject) {
   const item = getCatalogItem(obj.type)
   return {
@@ -101,6 +182,9 @@ export default function PlacedObjectsLayer() {
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
 
   const [drag, setDrag] = useState<DragState | null>(null)
+  // Precision gizmo (edit mode only) — live transform before commit, + its mode.
+  const [gizmoLive, setGizmoLive] = useState<GizmoLive | null>(null)
+  const [gizmoMode, setGizmoMode] = useState<GizmoMode>('translate')
   const groupRef = useRef<THREE.Group>(null)
   // Double-tap an object to flip its X-ray — quick, no panel/scroll. One detector
   // for the whole layer; the per-object handler calls it. (Walls/floors next.)
@@ -152,8 +236,70 @@ export default function PlacedObjectsLayer() {
     setDrag(null)
   }
 
+  // The object the precision gizmo attaches to: the selected one, in edit mode.
+  const gizmoObj =
+    editMode && selectedObjectId && !placeObjectType
+      ? placedObjects.find((o) => o.id === selectedObjectId) ?? null
+      : null
+  const gizmoMountY = gizmoObj
+    ? (gizmoObj.type === 'window'
+        ? (gizmoObj.sillM ?? 0.9) + (dims(gizmoObj).h) / 2
+        : deviceMountHeightM(gizmoObj.type, ceilingM) ?? dims(gizmoObj).h / 2)
+    : 0
+
   return (
     <group name="placed-objects" ref={groupRef}>
+      {/* Precision transform gizmo (edit mode) — R/G/B axis handles on the
+          selected object, with a Move/Rotate/Stretch mode toggle floating above. */}
+      {gizmoObj && (
+        <ObjectGizmo
+          key={gizmoObj.id}
+          obj={gizmoObj}
+          mountY={gizmoMountY}
+          mode={gizmoMode}
+          onLive={setGizmoLive}
+          onCommit={(v) => {
+            updatePlacedObject(v.id, {
+              x: v.x, z: v.z, rotationY: v.rotationY,
+              scaleX: v.scaleX, scaleY: v.scaleY, scaleZ: v.scaleZ,
+            })
+            setGizmoLive(null)
+          }}
+        />
+      )}
+      {gizmoObj && (
+        <Html
+          position={[gizmoObj.x, gizmoMountY + dims(gizmoObj).h / 2 + 0.6, gizmoObj.z]}
+          center
+          distanceFactor={8}
+          zIndexRange={[20, 0]}
+          style={{ pointerEvents: 'auto', userSelect: 'none' }}
+        >
+          <div style={{ display: 'flex', gap: 4 }}>
+            {(['translate', 'rotate', 'scale'] as GizmoMode[]).map((m) => (
+              <button
+                key={m}
+                onPointerDown={(e) => { e.stopPropagation(); setGizmoMode(m) }}
+                style={{
+                  padding: '3px 9px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  borderRadius: 999,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  color: gizmoMode === m ? '#0b0f17' : '#e2e8f0',
+                  background: gizmoMode === m ? '#38bdf8' : 'rgba(10,16,30,0.75)',
+                  border: '1px solid rgba(56,189,248,0.5)',
+                  textShadow: gizmoMode === m ? 'none' : '0 1px 2px rgba(0,0,0,0.8)',
+                }}
+              >
+                {m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}
+              </button>
+            ))}
+          </div>
+        </Html>
+      )}
+
       {/* Invisible ground catcher — only active while dragging, so moves/rotates
           continue even when the pointer leaves the object box. */}
       {drag && (
@@ -170,7 +316,12 @@ export default function PlacedObjectsLayer() {
       )}
 
       {placedObjects.map((obj) => {
-        const live = drag && drag.id === obj.id ? { ...obj, x: drag.x, z: drag.z, rotationY: drag.rotationY } : obj
+        const live =
+          gizmoLive && gizmoLive.id === obj.id
+            ? { ...obj, x: gizmoLive.x, z: gizmoLive.z, rotationY: gizmoLive.rotationY, scaleX: gizmoLive.scaleX, scaleY: gizmoLive.scaleY, scaleZ: gizmoLive.scaleZ }
+            : drag && drag.id === obj.id
+              ? { ...obj, x: drag.x, z: drag.z, rotationY: drag.rotationY }
+              : obj
         const { w, d, h, color } = dims(live)
         const selected = obj.id === selectedObjectId
         const editHovered = editMode && editHover?.kind === 'object' && editHover.id === obj.id

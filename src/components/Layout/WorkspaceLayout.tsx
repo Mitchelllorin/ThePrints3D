@@ -253,6 +253,7 @@ function SettingsContent() {
 
       <CollapsibleSection id="wordmark" title="3D wordmark" openId={openId} setOpenId={setOpenId}>
         <Toggle label="Visible" val={ui.logo3DVisible} onChange={(v) => setUI({ logo3DVisible: v })} />
+        <Toggle label="Motion" val={ui.logo3DAnimated} onChange={(v) => setUI({ logo3DAnimated: v })} />
         <Slider label="Opacity" val={Math.round(ui.logo3DOpacity * 100)} min={0} max={100} step={1} unit="%" onChange={(v) => setUI({ logo3DOpacity: v / 100 })} />
         <Slider label="Speed" val={ui.logo3DFloatSpeed} min={0} max={5} step={0.1} onChange={(v) => setUI({ logo3DFloatSpeed: v })} />
         <Slider label="Bounce" val={ui.logo3DFloatHeight} min={0} max={2} step={0.05} unit="m" onChange={(v) => setUI({ logo3DFloatHeight: v })} />
@@ -579,9 +580,11 @@ export default function WorkspaceLayout() {
         <ModelViewer />
       </div>
 
-      {/* Brand mark — the 3D extruded wordmark, small & crisp, pinned top-left.
-          (The large centered watermark was removed — it parked a big element dead
-          in the workspace; the top-left mark carries the brand.) */}
+      {/* Brand mark — the SAME 3D extruded wordmark twice: a large floating
+          watermark over the workspace, and a small crisp replica top-left. Both
+          obey Settings → 3D wordmark (Visible off / Motion off) so promo footage
+          can be fully logo-free or frozen. */}
+      <Logo3DBadge />
       <Logo3DBadge variant="mark" />
 
       {/* Persistent global actions, top-right. Build / Settings / Place each

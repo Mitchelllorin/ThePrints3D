@@ -59,6 +59,7 @@ function Wordmark({ opacity }: { opacity: number }) {
   const rockRef = useRef<THREE.Group>(null)
   const floatSpeed = useUISettingsStore((s) => s.logo3DFloatSpeed)
   const floatHeight = useUISettingsStore((s) => s.logo3DFloatHeight)
+  const animated = useUISettingsStore((s) => s.logo3DAnimated)
   const bevel = { bevelEnabled: true, bevelSize: 0.018, bevelThickness: 0.035, bevelSegments: 3 }
 
   const offsets = useMemo(() => {
@@ -72,10 +73,12 @@ function Wordmark({ opacity }: { opacity: number }) {
     return starts
   }, [font])
 
-  // Rock back and forth to show the extrusion; gentle vertical float.
+  // Rock back and forth to show the extrusion; gentle vertical float. Frozen flat
+  // when motion is off (Settings → 3D wordmark → Motion) — for clean promo footage.
   useFrame((state) => {
     const g = rockRef.current
     if (!g) return
+    if (!animated) { g.rotation.y = 0; g.position.y = -BASE_SIZE / 2; return }
     const t = state.clock.elapsedTime
     g.rotation.y = Math.sin(t * (0.5 + floatSpeed * 0.5)) * 0.55
     g.position.y = -BASE_SIZE / 2 + Math.sin(t * (0.7 + floatSpeed * 0.4)) * floatHeight * 0.4
@@ -116,7 +119,9 @@ export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'wate
   const opacity = isMark ? 1 : watermarkOpacity
   // The watermark can be toggled off; the small mark always shows (it's the
   // legible brand mark). Same wordmark either way — an exact replica.
-  if (!isMark && !visible) return null
+  // Visible toggle now hides BOTH the floating watermark AND the top-left mark
+  // (so promo footage can go fully logo-free).
+  if (!visible) return null
   const box = isMark
     ? { top: 10, left: 10, width: 150, height: 36, zIndex: 100 }
     : { top: '50%', left: '50%', width: 'min(70vw, 680px)', height: 'min(20vh, 190px)', zIndex: 40, transform: 'translate(-50%, -50%)' }

@@ -460,7 +460,10 @@ export default function FloorplanPanel() {
   const prevTracingActive = useRef(false)
   useEffect(() => {
     if (tracingActive !== prevTracingActive.current) {
-      setDrawerOpen('build', !tracingActive)
+      // Only CLOSE Build when an action starts (keep the workspace clear). Don't
+      // auto-REOPEN it when the action ends — the rail owns opening menus now, so
+      // auto-reopening popped Build over whatever menu (e.g. Place) was already out.
+      if (tracingActive) setDrawerOpen('build', false)
       prevTracingActive.current = tracingActive
     }
   }, [tracingActive, setDrawerOpen])

@@ -253,6 +253,23 @@
   text-decoration: underline;
 }
 
+/* "Check my build" — proactive review trigger, floating pill. */
+.checkBuild {
+  align-self: flex-start;
+  pointer-events: auto;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fbbf24;
+  background: color-mix(in srgb, #fbbf24 12%, transparent);
+  border: 1px solid color-mix(in srgb, #fbbf24 40%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+.checkBuild:hover { background: color-mix(in srgb, #fbbf24 20%, transparent); }
+.checkBuild:disabled { opacity: 0.5; cursor: default; }
+
 /* ✦ tag on brain-produced answers */
 .aiTag {
   flex: 0 0 auto;

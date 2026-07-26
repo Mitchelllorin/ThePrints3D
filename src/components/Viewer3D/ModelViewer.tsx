@@ -351,6 +351,7 @@ export default function ModelViewer() {
   const setWizardOpen  = useFloorplanLocalStore((s) => s.setWizardOpen)
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
   const tracePaused    = useFloorplanLocalStore((s) => s.tracePaused)
+  const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const [exportOpen, setExportOpen]     = useState(false)
   const [isDragOver, setIsDragOver]     = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
@@ -369,8 +370,12 @@ export default function ModelViewer() {
   // swipes don't shift the camera target while tapping trace points. When trace
   // is paused (double-tap to look around) pan is re-enabled so users can
   // re-center the print if it has drifted out of view.
-  const orbitEnabled = !overlay.orbitLocked
-  const panEnabled = !traceMode || tracePaused
+  // LOCK the workspace while an object is armed for placement — the action owns
+  // the pointer, so a tap/drag places precisely instead of orbiting the camera
+  // (fighting the workspace). Same "action locks, idle unlocks" model as tracing.
+  const placing = !!placeObjectType
+  const orbitEnabled = !overlay.orbitLocked && !placing
+  const panEnabled = (!traceMode || tracePaused) && !placing
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()

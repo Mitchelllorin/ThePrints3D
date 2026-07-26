@@ -16,6 +16,8 @@ export interface UISettings {
   logoSize: number
   // 3D floating logo
   logo3DVisible: boolean
+  /** When false, the logo is frozen (no rock/float) — for clean promo footage. */
+  logo3DAnimated: boolean
   logo3DOpacity: number
   logo3DFloatSpeed: number
   logo3DFloatHeight: number
@@ -54,6 +56,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   logoOpacity: 1,
   logoSize: 1,
   logo3DVisible: true,
+  logo3DAnimated: true,
   logo3DOpacity: 0.06, // floating workspace logo defaults to ALMOST invisible
   logo3DFloatSpeed: 0.7,
   logo3DFloatHeight: 0.25,

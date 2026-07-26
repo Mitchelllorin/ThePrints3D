@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
-import { Line } from '@react-three/drei'
+import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
@@ -1106,17 +1106,18 @@ export default function FloorplanOverlay() {
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
 
-  // Show the ghost IMMEDIATELY when an object is armed — parked at the plan
-  // centre — so you can see what you're placing right away. On touch there's no
-  // hover to reveal it first, so without this you'd pick a door and see nothing
-  // (then tap blindly). From here you drag it into place (or just tap a spot).
+  // Arm an item → it appears hi-vis at the EDGE of the workspace (near-left
+  // corner of the plan), not centred over it — so it's clearly grabbable and
+  // doesn't cover where you're about to drop it. Grab it, hold-drag it into
+  // place, release to drop. (Camera is locked while placing, so drag moves the
+  // ghost, not the view.)
   useEffect(() => {
     if (!placeObjectType || !ghostItem) return
-    // Defer a frame so the ghost mesh has mounted before we position it.
     const id = requestAnimationFrame(() => {
       if (!ghostRef.current) return
-      const cx = overlay.position[0], cz = overlay.position[1]
-      const pose = devicePose(cx, cz)
+      const edgeX = overlay.position[0] - width * 0.38
+      const edgeZ = overlay.position[1] + depth * 0.42
+      const pose = devicePose(edgeX, edgeZ)
       ghostRef.current.position.set(pose.x, ghostY(placeObjectType, ghostItem.defaultH), pose.z)
       ghostRef.current.rotation.y = pose.rotationY
       ghostRef.current.visible = true
@@ -1394,7 +1395,17 @@ export default function FloorplanOverlay() {
       {placeObjectType && ghostItem && (
         <mesh ref={ghostRef} visible={false} position={[0, ghostItem.defaultH / 2, 0]}>
           <boxGeometry args={[ghostItem.defaultW, ghostItem.defaultH, (placeObjectType === 'door' || placeObjectType === 'window') ? 0.06 : ghostItem.defaultD]} />
-          <meshStandardMaterial color={ghostItem.color} transparent opacity={0.5} depthWrite={false} />
+          {/* Hi-vis "grab me": the item's colour, glowing, with a bright outline so
+              it clearly reads as the thing to pick up and drag into place. */}
+          <meshStandardMaterial
+            color={ghostItem.color}
+            emissive={ghostItem.color}
+            emissiveIntensity={0.6}
+            transparent
+            opacity={0.85}
+            depthWrite={false}
+          />
+          <Edges color="#38bdf8" lineWidth={2.5} />
         </mesh>
       )}
 
