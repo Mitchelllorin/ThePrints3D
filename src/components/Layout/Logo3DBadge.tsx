@@ -123,7 +123,8 @@ export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'wate
   // (so promo footage can go fully logo-free).
   if (!visible) return null
   const box = isMark
-    ? { top: 10, left: 10, width: 150, height: 36, zIndex: 100 }
+    // Top-CENTRE so an extended edge menu (left rail) never touches the logo.
+    ? { top: 10, left: '50%', width: 150, height: 36, zIndex: 100, transform: 'translateX(-50%)' }
     : { top: '50%', left: '50%', width: 'min(70vw, 680px)', height: 'min(20vh, 190px)', zIndex: 40, transform: 'translate(-50%, -50%)' }
   return (
     <div

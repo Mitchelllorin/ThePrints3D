@@ -31,10 +31,10 @@ interface EdgeDrawerProps {
   /** `data-tour` value on the toggle tab, so the guided tutorial can spotlight it. */
   tourTab?: string
   /**
-   * Driven by the persistent EdgeRail instead of its own protruding tab: renders
-   * NO tab and opens BESIDE the rail (inset by the rail width — see `.inRail` in
-   * the CSS). This is how all the edge menus work now; the standalone tab is kept
-   * only as a fallback for a drawer that isn't in the rail.
+   * Driven by the persistent RailCascade instead of its own protruding tab:
+   * renders NO tab and opens BESIDE the rail (inset by the rail width — see
+   * `.inRail` in the CSS). This is how all the edge menus work now; the standalone
+   * tab is kept only as a fallback for a drawer that isn't in the rail.
    */
   inRail?: boolean
   children: ReactNode
