@@ -377,12 +377,16 @@ export default function PlacedObjectsLayer() {
                     roughness={0.6}
                     metalness={0.05}
                     transparent={isOpening || !!obj.transparent}
-                    opacity={obj.transparent ? 0.18 : isOpening ? 0.55 : 1}
-                    depthWrite={!(isOpening || obj.transparent)}
+                    opacity={obj.transparent ? 0.18 : isOpening ? 0.8 : 1}
+                    // Openings MUST write depth or a wall wins every depth test and
+                    // hides the door/window from all but a straight-down view (the
+                    // "disappears through a wall" bug). Only X-ray'd objects skip it.
+                    depthWrite={!obj.transparent}
                   />
                   {/* An opening is a thin panel — edge-on from the top-down plan
-                      view it disappears, so outline it so it always reads. */}
-                  {isOpening && !obj.transparent && <Edges color={color} lineWidth={1.5} />}
+                      view it collapses to a line, so a bold outline keeps it reading
+                      from any angle even when the face is edge-on. */}
+                  {isOpening && !obj.transparent && <Edges color={color} lineWidth={2.5} />}
                 </mesh>
               )}
               {/* Selection outline — an invisible bounding box carrying the edges.
