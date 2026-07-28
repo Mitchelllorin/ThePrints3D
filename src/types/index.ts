@@ -109,6 +109,13 @@ export interface PlacedObject {
   /** X-ray this object — render it see-through (same as the wall flag), so you
    *  can see past/into it without deleting it. Toggled from the object panel. */
   transparent?: boolean
+  /** Storey this object belongs to (0 = ground), captured at placement. Objects
+   *  render lifted by level, and doors/windows only cut openings in walls on
+   *  their OWN level — exterior walls stack plumb, so a level-blind match let a
+   *  ground-floor door cut the wall directly above it and leave itself buried
+   *  inside the solid wall ("the door disappeared"). Legacy objects have no
+   *  level and read as 0, which is what they already were. */
+  level?: number
 }
 
 export type CircuitType = 'general' | 'dedicated' | 'gfci' | 'afci' | 'gfci+afci'

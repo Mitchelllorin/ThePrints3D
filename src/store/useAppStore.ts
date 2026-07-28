@@ -42,7 +42,7 @@ import { logError, logEvent } from '../services/logger'
 import type { ParsedWall } from '../types'
 import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReducer'
 import { suggestFlushEdge } from '../services/flushInference'
-import { suggestWallCorner } from '../services/cornerInference'
+import { suggestAllCornerTrims } from '../services/cornerInference'
 import { suggestLineSnap } from '../services/lineSnapInference'
 import { pitchToRatio } from '../data/traceLayers'
 
@@ -58,19 +58,52 @@ export type InferenceSuggestion =
   | { kind: 'floor-flush'; message: string; areaId: string; rect: InferRect }
   | { kind: 'wall-corner'; message: string; drawingId: string; from: InferRect; rect: InferRect }
   | { kind: 'wall-line-snap'; message: string; drawingId: string; from: InferRect; rect: InferRect }
+  /** Every overshooting wall end in the build, trimmed in one tap. */
+  | { kind: 'wall-corner-all'; message: string; drawingId: string; trims: Array<{ from: InferRect; rect: InferRect }> }
 
-/** Wall inference for the just-traced wall (last user wall): first a corner-trim
- *  ("runs past the corner"), else a line-snap ("align onto this wall line"). */
+/** Wall inference after a trace commit.
+ *
+ *  The corner check used to look at the LAST wall only, so an overshoot went
+ *  unnoticed the moment you drew the next wall — which is how a build ends up
+ *  with little stubs poking out of every corner and no way to revisit them.
+ *  Now it sweeps EVERY wall (per storey — walls on different levels never form a
+ *  corner) and offers the whole cleanup at once. The single-wall line-snap still
+ *  runs for the wall you just drew when there is nothing to trim.
+ */
 function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): InferenceSuggestion | null {
   const userWalls = parsedWalls.filter((w) => w.source === 'user')
   if (userWalls.length < 2) return null
+
+  const rectOf = (w: ParsedWall): InferRect => ({ x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 })
+  const byLevel = new Map<number, ParsedWall[]>()
+  for (const w of userWalls) {
+    const lv = w.level ?? 0
+    const list = byLevel.get(lv)
+    if (list) list.push(w)
+    else byLevel.set(lv, [w])
+  }
+  const trims: Array<{ from: InferRect; rect: InferRect }> = []
+  for (const walls of byLevel.values()) {
+    if (walls.length < 2) continue
+    for (const t of suggestAllCornerTrims(walls)) {
+      trims.push({ from: rectOf(walls[t.index]), rect: t.rect })
+    }
+  }
+  if (trims.length > 0) {
+    return {
+      kind: 'wall-corner-all',
+      drawingId,
+      trims,
+      message: trims.length === 1
+        ? 'This runs past the corner — trim it?'
+        : `${trims.length} walls run past their corners — trim them?`,
+    }
+  }
+
   const last = userWalls[userWalls.length - 1]
   const others = userWalls.slice(0, -1)
-  const from: InferRect = { x1: last.x1, y1: last.y1, x2: last.x2, y2: last.y2 }
-  const corner = suggestWallCorner(last, others)
-  if (corner) return { kind: 'wall-corner', message: corner.message, drawingId, from, rect: corner.rect }
   const line = suggestLineSnap(last, others)
-  if (line) return { kind: 'wall-line-snap', message: line.message, drawingId, from, rect: line.rect }
+  if (line) return { kind: 'wall-line-snap', message: line.message, drawingId, from: rectOf(last), rect: line.rect }
   return null
 }
 import { defaultSmartProcessingState } from './smartProcessingSlice'
@@ -248,7 +281,11 @@ const DEFAULT_FLOORPLAN_OVERLAY: FloorplanOverlayState = {
   scale: [12, 8],
   rotationDeg: 0,
   opacity: 0.65,
-  printAtGround: false,
+  // Print STAYS DOWN by default on upper storeys. Lifting it to the working
+  // floor put the ground-floor plan in your face while framing above it, and on
+  // a platform-framed build the upper storey mostly repeats the exterior shell
+  // anyway — you don't need the plan up there. "⬆ Plan follows floor" lifts it.
+  printAtGround: true,
 }
 
 const HISTORY_LIMIT = 80
@@ -944,11 +981,14 @@ export const useAppStore = create<AppState>()(
       })
     },
 
-    // Carry the build up: clone every user wall on `fromLevel` onto the storey
+    // Carry the build up: clone the user walls on `fromLevel` onto the storey
     // above at the SAME footprint, so upper floors stand plumb on the one below
     // — real construction, not boxes stacked freehand. Skips any wall whose
     // footprint already exists on the target level so it's safe to re-tap.
-    carryWallsUp: (id, fromLevel, exteriorOnly = false) => {
+    // EXTERIOR ONLY by default: the shell carries up plumb and inline, but the
+    // interior layout does not — an upper storey needs stairs, and that opening
+    // alone rearranges the partitions. Pass false to clone every wall.
+    carryWallsUp: (id, fromLevel, exteriorOnly = true) => {
       pushHistory()
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
@@ -1772,18 +1812,26 @@ export const useAppStore = create<AppState>()(
         if (sug.kind === 'floor-flush') {
           const a = s.floorsAreas.find((ar) => ar.id === sug.areaId)
           if (a) { a.x1 = sug.rect.x1; a.y1 = sug.rect.y1; a.x2 = sug.rect.x2; a.y2 = sug.rect.y2 }
-        } else if (sug.kind === 'wall-corner' || sug.kind === 'wall-line-snap') {
+        } else if (sug.kind === 'wall-corner' || sug.kind === 'wall-line-snap' || sug.kind === 'wall-corner-all') {
           const d = s.drawings.find((dr) => dr.id === sug.drawingId)
           if (d) {
-            // Match the traced wall by its endpoints (robust to index shifts from
+            // Match each wall by its endpoints (robust to index shifts from
             // corner inference / merges), then trim it to the corner.
-            const matches = (w: ParsedWall): boolean => {
+            const matcher = (from: InferRect) => (w: ParsedWall): boolean => {
               const near = (a: number, b: number) => Math.abs(a - b) < 3
-              return (near(w.x1, sug.from.x1) && near(w.y1, sug.from.y1) && near(w.x2, sug.from.x2) && near(w.y2, sug.from.y2))
-                || (near(w.x1, sug.from.x2) && near(w.y1, sug.from.y2) && near(w.x2, sug.from.x1) && near(w.y2, sug.from.y1))
+              return (near(w.x1, from.x1) && near(w.y1, from.y1) && near(w.x2, from.x2) && near(w.y2, from.y2))
+                || (near(w.x1, from.x2) && near(w.y1, from.y2) && near(w.x2, from.x1) && near(w.y2, from.y1))
             }
-            const w = d.parsedWalls.find((ww) => ww.source === 'user' && matches(ww))
-            if (w) { w.x1 = sug.rect.x1; w.y1 = sug.rect.y1; w.x2 = sug.rect.x2; w.y2 = sug.rect.y2 }
+            // One suggestion may carry many trims (the whole-build sweep); the
+            // single-wall kinds are just the one-element case of the same thing.
+            const edits = sug.kind === 'wall-corner-all'
+              ? sug.trims
+              : [{ from: sug.from, rect: sug.rect }]
+            for (const e of edits) {
+              const isMatch = matcher(e.from)
+              const w = d.parsedWalls.find((ww) => ww.source === 'user' && isMatch(ww))
+              if (w) { w.x1 = e.rect.x1; w.y1 = e.rect.y1; w.x2 = e.rect.x2; w.y2 = e.rect.y2 }
+            }
           }
         }
         s.inferenceSuggestion = null

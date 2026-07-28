@@ -19,8 +19,41 @@ export interface CornerSuggestion {
   message: string
 }
 
+/** One wall's trim, by its index in the list handed to suggestAllCornerTrims. */
+export interface CornerTrim {
+  index: number
+  /** The wall trimmed back to the corner. */
+  rect: Seg
+  overshootPx: number
+}
+
 const isHoriz = (s: Seg): boolean => Math.abs(s.y2 - s.y1) < Math.abs(s.x2 - s.x1)
 const span = (a: number, b: number): [number, number] => [Math.min(a, b), Math.max(a, b)]
+
+/**
+ * Sweep EVERY wall for a corner overshoot, not just the one just traced.
+ *
+ * The single-wall check only ever looked at the last wall committed, so an
+ * overshoot went unnoticed the moment you drew the next wall — leaving a build
+ * peppered with little stubs at the corners with no way to revisit them. This
+ * returns every trim at once so the prompt can offer to clean the whole model up.
+ *
+ * `tolPx` is deliberately tighter than the single-wall default: a stub only a
+ * few pixels long is still real material on a scaled print (a few px is inches),
+ * and it is never something you traced on purpose.
+ *
+ * Callers must pass walls that could genuinely form corners with each other —
+ * i.e. one storey at a time. Walls on different levels never join.
+ */
+export function suggestAllCornerTrims(walls: Seg[], tolPx = 2, maxOvershootPx = 90): CornerTrim[] {
+  const out: CornerTrim[] = []
+  for (let i = 0; i < walls.length; i++) {
+    const others = walls.filter((_, j) => j !== i)
+    const s = suggestWallCorner(walls[i], others, tolPx, maxOvershootPx)
+    if (s) out.push({ index: i, rect: s.rect, overshootPx: s.overshootPx })
+  }
+  return out
+}
 
 /**
  * Suggest trimming a wall that overshoots a perpendicular wall by a small end

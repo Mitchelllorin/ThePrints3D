@@ -23,6 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 
+# Local build-time config — may hold the Ask proxy URL and other per-machine
+# settings. .env.example is the committed template; real values stay local.
+.env
+.env.local
+.env.*.local
+
 # local UI dev artifacts (throwaway)
 qr-phone.png
 ui-shots/

@@ -439,6 +439,30 @@ export default function FloorplanOverlay() {
    *  (service entrance). Snapping reins you in near a line; nothing clamps you. */
   const toPixel = (point: THREE.Vector3): [number, number] => worldToPixelRaw(point)
 
+  // Where a trace/calibration tap lands, computed from the pointer RAY against a
+  // mathematical horizontal plane at the trace elevation — never from the catcher
+  // mesh's own intersection.
+  //
+  // MEASURED: the catcher's reported `event.point` was degenerate — across taps
+  // at very different screen positions its z stayed exactly 0.00 while its y
+  // swung -7.37 → +5.83. Since toPixel reads only x and z, every tap on the plan
+  // collapsed onto ONE line, pixel Y pinned at imageHeight/2 (450 of 900). You
+  // could only ever draw the single horizontal wall through the middle of the
+  // print — on EVERY storey, which is why this read as "can't trace on floor 2".
+  //
+  // The exact reason that intersection is degenerate is NOT established; changing
+  // the mesh's rotation did not affect it. So rather than depend on it at all,
+  // derive the point from the pointer ray against a plane we define ourselves.
+  // Verified after: pixel Y varies with the tap (679, -113, 598) and a VERTICAL
+  // wall traces correctly, which was impossible before. Same approach as
+  // rayToWall for placement.
+  const rayToTracePlane = (e: ThreeEvent<PointerEvent>): THREE.Vector3 | null => {
+    const y = traceElevation + 0.03   // the catch height the catcher is meant to sit at
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -y)
+    const p = new THREE.Vector3()
+    return e.ray.intersectPlane(plane, p) ? p : null
+  }
+
   const traceWorldPoints = useMemo(
     () => traceStroke.map(planeLocalToTrace),
     [traceStroke, planeLocalToTrace],
@@ -539,7 +563,7 @@ export default function FloorplanOverlay() {
     pointerDownScreen.current = { x: event.nativeEvent.clientX, y: event.nativeEvent.clientY }
     if (traceMode && traceStyle === 'freehand') {
       event.stopPropagation()
-      const pixel = worldToPixel(event.point)
+      const pixel = worldToPixel(rayToTracePlane(event) ?? event.point)
       setTraceStroke([pixel])
       setHoverPixel(pixel)
     }
@@ -568,7 +592,14 @@ export default function FloorplanOverlay() {
   // to be off?" case worth surfacing. Sets a nudge with the lined-up target.
   const maybeNudgePlumb = (wall: ParsedWall, userIndex: number) => {
     if (!drawing || activeLevel <= 0) return
-    const below = drawing.parsedWalls.filter((w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1)
+    // Only the EXTERIOR shell is expected to stack plumb and inline, so only an
+    // exterior wall gets nudged, and only against exterior walls below. Interior
+    // partitions legitimately move between storeys (stairs and their opening
+    // reshape the floor), so flagging those as "off" was noise on real layouts.
+    if (wall.wallRole !== 'exterior-bearing') { setPlumbNudge(null); return }
+    const below = drawing.parsedWalls.filter((w) => w.source === 'user'
+      && (w.level ?? 0) === activeLevel - 1
+      && w.wallRole === 'exterior-bearing')
     if (below.length === 0) return
     const wdx = wall.x2 - wall.x1, wdy = wall.y2 - wall.y1
     if (Math.hypot(wdx, wdy) < 1) return
@@ -611,7 +642,20 @@ export default function FloorplanOverlay() {
   // with no meaningful drag), so the camera is free to move between points.
   const commitTraceOrCalibrationPoint = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
-    const pixel = toPixel(event.point)
+    const hit = rayToTracePlane(event) ?? event.point
+    const pixel = toPixel(hit)
+    // eslint-disable-next-line no-console
+    console.log('[TRACE-DBG] tap', {
+      activeLevel, traceElevation: +traceElevation.toFixed(2), layer: activeTraceLayer,
+      printAtGround: overlay.printAtGround,
+      hitXZ: [+event.point.x.toFixed(2), +event.point.z.toFixed(2)],
+      hitY: +event.point.y.toFixed(2),
+      objName: (event.object as { name?: string })?.name ?? '(unnamed)',
+      objType: (event.object as { type?: string })?.type ?? '?',
+      pixel: [Math.round(pixel[0]), Math.round(pixel[1])],
+      raster: [drawing.rasterWidth, drawing.rasterHeight],
+      hasTraceStart: !!traceStart,
+    })
 
     if (traceMode) {
       // Area layers (floors / roof): tap one corner, tap the opposite corner —
@@ -699,6 +743,8 @@ export default function FloorplanOverlay() {
         const rh = drawing.rasterHeight ?? 900
         const mx = rw * 0.25, my = rh * 0.25
         if (pixel[0] < -mx || pixel[1] < -my || pixel[0] > rw + mx || pixel[1] > rh + my) {
+          // eslint-disable-next-line no-console
+          console.log('[TRACE-DBG] REJECTED wall tap — pixel outside drawing', { pixel: [Math.round(pixel[0]), Math.round(pixel[1])], bounds: [-Math.round(mx), -Math.round(my), rw + Math.round(mx), rh + Math.round(my)] })
           setTraceStart(null); setHoverPixel(null); lastTapRef.current = null
           return
         }
@@ -713,8 +759,15 @@ export default function FloorplanOverlay() {
       // Walls on the storey directly below — used ONLY to align this floor plumb
       // over the one beneath (perpendicular line-snap), never corner-merged
       // across levels. So a wall traced a hair off lands plumb above its mate.
-      const belowWalls = activeLevel > 0
-        ? drawing.parsedWalls.filter((w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1)
+      // EXTERIOR walls only, and only while tracing an exterior wall: the shell
+      // carries up plumb and inline storey to storey, so the wall below is a
+      // genuine reference line. Interior partitions do NOT — a second floor has
+      // stairs, and that opening alone changes the layout — so referencing them
+      // dragged upstairs partitions onto downstairs lines that no longer apply.
+      const belowWalls = activeLevel > 0 && activeWallRole === 'exterior-bearing'
+        ? drawing.parsedWalls.filter((w) => w.source === 'user'
+            && (w.level ?? 0) === activeLevel - 1
+            && w.wallRole === 'exterior-bearing')
         : []
       // Rubber-band: tap A anchors, tap B commits, B becomes the next A so
       // consecutive segments share an exact corner point.
@@ -806,7 +859,7 @@ export default function FloorplanOverlay() {
   const handleWorkspacePointerMove = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     event.stopPropagation()
-    const pixel = toPixel(event.point)
+    const pixel = toPixel(rayToTracePlane(event) ?? event.point)
     // While tracing WALLS, freeze the rubber-band once the cursor leaves the
     // drawing (headed for a menu): don't drag the preview line out across the
     // screen after the finger. It stays put on the plan until you come back —
@@ -861,7 +914,7 @@ export default function FloorplanOverlay() {
 
   const commitFreehandStroke = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing) return
-    const pixel = worldToPixel(event.point)
+    const pixel = worldToPixel(rayToTracePlane(event) ?? event.point)
     setTraceStroke((prev) => {
       if (prev.length === 0) return prev
       const points = [...prev, pixel]
@@ -935,6 +988,15 @@ export default function FloorplanOverlay() {
     () => (drawing ? drawing.parsedWalls.filter((w) => w.source === 'user') : []),
     [drawing],
   )
+  // Walls a PLACEMENT may snap/orient to: the active storey's only. Exterior
+  // walls carry up plumb and inline so they're the same line either way, but
+  // interior partitions change floor to floor (a second floor needs stairs, and
+  // that opening moves the layout) — matching against every storey's walls at
+  // once let an upstairs door align itself to a downstairs partition.
+  const placementWalls = useMemo(
+    () => userWalls.filter((w) => (w.level ?? 0) === activeLevel),
+    [userWalls, activeLevel],
+  )
   // Click-target half-width for walls, ~20px of the print mapped to metres.
   const wallPickWidthM = Math.max(0.25, 20 * (width / imageWidth))
 
@@ -962,7 +1024,7 @@ export default function FloorplanOverlay() {
   // the wall). Returns 0 when no wall is close enough to snap to.
   const autoOrientYaw = (x: number, z: number): number => {
     let best = Infinity, yaw = 0
-    for (const w of userWalls) {
+    for (const w of placementWalls) {
       const a = planeLocalToWorld([w.x1, w.y1])
       const b = planeLocalToWorld([w.x2, w.y2])
       const d = segDist(x, z, a[0], a[2], b[0], b[2])
@@ -976,7 +1038,7 @@ export default function FloorplanOverlay() {
   // point unchanged when no wall is within reach.
   const snapToWall = (x: number, z: number): { x: number; z: number } => {
     let best = 1.2, sx = x, sz = z
-    for (const w of userWalls) {
+    for (const w of placementWalls) {
       const a = planeLocalToWorld([w.x1, w.y1])
       const b = planeLocalToWorld([w.x2, w.y2])
       const ax = a[0], az = a[2], bx = b[0], bz = b[2]
@@ -997,7 +1059,7 @@ export default function FloorplanOverlay() {
   // the tap point (auto-oriented) when no wall is within reach.
   const circulationPose = (x: number, z: number) => {
     let best = Infinity, foot: { x: number; z: number } | null = null, yaw = 0, nrm = { x: 0, z: 0 }
-    for (const w of userWalls) {
+    for (const w of placementWalls) {
       const a = planeLocalToWorld([w.x1, w.y1])
       const b = planeLocalToWorld([w.x2, w.y2])
       const ax = a[0], az = a[2], dx = b[0] - ax, dz = b[2] - az
@@ -1030,6 +1092,52 @@ export default function FloorplanOverlay() {
     return { x: snapped.x, z: snapped.z, rotationY: autoOrientYaw(snapped.x, snapped.z) }
   }
 
+  // Ray → the point on the WALL FACE the pointer is actually over.
+  //
+  // Placement used to project every tap onto the y=0 ground plane (rayToGround).
+  // Straight down that's fine, but on any tilted camera — i.e. nearly always —
+  // the ray sails past the wall you aimed at and lands metres beyond it on the
+  // floor. Measured in the running app: tapping mid-wall put the door 1.56 m
+  // away from that wall. That is outside BOTH the 1.2 m snapToWall radius and
+  // the 0.28 m opening-match threshold, so the door neither snapped onto the
+  // wall nor cut an opening — it just hung in the air, or buried itself in
+  // whatever other wall it happened to land in. The drift scales with camera
+  // pitch and distance, which is exactly why it "worked half the time".
+  //
+  // Treating each wall as its vertical face and taking the nearest hit means you
+  // place on the wall you can SEE. Falls back to the ground plane when the ray
+  // misses every wall, so floor-standing items still drop where you tap.
+  const rayToWall = (e: ThreeEvent<PointerEvent>): THREE.Vector3 | null => {
+    const base = activeLevel * storeyHeight
+    const top = base + ceilingM
+    let bestDist = Infinity
+    let hit: THREE.Vector3 | null = null
+    for (const w of placementWalls) {
+      const a = planeLocalToWorld([w.x1, w.y1])
+      const b = planeLocalToWorld([w.x2, w.y2])
+      const dx = b[0] - a[0], dz = b[2] - a[2]
+      const len = Math.hypot(dx, dz)
+      if (len < 1e-6) continue
+      // Vertical plane containing the wall centreline (horizontal normal).
+      const nx = -dz / len, nz = dx / len
+      const plane = new THREE.Plane(new THREE.Vector3(nx, 0, nz), -(nx * a[0] + nz * a[2]))
+      const p = new THREE.Vector3()
+      if (!e.ray.intersectPlane(plane, p)) continue
+      if (p.y < base - 0.1 || p.y > top + 0.1) continue          // over/under the wall
+      const t = ((p.x - a[0]) * dx + (p.z - a[2]) * dz) / (len * len)
+      if (t < -0.02 || t > 1.02) continue                        // past either end
+      const dist = e.ray.origin.distanceTo(p)
+      if (dist < bestDist) { bestDist = dist; hit = p }
+    }
+    return hit
+  }
+
+  // Where a placement tap lands: the wall face if the pointer is over one,
+  // otherwise the ground. Used by both the ghost and the commit so the preview
+  // and the drop always agree.
+  const rayToPlacement = (e: ThreeEvent<PointerEvent>): THREE.Vector3 | null =>
+    rayToWall(e) ?? rayToGround(e)
+
   // Standing height for the placement ghost, so it previews at the real mount
   // height (wall devices / ceiling fixtures) instead of on the floor.
   const ghostY = (type: string, fallbackH: number) =>
@@ -1040,7 +1148,7 @@ export default function FloorplanOverlay() {
   const moveGhost = (event: ThreeEvent<PointerEvent>) => {
     if (!placeObjectType || !ghostItem) return
     event.stopPropagation()
-    const p = rayToGround(event)
+    const p = rayToPlacement(event)
     if (!p || !ghostRef.current) return
     ghostRef.current.visible = true
     const pose = devicePose(p.x, p.z)
@@ -1053,7 +1161,7 @@ export default function FloorplanOverlay() {
   const placeAtPointer = (event: ThreeEvent<PointerEvent>) => {
     if (!placeObjectType || !ghostItem) return
     event.stopPropagation()
-    const p = rayToGround(event)
+    const p = rayToPlacement(event)
     if (!p) return
     commitPlacement(devicePose(p.x, p.z))
   }
@@ -1092,6 +1200,9 @@ export default function FloorplanOverlay() {
       circuitId,
       pxX: opx,
       pxY: opy,
+      // Stamp the storey being worked, so the object renders on that floor and
+      // only cuts openings in that floor's walls.
+      level: activeLevel,
     })
     setPlaceObjectType(null)
     hideGhost()
@@ -1165,19 +1276,56 @@ export default function FloorplanOverlay() {
           </mesh>
         </group>
       )}
+      {/* Tap-catcher — deliberately OUTSIDE the `overlay.visible && texture`
+          gate below. It used to live inside that group, which meant hiding the
+          print ("🙈 Hide plan") also unmounted the catcher and tracing died
+          silently with nothing to tap. That bit hardest on upper floors, where
+          dismissing the ground plan is the natural thing to do. Position and
+          local offset mirror the print group exactly so the catch plane sits at
+          the identical world height it always did (0.03 + traceElevation). */}
+      {drawing && (traceMode || overlay.calibrationMode) && (
+        <group
+          position={[overlay.position[0], 0.01 + traceElevation, overlay.position[1]]}
+          rotation={[0, rotationRad, 0]}
+        >
+          {/* Catcher stays present throughout trace/calibration so a tap always
+              registers (incl. resuming after a double-tap unlock). When unlocked
+              a DRAG still orbits the camera (OrbitControls reads the DOM event);
+              a TAP places + re-locks. */}
+          {/* Far larger than the print so floors/roofs can be pulled well past
+              the drawing edge ("for miles"); walls still clamp to bounds.
+              This mesh is now purely an EVENT TARGET — it decides which taps get
+              caught, but not where they land. The tap point is derived from the
+              pointer ray instead (see rayToTracePlane), because this mesh's
+              reported intersection was degenerate. */}
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, 0.02, 0]}
+            onPointerDown={handleWorkspacePointerDown}
+            onPointerMove={handleWorkspacePointerMove}
+            onPointerUp={handleWorkspacePointerUp}
+            onPointerLeave={handleWorkspacePointerCancel}
+            onPointerCancel={handleWorkspacePointerCancel}
+          >
+            <planeGeometry args={[Math.max(width, depth) * 12, Math.max(width, depth) * 12]} />
+            <meshBasicMaterial transparent opacity={0.02} color="#ffffff" side={THREE.DoubleSide} />
+          </mesh>
+        </group>
+      )}
+
       {drawing && overlay.visible && texture && (
         <group
-          /* Lifted to the active storey: the print image + the tap-catcher +
-             the edit handles inside this group all rise together, so you trace
-             on the floor you're working and the catcher stays coplanar. */
+          /* Lifted to the active storey: the print image + the edit handles in
+             this group rise together, so you trace on the floor you're working
+             and the print stays coplanar with the catcher above. */
           position={[overlay.position[0], 0.01 + traceElevation, overlay.position[1]]}
           rotation={[0, rotationRad, 0]}
         >
           <mesh
             rotation={[-Math.PI / 2, 0, 0]}
             /* Optionally keep the IMAGE at ground while the group (and the
-               tap-catcher) stay lifted to the active storey — so an upper floor
-               isn't muddled with the ground plan floating up at it. */
+               separate tap-catcher above) stay lifted to the active storey — so
+               an upper floor isn't muddled with the ground plan floating up. */
             position={[0, overlay.printAtGround ? -traceElevation : 0, 0]}
             userData={{ layer: 'floors', noPick: true }}
           >
@@ -1190,30 +1338,6 @@ export default function FloorplanOverlay() {
               side={THREE.DoubleSide}
             />
           </mesh>
-
-          {/* Catcher stays present throughout trace/calibration so a tap always
-              registers (incl. resuming after a double-tap unlock). When unlocked
-              a DRAG still orbits the camera (OrbitControls reads the DOM event);
-              a TAP places + re-locks. */}
-          {(traceMode || overlay.calibrationMode) && (
-            <mesh
-              rotation={[-Math.PI / 2, 0, 0]}
-              /* Catch at PRINT level (not lifted to traceY): the user always aims
-                 at the plan, so an elevated catcher made the ray land offset in
-                 perspective ("short on one side unless straight overhead"). And
-                 it's far larger than the print so floors/roofs can be pulled well
-                 past the drawing edge ("for miles"); walls still clamp to bounds. */
-              position={[0, 0.02, 0]}
-              onPointerDown={handleWorkspacePointerDown}
-              onPointerMove={handleWorkspacePointerMove}
-              onPointerUp={handleWorkspacePointerUp}
-              onPointerLeave={handleWorkspacePointerCancel}
-              onPointerCancel={handleWorkspacePointerCancel}
-            >
-              <planeGeometry args={[Math.max(width, depth) * 12, Math.max(width, depth) * 12]} />
-              <meshBasicMaterial transparent opacity={0.02} color="#ffffff" side={THREE.DoubleSide} />
-            </mesh>
-          )}
 
           {canEdit && (
             <>

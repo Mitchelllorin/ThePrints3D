@@ -17,6 +17,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
 import ObjectModel from './ObjectModels'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import type { PlacedObject } from '../../types'
 
 interface DragState {
@@ -180,6 +181,9 @@ export default function PlacedObjectsLayer() {
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
 
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
+  // Same storey-to-storey rise the walls/decks use, so an object placed on an
+  // upper floor sits on THAT floor instead of down at grade.
+  const storeyHeight = ceilingM + FLOOR_ASSEMBLY_H
 
   const [drag, setDrag] = useState<DragState | null>(null)
   // Precision gizmo (edit mode only) — live transform before commit, + its mode.
@@ -337,7 +341,7 @@ export default function PlacedObjectsLayer() {
           : deviceMountHeightM(obj.type, ceilingM) ?? h / 2
         const model = isOpening ? null : <ObjectModel type={obj.type} w={w} h={h} d={d} color={color} subtype={obj.subtype} />
         return (
-          <group key={obj.id} position={[live.x, 0, live.z]} rotation={[0, live.rotationY, 0]}>
+          <group key={obj.id} position={[live.x, (obj.level ?? 0) * storeyHeight, live.z]} rotation={[0, live.rotationY, 0]}>
             <group
               position={[0, mountY, 0]}
               userData={{ info: obj.label ?? obj.type }}

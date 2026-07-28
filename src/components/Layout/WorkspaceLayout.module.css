@@ -468,6 +468,13 @@
   transition: background 0.12s, color 0.12s;
 }
 .floorBtn:hover { color: var(--bp-text, #f1f5f9); }
+/* See-past ladder, one button, three states — see docs/INTERACTIONS.md.
+   normal (dim grey) → faded (accent TEXT, no fill) → isolated (filled accent).
+   Fade reads as "lighter" than isolate on purpose, and neither adds a box. */
+.floorBtnFaded {
+  color: var(--bp-accent, #38bdf8);
+  background: none;
+}
 .floorBtnActive {
   background: var(--bp-accent, #38bdf8);
   color: #0b1120;

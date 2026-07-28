@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -452,13 +452,35 @@ export default function WorkspaceLayout() {
   const floorCount = useAppStore((s) => s.floorsAreas.length)
   const roofCount = useAppStore((s) => s.roofAreas.length)
   const objectCount = useAppStore((s) => s.placedObjects.length)
-  const floorLevels = useAppStore((s) => s.model.floorLevels)
+  // Floors the user actually HAS, from what they've traced/placed — not from
+  // model.floorLevels, which only exists after a build. The floor bar (fade +
+  // isolate) was gated on the built model, so on an unbuilt plan it never
+  // appeared even though the floors were plainly there and double-tap could
+  // already fade them. Gating on real content keeps fade reachable everywhere
+  // the gesture reaches, which is what lets the gesture be rebound later.
+  // Returns a joined STRING so the selector stays referentially stable and does
+  // not re-render this layout on every unrelated store write.
+  const floorKey = useAppStore((s) => {
+    const set = new Set<number>()
+    for (const d of s.drawings) for (const w of d.parsedWalls) if (w.source === 'user') set.add(w.level ?? 0)
+    for (const a of s.floorsAreas) set.add(a.level ?? 0)
+    for (const a of s.roofAreas) set.add(a.level ?? 0)
+    for (const o of s.placedObjects) set.add(o.level ?? 0)
+    s.model.floorLevels.forEach((_, i) => set.add(i))
+    return [...set].sort((a, b) => a - b).join(',')
+  })
+  const availableFloors = useMemo(
+    () => (floorKey ? floorKey.split(',').map(Number) : []),
+    [floorKey],
+  )
   // Reachable once there's anything to grab — a built model OR any placed
   // floor/roof/object. (The auto-build can be empty on wall-less plans.)
   const built = buildResult !== null || modelStatus === 'ready'
     || floorCount > 0 || roofCount > 0 || objectCount > 0
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
+  const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
+  const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
   // Single source of truth: the chrome panels are driven by the store's
   // activePanel gate, the same gate every other overlay UI checks.
@@ -689,24 +711,47 @@ export default function WorkspaceLayout() {
         </div>
       )}
 
-      {/* Floor isolation buttons — shown when there are multiple floors. Tap a
-          floor number to isolate it; tap the same one again to show all. */}
-      {hasDrawings && !calibrationMode && !traceMode && floorLevels.length > 1 && (
+      {/* Floor bar — the SEE-PAST LADDER for whole floors (docs/INTERACTIONS.md).
+          Fade and isolate are the same choice at different strengths and the same
+          scope (a floor), so they are one control, not two. Tapping a floor cycles
+          it:  normal → faded (15%, see past it) → isolated (others hidden) → normal.
+          Fading used to be a double-tap on a wall or floor deck, which put a
+          floor-scoped action on a component and left it undiscoverable; it lives
+          here now, beside isolate, adding no new buttons. */}
+      {/* Stays hidden mid-trace on purpose — you're placing points, not
+          inspecting floors, and the workspace stays clear while you tap. */}
+      {hasDrawings && !calibrationMode && !traceMode && availableFloors.length > 1 && (
         <div className={`${styles.floorBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
           <span className={styles.explodeLabel}>Floor</span>
           <button
-            className={`${styles.floorBtn} ${isolatedFloor === null ? styles.floorBtnActive : ''}`}
-            onClick={() => setIsolatedFloor(null)}
-            aria-label="Show all floors"
+            className={`${styles.floorBtn} ${isolatedFloor === null && ghostedLevels.length === 0 ? styles.floorBtnActive : ''}`}
+            onClick={() => { setIsolatedFloor(null); ghostedLevels.forEach((l) => toggleGhostedLevel(l)) }}
+            aria-label="Show all floors normally"
           >All</button>
-          {floorLevels.map((_, i) => (
-            <button
-              key={i}
-              className={`${styles.floorBtn} ${isolatedFloor === i ? styles.floorBtnActive : ''}`}
-              onClick={() => setIsolatedFloor(i)}
-              aria-label={`Isolate floor ${i + 1}`}
-            >{i + 1}</button>
-          ))}
+          {availableFloors.map((i) => {
+            const faded = ghostedLevels.includes(i)
+            const isolated = isolatedFloor === i
+            const cycle = () => {
+              if (isolated) {                       // isolated → normal
+                setIsolatedFloor(null)
+              } else if (faded) {                   // faded → isolated
+                toggleGhostedLevel(i)
+                setIsolatedFloor(i)
+              } else {                              // normal → faded
+                if (isolatedFloor !== null) setIsolatedFloor(null)
+                toggleGhostedLevel(i)
+              }
+            }
+            return (
+              <button
+                key={i}
+                className={`${styles.floorBtn} ${isolated ? styles.floorBtnActive : faded ? styles.floorBtnFaded : ''}`}
+                onClick={cycle}
+                aria-label={`Floor ${i + 1} — ${isolated ? 'isolated, tap to show all' : faded ? 'faded, tap to isolate' : 'normal, tap to fade'}`}
+                title={isolated ? 'Isolated · tap to show all' : faded ? 'Faded · tap to isolate' : 'Tap to fade this floor'}
+              >{i + 1}</button>
+            )
+          })}
         </div>
       )}
 

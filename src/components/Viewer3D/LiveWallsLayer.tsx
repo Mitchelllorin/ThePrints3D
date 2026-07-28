@@ -232,15 +232,20 @@ export default function LiveWallsLayer() {
     // Wall segments in world space (same transform that places the framing).
     const wsegs = userWalls.map(({ wall: w }) => {
       const a = pixelToWorld(w.x1, w.y1), b = pixelToWorld(w.x2, w.y2)
-      return { ax: a.x, az: a.z, dx: b.x - a.x, dz: b.z - a.z, thick: w.thickness }
+      return { ax: a.x, az: a.z, dx: b.x - a.x, dz: b.z - a.z, thick: w.thickness, level: w.level ?? 0 }
     })
     // Average metres-per-pixel, to carry the pixel-derived snap tolerance into world.
     const mPerPx = (overlayW / imageWidth + overlayD / imageHeight) / 2
     // Nearest wall to a world point. `reach` (m) shifts the match from the wall
     // centreline to a footprint near-edge (stairs/shafts sit edge-on to a wall).
-    const nearestWall = (wx: number, wz: number, reach: number, edgeBias: number) => {
+    // `level` confines the match to the object's own storey. Exterior walls carry
+    // up plumb and inline, so without it a ground-floor door and the wall directly
+    // above it are the same point in XZ — the opening could be cut upstairs
+    // while the door stayed buried in the solid wall beside it.
+    const nearestWall = (wx: number, wz: number, reach: number, edgeBias: number, level: number) => {
       let best = -1, bestScore = Infinity, bestT = 0
       wsegs.forEach((s, i) => {
+        if (s.level !== level) return
         const len2 = s.dx * s.dx + s.dz * s.dz
         if (len2 < 1e-6) return
         const t = ((wx - s.ax) * s.dx + (wz - s.az) * s.dz) / len2
@@ -256,7 +261,7 @@ export default function LiveWallsLayer() {
     // Doors/windows: match by their centre.
     for (const o of placedObjects) {
       if (o.type !== 'door' && o.type !== 'window') continue
-      const { best, t } = nearestWall(o.x, o.z, 0, 0)
+      const { best, t } = nearestWall(o.x, o.z, 0, 0, o.level ?? 0)
       if (best < 0) continue
       const item = getCatalogItem(o.type)
       const widthM = (item?.defaultW ?? 0.9) * o.scaleX
@@ -271,7 +276,7 @@ export default function LiveWallsLayer() {
       const item = getCatalogItem(o.type)
       const widthM = (item?.defaultW ?? 1) * o.scaleX           // along the wall (snap convention)
       const halfDepth = (item?.defaultD ?? 1) * o.scaleZ / 2    // half-depth toward the wall
-      const { best, t } = nearestWall(o.x, o.z, halfDepth, 6 * mPerPx)
+      const { best, t } = nearestWall(o.x, o.z, halfDepth, 6 * mPerPx, o.level ?? 0)
       if (best < 0) continue
       out[best].push({ t, widthM, type: 'door', sillM: 0, heightM: (item?.defaultH ?? 2.4) * o.scaleY })
     }

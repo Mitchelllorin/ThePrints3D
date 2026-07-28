@@ -2,10 +2,12 @@
  * AskAI — the in-app construction reference + AI, as a CONVERSATION.
  *
  * You ask, it answers. Offline it uses the app's baked-in construction standards
- * (grounded, no hallucination). With your own Anthropic key set, the Claude brain
- * answers conversationally — grounded on those same specs. Everything routes
- * through askBrain.answer(); this file just renders the thread + the key toggle.
- * See src/services/askBrain.ts and src/services/aiKey.ts.
+ * (grounded, no hallucination). With the proxy deployed (VITE_ASK_PROXY_URL) —
+ * or, failing that, your own free Google AI Studio key — the Gemini brain answers
+ * conversationally, grounded on those same specs. It is NOT an Anthropic key;
+ * the comment here used to say Claude, but the call has always gone to Gemini.
+ * Everything routes through askBrain.answer(); this file just renders the thread
+ * + the key toggle. See src/services/askBrain.ts and src/services/aiKey.ts.
  */
 import { useState, useRef, useEffect, type FormEvent } from 'react'
 import { answer, reviewBuild, summarizeBuild, AI_PROXIED, type Turn } from '../../services/askBrain'

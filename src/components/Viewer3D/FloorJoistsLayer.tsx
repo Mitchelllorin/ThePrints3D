@@ -194,6 +194,7 @@ export default function FloorJoistsLayer() {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const translateFloorsArea = useAppStore((s) => s.translateFloorsArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
+  const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
@@ -288,7 +289,15 @@ export default function FloorJoistsLayer() {
     }
     setBodyDrag(null)
   }
-  const handlersFor = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => editMode
+  // While a trace/calibration is running the deck is INERT — no handlers at all.
+  // A deck sits directly under every tap you make on the floor above it, and its
+  // pointer-down stopPropagation() was swallowing the trace catcher's down event
+  // (so each wall tap also popped a floor selection). Its double-click handler
+  // fought the double-tap-to-finish gesture the same way, toggling ghosting as
+  // you ended a run. Floors go back to selectable/draggable the moment you stop.
+  const handlersFor = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => (traceMode || overlay.calibrationMode)
+    ? {}
+    : editMode
     ? {
         onPointerDown: onBodyDown(area),
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'floor', id: area.id }) },

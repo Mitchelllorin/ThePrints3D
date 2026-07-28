@@ -78,6 +78,48 @@ function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObj
 }
 
 /**
+ * Camera tether — you cannot fling the model off into space.
+ *
+ * OrbitControls pans the TARGET with nothing bounding it, so one stray
+ * two-finger drag walks the point-of-interest away and the print sails out of
+ * frame with no way back short of hunting for a camera preset. This clamps the
+ * target to a leash around the plan's centre every frame.
+ *
+ * A leash rather than locking the target to dead centre: you still need to pan
+ * across a big drawing to work a far corner, you just can't pan PAST the
+ * drawing. Leash length is half the plan's diagonal, so the whole print is
+ * always reachable and nothing beyond it is. Height is clamped too — the target
+ * can't sink under the site or float above the roof.
+ */
+function CameraTether({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
+  const overlay = useAppStore((s) => s.floorplanOverlay)
+  useFrame(() => {
+    const ctrl = controlsRef.current
+    if (!ctrl) return
+    const cx = overlay.position[0]
+    const cz = overlay.position[1]
+    const [w, d] = overlay.scale
+    const leash = Math.max(4, 0.5 * Math.hypot(w, d))
+    const dx = ctrl.target.x - cx
+    const dz = ctrl.target.z - cz
+    const dist = Math.hypot(dx, dz)
+    let clamped = false
+    if (dist > leash) {
+      const k = leash / dist
+      ctrl.target.x = cx + dx * k
+      ctrl.target.z = cz + dz * k
+      clamped = true
+    }
+    if (ctrl.target.y < -1) { ctrl.target.y = -1; clamped = true }
+    else if (ctrl.target.y > 20) { ctrl.target.y = 20; clamped = true }
+    // Only re-sync when we actually pulled it back, so normal orbiting keeps
+    // its damping untouched and this costs nothing on a free camera.
+    if (clamped) ctrl.update()
+  })
+  return null
+}
+
+/**
  * Camera pose that frames the whole print: target = the print's centre on the
  * ground, distance sized to fit the plan's bounding CIRCLE inside the FOV (so
  * it's rotation- and aspect-proof — portrait phones use the tighter horizontal
@@ -716,6 +758,7 @@ export default function ModelViewer() {
           screenSpacePanning
         />
         <CameraPresetApplier controlsRef={controlsRef} />
+        <CameraTether controlsRef={controlsRef} />
 
 
       </Canvas>

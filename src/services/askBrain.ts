@@ -4,12 +4,16 @@
 //  1. GROUNDED CARDS (constructionKnowledge.ts) — deterministic, offline, free,
 //     no hallucination. Always computed; it's the source of truth and the
 //     offline fallback.
-//  2. THE BRAIN (Claude Opus 4.8) — a master-builder that answers conversation-
-//     ally, reasons about the question, and knows construction far past the
-//     cards. It is GROUNDED on the same cards (passed as reference) and told to
-//     cite + flag when it goes beyond them, so it stays anchored. Only used when
-//     the user has set their own API key (aiKey.ts) and the call succeeds; any
-//     failure (no key, offline, error) silently falls back to layer 1.
+//  2. THE BRAIN (Google Gemini — see MODEL below) — a master-builder that
+//     answers conversationally, reasons about the question, and knows
+//     construction far past the cards. It is GROUNDED on the same cards (passed
+//     as reference) and told to cite + flag when it goes beyond them, so it
+//     stays anchored. Reached either through the proxy (no user key) or with the
+//     user's own Google AI Studio key (aiKey.ts); any failure (no key, offline,
+//     error) silently falls back to layer 1.
+//
+//     NB: the key is a GOOGLE AI STUDIO key, not an Anthropic one. Earlier
+//     comments here named Claude; the call has always gone to Gemini.
 
 import { askConstruction, type KnowledgeAnswer, type Trade } from './constructionKnowledge'
 import { getAiKey, hasAiKey } from './aiKey'
@@ -159,9 +163,10 @@ async function askGemini(query: string, history: Turn[], cards: KnowledgeAnswer[
 // ── the ask ───────────────────────────────────────────────────────────────────
 
 /**
- * Answer a construction question. Uses the Claude brain when a key is set and
- * reachable; otherwise the offline grounded lookup. `history` threads the
- * conversation (and lets short offline follow-ups keep their subject).
+ * Answer a construction question. Uses the Gemini brain when the proxy is
+ * configured or a key is set and reachable; otherwise the offline grounded
+ * lookup. `history` threads the conversation (and lets short offline follow-ups
+ * keep their subject).
  */
 export async function answer(query: string, history: Turn[] = []): Promise<AskReply> {
   const trimmed = query.trim()
