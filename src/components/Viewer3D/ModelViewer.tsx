@@ -26,6 +26,7 @@ import HoverNameplate from './HoverNameplate'
 import ExplodeDriver from './ExplodeDriver'
 import DrywallLayer from './DrywallLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
+import SelectionGizmo from './SelectionGizmo'
 import TradeLayersRenderer from './TradeLayersRenderer'
 import styles from './ModelViewer.module.css'
 
@@ -774,6 +775,7 @@ export default function ModelViewer() {
           enablePan={panEnabled}
           screenSpacePanning
         />
+        <SelectionGizmo />
         <CameraPresetApplier controlsRef={controlsRef} />
         <CameraTether controlsRef={controlsRef} />
 
