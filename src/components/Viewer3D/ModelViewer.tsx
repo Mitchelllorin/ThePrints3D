@@ -386,6 +386,7 @@ export default function ModelViewer() {
   const activeUnit     = useConfigStore((s) => s.activeUnit)
   const lengthFormat   = useConfigStore((s) => s.lengthFormat)
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
+  const gestureLock    = useFloorplanLocalStore((s) => s.gestureLock)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
   // Construction wizard is opened from Settings → "Re-run Wizard" via the store.
@@ -416,7 +417,11 @@ export default function ModelViewer() {
   // the pointer, so a tap/drag places precisely instead of orbiting the camera
   // (fighting the workspace). Same "action locks, idle unlocks" model as tracing.
   const placing = !!placeObjectType
-  const orbitEnabled = !overlay.orbitLocked && !placing
+  // gestureLock is raised by ANY layer that has grabbed the pointer for a drag
+  // (roof ridge/body, floor deck, placed object). Without it the camera orbited
+  // underneath the drag and you fought the workspace the entire time you were
+  // editing. Same "action locks, idle unlocks" model as tracing and placing.
+  const orbitEnabled = !overlay.orbitLocked && !placing && !gestureLock
   const panEnabled = (!traceMode || tracePaused) && !placing
 
   function handleDragOver(e: React.DragEvent) {
@@ -676,9 +681,21 @@ export default function ModelViewer() {
         camera={{ fov: 55, near: 0.1, far: 1000 }}
         style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
         onPointerMissed={() => {
+          const local = useFloorplanLocalStore.getState()
+          // A tap that hit nothing must NOT cancel an armed placement.
+          // MEASURED: the placement catcher is occasionally missed on pointer-
+          // down (a frame-timing artefact), and cancelling here disarmed the
+          // tray item silently — so that tap placed nothing AND the next tap
+          // placed nothing either, because the catcher unmounts along with the
+          // arming. That is the whole "placement is intermittent, no rhyme nor
+          // reason" report: 4 of 5 identical clicks placed nothing.
+          // Staying armed makes a missed frame cost one retry instead of
+          // silently dropping the tool. Placement still ends deliberately —
+          // Escape, re-tapping the tray item, or actually placing.
+          if (local.placeObjectType) return
           // Tap on empty canvas (not a wall/object) dismisses every open
           // card/picker/panel and clears the active selection.
-          useFloorplanLocalStore.getState().closeAllPanels()
+          local.closeAllPanels()
         }}
       >
         <CameraRig />

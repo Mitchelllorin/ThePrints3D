@@ -154,6 +154,12 @@ interface FloorplanLocalState {
   // ─── edit-everything mode (post-build direct manipulation) ───────
   /** Post-build "Edit Everything": hover-highlight + select + drag any element.
    *  ON → the whole model is grabbable; OFF → locked back to normal viewing. */
+  /** True while ANY layer owns the pointer for a drag — roof ridge, roof body,
+   *  floor deck, placed object. The camera must not orbit underneath a gesture
+   *  or you fight the workspace the whole time you are editing. Layers raise it
+   *  on drag start and clear it on end. Print-overlay/wall drags already lock via
+   *  floorplanOverlay.orbitLocked; this covers every other layer. */
+  gestureLock: boolean
   editMode: boolean
   /** Element currently hovered while in edit mode (drives the hover highlight). */
   editHover: EditTarget | null
@@ -250,6 +256,7 @@ interface FloorplanLocalState {
   setTutorialStep: (n: number) => void
   /** Toggle edit-everything mode. Leaving it clears the hover + any selection so
    *  the workspace returns to a clean, locked viewing state. */
+  setGestureLock: (v: boolean) => void
   setEditMode: (v: boolean) => void
   setEditHover: (h: EditTarget | null) => void
   setEditSelected: (h: EditTarget | null) => void
@@ -304,6 +311,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   wallDetailExplode: false,
   selectedArea: null,
   selectedLine: null,
+  gestureLock: false,
   editMode: false,
   editHover: null,
   editSelected: null,
@@ -418,6 +426,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   startTutorial: () => set({ tutorialActive: true, tutorialStep: 0 }),
   exitTutorial: () => set({ tutorialActive: false }),
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
+  setGestureLock: (v) => set({ gestureLock: v }),
   setEditMode: (v) => set(v
     // Entering: start clean — drop any open card/selection so edit mode owns it.
     ? { editMode: true, editHover: null, editSelected: null, activePanel: null, selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null }

@@ -191,6 +191,9 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, mode, onDraft, 
       },
     }
     setDragging(true)
+    // The ridge grip owns the pointer now — lock the camera or every pitch drag
+    // orbits the view at the same time and you fight the workspace.
+    useFloorplanLocalStore.getState().setGestureLock(true)
   }
 
   const move = (e: ThreeEvent<PointerEvent>) => {
@@ -223,6 +226,7 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, mode, onDraft, 
     onCommit({ ...d.work })
     dragRef.current = null
     setDragging(false)
+    useFloorplanLocalStore.getState().setGestureLock(false)   // release the camera
     document.body.style.cursor = ''
   }
 
@@ -261,6 +265,7 @@ export default function RoofLayer() {
   const translateRoofArea = useAppStore((s) => s.translateRoofArea)
   const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
+  const setGestureLock = useFloorplanLocalStore((s) => s.setGestureLock)
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
@@ -307,7 +312,7 @@ export default function RoofLayer() {
     e.stopPropagation()
     setEditSelected({ kind: 'roof', id: area.id })
     const g = rayToGround(e)
-    if (g) setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false })
+    if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
   }
   const onBodyMove = (e: ThreeEvent<PointerEvent>) => {
     if (!bodyDrag) return
@@ -326,6 +331,7 @@ export default function RoofLayer() {
       translateRoofArea(bodyDrag.id, dpx, dpy)
     }
     setBodyDrag(null)
+    setGestureLock(false)
   }
 
   const hoverHandlers = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => (editMode ? {

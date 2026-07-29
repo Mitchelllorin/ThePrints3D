@@ -175,6 +175,7 @@ export default function PlacedObjectsLayer() {
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
+  const setGestureLock = useFloorplanLocalStore((s) => s.setGestureLock)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
@@ -206,6 +207,7 @@ export default function PlacedObjectsLayer() {
     e.stopPropagation()
     select(obj.id)
     setDrag({ id: obj.id, kind, x: obj.x, z: obj.z, rotationY: obj.rotationY, moved: false })
+    setGestureLock(true)
   }
 
   // Pressing an object starts a PENDING move — no select yet. If the pointer
@@ -213,6 +215,7 @@ export default function PlacedObjectsLayer() {
   const startObjectPress = (e: ThreeEvent<PointerEvent>, obj: PlacedObject) => {
     e.stopPropagation()
     setDrag({ id: obj.id, kind: 'move', x: obj.x, z: obj.z, rotationY: obj.rotationY, moved: false })
+    setGestureLock(true)
   }
 
   const onPlaneMove = (e: ThreeEvent<PointerEvent>) => {
@@ -238,6 +241,7 @@ export default function PlacedObjectsLayer() {
       select(drag.id)   // a tap (no movement) just selects → opens the editor
     }
     setDrag(null)
+    setGestureLock(false)
   }
 
   // The object the precision gizmo attaches to: the selected one, in edit mode.

@@ -194,6 +194,7 @@ export default function FloorJoistsLayer() {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const translateFloorsArea = useAppStore((s) => s.translateFloorsArea)
   const selectArea = useFloorplanLocalStore((s) => s.selectAreaExclusive)
+  const setGestureLock = useFloorplanLocalStore((s) => s.setGestureLock)
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
@@ -270,7 +271,7 @@ export default function FloorJoistsLayer() {
     e.stopPropagation()
     setEditSelected({ kind: 'floor', id: area.id })
     const g = rayToGround(e)
-    if (g) setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false })
+    if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
   }
   const onBodyMove = (e: ThreeEvent<PointerEvent>) => {
     if (!bodyDrag) return
@@ -288,6 +289,7 @@ export default function FloorJoistsLayer() {
       translateFloorsArea(bodyDrag.id, dpx, dpy)
     }
     setBodyDrag(null)
+    setGestureLock(false)
   }
   // While a trace/calibration is running the deck is INERT — no handlers at all.
   // A deck sits directly under every tap you make on the floor above it, and its

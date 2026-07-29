@@ -644,18 +644,6 @@ export default function FloorplanOverlay() {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     const hit = rayToTracePlane(event) ?? event.point
     const pixel = toPixel(hit)
-    // eslint-disable-next-line no-console
-    console.log('[TRACE-DBG] tap', {
-      activeLevel, traceElevation: +traceElevation.toFixed(2), layer: activeTraceLayer,
-      printAtGround: overlay.printAtGround,
-      hitXZ: [+event.point.x.toFixed(2), +event.point.z.toFixed(2)],
-      hitY: +event.point.y.toFixed(2),
-      objName: (event.object as { name?: string })?.name ?? '(unnamed)',
-      objType: (event.object as { type?: string })?.type ?? '?',
-      pixel: [Math.round(pixel[0]), Math.round(pixel[1])],
-      raster: [drawing.rasterWidth, drawing.rasterHeight],
-      hasTraceStart: !!traceStart,
-    })
 
     if (traceMode) {
       // Area layers (floors / roof): tap one corner, tap the opposite corner —
@@ -743,8 +731,6 @@ export default function FloorplanOverlay() {
         const rh = drawing.rasterHeight ?? 900
         const mx = rw * 0.25, my = rh * 0.25
         if (pixel[0] < -mx || pixel[1] < -my || pixel[0] > rw + mx || pixel[1] > rh + my) {
-          // eslint-disable-next-line no-console
-          console.log('[TRACE-DBG] REJECTED wall tap — pixel outside drawing', { pixel: [Math.round(pixel[0]), Math.round(pixel[1])], bounds: [-Math.round(mx), -Math.round(my), rw + Math.round(mx), rh + Math.round(my)] })
           setTraceStart(null); setHoverPixel(null); lastTapRef.current = null
           return
         }
