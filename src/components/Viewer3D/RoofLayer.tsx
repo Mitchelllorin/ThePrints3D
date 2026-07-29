@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useExplodeChildren } from './explodeRuntime'
+import { createDoubleTapState, detectDoubleTap } from './doubleTap'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -305,28 +306,35 @@ export default function RoofLayer() {
     return new THREE.Vector3(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
-  // Outside edit mode: a press on a roof body only SELECTS it (delete/info via the
-  // drawer card). Body drag-to-move is gated behind Edit-Everything mode so a stray
-  // press+move can't skate placed roofs during normal viewing.
-  const onDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
-    if (editMode) return  // edit mode handles its own press → drag (below)
-    e.stopPropagation()
-    selectArea('roof', area.id)
-  }
 
   // Live ridge draft for the area being dragged (committed to the store on release).
   const [draft, setDraft] = useState<{ id: string; ridge: RoofRidge } | null>(null)
+  const dtap = useRef(createDoubleTapState())
 
   // Edit-mode body drag: grab the roof and slide it on the ground plane. A live
   // world offset moves the mesh each frame; the store is written ONCE on release.
   const [bodyDrag, setBodyDrag] = useState<{ id: string; start: THREE.Vector3; offset: [number, number]; moved: boolean } | null>(null)
 
+  // ── The standard: double-tap SELECTS, drag moves the SELECTION ─────────────
+  //
+  // The roof was the worst case of the old model. Press-anywhere started sliding
+  // the whole roof, and the ridge bar — a thin pitch grip — sat on top of that
+  // grab-anywhere body, so missing it by a few pixels moved the roof instead of
+  // pitching it. Now a press only drags once the roof is deliberately selected,
+  // so the ridge grip no longer competes with the body underneath it, and an
+  // unselected roof just lets the camera orbit. See docs/INTERACTIONS.md.
   const onBodyDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
-    if (!editMode) return
-    e.stopPropagation()
-    setEditSelected({ kind: 'roof', id: area.id })
-    const g = rayToGround(e)
-    if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
+    const isSel = editSelected?.kind === 'roof' && editSelected.id === area.id
+    if (detectDoubleTap(dtap.current, area.id, e)) {
+      e.stopPropagation()
+      selectArea('roof', area.id)
+      return
+    }
+    if (isSel) {
+      e.stopPropagation()
+      const g = rayToGround(e)
+      if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
+    }
   }
   const onBodyMove = (e: ThreeEvent<PointerEvent>) => {
     if (!bodyDrag) return
@@ -370,7 +378,7 @@ export default function RoofLayer() {
         const live: [number, number] = bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0]
         const bodyHandlers: Record<string, (e: ThreeEvent<PointerEvent>) => void> = editMode
           ? { onPointerDown: onBodyDown(area), ...hoverHandlers(area) }
-          : { onPointerDown: onDown(area) }
+          : { onPointerDown: onBodyDown(area) }
 
         return (
           <group key={area.id}>

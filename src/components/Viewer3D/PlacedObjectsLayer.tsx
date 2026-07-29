@@ -352,19 +352,20 @@ export default function PlacedObjectsLayer() {
               onPointerDown={(e) => {
                 // In place mode the floorplan handles the next click — don't steal it.
                 if (placeObjectType) return
-                // Double-tap → toggle X-ray, and don't also start a drag/select.
+                // ── The standard: double-tap SELECTS (docs/INTERACTIONS.md) ──
+                // Double-tap used to toggle X-ray here, which is why the same
+                // gesture meant two different things depending on what you hit.
+                // X-ray is a card button now, so the gesture is free to mean the
+                // one thing it means everywhere else.
                 if (detectDoubleTap(dtap.current, obj.id, e)) {
                   e.stopPropagation()
-                  updatePlacedObject(obj.id, { transparent: !obj.transparent })
+                  select(obj.id)
                   return
                 }
-                // Press-drag to move, tap to select — one gesture either way.
-                startObjectPress(e, obj)
-              }}
-              onPointerUp={(e) => {
-                // Tap with no drag, and the catcher didn't catch the release →
-                // select here so the editor still opens on a plain tap.
-                if (drag && drag.id === obj.id && !drag.moved) { e.stopPropagation(); select(obj.id); setDrag(null) }
+                // Press-drag moves the SELECTED object. An unselected one falls
+                // through to the camera, so a stray press orbits instead of
+                // skating furniture across the plan.
+                if (selected) startObjectPress(e, obj)
               }}
               onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'object', id: obj.id }) } : undefined}
               onPointerOut={editMode ? () => setEditHover(null) : undefined}

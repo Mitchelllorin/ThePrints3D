@@ -401,17 +401,24 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   toggleCatalog: () => set((s) => s.activePanel === 'catalog'
     ? { activePanel: null }
     : { activePanel: 'catalog', selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
-  selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
-  selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
-  selectLineExclusive: (trade, id) => set({ activePanel: 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, selectedArea: null, placeObjectType: null }),
-  selectAreaExclusive: (kind, id) => set({ activePanel: 'area', selectedArea: { kind, id }, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null }),
-  armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null }),
+  // ONE SELECTION. `editSelected` used to be a second, independent channel: edit
+  // mode recorded floor/roof picks there while objects and walls went through
+  // these setters, so you could have a roof edit-selected AND an object selected
+  // at the same time, both highlighted, and the gizmo (which reads
+  // selectedObjectId) could never attach to a floor or roof. Every selector now
+  // writes editSelected too, so whatever is picked is THE selection whichever
+  // path picked it. See docs/INTERACTIONS.md.
+  selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'object', id } }),
+  selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'wall', id: String(i) } }),
+  selectLineExclusive: (trade, id) => set({ activePanel: 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'line', id } }),
+  selectAreaExclusive: (kind, id) => set({ activePanel: 'area', selectedArea: { kind, id }, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null, editSelected: { kind, id } }),
+  armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, editSelected: null }),
   // Toggling the same panel closes it; opening a different one clears every
   // selection/floater so the single-panel rule holds across both UI systems.
   setActivePanel: (v) => set((s) => v && s.activePanel === v
     ? { activePanel: null }
     : { activePanel: v, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
-  closeAllPanels: () => set({ activePanel: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null }),
+  closeAllPanels: () => set({ activePanel: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: null }),
   setPresetOpen: (v) => set({ presetOpen: v }),
   setPracticeMode: (v) => set({ practiceMode: v }),
   setSeedProcessing: (v) => set({ seedProcessing: v }),
@@ -444,5 +451,14 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
         selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null,
       }),
   setEditHover: (h) => set({ editHover: h }),
-  setEditSelected: (h) => set({ editSelected: h }),
+  // Routed through the exclusive setters so the canonical fields and
+  // editSelected can never disagree. Callers in the layers still just say
+  // "this is now selected" and get one consistent selection.
+  setEditSelected: (h) => {
+    if (!h) { get().closeAllPanels(); return }
+    if (h.kind === 'object') { get().selectObjectExclusive(h.id); return }
+    if (h.kind === 'wall') { get().selectWallExclusive(Number(h.id)); return }
+    if (h.kind === 'floor' || h.kind === 'roof') { get().selectAreaExclusive(h.kind, h.id); return }
+    set({ editSelected: h })
+  },
 }))

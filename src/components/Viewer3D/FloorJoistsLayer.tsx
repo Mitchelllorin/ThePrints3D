@@ -13,6 +13,7 @@ import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import { explodeRuntime } from './explodeRuntime'
+import { createDoubleTapState, detectDoubleTap } from './doubleTap'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -205,6 +206,7 @@ export default function FloorJoistsLayer() {
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
   const [bodyDrag, setBodyDrag] = useState<{ id: string; start: THREE.Vector3; offset: [number, number]; moved: boolean } | null>(null)
+  const dtap = useRef(createDoubleTapState())
 
   // Storey-to-storey rise = wall height + the floor assembly on top of it, so a
   // 2nd-floor deck's joists rest ON the lower wall's top plate.
@@ -255,23 +257,28 @@ export default function FloorJoistsLayer() {
     return map
   }, [placedObjects, floorsAreas, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad])
 
-  // Outside edit mode: a press on a floor only SELECTS it (drawer card). Body
-  // drag-to-move is gated behind Edit-Everything mode (below) so a stray press
-  // can't skate placed floors during normal viewing.
-  const onDownArea = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
-    if (editMode) return
-    e.stopPropagation()
-    selectArea('floor', area.id)
-  }
-
-  // Edit-mode body drag: grab the floor and slide it on the ground plane. Live
-  // world offset moves it each frame; the store is written ONCE on release.
-  const onBodyDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
-    if (!editMode) return
-    e.stopPropagation()
-    setEditSelected({ kind: 'floor', id: area.id })
-    const g = rayToGround(e)
-    if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
+  // ── The standard: double-tap SELECTS, drag moves the SELECTION ─────────────
+  //
+  // One handler for every state (see docs/INTERACTIONS.md). Single tap is inert
+  // so brushing the model while orbiting can no longer pop a card or skate a
+  // floor across the plan; a press only moves something once it is deliberately
+  // selected. That selection gate replaces Edit mode's old press-to-drag, which
+  // is what made thin handles unusable — they sat on grab-anywhere bodies.
+  const onAreaDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
+    const isSel = editSelected?.kind === 'floor' && editSelected.id === area.id
+    // Double-tap → select, whatever mode we're in.
+    if (detectDoubleTap(dtap.current, area.id, e)) {
+      e.stopPropagation()
+      selectArea('floor', area.id)
+      return
+    }
+    // Press-drag the SELECTED floor moves it. Anything else falls through to the
+    // camera, so a stray press orbits instead of grabbing geometry.
+    if (isSel) {
+      e.stopPropagation()
+      const g = rayToGround(e)
+      if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
+    }
   }
   const onBodyMove = (e: ThreeEvent<PointerEvent>) => {
     if (!bodyDrag) return
@@ -301,12 +308,12 @@ export default function FloorJoistsLayer() {
     ? {}
     : editMode
     ? {
-        onPointerDown: onBodyDown(area),
+        onPointerDown: onAreaDown(area),
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'floor', id: area.id }) },
         onPointerOut: () => setEditHover(null),
       }
     : {
-        onPointerDown: onDownArea(area),
+        onPointerDown: onAreaDown(area),
         onDoubleClick: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); toggleGhostedLevel(area.level ?? 0) },
       }
   const liveFor = (area: TracedLine): [number, number] => (bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0])
