@@ -498,6 +498,10 @@ interface AppState {
   addPlumbingLines: (lines: TracedLine[]) => void
   addElectricalLines: (lines: TracedLine[]) => void
   addHvacLines: (lines: TracedLine[]) => void
+  /** Patch a trade run's pixel endpoints, whichever trade it belongs to. Lines
+   *  are looked up by id across plumbing/electrical/HVAC so callers that only
+   *  know "the selected run" (the gizmo) don't have to carry the trade. */
+  updateTradeLine: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
   removePlumbingLine: (id: string) => void
   removeElectricalLine: (id: string) => void
   removeHvacLine: (id: string) => void
@@ -1854,6 +1858,16 @@ export const useAppStore = create<AppState>()(
       if (lines.length === 0) return
       pushHistory()
       set((s) => { s.hvacLines.push(...lines) })
+    },
+
+    updateTradeLine: (id, patch) => {
+      pushHistory()
+      set((s) => {
+        for (const arr of [s.plumbingLines, s.electricalLines, s.hvacLines]) {
+          const l = arr.find((x) => x.id === id)
+          if (l) { Object.assign(l, patch); return }
+        }
+      })
     },
 
     removePlumbingLine: (id) => {

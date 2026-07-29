@@ -79,6 +79,28 @@ function CameraPresetApplier({ controlsRef }: { controlsRef: React.MutableRefObj
 }
 
 /**
+ * Keeps OrbitControls' ENABLED flag honest.
+ *
+ * drei's TransformControls writes straight to the controls instance
+ * (`controls.enabled = false` while a handle is dragged, `true` on release).
+ * That mutation desyncs the instance from our `enabled={orbitEnabled}` prop, and
+ * because React then sees no prop CHANGE it never re-applies it — so after any
+ * gizmo drag the camera stayed live even while tracing, and the workspace moved
+ * under you mid-pull. Reasserting each frame costs one boolean compare and makes
+ * our intent the last word.
+ */
+function OrbitEnabledGuard({ controlsRef, enabled }: {
+  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>
+  enabled: boolean
+}) {
+  useFrame(() => {
+    const ctrl = controlsRef.current
+    if (ctrl && ctrl.enabled !== enabled) ctrl.enabled = enabled
+  })
+  return null
+}
+
+/**
  * Camera tether — you cannot fling the model off into space.
  *
  * OrbitControls pans the TARGET with nothing bounding it, so one stray
@@ -775,6 +797,7 @@ export default function ModelViewer() {
           enablePan={panEnabled}
           screenSpacePanning
         />
+        <OrbitEnabledGuard controlsRef={controlsRef} enabled={orbitEnabled} />
         <SelectionGizmo />
         <CameraPresetApplier controlsRef={controlsRef} />
         <CameraTether controlsRef={controlsRef} />

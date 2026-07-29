@@ -40,6 +40,10 @@ import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
 type Mode = 'translate' | 'rotate' | 'scale'
 const MODE_LABEL: Record<Mode, string> = { translate: 'Move', rotate: 'Rotate', scale: 'Stretch' }
 
+/** Height bands a trade run lives in — mirrors BAND_Y in TradeLayersRenderer so
+ *  the handles land on the pipe/wire/duct rather than under it. */
+const TRADE_BAND_Y: Record<string, number> = { 'under-floor': 0.12, 'in-wall': 1.2, 'ceiling': 2.5 }
+
 /** One gizmo drag, in the units the gizmo works in (world metres / radians). */
 interface Live { dx: number; dz: number; rotationY: number; sx: number; sy: number; sz: number }
 
@@ -62,6 +66,10 @@ export default function SelectionGizmo() {
   const updateRoofArea = useAppStore((s) => s.updateRoofArea)
   const updateUserWall = useAppStore((s) => s.updateUserWall)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
+  const updateTradeLine = useAppStore((s) => s.updateTradeLine)
+  const plumbingLines = useAppStore((s) => s.plumbingLines)
+  const electricalLines = useAppStore((s) => s.electricalLines)
+  const hvacLines = useAppStore((s) => s.hvacLines)
 
   const proxy = useMemo(() => new THREE.Object3D(), [])
   const [ready, setReady] = useState(false)
@@ -166,9 +174,41 @@ export default function SelectionGizmo() {
         },
       }
     }
+    if (kind === 'line') {
+      // Plumbing / electrical / HVAC runs. Geometrically identical to a wall —
+      // two pixel endpoints — so the SAME maths gives all three modes. The run is
+      // found by id across the trades, because a selection only carries "which
+      // run", not which trade.
+      const l = [...plumbingLines, ...electricalLines, ...hvacLines].find((x) => x.id === id)
+      if (!l) return null
+      const c = pixelToWorld((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2)
+      const mx = (l.x1 + l.x2) / 2, my = (l.y1 + l.y2) / 2
+      const baseAng = Math.atan2(l.y2 - l.y1, l.x2 - l.x1)
+      const halfLen = Math.hypot(l.x2 - l.x1, l.y2 - l.y1) / 2
+      // Sit at the run's own height band so the handles meet the pipe/wire/duct
+      // where it actually renders, not on the floor beneath it.
+      const bandLift = TRADE_BAND_Y[l.band ?? 'in-wall'] ?? TRADE_BAND_Y['in-wall']
+      return {
+        modes: ['translate', 'rotate', 'scale'] as Mode[],
+        pos: new THREE.Vector3(c.x, (l.level ?? 0) * storeyHeight + bandLift + 0.35, c.z),
+        rot: 0,
+        scl: new THREE.Vector3(1, 1, 1),
+        commit: (v: Live) => {
+          const [dpx, dpy] = toPx(v.dx, v.dz)
+          const ang = baseAng - v.rotationY
+          const len = halfLen * (v.sx || 1)
+          const ncx = mx + dpx, ncy = my + dpy
+          updateTradeLine(l.id, {
+            x1: ncx - Math.cos(ang) * len, y1: ncy - Math.sin(ang) * len,
+            x2: ncx + Math.cos(ang) * len, y2: ncy + Math.sin(ang) * len,
+          })
+        },
+      }
+    }
+
     return null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editSelected?.kind, editSelected?.id, traceMode, placeObjectType,
+  }, [editSelected?.kind, editSelected?.id, plumbingLines, electricalLines, hvacLines, traceMode, placeObjectType,
       placedObjects, floorsAreas, roofAreas, drawing?.id,
       overlay.position[0], overlay.position[1], overlayW, overlayD, rotRad,
       imageWidth, imageHeight, storeyHeight, ceilingM])
