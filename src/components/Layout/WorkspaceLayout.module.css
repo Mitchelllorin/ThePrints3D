@@ -460,43 +460,46 @@
   border: none;
   pointer-events: auto;
 }
-/* Gizmo mode palette — TOP of the bottom-right stack (Explode 14-48, Floor
-   62-92, Gizmo 100-130). A tool selector belongs in the chrome, not floating
-   over the component you are editing. Same no-box treatment as its neighbours. */
-.gizmoBar {
+/* Gizmo mode rail — VERTICAL, right edge, mirroring the Build/Ask/Settings/Place
+   rail on the left so both sides read as one system. Icon above a small
+   uppercase label, no box, accent when live. It sits in the chrome rather than
+   over the model: a tool selector anchored to the component you are editing
+   covers the very thing you are looking at. */
+.gizmoRail {
   position: absolute;
-  bottom: calc(100px + env(safe-area-inset-bottom, 0px));
-  right: 14px;
+  top: 70px;
+  right: 6px;
   z-index: 56;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 4px;
+  gap: 14px;
   background: none;
   border: none;
   pointer-events: auto;
 }
-.gizmoBarLifted { bottom: calc(42dvh + 94px); }
-/* Active mode = accent TEXT, not a filled slab. A solid pill here reads as a
-   chunky button sitting on the model; the whole chrome is meant to be near
-   invisible. Faint tint + accent text is enough to show which tool is live. */
-.gizmoBtn {
+
+.gizmoRailBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 44px;
   background: none;
   border: none;
-  color: var(--bp-text-dim, #94a3b8);
-  font-size: 11px;
-  font-weight: 600;
   cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: color 0.12s, background 0.12s;
+  padding: 2px 0;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  transition: color 0.12s;
 }
-.gizmoBtn:hover { color: var(--bp-text, #f1f5f9); }
-.gizmoBtnActive {
-  color: var(--bp-accent, #38bdf8);
-  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 12%, transparent);
-}
+.gizmoRailBtn:hover { color: var(--bp-text, #f1f5f9); }
+.gizmoRailBtnActive { color: var(--bp-accent, #38bdf8); }
+.gizmoRailIcon { font-size: 17px; line-height: 1; }
 
 .floorBtn {
   background: none;
@@ -536,7 +539,6 @@
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
      the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
   .floorBar { bottom: calc(152px + env(safe-area-inset-bottom, 0px)); right: 10px; }
-  .gizmoBar { bottom: calc(190px + env(safe-area-inset-bottom, 0px)); right: 10px; }
-  .gizmoBarLifted { bottom: calc(42dvh + 100px); }
+  .gizmoRail { top: 62px; right: 2px; gap: 10px; }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }

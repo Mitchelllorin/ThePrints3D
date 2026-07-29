@@ -761,15 +761,19 @@ export default function WorkspaceLayout() {
           selection can actually express are listed (a floor has no rotation
           field, so it shows Move · Stretch). */}
       {gizmoModes.length > 0 && !traceMode && !calibrationMode && (
-        <div className={`${styles.gizmoBar} ${placeDrawerOpen ? styles.gizmoBarLifted : ''}`}>
-          <span className={styles.explodeLabel}>Edit</span>
+        <div className={styles.gizmoRail}>
           {gizmoModes.map((m) => (
             <button
               key={m}
-              className={`${styles.gizmoBtn} ${gizmoMode === m ? styles.gizmoBtnActive : ''}`}
+              className={`${styles.gizmoRailBtn} ${gizmoMode === m ? styles.gizmoRailBtnActive : ''}`}
               onClick={() => setGizmoMode(m)}
-              aria-label={m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}
-            >{m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}</button>
+              title={m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}
+            >
+              <span className={styles.gizmoRailIcon}>
+                {m === 'translate' ? '✥' : m === 'rotate' ? '↻' : '⤢'}
+              </span>
+              {m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}
+            </button>
           ))}
         </div>
       )}
