@@ -283,8 +283,8 @@ export default function RoofLayer() {
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+  const gizmoLive = useFloorplanLocalStore((s) => s.gizmoLive)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
-  const setEditSelected = useFloorplanLocalStore((s) => s.setEditSelected)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'roof')
@@ -367,7 +367,13 @@ export default function RoofLayer() {
         const lenZ = (Math.abs(area.y2 - area.y1) / imageHeight) * overlayD
         const eaveY = wallHeight + (area.level ?? 0) * (wallHeight + FLOOR_ASSEMBLY_H)
         const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
-        const live: [number, number] = bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0]
+        // Live world offset while this roof is being moved — by a body drag OR by
+        // the shared gizmo, so both follow your hand identically.
+        const live: [number, number] = bodyDrag?.id === area.id
+          ? bodyDrag.offset
+          : (gizmoLive && gizmoLive.kind === 'roof' && gizmoLive.id === area.id)
+            ? [gizmoLive.dx, gizmoLive.dz]
+            : [0, 0]
         const bodyHandlers: Record<string, (e: ThreeEvent<PointerEvent>) => void> = editMode
           ? { onPointerDown: onBodyDown(area), ...hoverHandlers(area) }
           : { onPointerDown: onBodyDown(area) }

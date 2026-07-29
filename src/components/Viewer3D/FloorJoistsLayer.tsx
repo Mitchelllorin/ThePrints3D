@@ -199,8 +199,8 @@ export default function FloorJoistsLayer() {
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+  const gizmoLive = useFloorplanLocalStore((s) => s.gizmoLive)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
-  const setEditSelected = useFloorplanLocalStore((s) => s.setEditSelected)
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
@@ -309,7 +309,13 @@ export default function FloorJoistsLayer() {
         onPointerDown: onAreaDown(area),
         onDoubleClick: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); toggleGhostedLevel(area.level ?? 0) },
       }
-  const liveFor = (area: TracedLine): [number, number] => (bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0])
+  // Live world offset while this area is being moved — by a body drag OR by the
+  // shared gizmo, so both follow your hand identically.
+  const liveFor = (area: TracedLine): [number, number] => {
+    if (bodyDrag?.id === area.id) return bodyDrag.offset
+    if (gizmoLive && gizmoLive.kind === 'floor' && gizmoLive.id === area.id) return [gizmoLive.dx, gizmoLive.dz]
+    return [0, 0]
+  }
 
   if (!visibleLayers.has('floors') || floorsAreas.length === 0) return null
 
