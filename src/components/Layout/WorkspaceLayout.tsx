@@ -457,6 +457,18 @@ export default function WorkspaceLayout() {
   const floorCount = useAppStore((s) => s.floorsAreas.length)
   const roofCount = useAppStore((s) => s.roofAreas.length)
   const objectCount = useAppStore((s) => s.placedObjects.length)
+  // Traced WALLS and trade runs count as something to edit too. They didn't, and
+  // walls are the main thing you trace — so a plan with walls on it and nothing
+  // else offered no Edit button at all, even though the edit rail handles walls
+  // and runs fully. Worse since the model reflects tracing live: there is no
+  // build step left to flip buildResult, so on a walls-only plan NOTHING here was
+  // ever true and Edit simply never appeared.
+  const wallCount = useAppStore((s) => {
+    let n = 0
+    for (const d of s.drawings) for (const w of d.parsedWalls) if (w.source === 'user') n++
+    return n
+  })
+  const runCount = useAppStore((s) => s.plumbingLines.length + s.electricalLines.length + s.hvacLines.length)
   // Floors the user actually HAS, from what they've traced/placed — not from
   // model.floorLevels, which only exists after a build. The floor bar (fade +
   // isolate) was gated on the built model, so on an unbuilt plan it never
@@ -478,10 +490,12 @@ export default function WorkspaceLayout() {
     () => (floorKey ? floorKey.split(',').map(Number) : []),
     [floorKey],
   )
-  // Reachable once there's anything to grab — a built model OR any placed
-  // floor/roof/object. (The auto-build can be empty on wall-less plans.)
+  // Reachable once there's ANYTHING to grab — a built model, or any traced wall,
+  // floor, roof, run or placed object. If you can select it, you can edit it, so
+  // the same things that make a selection possible make Edit reachable.
   const built = buildResult !== null || modelStatus === 'ready'
     || floorCount > 0 || roofCount > 0 || objectCount > 0
+    || wallCount > 0 || runCount > 0
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
   // What the selection can be told to do. Buttons, not handles — see selectionEdit.
