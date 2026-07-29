@@ -479,6 +479,9 @@ export default function WorkspaceLayout() {
     || floorCount > 0 || roofCount > 0 || objectCount > 0
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
+  const gizmoMode = useFloorplanLocalStore((s) => s.gizmoMode)
+  const setGizmoMode = useFloorplanLocalStore((s) => s.setGizmoMode)
+  const gizmoModes = useFloorplanLocalStore((s) => s.gizmoModes)
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
@@ -748,6 +751,26 @@ export default function WorkspaceLayout() {
           {explodeAmount > 0 && (
             <button className={styles.explodeReset} onClick={() => setExplodeAmount(0)} aria-label="Reset explode">Reset</button>
           )}
+        </div>
+      )}
+
+      {/* Gizmo mode palette — Move / Rotate / Stretch for whatever is selected.
+          Lives in the corner with the other view controls rather than floating
+          over the model: a tool selector that sits on the component you're
+          editing covers the very thing you're looking at. Only the modes the
+          selection can actually express are listed (a floor has no rotation
+          field, so it shows Move · Stretch). */}
+      {gizmoModes.length > 0 && !traceMode && !calibrationMode && (
+        <div className={`${styles.gizmoBar} ${placeDrawerOpen ? styles.gizmoBarLifted : ''}`}>
+          <span className={styles.explodeLabel}>Edit</span>
+          {gizmoModes.map((m) => (
+            <button
+              key={m}
+              className={`${styles.gizmoBtn} ${gizmoMode === m ? styles.gizmoBtnActive : ''}`}
+              onClick={() => setGizmoMode(m)}
+              aria-label={m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}
+            >{m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}</button>
+          ))}
         </div>
       )}
 

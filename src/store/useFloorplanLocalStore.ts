@@ -163,6 +163,10 @@ interface FloorplanLocalState {
   /** Which gizmo handle set is showing. Persists across selections so the tool
    *  you were using stays chosen, like any other tool palette. */
   gizmoMode: 'translate' | 'rotate' | 'scale'
+  /** Which modes the CURRENT selection can actually express, published by the
+   *  gizmo's resolver so the corner palette doesn't have to duplicate the rule.
+   *  Empty when nothing is selected. */
+  gizmoModes: Array<'translate' | 'rotate' | 'scale'>
   /** LIVE transform while a gizmo handle is being dragged, published for the
    *  layers to render transiently. One channel for every component type, so a
    *  live preview is not an object-only privilege. Null when nothing is dragging;
@@ -270,6 +274,7 @@ interface FloorplanLocalState {
    *  the workspace returns to a clean, locked viewing state. */
   setGestureLock: (v: boolean) => void
   setGizmoMode: (v: 'translate' | 'rotate' | 'scale') => void
+  setGizmoModes: (v: FloorplanLocalState['gizmoModes']) => void
   setGizmoLive: (v: FloorplanLocalState['gizmoLive']) => void
   setWallTrimArmed: (v: boolean) => void
   setEditMode: (v: boolean) => void
@@ -328,6 +333,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   selectedLine: null,
   gestureLock: false,
   gizmoMode: 'translate',
+  gizmoModes: [],
   gizmoLive: null,
   wallTrimArmed: false,
   editMode: false,
@@ -453,6 +459,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
   setGestureLock: (v) => set({ gestureLock: v }),
   setGizmoMode: (v) => set({ gizmoMode: v }),
+  setGizmoModes: (v) => set({ gizmoModes: v }),
   setGizmoLive: (v) => set({ gizmoLive: v }),
   setWallTrimArmed: (v) => set({ wallTrimArmed: v }),
   setEditMode: (v) => set(v

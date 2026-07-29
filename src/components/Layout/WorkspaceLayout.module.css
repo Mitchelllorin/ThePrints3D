@@ -460,6 +460,44 @@
   border: none;
   pointer-events: auto;
 }
+/* Gizmo mode palette — TOP of the bottom-right stack (Explode 14-48, Floor
+   62-92, Gizmo 100-130). A tool selector belongs in the chrome, not floating
+   over the component you are editing. Same no-box treatment as its neighbours. */
+.gizmoBar {
+  position: absolute;
+  bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+  right: 14px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  pointer-events: auto;
+}
+.gizmoBarLifted { bottom: calc(42dvh + 94px); }
+/* Active mode = accent TEXT, not a filled slab. A solid pill here reads as a
+   chunky button sitting on the model; the whole chrome is meant to be near
+   invisible. Faint tint + accent text is enough to show which tool is live. */
+.gizmoBtn {
+  background: none;
+  border: none;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.12s, background 0.12s;
+}
+.gizmoBtn:hover { color: var(--bp-text, #f1f5f9); }
+.gizmoBtnActive {
+  color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 12%, transparent);
+}
+
 .floorBtn {
   background: none;
   border: none;
@@ -498,5 +536,7 @@
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
      the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
   .floorBar { bottom: calc(152px + env(safe-area-inset-bottom, 0px)); right: 10px; }
+  .gizmoBar { bottom: calc(190px + env(safe-area-inset-bottom, 0px)); right: 10px; }
+  .gizmoBarLifted { bottom: calc(42dvh + 100px); }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }

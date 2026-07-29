@@ -29,7 +29,7 @@
  */
 import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import * as THREE from 'three'
-import { TransformControls, Html } from '@react-three/drei'
+import { TransformControls } from '@react-three/drei'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
@@ -38,8 +38,6 @@ import { worldDeltaToPixel } from './editHelpers'
 import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
 
 type Mode = 'translate' | 'rotate' | 'scale'
-const MODE_LABEL: Record<Mode, string> = { translate: 'Move', rotate: 'Rotate', scale: 'Stretch' }
-
 /** Height bands a trade run lives in — mirrors BAND_Y in TradeLayersRenderer so
  *  the handles land on the pipe/wire/duct rather than under it. */
 const TRADE_BAND_Y: Record<string, number> = { 'under-floor': 0.12, 'in-wall': 1.2, 'ceiling': 2.5 }
@@ -54,6 +52,7 @@ export default function SelectionGizmo() {
   const mode = useFloorplanLocalStore((s) => s.gizmoMode)
   const setMode = useFloorplanLocalStore((s) => s.setGizmoMode)
   const setGizmoLive = useFloorplanLocalStore((s) => s.setGizmoLive)
+  const setGizmoModes = useFloorplanLocalStore((s) => s.setGizmoModes)
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const drawings = useAppStore((s) => s.drawings)
   const floorsAreas = useAppStore((s) => s.floorsAreas)
@@ -229,6 +228,15 @@ export default function SelectionGizmo() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ax, ay, az, arot, proxy])
 
+  // Publish which modes this selection supports so the corner palette can render
+  // them. Compared as a joined key — pushing a fresh array every render would
+  // loop. The palette lives in the chrome (WorkspaceLayout), NOT over the model:
+  // a tool selector floating on the thing you are editing covers it.
+  const modeKey = target ? target.modes.join(',') : ''
+  useEffect(() => {
+    setGizmoModes(modeKey ? (modeKey.split(',') as Mode[]) : [])
+  }, [modeKey, setGizmoModes])
+
   if (!target) return null
   // A mode the selection can't express is never offered.
   const activeMode: Mode = target.modes.includes(mode) ? mode : 'translate'
@@ -271,26 +279,6 @@ export default function SelectionGizmo() {
           }}
         />
       )}
-      {/* Mode palette — only the modes this selection can express. Small floating
-          pills over the model, never a panel. */}
-      <Html position={[target.pos.x, target.pos.y + 0.9, target.pos.z]} center distanceFactor={9}
-            zIndexRange={[20, 0]} style={{ pointerEvents: 'auto', userSelect: 'none' }}>
-        <div style={{ display: 'flex', gap: 4 }}>
-          {target.modes.map((m) => (
-            <button
-              key={m}
-              onPointerDown={(e) => { e.stopPropagation(); setMode(m) }}
-              style={{
-                padding: '3px 9px', fontSize: 11, fontWeight: 700, borderRadius: 999,
-                cursor: 'pointer', whiteSpace: 'nowrap',
-                color: activeMode === m ? '#0b0f17' : '#e2e8f0',
-                background: activeMode === m ? '#38bdf8' : 'rgba(10,16,30,0.75)',
-                border: '1px solid rgba(56,189,248,0.5)',
-              }}
-            >{MODE_LABEL[m]}</button>
-          ))}
-        </div>
-      </Html>
     </>
   )
 }
