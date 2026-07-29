@@ -92,17 +92,36 @@ so the controls stay where the hand expects them.
 
 ## Edit mode
 
-Edit mode is currently four different systems wearing one name. Verified in the
-running app, 2026-07-28:
+Edit mode **was** four different systems wearing one name (surveyed 2026-07-28,
+below). It is now one: every pick routes through `setEditSelected`, and the
+selected thing's actions are BUTTONS on the right-edge edit rail, resolved by
+`selectionEdit.ts`. Verified in the running app, 2026-07-29:
 
-| Component | How a pick is recorded | Highlight | Gizmo |
+| Component | How a pick is recorded | Highlight | Rail verbs |
 |---|---|---|---|
-| Placed object | `selectedObjectId` (`selectObjectExclusive`) | `Edges` | **yes** |
-| Floor deck | `editSelected` (`setEditSelected`) | `AreaHighlight` | no |
-| Roof area | `editSelected` | `AreaHighlight` | no |
-| Wall | nothing — only `editHover` | cyan hover line | no |
+| Placed object | `editSelected` → `selectObjectExclusive` | `Edges` | move · rotate · stretch |
+| Floor deck | `editSelected` → `selectAreaExclusive` | `AreaHighlight` | move · stretch |
+| Roof area | `editSelected` → `selectAreaExclusive` | `AreaHighlight` | move · stretch |
+| Wall | `editSelected` → `selectWallExclusive` | yellow line + end handles | move · rotate · stretch |
+| Trade run | `editSelected` → `selectLineExclusive` | run highlight | move · rotate · stretch |
 
-Consequences, each observed rather than inferred:
+Floors and roofs get no rotate verb because an axis-aligned pixel rect has no
+rotation field to write — the button would spin nothing, so it is omitted rather
+than offered as a lie.
+
+There is **no 3D gizmo**. TransformControls was tried and removed: the handles
+were hard to hit on a phone, they covered the component being edited, and they
+were forever buried in geometry. The resolver it introduced was the good part and
+is what survives.
+
+**Walls are picked on the wall.** The pick target is the wall's real volume — full
+storey height at its own level — not the flat 8cm plate on the print it used to
+be. Tapping 2.4m of visible studs recorded nothing before, so a wall's controls
+could not be reached by touching the wall, and a floor deck buried the plate
+besides.
+
+The 2026-07-28 survey and its consequences are kept below, because they are why
+the current design looks the way it does. Each was observed rather than inferred:
 
 1. **Two selection channels, neither clearing the other.** Picking an object set
    `selectedObjectId` while `editSelected` still held the roof — two things
@@ -133,8 +152,9 @@ Nothing new — the same rule as everywhere else:
 
 - **One selection channel for every component type.** Whatever is picked, one
   thing is selected and everything else is cleared.
-- **The gizmo attaches to the selection, whatever it is** — object, floor, roof
-  or wall — instead of existing only for objects.
+- **The edit rail serves the selection, whatever it is** — object, floor, roof,
+  wall or run — instead of an objects-only gizmo. Buttons, in the chrome, off the
+  model.
 - **Handles only appear on the selected component**, so a thin grip never
   competes with an unselected body underneath it.
 - **The card is slim and off-centre**, per the near-invisible-chrome rule. It

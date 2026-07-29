@@ -1548,8 +1548,17 @@ export default function FloorplanOverlay() {
         </mesh>
       )}
 
-      {/* Wall select: thin invisible click targets along each UNSELECTED wall.
-          Under canEditWalls (not editMode) so they stay live through a drag. */}
+      {/* Wall select: invisible click targets on each UNSELECTED wall.
+          Under canEditWalls (not editMode) so they stay live through a drag.
+
+          The target is the wall's REAL VOLUME — full storey height, standing at
+          its own level. It used to be a flat 8cm plate lying on the print, which
+          meant tapping the wall you can actually see (2.4m of studs) hit nothing
+          at all: you had to find the thin sliver down on the drawing. Repeated
+          taps on the framing left editSelected null, so a wall's controls were
+          unreachable by touching the wall — and once a floor deck went down, that
+          sliver was buried under it as well. Now the thing you point at is the
+          thing you select, which is the whole premise of edit mode. */}
       {canEditWalls && !placeObjectType && userWalls.map((w, i) => {
         if (i === selectedWallIndex) return null
         const a = planeLocalToWorld([w.x1, w.y1])
@@ -1558,11 +1567,12 @@ export default function FloorplanOverlay() {
         if (len < 0.05) return null
         const ang = Math.atan2(b[2] - a[2], b[0] - a[0])
         const editHovered = editMode && editHover?.kind === 'wall' && editHover.id === String(i)
+        const wallBase = (w.level ?? 0) * storeyHeight
         return (
           <group key={`wall-pick-${i}`}>
             {editHovered && <Line points={[a, b]} color="#22d3ee" lineWidth={6} />}
             <mesh
-              position={[(a[0] + b[0]) / 2, 0.06, (a[2] + b[2]) / 2]}
+              position={[(a[0] + b[0]) / 2, wallBase + ceilingM / 2, (a[2] + b[2]) / 2]}
               rotation={[0, -ang, 0]}
               onPointerDown={(e) => {
                 e.stopPropagation()
@@ -1582,7 +1592,7 @@ export default function FloorplanOverlay() {
               onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'wall', id: String(i) }) } : undefined}
               onPointerOut={editMode ? () => setEditHover(null) : undefined}
             >
-              <boxGeometry args={[len, 0.08, wallPickWidthM]} />
+              <boxGeometry args={[len, ceilingM, wallPickWidthM]} />
               <meshBasicMaterial transparent opacity={0} depthWrite={false} />
             </mesh>
           </group>
