@@ -160,6 +160,10 @@ interface FloorplanLocalState {
    *  on drag start and clear it on end. Print-overlay/wall drags already lock via
    *  floorplanOverlay.orbitLocked; this covers every other layer. */
   gestureLock: boolean
+  /** Trim mode: the next tap on a wall removes the PIECE you tapped, instead of
+   *  selecting the wall. Armed from the selected wall's card, disarms after one
+   *  trim (or on Escape) so a stray tap can never eat a wall. */
+  wallTrimArmed: boolean
   editMode: boolean
   /** Element currently hovered while in edit mode (drives the hover highlight). */
   editHover: EditTarget | null
@@ -257,6 +261,7 @@ interface FloorplanLocalState {
   /** Toggle edit-everything mode. Leaving it clears the hover + any selection so
    *  the workspace returns to a clean, locked viewing state. */
   setGestureLock: (v: boolean) => void
+  setWallTrimArmed: (v: boolean) => void
   setEditMode: (v: boolean) => void
   setEditHover: (h: EditTarget | null) => void
   setEditSelected: (h: EditTarget | null) => void
@@ -312,6 +317,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   selectedArea: null,
   selectedLine: null,
   gestureLock: false,
+  wallTrimArmed: false,
   editMode: false,
   editHover: null,
   editSelected: null,
@@ -427,6 +433,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   exitTutorial: () => set({ tutorialActive: false }),
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
   setGestureLock: (v) => set({ gestureLock: v }),
+  setWallTrimArmed: (v) => set({ wallTrimArmed: v }),
   setEditMode: (v) => set(v
     // Entering: start clean — drop any open card/selection so edit mode owns it.
     ? { editMode: true, editHover: null, editSelected: null, activePanel: null, selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null }

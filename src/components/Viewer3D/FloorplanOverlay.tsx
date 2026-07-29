@@ -247,6 +247,9 @@ export default function FloorplanOverlay() {
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const keepPlacing = useFloorplanLocalStore((s) => s.keepPlacing)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
+  const wallTrimArmed = useFloorplanLocalStore((s) => s.wallTrimArmed)
+  const setWallTrimArmed = useFloorplanLocalStore((s) => s.setWallTrimArmed)
+  const trimUserWallAt = useAppStore((s) => s.trimUserWallAt)
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
@@ -1533,6 +1536,17 @@ export default function FloorplanOverlay() {
               rotation={[0, -ang, 0]}
               onPointerDown={(e) => {
                 e.stopPropagation()
+                // TRIM armed → this tap removes the PIECE of wall you pointed at
+                // rather than selecting it. Derive the point from the ray (the
+                // same reason tracing does — a mesh intersection can be
+                // degenerate), then disarm so one arm = one trim.
+                if (wallTrimArmed && drawing) {
+                  const hit = rayToTracePlane(e) ?? e.point
+                  const [px, py] = toPixel(hit)
+                  trimUserWallAt(drawing.id, i, px, py)
+                  setWallTrimArmed(false)
+                  return
+                }
                 selectWallExclusive(i)
               }}
               onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'wall', id: String(i) }) } : undefined}

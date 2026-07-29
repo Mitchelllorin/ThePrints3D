@@ -145,6 +145,8 @@ export default function FloorplanPanel() {
   const setPlumb = useFloorplanLocalStore((s) => s.setPlumb)
   const selectedLine = useFloorplanLocalStore((s) => s.selectedLine)
   const selectedArea = useFloorplanLocalStore((s) => s.selectedArea)
+  const wallTrimArmed = useFloorplanLocalStore((s) => s.wallTrimArmed)
+  const setWallTrimArmed = useFloorplanLocalStore((s) => s.setWallTrimArmed)
   const editModeActive = useFloorplanLocalStore((s) => s.editMode)
   const removeRoofArea = useAppStore((s) => s.removeRoofArea)
   const removeFloorsArea = useAppStore((s) => s.removeFloorsArea)
@@ -1382,6 +1384,20 @@ export default function FloorplanPanel() {
               >
                 {EXTERIOR_CLADDINGS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
               </select>
+            </label>
+            {/* TRIM — point at the bit you want gone. Arms one tap: the piece of
+                wall between its nearest junctions (or between the tap and the
+                nearer free end) is removed. The auto "runs past the corner"
+                prompt only fires when the app notices; this is the manual one. */}
+            <label className={styles.row}>
+              <span className={styles.propLabel}>Trim</span>
+              <button
+                className={wallTrimArmed ? styles.action : styles.secondary}
+                onClick={() => setWallTrimArmed(!wallTrimArmed)}
+                title="Then tap the part of the wall you want removed"
+              >
+                {wallTrimArmed ? 'Tap the part to remove' : 'Trim a piece'}
+              </button>
             </label>
             <label className={styles.row}>
               <span className={styles.propLabel}>See-through</span>

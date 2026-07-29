@@ -421,6 +421,13 @@ interface AppState {
   updateUserWall: (id: string, userIndex: number, patch: Partial<ParsedWall>) => void
   /** Live-move a user wall's endpoints WITHOUT pushing history (drag use). */
   moveUserWall: (id: string, userIndex: number, coords: Partial<Pick<ParsedWall, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
+  /** TRIM: remove the PIECE of a wall containing (px, py). Real trim semantics —
+   *  point at the bit you want gone. The wall is cut at its junctions (where
+   *  other same-level user walls cross it or land on it) and the piece under the
+   *  point is deleted: an end piece shortens the wall, a middle piece splits it
+   *  in two, and trimming the whole thing deletes it. With no junction, trims
+   *  from the nearer END back to the point, which is the plain overshoot case. */
+  trimUserWallAt: (id: string, userIndex: number, px: number, py: number) => void
   clearUserTracedWalls: (id: string) => void
   /** Clone walls on `fromLevel` up to the next storey at the SAME footprint, so
    *  they stand plumb (vertical) AND flush (faces in the same plane) over the
@@ -952,6 +959,84 @@ export const useAppStore = create<AppState>()(
         const target = userWalls[userIndex]
         if (!target) return
         Object.assign(target, patch)
+      })
+    },
+
+    // TRIM a wall by pointing at the piece to remove.
+    //
+    // The corner-trim inference only fires when the app NOTICES an overshoot, and
+    // only in the band it considers a stub. This is the manual version: cut the
+    // wall at its junctions and delete the piece you pointed at.
+    //
+    // Junctions = where another same-level user wall crosses this one, or lands
+    // its endpoint on it. Those points split the wall into pieces; the one
+    // containing (px, py) goes. With no junction at all, the "piece" is from the
+    // nearer END back to the point — which is exactly a plain overshoot with
+    // nothing crossing it.
+    trimUserWallAt: (id, userIndex, px, py) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+        const w = userWalls[userIndex]
+        if (!w) return
+        const dx = w.x2 - w.x1, dy = w.y2 - w.y1
+        const len2 = dx * dx + dy * dy
+        if (len2 < 1) return
+        const at = (t: number) => ({ x: w.x1 + t * dx, y: w.y1 + t * dy })
+        // Where along the wall (0..1) the user pointed.
+        const tHit = Math.max(0, Math.min(1, ((px - w.x1) * dx + (py - w.y1) * dy) / len2))
+
+        // Junction parameters along this wall, from every OTHER wall on the same
+        // level: both its endpoints projected on, kept only if they actually sit
+        // on this wall (within tolerance) and not at the very ends.
+        const TOL = 14   // px — an endpoint this close counts as landing on us
+        const level = w.level ?? 0
+        const cuts: number[] = []
+        for (const o of userWalls) {
+          if (o === w || (o.level ?? 0) !== level) continue
+          for (const [ox, oy] of [[o.x1, o.y1], [o.x2, o.y2]] as const) {
+            const t = ((ox - w.x1) * dx + (oy - w.y1) * dy) / len2
+            if (t <= 0.02 || t >= 0.98) continue
+            const p = at(t)
+            if (Math.hypot(ox - p.x, oy - p.y) <= TOL) cuts.push(t)
+          }
+        }
+        cuts.sort((a, b) => a - b)
+
+        // The piece under the point, bounded by the nearest cut either side.
+        let lo = 0, hi = 1
+        for (const c of cuts) {
+          if (c <= tHit && c > lo) lo = c
+          if (c >= tHit && c < hi) hi = c
+        }
+        // Nothing crossing it → treat the stub between the point and the nearer
+        // end as the piece, so a plain overshoot still trims in one tap.
+        if (cuts.length === 0) {
+          if (tHit < 0.5) hi = tHit
+          else lo = tHit
+        }
+
+        const keepStart = lo > 0.02
+        const keepEnd = hi < 0.98
+        const idxInAll = d.parsedWalls.indexOf(w)
+        if (!keepStart && !keepEnd) {
+          // The whole wall was the piece.
+          d.parsedWalls.splice(idxInAll, 1)
+          return
+        }
+        const A = at(lo), B = at(hi)
+        if (keepStart && keepEnd) {
+          // Middle piece removed → the wall becomes two.
+          const tail: ParsedWall = { ...w, x1: B.x, y1: B.y }
+          w.x2 = A.x; w.y2 = A.y
+          d.parsedWalls.splice(idxInAll + 1, 0, tail)
+        } else if (keepStart) {
+          w.x2 = A.x; w.y2 = A.y          // trimmed off the far end
+        } else {
+          w.x1 = B.x; w.y1 = B.y          // trimmed off the near end
+        }
       })
     },
 

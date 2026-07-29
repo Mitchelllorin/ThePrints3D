@@ -579,6 +579,7 @@ export default function WorkspaceLayout() {
 
       // 1. A tool is in your hand — put it down.
       if (st.placeObjectType) { st.setPlaceObjectType(null); return }
+      if (st.wallTrimArmed) { st.setWallTrimArmed(false); return }
 
       // 2. Mid-action — step back one stage at a time, don't dump the whole run.
       if (st.traceMode) {
