@@ -439,8 +439,12 @@
    stays reachable (Android parity) instead of hiding behind the sheet. */
 .explodeBarLifted { bottom: calc(42dvh + 14px); }
 
-/* Floor isolation bar — sits above the explode bar (bottom-right) so both
-   controls are reachable without overlap. */
+/* Floor bar — sits ABOVE the explode bar (bottom-right) so both are reachable.
+   Explode occupies 14–48px here (bottom 14 + height 34), so 62 clears it by 14.
+   It needs its OWN lifted offset: sharing .explodeBarLifted set both bars to the
+   same absolute `bottom`, which stacked them exactly on top of each other the
+   moment the Place drawer opened. */
+.floorBarLifted { bottom: calc(42dvh + 56px); }
 .floorBar {
   position: absolute;
   bottom: calc(62px + env(safe-area-inset-bottom, 0px));
@@ -491,5 +495,8 @@
   }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { width: 90px; }
-  .floorBar { bottom: calc(130px + env(safe-area-inset-bottom, 0px)); right: 10px; }
+  /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
+     the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
+  .floorBar { bottom: calc(152px + env(safe-area-inset-bottom, 0px)); right: 10px; }
+  .floorBarLifted { bottom: calc(42dvh + 62px); }
 }

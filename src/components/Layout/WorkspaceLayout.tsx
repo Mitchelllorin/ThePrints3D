@@ -721,7 +721,7 @@ export default function WorkspaceLayout() {
       {/* Stays hidden mid-trace on purpose — you're placing points, not
           inspecting floors, and the workspace stays clear while you tap. */}
       {hasDrawings && !calibrationMode && !traceMode && availableFloors.length > 1 && (
-        <div className={`${styles.floorBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
+        <div className={`${styles.floorBar} ${placeDrawerOpen ? styles.floorBarLifted : ''}`}>
           <span className={styles.explodeLabel}>Floor</span>
           <button
             className={`${styles.floorBtn} ${isolatedFloor === null && ghostedLevels.length === 0 ? styles.floorBtnActive : ''}`}
