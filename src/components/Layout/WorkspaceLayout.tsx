@@ -552,14 +552,53 @@ export default function WorkspaceLayout() {
     e.target.value = ''
   }
 
-  // Escape retracts the Settings drawer (FloorplanPanel handles Escape for the
-  // Build/Place drawers + its own pickers/cards).
+  // ─── THE Escape owner ──────────────────────────────────────────────────────
+  //
+  // Exactly ONE window-level Escape handler for the whole app, dismissing ONE
+  // thing per press, most specific first.
+  //
+  // There used to be three, none aware of the others: this one closed the
+  // Settings AND Ask drawers, FloorplanPanel closed panels/placement and stepped
+  // back through a trace, and FloorplanOverlay separately disarmed placement. A
+  // single Escape while placing with Settings open fired all three — disarming
+  // the tool, closing Settings and closing Ask in one keystroke. Nobody decided
+  // that; it accreted, exactly like the gesture map (docs/INTERACTIONS.md).
+  //
+  // Escape means "back out of the innermost thing", so the order is by depth:
+  // the tool you're holding, then the action you're in, then a card, then a
+  // drawer, then any selection. Each branch RETURNS — one press, one dismissal.
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      // Text fields own their own Escape (cancel the edit); those handlers are
+      // scoped to the field and must win over anything global.
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
+
       const st = useFloorplanLocalStore.getState()
-      if (st.settingsDrawerOpen) st.setDrawerOpen('settings', false)
-      if (st.askDrawerOpen) st.setDrawerOpen('ask', false)
+
+      // 1. A tool is in your hand — put it down.
+      if (st.placeObjectType) { st.setPlaceObjectType(null); return }
+
+      // 2. Mid-action — step back one stage at a time, don't dump the whole run.
+      if (st.traceMode) {
+        if (st.pendingWalls) { st.setPendingWalls(null); return }
+        if (st.traceStart) { st.setTraceStart(null); return }
+        st.setTraceMode(false); st.setTraceStroke([]); st.setHoverPixel(null); st.setPlumbNudge(null)
+        return
+      }
+
+      // 3. A card or picker is open.
+      if (st.activePanel) { st.closeAllPanels(); return }
+
+      // 4. A drawer is open (they're mutually exclusive, so at most one hits).
+      if (st.buildDrawerOpen) { st.setDrawerOpen('build', false); return }
+      if (st.placeDrawerOpen) { st.setDrawerOpen('place', false); return }
+      if (st.askDrawerOpen) { st.setDrawerOpen('ask', false); return }
+      if (st.settingsDrawerOpen) { st.setDrawerOpen('settings', false); return }
+
+      // 5. Nothing open — clear any lingering selection.
+      st.closeAllPanels()
     }
     window.addEventListener('keydown', onEsc)
     return () => window.removeEventListener('keydown', onEsc)

@@ -998,13 +998,9 @@ export default function FloorplanOverlay() {
   const ghostRef = useRef<THREE.Mesh>(null)
   const hideGhost = () => { if (ghostRef.current) ghostRef.current.visible = false }
 
-  // Escape cancels placement.
-  useEffect(() => {
-    if (!placeObjectType) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPlaceObjectType(null) }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [placeObjectType, setPlaceObjectType])
+  // Escape cancels placement — handled by the single Escape owner in
+  // WorkspaceLayout, not here. This was one of three competing window-level
+  // handlers, so one press disarmed the tool AND closed unrelated drawers.
 
   // Yaw that aligns an object with the nearest user wall (so it sits IN/along
   // the wall). Returns 0 when no wall is close enough to snap to.

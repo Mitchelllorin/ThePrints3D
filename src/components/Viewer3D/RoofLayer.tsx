@@ -35,6 +35,9 @@ const MIN_PITCH = 1 / 12
 const MAX_PITCH = 18 / 12
 // Vertical drag sensitivity: metres of ridge rise per screen pixel dragged.
 const RISE_PER_PX = 0.012
+// Invisible grab box around the ridge bar. Sized for a fingertip, not for looks
+// — the visible bar stays 0.16 m so the roof still reads correctly.
+const RIDGE_GRIP_M = 0.5
 
 // Roof types whose ridge runs centred along the long side — these get the FULL
 // ridge handle (pitch + saltbox slide + hip end-knobs, via buildRidgeRoof).
@@ -232,13 +235,24 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, mode, onDraft, 
 
   return (
     <group position={[centre.x, eaveY, centre.z]} rotation={[0, handleRotY, 0]}>
-      {/* Ridge bar — drag up/down (pitch) or sideways (slide off-centre). */}
+      {/* Ridge bar — drag up/down (pitch) or sideways (slide off-centre).
+          The GRIP and the LOOK are deliberately separate meshes: an invisible
+          box larger than the bar carries the pointer handlers, so the ridge is
+          comfortable to grab with a fingertip while still reading as a slim bar.
+          The visible bar is 0.16 m ≈ 6", which is a small target on a phone;
+          drawing a fatter bar instead would make the roof look wrong. */}
       <mesh
         position={[(xA + xB) / 2, rise, c]}
         onPointerDown={start('bar')}
         onPointerOver={() => { document.body.style.cursor = 'move' }}
         onPointerOut={() => { if (!dragging) document.body.style.cursor = '' }}
       >
+        <boxGeometry args={[ridgeLen, RIDGE_GRIP_M, RIDGE_GRIP_M]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
+      {/* The bar you actually see. raycast opted out so it can never shadow the
+          grip above it. */}
+      <mesh position={[(xA + xB) / 2, rise, c]} raycast={() => null}>
         <boxGeometry args={[ridgeLen, 0.16, 0.16]} />
         <meshStandardMaterial color="#22d3ee" emissive="#0891b2" emissiveIntensity={0.6} roughness={0.4} />
       </mesh>

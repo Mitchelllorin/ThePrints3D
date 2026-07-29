@@ -350,25 +350,15 @@ export default function FloorplanPanel() {
     setPendingWalls(null)
   }
 
-  // Keyboard: Enter keeps pending walls; Escape closes ANY open panel/card/
-  // picker first (one-panel rule), and only then handles trace run/exit.
+  // Enter keeps the pending walls. Escape is NOT handled here — WorkspaceLayout
+  // is the single Escape owner for the whole app (see the comment there); this
+  // used to be one of three competing handlers.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const local = useFloorplanLocalStore.getState()
       if (e.key === 'Enter' && local.traceMode && local.pendingWalls) {
         e.preventDefault()
         keepPendingWalls()
-        return
-      }
-      if (e.key !== 'Escape') return
-      if (local.activePanel || local.placeObjectType) {
-        local.closeAllPanels()
-        return
-      }
-      if (local.traceMode) {
-        if (local.pendingWalls) local.setPendingWalls(null)
-        else if (local.traceStart) local.setTraceStart(null)
-        else cancelTracing()
       }
     }
     window.addEventListener('keydown', onKey)
