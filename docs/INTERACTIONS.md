@@ -77,6 +77,59 @@ so the controls stay where the hand expects them.
 
 ---
 
+## Edit mode
+
+Edit mode is currently four different systems wearing one name. Verified in the
+running app, 2026-07-28:
+
+| Component | How a pick is recorded | Highlight | Gizmo |
+|---|---|---|---|
+| Placed object | `selectedObjectId` (`selectObjectExclusive`) | `Edges` | **yes** |
+| Floor deck | `editSelected` (`setEditSelected`) | `AreaHighlight` | no |
+| Roof area | `editSelected` | `AreaHighlight` | no |
+| Wall | nothing — only `editHover` | cyan hover line | no |
+
+Consequences, each observed rather than inferred:
+
+1. **Two selection channels, neither clearing the other.** Picking an object set
+   `selectedObjectId` while `editSelected` still held the roof — two things
+   selected at once, both highlighted.
+2. **The gizmo is objects-only.** `PlacedObjectsLayer` attaches it to
+   `selectedObjectId`, which is not the channel Edit mode uses for floors and
+   roofs, so those never get one. Walls never get one either.
+3. **Press = immediate drag.** `onBodyDown` starts moving the component on
+   pointer-down, so there is no select-then-act; every press risks shifting
+   geometry.
+4. **Small handles sit on grab-anywhere bodies.** The roof's ridge bar is a thin
+   target mounted on a body that drags from any pixel — miss the bar slightly and
+   you slide the whole roof instead of pitching it. This is why editing a roof
+   "was really difficult".
+5. **The selection card is a large centred panel** that covers the model, with
+   the gizmo's own Move/Rotate/Stretch toggle behind it.
+
+### The standard, applied to Edit mode
+
+Nothing new — the same rule as everywhere else:
+
+| Gesture | Meaning |
+|---|---|
+| Double-tap a component | select it (ONE selection, any type, one channel) |
+| Press-drag the **selected** component | move it |
+| Press-drag anything else | orbit |
+| Grab a handle on the selection | that handle's job (ridge pitch, endpoint, corner) |
+
+- **One selection channel for every component type.** Whatever is picked, one
+  thing is selected and everything else is cleared.
+- **The gizmo attaches to the selection, whatever it is** — object, floor, roof
+  or wall — instead of existing only for objects.
+- **Handles only appear on the selected component**, so a thin grip never
+  competes with an unselected body underneath it.
+- **The card is slim and off-centre**, per the near-invisible-chrome rule. It
+  must never cover the thing being edited.
+
+Selection replaces Edit mode's press-to-drag as the safety gate, which is the
+same move made in "What this does to Edit mode" below.
+
 ## No function is lost
 
 The hard constraint on this standard: **it relocates capability, it never removes
