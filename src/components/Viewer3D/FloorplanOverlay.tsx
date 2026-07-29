@@ -1231,8 +1231,14 @@ export default function FloorplanOverlay() {
     : activeTraceLayer === 'roof' ? LAYER_COLORS.roof
     : LAYER_COLORS.framing
 
-  // Electrical code violations (shown as red markers while the layer is on).
-  const violations = (drawing && visibleLayers.has('electrical'))
+  // Electrical code violations (red markers on the print).
+  //
+  // Only once there IS electrical work to judge. The electrical layer is visible
+  // by default, so this used to scatter red rings over a plan with no outlets
+  // and no circuits on it — flagging code problems against work nobody had done
+  // yet. A validator that cries before you start is noise you learn to ignore.
+  const hasElectricalWork = placedObjects.some((o) => OUTLET_TYPES.has(o.type)) || electricalLines.length > 0
+  const violations = (drawing && visibleLayers.has('electrical') && hasElectricalWork)
     ? validateElectrical({
         userWalls: userWalls,
         outlets: placedObjects

@@ -214,6 +214,10 @@ function PrintAutoFrame() {
  * pushes it left. The bottom (Place) drawer's height is content-driven, so
  * vertical recentering is left alone.
  */
+/** Width of the permanent left edge rail (Build/Ask/Settings/Place). The plan is
+ *  framed clear of it so nothing traceable ever sits under the tabs. */
+const RAIL_CLEAR_PX = 48
+
 function DrawerRecenter() {
   const { camera, size } = useThree()
   const buildOpen = useFloorplanLocalStore((s) => s.buildDrawerOpen)
@@ -233,7 +237,19 @@ function DrawerRecenter() {
     // No view-offset while an ACTION owns the pointer (tracing, calibrating, or
     // PLACING) — shifting the plan makes the tap land off where you aimed, so a
     // placed object appears to "disappear" (lands elsewhere / the view jumps).
-    if (traceMode || calibrationMode || placeObjectType) { cam.clearViewOffset(); cam.updateProjectionMatrix(); return }
+    // …but the RAIL offset is constant, so it still applies. The left edge rail
+    // (Build/Ask/Settings/Place) permanently covers ~48px of the workspace, and
+    // with the plan dead-centre a wall corner underneath it cannot be tapped —
+    // so a wall run could not be closed. Nudging the framing right clears the
+    // rail. A CONSTANT offset is safe during a run: what breaks taps is the
+    // offset CHANGING mid-action (the plan slides under your finger). This one
+    // is identical before, during and after, and the raycaster reads the same
+    // projection matrix it modifies, so taps still land 1:1.
+    if (traceMode || calibrationMode || placeObjectType) {
+      cam.setViewOffset(w, h, -RAIL_CLEAR_PX / 2, 0, w, h)
+      cam.updateProjectionMatrix()
+      return
+    }
     // Shift the RENDERED framing (not the camera) so the plan re-centres in the
     // area the open drawer leaves visible — the plan must stay centred in the
     // workspace AT ALL TIMES, even on a phone where a drawer covers most of the
@@ -245,7 +261,7 @@ function DrawerRecenter() {
     // drawer, whose height is ~40dvh of catalog).
     // Build and Settings both open from the LEFT now (beside the rail), so both
     // shift the plan RIGHT into the visible sliver.
-    const offsetX = buildOpen || settingsOpen ? -drawerW / 2 : 0
+    const offsetX = (buildOpen || settingsOpen ? -drawerW / 2 : 0) - RAIL_CLEAR_PX / 2
     const offsetY = placeOpen ? h * 0.2 : 0
     if (offsetX === 0 && offsetY === 0) cam.clearViewOffset()
     else cam.setViewOffset(w, h, offsetX, offsetY, w, h)
