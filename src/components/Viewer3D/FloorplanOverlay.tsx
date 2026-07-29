@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
-import { createDoubleTapState, detectDoubleTap } from './doubleTap'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore, type DragState } from '../../store/useFloorplanLocalStore'
@@ -248,7 +247,6 @@ export default function FloorplanOverlay() {
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const keepPlacing = useFloorplanLocalStore((s) => s.keepPlacing)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
-  const wallTap = useRef(createDoubleTapState())
   const wallTrimArmed = useFloorplanLocalStore((s) => s.wallTrimArmed)
   const setWallTrimArmed = useFloorplanLocalStore((s) => s.setWallTrimArmed)
   const trimUserWallAt = useAppStore((s) => s.trimUserWallAt)
@@ -1549,10 +1547,7 @@ export default function FloorplanOverlay() {
                   setWallTrimArmed(false)
                   return
                 }
-                // The standard: double-tap SELECTS (docs/INTERACTIONS.md).
-                // Single tap falls through to the camera, so brushing a wall
-                // while orbiting no longer pops its card open.
-                if (detectDoubleTap(wallTap.current, String(i), e)) selectWallExclusive(i)
+                selectWallExclusive(i)
               }}
               onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'wall', id: String(i) }) } : undefined}
               onPointerOut={editMode ? () => setEditHover(null) : undefined}

@@ -19,7 +19,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useExplodeChildren } from './explodeRuntime'
-import { createDoubleTapState, detectDoubleTap } from './doubleTap'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -309,7 +308,6 @@ export default function RoofLayer() {
 
   // Live ridge draft for the area being dragged (committed to the store on release).
   const [draft, setDraft] = useState<{ id: string; ridge: RoofRidge } | null>(null)
-  const dtap = useRef(createDoubleTapState())
 
   // Edit-mode body drag: grab the roof and slide it on the ground plane. A live
   // world offset moves the mesh each frame; the store is written ONCE on release.
@@ -325,16 +323,10 @@ export default function RoofLayer() {
   // unselected roof just lets the camera orbit. See docs/INTERACTIONS.md.
   const onBodyDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     const isSel = editSelected?.kind === 'roof' && editSelected.id === area.id
-    if (detectDoubleTap(dtap.current, area.id, e)) {
-      e.stopPropagation()
-      selectArea('roof', area.id)
-      return
-    }
-    if (isSel) {
-      e.stopPropagation()
-      const g = rayToGround(e)
-      if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
-    }
+    e.stopPropagation()
+    if (!isSel) { selectArea('roof', area.id); return }
+    const g = rayToGround(e)
+    if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
   }
   const onBodyMove = (e: ThreeEvent<PointerEvent>) => {
     if (!bodyDrag) return

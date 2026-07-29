@@ -13,7 +13,6 @@ import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import { explodeRuntime } from './explodeRuntime'
-import { createDoubleTapState, detectDoubleTap } from './doubleTap'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -206,7 +205,6 @@ export default function FloorJoistsLayer() {
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
   const [bodyDrag, setBodyDrag] = useState<{ id: string; start: THREE.Vector3; offset: [number, number]; moved: boolean } | null>(null)
-  const dtap = useRef(createDoubleTapState())
 
   // Storey-to-storey rise = wall height + the floor assembly on top of it, so a
   // 2nd-floor deck's joists rest ON the lower wall's top plate.
@@ -266,19 +264,14 @@ export default function FloorJoistsLayer() {
   // is what made thin handles unusable — they sat on grab-anywhere bodies.
   const onAreaDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     const isSel = editSelected?.kind === 'floor' && editSelected.id === area.id
-    // Double-tap → select, whatever mode we're in.
-    if (detectDoubleTap(dtap.current, area.id, e)) {
-      e.stopPropagation()
-      selectArea('floor', area.id)
-      return
-    }
-    // Press-drag the SELECTED floor moves it. Anything else falls through to the
-    // camera, so a stray press orbits instead of grabbing geometry.
-    if (isSel) {
-      e.stopPropagation()
-      const g = rayToGround(e)
-      if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
-    }
+    e.stopPropagation()
+    // First tap SELECTS. Selection is the gate — only a press on the already
+    // selected floor starts a drag, so a stray press can never skate geometry.
+    // (Orbit is unaffected: OrbitControls reads the DOM event, so stopping r3f
+    // propagation here doesn't freeze the camera.)
+    if (!isSel) { selectArea('floor', area.id); return }
+    const g = rayToGround(e)
+    if (g) { setBodyDrag({ id: area.id, start: g, offset: [0, 0], moved: false }); setGestureLock(true) }
   }
   const onBodyMove = (e: ThreeEvent<PointerEvent>) => {
     if (!bodyDrag) return

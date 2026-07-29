@@ -29,11 +29,10 @@ That is the whole standard. The tables below are just it, spelled out.
 
 | Gesture | Meaning | Where |
 |---|---|---|
-| **Double-tap a component** | **Select it** | every component, no exceptions |
-| Single tap a component | nothing — falls through to the camera | workspace |
-| Single tap empty space | deselect, dismiss any open card | workspace |
-| Press-drag | orbit the camera | workspace |
-| Press-drag a selected component | move it (Edit mode only) | workspace |
+| **Tap a component** | **Select it** | every component, no exceptions |
+| Tap empty space | deselect, dismiss any open card | workspace |
+| Press-drag the **selected** component | move it | workspace |
+| Press-drag anything else | orbit the camera | workspace |
 | Double-tap during an action | end that action | trace, calibrate, place |
 | Swipe in from an edge | open that edge's drawer | chrome |
 | Tap outside an open drawer | close it | chrome |
@@ -43,12 +42,26 @@ placed objects, doors, windows, devices, trade lines (plumbing / electrical /
 HVAC), annotations. If a new thing is added to the workspace, it gets the same
 gesture for free or it is not finished.
 
-### Why double-tap for select, and single tap for nothing
+### Why a single tap selects, and the DRAG is what's protected
 
-Single-tap select means brushing the model while orbiting pops cards open — the
-"stray tap" annoyance. Deliberate selection wants a deliberate gesture. Making
-single tap inert also means the camera is always free, which is what you want the
-majority of the time.
+Double-tap-to-select was tried and reverted 2026-07-28. Two different annoyances
+were being conflated:
+
+- a stray tap pops a card open — noise
+- a stray press drags geometry across the plan — actual damage
+
+Only the second one matters, and it is fixed by requiring a component to be
+SELECTED before a press can move it. That protection is independent of how
+selection happens, so it survives either way.
+
+Double-tap therefore bought only "no card on a stray tap", and cost a two-tap
+gesture on small targets — a stud or a trade line, with a finger, twice inside
+320 ms and 28 px. Bad trade on a phone-first app. Selection is one tap again.
+
+The sequence is: **tap to select, then drag to move.** Pressing an unselected
+component selects it and nothing else; pressing the one already selected moves
+it. Orbit is unaffected either way — OrbitControls reads the DOM event directly,
+so stopping r3f propagation in a layer never freezes the camera.
 
 ### Why not `onDoubleClick`
 
@@ -113,7 +126,7 @@ Nothing new — the same rule as everywhere else:
 
 | Gesture | Meaning |
 |---|---|
-| Double-tap a component | select it (ONE selection, any type, one channel) |
+| Tap a component | select it (ONE selection, any type, one channel) |
 | Press-drag the **selected** component | move it |
 | Press-drag anything else | orbit |
 | Grab a handle on the selection | that handle's job (ridge pitch, endpoint, corner) |
@@ -139,11 +152,11 @@ and must change, not the feature.
 
 | Function (today) | Reached today by | Reached under the standard |
 |---|---|---|
-| Select object | single tap | double-tap |
-| Select floor deck | single tap | double-tap |
-| Select wall | single tap, only when `canEditWalls` | double-tap, any time |
-| Select trade line | single tap | double-tap |
-| Select roof area | single tap | double-tap |
+| Select object | single tap | single tap (unchanged) |
+| Select floor deck | single tap | single tap (unchanged) |
+| Select wall | single tap, only when `canEditWalls` | single tap, any time |
+| Select trade line | single tap | single tap (unchanged) |
+| Select roof area | single tap | single tap (unchanged) |
 | Toggle X-ray (object) | double-tap object | card → X-ray |
 | Toggle X-ray (wall) | card | card → X-ray (same button) |
 | Ghost a storey | double-tap wall or floor | card → Ghost |

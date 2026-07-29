@@ -357,15 +357,9 @@ export default function PlacedObjectsLayer() {
                 // gesture meant two different things depending on what you hit.
                 // X-ray is a card button now, so the gesture is free to mean the
                 // one thing it means everywhere else.
-                if (detectDoubleTap(dtap.current, obj.id, e)) {
-                  e.stopPropagation()
-                  select(obj.id)
-                  return
-                }
-                // Press-drag moves the SELECTED object. An unselected one falls
-                // through to the camera, so a stray press orbits instead of
-                // skating furniture across the plan.
-                if (selected) startObjectPress(e, obj)
+                e.stopPropagation()
+                if (!selected) { select(obj.id); return }
+                startObjectPress(e, obj)
               }}
               onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'object', id: obj.id }) } : undefined}
               onPointerOut={editMode ? () => setEditHover(null) : undefined}
