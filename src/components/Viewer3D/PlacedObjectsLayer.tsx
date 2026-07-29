@@ -97,7 +97,6 @@ export default function PlacedObjectsLayer() {
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
-  const gizmoLive = useFloorplanLocalStore((s) => s.gizmoLive)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
 
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
@@ -163,8 +162,8 @@ export default function PlacedObjectsLayer() {
 
   return (
     <group name="placed-objects" ref={groupRef}>
-      {/* The transform gizmo now lives in SelectionGizmo — ONE gizmo attached to
-          whatever is selected, instead of an objects-only one here. */}
+      {/* Transforms are driven by the edit rail (WorkspaceLayout) — buttons that
+          do what they say, not handles floating over the model. */}
 
       {/* Invisible ground catcher — only active while dragging, so moves/rotates
           continue even when the pointer leaves the object box. */}
@@ -182,13 +181,9 @@ export default function PlacedObjectsLayer() {
       )}
       {placedObjects.map((obj) => {
         const live =
-          gizmoLive && gizmoLive.kind === 'object' && gizmoLive.id === obj.id
-            ? { ...obj, x: obj.x + gizmoLive.dx, z: obj.z + gizmoLive.dz,
-                rotationY: obj.rotationY + gizmoLive.rotationY,
-                scaleX: gizmoLive.scaleX, scaleY: gizmoLive.scaleY, scaleZ: gizmoLive.scaleZ }
-            : drag && drag.id === obj.id
-              ? { ...obj, x: drag.x, z: drag.z, rotationY: drag.rotationY }
-              : obj
+          drag && drag.id === obj.id
+            ? { ...obj, x: drag.x, z: drag.z, rotationY: drag.rotationY }
+            : obj
         const { w, d, h, color } = dims(live)
         const selected = obj.id === selectedObjectId
         const editHovered = editMode && editHover?.kind === 'object' && editHover.id === obj.id

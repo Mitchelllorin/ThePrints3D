@@ -387,8 +387,18 @@ export default function FloorplanOverlay() {
   // plane must include wallTop or you get the same offset a wall-height too low.
   // storeyHeight here equals the wall/floor layers' storeyHeight. Level 0 floor
   // tracing → 0 (unchanged).
-  const tracingAtWallTop = activeTraceLayer === 'roof'
-    || (activeTraceLayer === 'floors' && CEILING_TYPES.has(floorsElement))
+  //
+  // …but ONLY WHILE A TRACE IS ACTUALLY RUNNING. This lift exists so your taps
+  // and the geometry share a plane during the run; it has no business surviving
+  // the run. It used to be derived from activeTraceLayer alone, which persists
+  // after you finish — so pulling a roof on the GROUND floor left the print
+  // parked a full wall-height in the air afterwards, reading exactly like a
+  // stuck explode. Worse, the "Plan at ground" escape hatch is only offered on
+  // upper floors (activeLevel > 0), so at ground there was no way to bring it
+  // back down. Idle → the print sits on its storey, where it belongs.
+  const tracingAtWallTop = (traceMode || overlay.calibrationMode)
+    && (activeTraceLayer === 'roof'
+      || (activeTraceLayer === 'floors' && CEILING_TYPES.has(floorsElement)))
   // Trades (plumbing/electrical/HVAC) trace on the print plane — they render by
   // BAND (under-floor/in-wall/ceiling), not by storey level, so they must NOT
   // lift with the now-persistent activeLevel. Otherwise, after any multi-floor
@@ -1128,7 +1138,7 @@ export default function FloorplanOverlay() {
   const ghostY = (type: string, fallbackH: number) =>
     deviceMountHeightM(type, ceilingM) ?? fallbackH / 2
 
-  // Hover/drag moves the ghost (imperative — no re-render, so the ghost stays
+  // Press/drag moves the ghost (imperative — no re-render, so the ghost stays
   // visible). The camera is locked while placing, so the print never drifts.
   const moveGhost = (event: ThreeEvent<PointerEvent>) => {
     if (!placeObjectType || !ghostItem) return
@@ -1139,6 +1149,20 @@ export default function FloorplanOverlay() {
     const pose = devicePose(p.x, p.z)
     ghostRef.current.position.set(pose.x, ghostY(placeObjectType, ghostItem.defaultH), pose.z)
     ghostRef.current.rotation.y = pose.rotationY
+  }
+
+  // Only DRAG moves the ghost — a bare hover must not.
+  //
+  // This was wired straight to onPointerMove, which on a phone is fine: there is
+  // no hover, so move only fires while a finger is down and the press-drag-drop
+  // flow works. On a mouse it fires the moment the pointer moves ANYWHERE, so
+  // the ghost parked hi-vis at the plan's edge teleported to the cursor before
+  // you could reach it — the item looked like it vanished the instant you went
+  // to grab it. `buttons` is non-zero only while a mouse button or finger is
+  // actually down, which is the same test on both.
+  const dragGhost = (event: ThreeEvent<PointerEvent>) => {
+    if (event.buttons === 0) return
+    moveGhost(event)
   }
 
   // Tap on the print places the object right there (map is locked → precise),
@@ -1497,7 +1521,7 @@ export default function FloorplanOverlay() {
         // Press shows + moves the ghost to the finger, drag follows it, release
         // drops it there — so you DRAG the ghost into place instead of tapping
         // blindly. A plain tap (press+release, no move) still places at the tap.
-        <mesh onPointerDown={moveGhost} onPointerMove={moveGhost} onPointerUp={placeAtPointer}>
+        <mesh onPointerDown={moveGhost} onPointerMove={dragGhost} onPointerUp={placeAtPointer}>
           <sphereGeometry args={[800, 16, 12]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.BackSide} />
         </mesh>

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
-import { convertValue, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
+import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TakeoffContent from '../Viewer3D/TakeoffPanel'
 import InferencePrompt from '../Viewer3D/InferencePrompt'
@@ -12,11 +12,16 @@ import TutorialCoach from './TutorialCoach'
 import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
+import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useConfigStore, type ActiveUnit } from '../../store/useConfigStore'
 import styles from './WorkspaceLayout.module.css'
+
+/** Edit rail steps. One tap = one of these, and one undo entry. */
+const ROT_STEP = Math.PI / 12   // 15°
+const STRETCH_STEP = 1.05       // ±5% per tap
 
 // ── Reusable setting controls (module scope: stable component identities) ─────
 function Slider({ label, val, min, max, step, unit = '', onChange }: {
@@ -479,9 +484,13 @@ export default function WorkspaceLayout() {
     || floorCount > 0 || roofCount > 0 || objectCount > 0
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
-  const gizmoMode = useFloorplanLocalStore((s) => s.gizmoMode)
-  const setGizmoMode = useFloorplanLocalStore((s) => s.setGizmoMode)
-  const gizmoModes = useFloorplanLocalStore((s) => s.gizmoModes)
+  // What the selection can be told to do. Buttons, not handles — see selectionEdit.
+  const selectionEdit = useSelectionEdit()
+  // Move step, in the active unit. Mirrors the wall D-pad's 1/6/12 so a step
+  // means the same thing wherever you nudge from.
+  const [editStep, setEditStep] = useState(1)
+  const activeUnit = useConfigStore((s) => s.activeUnit)
+  const stepM = convertLength(editStep, activeUnit, 'mm') / 1000
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
@@ -754,27 +763,70 @@ export default function WorkspaceLayout() {
         </div>
       )}
 
-      {/* Gizmo mode palette — Move / Rotate / Stretch for whatever is selected.
-          Lives in the corner with the other view controls rather than floating
-          over the model: a tool selector that sits on the component you're
-          editing covers the very thing you're looking at. Only the modes the
-          selection can actually express are listed (a floor has no rotation
-          field, so it shows Move · Stretch). */}
-      {gizmoModes.length > 0 && !traceMode && !calibrationMode && (
-        <div className={styles.gizmoRail}>
-          {gizmoModes.map((m) => (
-            <button
-              key={m}
-              className={`${styles.gizmoRailBtn} ${gizmoMode === m ? styles.gizmoRailBtnActive : ''}`}
-              onClick={() => setGizmoMode(m)}
-              title={m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}
-            >
-              <span className={styles.gizmoRailIcon}>
-                {m === 'translate' ? '✥' : m === 'rotate' ? '↻' : '⤢'}
-              </span>
-              {m === 'translate' ? 'Move' : m === 'rotate' ? 'Rotate' : 'Stretch'}
-            </button>
-          ))}
+      {/* EDIT RAIL — what you can do to the selection, as buttons that do the
+          thing they are named after. This replaced a 3D gizmo (drei
+          TransformControls arrows/rings on the model): the handles were hard to
+          hit on a phone, they covered the component being edited, and they were
+          forever buried in geometry. A tap here is unambiguous and lands one
+          undo step.
+
+          Only the verbs the selection can honestly express are shown — a floor
+          is an axis-aligned rect with no rotation field, so it gets Move ·
+          Stretch and no Rotate button that would spin nothing.
+
+          Lives in the chrome on the right edge, mirroring the left rail, so it
+          never sits on top of the thing you are editing. */}
+      {editMode && selectionEdit && !traceMode && !calibrationMode && (
+        <div className={styles.editRail}>
+          <span className={styles.editRailLabel}>{selectionEdit.label}</span>
+
+          {selectionEdit.verbs.includes('move') && (
+            <>
+              {/* Step size — same 1/6/12 ladder as the wall D-pad, so a "step"
+                  means one thing everywhere. Tap to cycle. */}
+              <button
+                className={styles.editRailStep}
+                onClick={() => setEditStep((s) => (s === 1 ? 6 : s === 6 ? 12 : 1))}
+                title="Change step size"
+              >
+                {editStep} {activeUnit}
+              </button>
+              <div className={styles.editRailPad}>
+                <button style={{ gridArea: 'up' }} className={styles.editRailBtn}
+                  onClick={() => selectionEdit.apply({ dz: -stepM })} aria-label="Move up">↑</button>
+                <button style={{ gridArea: 'left' }} className={styles.editRailBtn}
+                  onClick={() => selectionEdit.apply({ dx: -stepM })} aria-label="Move left">←</button>
+                <button style={{ gridArea: 'right' }} className={styles.editRailBtn}
+                  onClick={() => selectionEdit.apply({ dx: stepM })} aria-label="Move right">→</button>
+                <button style={{ gridArea: 'down' }} className={styles.editRailBtn}
+                  onClick={() => selectionEdit.apply({ dz: stepM })} aria-label="Move down">↓</button>
+              </div>
+            </>
+          )}
+
+          {selectionEdit.verbs.includes('rotate') && (
+            <div className={styles.editRailGroup}>
+              <span className={styles.editRailCaption}>Rotate</span>
+              <div className={styles.editRailPair}>
+                <button className={styles.editRailBtn} aria-label="Rotate left 15 degrees"
+                  onClick={() => selectionEdit.apply({ rot: -ROT_STEP })}>↺</button>
+                <button className={styles.editRailBtn} aria-label="Rotate right 15 degrees"
+                  onClick={() => selectionEdit.apply({ rot: ROT_STEP })}>↻</button>
+              </div>
+            </div>
+          )}
+
+          {selectionEdit.verbs.includes('stretch') && (
+            <div className={styles.editRailGroup}>
+              <span className={styles.editRailCaption}>Stretch</span>
+              <div className={styles.editRailPair}>
+                <button className={styles.editRailBtn} aria-label="Shrink"
+                  onClick={() => selectionEdit.apply({ factor: 1 / STRETCH_STEP })}>−</button>
+                <button className={styles.editRailBtn} aria-label="Grow"
+                  onClick={() => selectionEdit.apply({ factor: STRETCH_STEP })}>+</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

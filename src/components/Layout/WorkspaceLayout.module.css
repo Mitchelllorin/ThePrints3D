@@ -460,12 +460,12 @@
   border: none;
   pointer-events: auto;
 }
-/* Gizmo mode rail — VERTICAL, right edge, mirroring the Build/Ask/Settings/Place
-   rail on the left so both sides read as one system. Icon above a small
-   uppercase label, no box, accent when live. It sits in the chrome rather than
-   over the model: a tool selector anchored to the component you are editing
-   covers the very thing you are looking at. */
-.gizmoRail {
+/* Edit rail — VERTICAL, right edge, mirroring the Build/Ask/Settings/Place rail
+   on the left so both sides read as one system. Container-less: glyphs and tiny
+   uppercase captions floating on the workspace, no panel, no box. It sits in the
+   chrome rather than over the model, because controls anchored to the component
+   you are editing cover the very thing you are looking at. */
+.editRail {
   position: absolute;
   top: 70px;
   right: 6px;
@@ -473,33 +473,84 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   background: none;
   border: none;
   pointer-events: auto;
 }
 
-.gizmoRailBtn {
+/* What's selected — the rail's only prose, so you know what the buttons act on. */
+.editRailLabel {
+  color: var(--bp-accent, #38bdf8);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+}
+
+.editRailGroup {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  width: 44px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px 0;
+}
+.editRailCaption {
   color: var(--bp-text-dim, #94a3b8);
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+}
+
+.editRailBtn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 16px;
+  line-height: 1;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
   transition: color 0.12s;
 }
-.gizmoRailBtn:hover { color: var(--bp-text, #f1f5f9); }
-.gizmoRailBtnActive { color: var(--bp-accent, #38bdf8); }
-.gizmoRailIcon { font-size: 17px; line-height: 1; }
+.editRailBtn:hover { color: var(--bp-text, #f1f5f9); }
+.editRailBtn:active { color: var(--bp-accent, #38bdf8); }
+
+/* Move D-pad — arrows in their real directions, so the control looks like what
+   it does. Same 3x3 shape as the wall nudge pad in the Build drawer. */
+.editRailPad {
+  display: grid;
+  grid-template-areas:
+    '.    up    .'
+    'left .     right'
+    '.    down  .';
+  grid-template-columns: repeat(3, 26px);
+  grid-template-rows: repeat(3, 22px);
+  place-items: center;
+}
+
+.editRailPair { display: flex; gap: 2px; }
+
+/* Step chip — tap to cycle 1/6/12 of the active unit. */
+.editRailStep {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+}
+.editRailStep:hover { color: var(--bp-accent, #38bdf8); }
 
 .floorBtn {
   background: none;
@@ -539,6 +590,6 @@
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
      the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
   .floorBar { bottom: calc(152px + env(safe-area-inset-bottom, 0px)); right: 10px; }
-  .gizmoRail { top: 62px; right: 2px; gap: 10px; }
+  .editRail { top: 62px; right: 2px; gap: 8px; }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }

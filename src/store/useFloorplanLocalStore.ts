@@ -160,18 +160,6 @@ interface FloorplanLocalState {
    *  on drag start and clear it on end. Print-overlay/wall drags already lock via
    *  floorplanOverlay.orbitLocked; this covers every other layer. */
   gestureLock: boolean
-  /** Which gizmo handle set is showing. Persists across selections so the tool
-   *  you were using stays chosen, like any other tool palette. */
-  gizmoMode: 'translate' | 'rotate' | 'scale'
-  /** Which modes the CURRENT selection can actually express, published by the
-   *  gizmo's resolver so the corner palette doesn't have to duplicate the rule.
-   *  Empty when nothing is selected. */
-  gizmoModes: Array<'translate' | 'rotate' | 'scale'>
-  /** LIVE transform while a gizmo handle is being dragged, published for the
-   *  layers to render transiently. One channel for every component type, so a
-   *  live preview is not an object-only privilege. Null when nothing is dragging;
-   *  the real store write happens ONCE on release (one history entry per edit). */
-  gizmoLive: { kind: EditKind; id: string; dx: number; dz: number; rotationY: number; scaleX: number; scaleY: number; scaleZ: number } | null
   /** Trim mode: the next tap on a wall removes the PIECE you tapped, instead of
    *  selecting the wall. Armed from the selected wall's card, disarms after one
    *  trim (or on Escape) so a stray tap can never eat a wall. */
@@ -273,9 +261,6 @@ interface FloorplanLocalState {
   /** Toggle edit-everything mode. Leaving it clears the hover + any selection so
    *  the workspace returns to a clean, locked viewing state. */
   setGestureLock: (v: boolean) => void
-  setGizmoMode: (v: 'translate' | 'rotate' | 'scale') => void
-  setGizmoModes: (v: FloorplanLocalState['gizmoModes']) => void
-  setGizmoLive: (v: FloorplanLocalState['gizmoLive']) => void
   setWallTrimArmed: (v: boolean) => void
   setEditMode: (v: boolean) => void
   setEditHover: (h: EditTarget | null) => void
@@ -332,9 +317,6 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   selectedArea: null,
   selectedLine: null,
   gestureLock: false,
-  gizmoMode: 'translate',
-  gizmoModes: [],
-  gizmoLive: null,
   wallTrimArmed: false,
   editMode: false,
   editHover: null,
@@ -458,9 +440,6 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   exitTutorial: () => set({ tutorialActive: false }),
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
   setGestureLock: (v) => set({ gestureLock: v }),
-  setGizmoMode: (v) => set({ gizmoMode: v }),
-  setGizmoModes: (v) => set({ gizmoModes: v }),
-  setGizmoLive: (v) => set({ gizmoLive: v }),
   setWallTrimArmed: (v) => set({ wallTrimArmed: v }),
   setEditMode: (v) => set(v
     // Entering: start clean — drop any open card/selection so edit mode owns it.

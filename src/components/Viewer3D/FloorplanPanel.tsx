@@ -435,7 +435,17 @@ export default function FloorplanPanel() {
   // the workspace; menus retract and cannot pop back until the action ends.
   const tracingActive = traceMode && !tracePaused && !pickerOpen && !pendingWalls
 
-  const buildCtx = overlay.calibrationMode || pickerOpen || selectedWallIndex != null || !!selectedLine || !!selectedArea
+  // What genuinely REQUIRES the Build drawer: a choice you must make (the type
+  // picker) or a guided flow (calibration).
+  //
+  // Selecting something is NOT on this list any more. It used to be — every
+  // wall/area/line pick threw the drawer open across the workspace. That was
+  // survivable when selecting was occasional, but selection is now the gate for
+  // dragging (you must select a thing before you can move it), so you select
+  // constantly and the drawer was flying out over the model every time. The
+  // workspace stays clear; the selection's controls are the gizmo rail on the
+  // right edge, and its card is still in Build whenever you choose to open it.
+  const buildCtx = overlay.calibrationMode || pickerOpen
   const prevBuildCtx = useRef(false)
   const prevPlaceType = useRef<string | null>(null)
   useEffect(() => {
@@ -789,12 +799,17 @@ export default function FloorplanPanel() {
             >
               {overlay.visible ? '🙈 Hide plan' : '👁 Show plan'}
             </button>
-            {activeLevel > 0 && (
+            {/* Offered whenever the print is actually lifted off the ground —
+                by an upper storey OR by a roof/ceiling trace, which raises it to
+                the wall top even on the ground floor. Gating on `activeLevel > 0`
+                alone meant that at ground the plan could float a wall-height up
+                with no control on screen to bring it back. */}
+            {(activeLevel > 0 || activeTraceLayer === 'roof') && (
               <button
                 className={overlay.printAtGround ? styles.action : styles.secondary}
                 style={{ fontSize: 11, padding: '2px 8px' }}
                 onClick={() => updateOverlay({ printAtGround: !overlay.printAtGround }, false)}
-                title="Keep the plan image at ground level while you trace an upper floor"
+                title="Keep the plan image at ground level while you trace above it"
               >
                 {overlay.printAtGround ? '⬇ Plan at ground' : '⬆ Plan follows floor'}
               </button>
