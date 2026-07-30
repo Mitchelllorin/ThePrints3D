@@ -39,7 +39,7 @@ import {
   squareWallToAxis,
 } from '../../services/wallTraceReducer'
 import { ensureInkBuffer, getInkBuffer, snapSegmentToInk } from '../../services/inkRaster'
-import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, WALL_MOUNTED_DEVICES, VERTICAL_CIRCULATION, deviceMountHeightM } from '../../data/objectCatalog'
+import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, isWallMountedType, VERTICAL_CIRCULATION, deviceMountHeightM } from '../../data/objectCatalog'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { validateElectrical } from '../../services/constructionCode'
@@ -1082,8 +1082,7 @@ export default function FloorplanOverlay() {
     // Doors/windows belong IN a wall — snap them onto the nearest wall centreline
     // (like wall devices) so the opening lands exactly on the wall and frames in,
     // instead of only framing when dropped pixel-perfectly on the line.
-    const snapsToWall = WALL_MOUNTED_DEVICES.has(type) || type === 'door' || type === 'window'
-    const snapped = snapsToWall ? snapToWall(x, z) : { x, z }
+    const snapped = isWallMountedType(type) ? snapToWall(x, z) : { x, z }
     return { x: snapped.x, z: snapped.z, rotationY: autoOrientYaw(snapped.x, snapped.z) }
   }
 
@@ -1127,11 +1126,24 @@ export default function FloorplanOverlay() {
     return hit
   }
 
-  // Where a placement tap lands: the wall face if the pointer is over one,
-  // otherwise the ground. Used by both the ghost and the commit so the preview
-  // and the drop always agree.
+  // Where a placement tap lands. Used by both the ghost and the commit so the
+  // preview and the drop always agree.
+  //
+  // Wall-mounted things (doors, windows, outlets, switches) read the WALL FACE
+  // under the pointer — that is the whole point of rayToWall. Floor-standing
+  // things read the GROUND, and must not consult walls at all.
+  //
+  // rayToWall used to run for every type. On any tilted camera — i.e. nearly
+  // always — a ray aimed into a room crosses the near wall's vertical plane on
+  // its way in, inside that wall's height band and length, so it counted as a
+  // hit and won. The result: stairs (and furniture) stuck themselves to the
+  // first wall the ray grazed and "wouldn't go inside" the building. The ground
+  // fallback never fired, because the ray had not missed the walls — it had
+  // passed through one.
   const rayToPlacement = (e: ThreeEvent<PointerEvent>): THREE.Vector3 | null =>
-    rayToWall(e) ?? rayToGround(e)
+    isWallMountedType(placeObjectType ?? '')
+      ? (rayToWall(e) ?? rayToGround(e))
+      : rayToGround(e)
 
   // Standing height for the placement ghost, so it previews at the real mount
   // height (wall devices / ceiling fixtures) instead of on the floor.

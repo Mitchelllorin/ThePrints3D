@@ -1,12 +1,76 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M } from './framingGeometry'
 
 const meshCount = (g: THREE.Object3D) => {
   let n = 0
   g.traverse((o) => { if ((o as THREE.Mesh).isMesh) n++ })
   return n
 }
+
+/** Every mesh whose nameplate text matches. */
+const withInfo = (g: THREE.Object3D, re: RegExp) => {
+  const out: THREE.Mesh[] = []
+  g.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (m.isMesh && typeof m.userData.info === 'string' && re.test(m.userData.info)) out.push(m)
+  })
+  return out
+}
+
+describe('floor openings are framed (IRC R502.10)', () => {
+  const base = { lenX: 8, lenZ: 6, element: '2x10', ocM: 0.4064 }
+  // A 3'x10' stairwell: header spans the 0.91 m dimension → under 4 ft → single.
+  const stairwell = { x: 0, z: 0, w: 0.91, d: 3.05 }
+
+  it('doubles header and trimmers only past a 4 ft header span', () => {
+    expect(openingPlies(0.91)).toBe(1)                          // 3 ft
+    expect(openingPlies(OPENING_DOUBLE_SPAN_M)).toBe(1)         // exactly 4 ft
+    expect(openingPlies(OPENING_DOUBLE_SPAN_M + 0.01)).toBe(2)  // just over
+    expect(openingPlies(2.4)).toBe(2)                           // 8 ft
+  })
+
+  it('adds headers AND trimmers around an opening', () => {
+    const g = buildFloorJoists({ ...base, holes: [stairwell] })
+    // Both must exist. Trimmers were entirely missing before, which left the cut
+    // joists with nothing carrying them.
+    expect(withInfo(g, /Opening header/).length).toBeGreaterThan(0)
+    expect(withInfo(g, /Trimmer joist/).length).toBeGreaterThan(0)
+  })
+
+  it('frames a narrow opening single and a wide one doubled', () => {
+    // Orientation matters: joists span the SHORTER dimension, so with lenX 8 x
+    // lenZ 6 they run along Z and the header crosses them along X. The header's
+    // span is therefore the opening's X extent (w) — widen that, not d.
+    const narrow = buildFloorJoists({ ...base, holes: [{ x: 0, z: 0, w: 0.91, d: 3.05 }] })
+    const wide = buildFloorJoists({ ...base, holes: [{ x: 0, z: 0, w: 2.4, d: 3.05 }] })
+    // Two edges x plies. Narrow: 1 ply each side = 2. Wide: 2 plies each side = 4.
+    expect(withInfo(narrow, /Opening header/).length).toBe(2)
+    expect(withInfo(wide, /Opening header/).length).toBe(4)
+    expect(withInfo(narrow, /single/).length).toBeGreaterThan(0)
+    expect(withInfo(wide, /2-ply/).length).toBeGreaterThan(0)
+  })
+
+  it('leaves the clear opening clear — no joist crosses it', () => {
+    const g = buildFloorJoists({ ...base, holes: [stairwell] })
+    const commons = withInfo(g, /^2x10 · /)   // common joists only, not header/trimmer
+    for (const m of commons) {
+      m.geometry.computeBoundingBox()
+      const bb = m.geometry.boundingBox!
+      const x0 = m.position.x + bb.min.x, x1 = m.position.x + bb.max.x
+      const z0 = m.position.z + bb.min.z, z1 = m.position.z + bb.max.z
+      const overlaps = x0 < stairwell.w / 2 && x1 > -stairwell.w / 2
+        && z0 < stairwell.d / 2 && z1 > -stairwell.d / 2
+      expect(overlaps).toBe(false)
+    }
+  })
+
+  it('still cuts the deck over the opening', () => {
+    const solid = buildFloorDeck({ lenX: 8, lenZ: 6 })
+    const holed = buildFloorDeck({ lenX: 8, lenZ: 6, holes: [stairwell] })
+    expect(holed.userData.sheetCount as number).toBeLessThan(solid.userData.sheetCount as number)
+  })
+})
 
 describe('roof renders for every type (regression lock)', () => {
   const opts = { lenX: 9, lenZ: 7, pitch: 0.5, ocM: 0.6096 }

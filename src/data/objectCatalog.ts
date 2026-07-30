@@ -90,6 +90,19 @@ export const WALL_MOUNTED_DEVICES = new Set([
   'duplex-outlet', 'gfci-outlet', 'device-box', 'junction-box', 'switch', 'panel-box',
 ])
 
+/**
+ * Does this type live IN or ON a wall?
+ *
+ * The one predicate for "read the wall face under the pointer, and snap to the
+ * wall centreline". Doors and windows are wall-mounted in every sense that
+ * matters here even though they are not devices, and they were previously
+ * spelled out inline at each call site — which is how one caller ended up
+ * consulting walls for EVERYTHING and stairs refused to go indoors.
+ */
+export function isWallMountedType(type: string): boolean {
+  return WALL_MOUNTED_DEVICES.has(type) || type === 'door' || type === 'window'
+}
+
 /** Ceiling-mounted electrical fixtures (boxes/lights/fans up at the ceiling). */
 export const CEILING_DEVICES = new Set([
   'light-box', 'ceiling-light', 'recessed-light', 'exhaust-fan',

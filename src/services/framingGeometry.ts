@@ -441,6 +441,25 @@ export const FLOOR_ASSEMBLY_H = 0.32
  *  centre (x,z) and size (w,d). Used to frame a stairwell/shaft through the deck. */
 export interface FloorHole { x: number; z: number; w: number; d: number }
 
+/** IRC R502.10 — a floor opening's header may be a single member while it spans
+ *  4 ft or less; past that the header AND the trimmer joists must be doubled. */
+export const OPENING_DOUBLE_SPAN_M = 1.2192   // 4'-0"
+/** IRC R502.10 — past 6 ft the header must hang on approved framing anchors
+ *  rather than bear on a ledger/notch. */
+export const OPENING_HANGER_SPAN_M = 1.8288   // 6'-0"
+
+/**
+ * How many plies a floor opening's header and trimmers need, from the header's
+ * span (the opening dimension the header crosses).
+ *
+ * Straight out of IRC R502.10, so a stairwell is framed the way an inspector
+ * expects rather than to whatever looked about right. A typical 36" stair well is
+ * under 4 ft across and gets single members; anything wider doubles up.
+ */
+export function openingPlies(headerSpanM: number): number {
+  return headerSpanM > OPENING_DOUBLE_SPAN_M ? 2 : 1
+}
+
 export function buildFloorJoists(opts: {
   lenX: number; lenZ: number; element: string; ocM: number; opacity?: number; holes?: FloorHole[]
 }): THREE.Group {
@@ -470,12 +489,12 @@ export function buildFloorJoists(opts: {
     color: new THREE.Color(color), roughness: 0.72, metalness: 0,
     transparent: opacity < 1, opacity,
   })
-  const addJoist = (w: number, d: number, x: number, z: number) => {
+  const addJoist = (w: number, d: number, x: number, z: number, info: string = joistInfo) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, depth, d), joistMat)
     m.position.set(x, 0, z)
     m.castShadow = true; m.receiveShadow = true
     m.userData.layer = 'floors'
-    m.userData.info = joistInfo
+    m.userData.info = info
     g.add(m)
   }
   // Joists span the shorter dimension; the row of them runs along the longer.
@@ -486,11 +505,22 @@ export function buildFloorJoists(opts: {
   // Common joists at OC, plus an outer joist flush to each long edge.
   const positions: number[] = [-halfRun + width / 2, halfRun - width / 2]
   for (let p = -halfRun + width / 2; p < halfRun - width / 2; p += oc) positions.push(p)
-  // Each hole, mapped to (span-range s0..s1, run-range p0..p1) for this orientation.
+  // Each hole, mapped to (span-range s0..s1, run-range p0..p1) for this
+  // orientation. These are the CLEAR opening dimensions — what the deck cuts and
+  // what you actually walk through. The framing goes OUTSIDE them, so a 3'×10'
+  // stairwell stays a 3'×10' stairwell after it is framed.
   const spanHalf = spanLen / 2
   const mapped = holes.map((h) => spanAlongX
     ? { s0: h.x - h.w / 2, s1: h.x + h.w / 2, p0: h.z - h.d / 2, p1: h.z + h.d / 2 }
     : { s0: h.z - h.d / 2, s1: h.z + h.d / 2, p0: h.x - h.w / 2, p1: h.x + h.w / 2 })
+  // Per opening: how many plies its header/trimmers need (IRC R502.10, see
+  // openingPlies) and how far that framing reaches beyond the clear opening.
+  // Carried on the opening itself rather than in a parallel array, so a later
+  // filter can never slide the two out of step.
+  const openings = mapped.map((m) => {
+    const plies = openingPlies(m.p1 - m.p0)
+    return { ...m, plies, out: plies * width }
+  })
   // A joist segment from a→b along the span axis at run-position p.
   const addJoistSeg = (p: number, a: number, b: number) => {
     if (b - a < 0.05) return
@@ -499,10 +529,15 @@ export function buildFloorJoists(opts: {
     else            addJoist(width, len, p, mid)
   }
   for (const p of positions) {
-    // Span-axis cuts from any hole whose run-range straddles this joist.
-    const cuts = mapped
-      .filter((m) => p > m.p0 && p < m.p1)
-      .map((m) => [Math.max(-spanHalf, m.s0), Math.min(spanHalf, m.s1)] as [number, number])
+    // Span-axis cuts from any hole whose run-range straddles this joist. The cut
+    // runs to the HEADER's outer face, not the opening edge — the tail joist has
+    // to stop where the header begins, or the two occupy the same wood.
+    const cuts = openings
+      .filter((o) => p > o.p0 - o.out && p < o.p1 + o.out)
+      .map((o) => [
+        Math.max(-spanHalf, o.s0 - o.out),
+        Math.min(spanHalf, o.s1 + o.out),
+      ] as [number, number])
       .filter(([a, b]) => b > a)
       .sort((a, b) => a[0] - b[0])
     if (cuts.length === 0) { addJoistSeg(p, -spanHalf, spanHalf); continue }
@@ -516,14 +551,45 @@ export function buildFloorJoists(opts: {
     if (spanAlongX) addJoist(width, runLen, e, 0)
     else            addJoist(runLen, width, 0, e)
   }
-  // Headers/trimmers framing each opening (doubled members along the run axis at
-  // the span edges of the hole) — how a real stairwell is framed.
-  for (const m of mapped) {
-    const runLenH = m.p1 - m.p0
-    if (runLenH < 0.05) continue
-    for (const s of [m.s0, m.s1]) {
-      if (spanAlongX) addJoist(width, runLenH, s, (m.p0 + m.p1) / 2)
-      else            addJoist(runLenH, width, (m.p0 + m.p1) / 2, s)
+  // ── Framing each opening: HEADERS + TRIMMERS (IRC R502.10) ─────────────────
+  //
+  // This used to add one single member per span-edge and call itself "doubled".
+  // Two things were wrong: nothing was doubled, and there were no TRIMMER joists
+  // at all — so the joists cut by the opening simply ended in mid-air with
+  // nothing carrying them. A stairwell framed that way is a hole with loose ends.
+  //
+  // A real opening is a box:
+  //   HEADERS  cross the cut joists at each end of the opening and carry them.
+  //   TRIMMERS run alongside the opening, full span, and carry the headers.
+  // Everything sits OUTSIDE the clear opening, so framing it does not shrink it.
+  for (const o of openings) {
+    const clearRun = o.p1 - o.p0
+    if (clearRun < 0.05 || o.s1 - o.s0 < 0.05) continue
+    const plyLabel = o.plies > 1 ? `${o.plies}-ply` : 'single'
+    const headerInfo = `Opening header · ${plyLabel} ${element}`
+    const trimmerInfo = `Trimmer joist · ${plyLabel} ${element}`
+    // Trimmers first: they are the supports, and they set how long the headers
+    // must be (a header bears ON the trimmers, so it runs to their outer faces).
+    for (const dir of [-1, 1] as const) {
+      const edge = dir < 0 ? o.p0 : o.p1
+      for (let i = 0; i < o.plies; i++) {
+        const p = edge + dir * (width / 2 + i * width)
+        if (Math.abs(p) > halfRun) continue          // past the floor edge
+        if (spanAlongX) addJoist(spanLen, width, 0, p, trimmerInfo)
+        else            addJoist(width, spanLen, p, 0, trimmerInfo)
+      }
+    }
+    // Headers span the opening plus both trimmer packs, so their ends land on
+    // wood rather than stopping short in the void.
+    const headerLen = clearRun + 2 * o.out
+    for (const dir of [-1, 1] as const) {
+      const edge = dir < 0 ? o.s0 : o.s1
+      for (let i = 0; i < o.plies; i++) {
+        const s = edge + dir * (width / 2 + i * width)
+        if (Math.abs(s) > spanHalf) continue
+        if (spanAlongX) addJoist(width, headerLen, s, (o.p0 + o.p1) / 2, headerInfo)
+        else            addJoist(headerLen, width, (o.p0 + o.p1) / 2, s, headerInfo)
+      }
     }
   }
 
