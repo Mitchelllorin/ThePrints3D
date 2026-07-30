@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildTemporaryGuardrail } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildTemporaryGuardrail, buildWallCladding } from './framingGeometry'
 import {
-  sheathingLayer, wrbLayer, wallTakesEnvelope,
+  sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb,
   GUARDRAIL_TOP_M, GUARDRAIL_POST_SPACING_M,
 } from './constructionCode'
 
@@ -119,6 +119,80 @@ describe('exterior envelope: sheathing + housewrap', () => {
     expect(wallTakesEnvelope('partition', 'wood-2x4')).toBe(false)
     expect(wallTakesEnvelope('interior-bearing', 'wood-2x6')).toBe(false)
     expect(wallTakesEnvelope('exterior-bearing', 'cmu')).toBe(false)  // its own assembly
+  })
+})
+
+describe('cladding', () => {
+  const base = { length: 6, height: 2.44, standoff: 0.11, outward: 1 as const }
+
+  it('stands brick off on a cavity, and hangs lap siding tight', () => {
+    const brick = claddingSpec('brick-veneer')!
+    const lap = claddingSpec('vinyl-lap')!
+    // Brick's drained cavity is why a brick wall's outside face lands further out.
+    expect(brick.gapM).toBeGreaterThan(0)
+    expect(brick.needsLedge).toBe(true)
+    expect(lap.gapM).toBe(0)
+    expect(lap.needsLedge).toBe(false)
+    // Rainscreen panel is furred off too.
+    expect(claddingSpec('panel')!.gapM).toBeGreaterThan(0)
+    expect(claddingSpec('none')).toBeNull()
+  })
+
+  it('lays coursed siding in courses and continuous finishes in one skin', () => {
+    const lap = buildWallCladding({ ...base, spec: claddingSpec('fiber-cement-lap')! })
+    const stucco = buildWallCladding({ ...base, spec: claddingSpec('stucco')! })
+    expect(lap.userData.courseCount as number).toBeGreaterThan(1)
+    expect(stucco.userData.courseCount as number).toBe(0)
+    // Courses should roughly cover the wall at the spec'd exposure.
+    const exposure = claddingSpec('fiber-cement-lap')!.exposureM!
+    expect(lap.userData.courseCount as number).toBe(Math.ceil(base.height / exposure))
+  })
+
+  it('sits outboard of everything already on the wall', () => {
+    const g = buildWallCladding({ ...base, spec: claddingSpec('wood-lap')! })
+    const meshes = withInfo(g, /Wood lap/)
+    expect(meshes.length).toBeGreaterThan(0)
+    for (const m of meshes) expect(m.position.z).toBeGreaterThan(base.standoff)
+  })
+
+  it('puts brick further out than lap siding on the same wall', () => {
+    const lapSpec = claddingSpec('vinyl-lap')!
+    const brickSpec = claddingSpec('brick-veneer')!
+    const lapZ = base.standoff + lapSpec.gapM + lapSpec.thicknessM / 2
+    const brickZ = base.standoff + brickSpec.gapM + brickSpec.thicknessM / 2
+    expect(brickZ - lapZ).toBeGreaterThan(0.05)   // ~4", a real footprint change
+  })
+
+  it('honours the outward side', () => {
+    const spec = claddingSpec('vinyl-lap')!
+    const out = buildWallCladding({ ...base, outward: -1, spec })
+    expect(withInfo(out, /Vinyl/).every((m) => m.position.z < 0)).toBe(true)
+  })
+
+  it('cuts around a door, coursed and continuous alike', () => {
+    const door = [{ centerM: 3, widthM: 1.8, type: 'door' as const }]
+    for (const kind of ['fiber-cement-lap', 'stucco'] as const) {
+      const g = buildWallCladding({ ...base, spec: claddingSpec(kind)!, openings: door })
+      const meshes = withInfo(g, /./)
+      expect(meshes.length).toBeGreaterThan(0)
+      for (const m of meshes) {
+        m.geometry.computeBoundingBox()
+        const bb = m.geometry.boundingBox!
+        const x0 = m.position.x + bb.min.x, x1 = m.position.x + bb.max.x
+        const y0 = m.position.y + bb.min.y, y1 = m.position.y + bb.max.y
+        // Doorway is x -0.9..0.9, y 0..2.06 in wall-local space.
+        const overlaps = x0 < 0.9 - 1e-6 && x1 > -0.9 + 1e-6 && y0 < 2.06 - 1e-6 && y1 > 1e-6
+        expect(overlaps).toBe(false)
+      }
+    }
+  })
+
+  it('asks for felt behind wet-applied finishes and housewrap behind the rest', () => {
+    // Stucco and adhered stone bond to synthetic wrap and ruin its drainage.
+    expect(recommendedWrb('stucco')).toBe('felt')
+    expect(recommendedWrb('stone-veneer')).toBe('felt')
+    expect(recommendedWrb('vinyl-lap')).toBe('housewrap')
+    expect(recommendedWrb('brick-veneer')).toBe('housewrap')
   })
 })
 

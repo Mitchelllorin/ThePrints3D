@@ -13,7 +13,8 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
-import type { WrbKind, WoodSheathing } from '../../services/constructionCode'
+import type { WrbKind, WoodSheathing, CladdingKind } from '../../services/constructionCode'
+import { recommendedWrb } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -304,6 +305,33 @@ function SettingsContent() {
           onChange={(v) => setUI({ woodSheathing: v as WoodSheathing })} />
         {/* Temporary fall protection — what the frame looks like for most of its
             life on site, and half the time it never comes off. */}
+        {/* Cladding. Masonry veneer stands off on its own ledge with a drained
+            cavity, so picking it genuinely moves the outside face of the wall. */}
+        <Select label="Cladding" val={ui.cladding}
+          options={[
+            { value: 'none', label: 'None (dried-in)' },
+            { value: 'vinyl-lap', label: 'Vinyl lap siding' },
+            { value: 'fiber-cement-lap', label: 'Fiber-cement lap (Hardie)' },
+            { value: 'wood-lap', label: 'Wood bevel siding' },
+            { value: 'panel', label: 'Rainscreen panel' },
+            { value: 'stucco', label: 'Stucco (3-coat)' },
+            { value: 'brick-veneer', label: 'Brick veneer (+ledge)' },
+            { value: 'stone-veneer', label: 'Adhered stone veneer' },
+          ]}
+          onChange={(v) => setUI({ cladding: v as CladdingKind })} />
+        {/* Wet-applied finishes bond to housewrap and wreck its drainage — a real
+            failure, so say so rather than silently building a wall that leaks. */}
+        {ui.cladding !== 'none' && recommendedWrb(ui.cladding) !== ui.wrbKind && (
+          <button
+            className={styles.uploadHintChip}
+            style={{ alignSelf: 'flex-start', margin: '2px 0 6px' }}
+            onClick={() => setUI({ wrbKind: recommendedWrb(ui.cladding) })}
+          >
+            {recommendedWrb(ui.cladding) === 'felt'
+              ? 'This finish wants felt behind it — switch?'
+              : 'Housewrap suits this finish — switch?'}
+          </button>
+        )}
         <Toggle label="Temp guardrail (2x4)" val={ui.guardrailVisible} onChange={(v) => setUI({ guardrailVisible: v })} />
       </CollapsibleSection>
 

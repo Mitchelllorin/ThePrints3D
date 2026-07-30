@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { WrbKind, WoodSheathing } from '../services/constructionCode'
+import type { WrbKind, WoodSheathing, CladdingKind } from '../services/constructionCode'
 
 export interface UISettings {
   // Panels / toolbars / menus
@@ -42,6 +42,8 @@ export interface UISettings {
   woodSheathing: WoodSheathing
   /** Temporary 2x4 jobsite guardrail along the top of exterior walls. */
   guardrailVisible: boolean
+  /** Exterior finish over the barrier. 'none' leaves the wall dried-in. */
+  cladding: CladdingKind
   // Workspace lighting / background
   bgColor: string
   lightColor: string
@@ -84,6 +86,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   wrbKind: 'housewrap',
   woodSheathing: 'osb',
   guardrailVisible: false,
+  cladding: 'none',
   bgColor: '#0b0e14',
   lightColor: '#ffffff',
   dirIntensity: 1.0,

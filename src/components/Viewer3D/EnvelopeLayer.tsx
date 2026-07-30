@@ -22,10 +22,11 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallEnvelope, buildTemporaryGuardrail, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
+import { buildWallEnvelope, buildWallCladding, buildTemporaryGuardrail, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, wallThicknessM,
-  type WrbKind, type WoodSheathing,
+  claddingSpec,
+  type WrbKind, type WoodSheathing, type CladdingKind,
 } from '../../services/constructionCode'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem } from '../../data/objectCatalog'
@@ -41,11 +42,12 @@ interface SkinProps {
   wrbKind: WrbKind
   woodSheathing: WoodSheathing
   sheathe: boolean
+  cladding: CladdingKind
   guardrail: boolean
   openings: WallOpening[]
 }
 
-function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, wrbKind, woodSheathing, sheathe, guardrail, openings }: SkinProps) {
+function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, wrbKind, woodSheathing, sheathe, cladding, guardrail, openings }: SkinProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
   const dx = p2.x - p1.x
@@ -77,6 +79,34 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheathe, length, wallHeight, thickness, outward, spec.material, woodSheathing, wrapVisible, wrbKind, openings, wall.level])
 
+  // Cladding sits on TOP of whatever is already on the wall, so its standoff is
+  // the running total: stud face + sheathing + barrier + its own cavity. Brick's
+  // cavity is why a brick wall's outside face lands ~4" further out than a sided
+  // one — modelled, not approximated.
+  const skinM = useMemo(() => {
+    const sh = sheathingLayer(spec.material, woodSheathing)
+    const wr = wrapVisible ? wrbLayer(wrbKind) : null
+    return (sheathe ? sh.thicknessM : 0) + (sheathe && wr ? wr.thicknessM : 0)
+  }, [spec.material, woodSheathing, wrapVisible, wrbKind, sheathe])
+
+  const clad = useMemo(() => {
+    const cs = claddingSpec(cladding)
+    if (!cs) return null
+    const g = buildWallCladding({
+      length, height: wallHeight,
+      standoff: Math.max(0.038, thickness) / 2 + skinM + cs.gapM,
+      outward, spec: cs, openings,
+    })
+    g.userData.level = wall.level ?? 0
+    return g
+  }, [cladding, length, wallHeight, thickness, skinM, outward, openings, wall.level])
+
+  useEffect(() => () => {
+    clad?.traverse((o) => {
+      if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
+    })
+  }, [clad])
+
   // Temporary fall protection, built in the same wall-local frame so abutting
   // sections line up into one continuous run around the perimeter.
   const rail = useMemo(() => guardrail
@@ -104,6 +134,7 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
   return (
     <>
       {skin && <primitive object={skin} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
+      {clad && <primitive object={clad} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
       {rail && <primitive object={rail} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
     </>
   )
@@ -119,6 +150,7 @@ export default function EnvelopeLayer() {
   const wrbKind = useUISettingsStore((s) => s.wrbKind)
   const woodSheathing = useUISettingsStore((s) => s.woodSheathing)
   const guardrailVisible = useUISettingsStore((s) => s.guardrailVisible)
+  const cladding = useUISettingsStore((s) => s.cladding)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'walls')
@@ -203,7 +235,7 @@ export default function EnvelopeLayer() {
 
   // The guardrail is not part of the envelope — it can be shown on bare studs, so
   // this layer stays mounted when only the rail is on.
-  if ((!sheathingVisible && !guardrailVisible) || skinWalls.length === 0) return null
+  if ((!sheathingVisible && !guardrailVisible && cladding === 'none') || skinWalls.length === 0) return null
 
   return (
     <group name="envelope" ref={groupRef}>
@@ -230,6 +262,7 @@ export default function EnvelopeLayer() {
             wrbKind={wrbKind}
             woodSheathing={woodSheathing}
             sheathe={sheathingVisible}
+            cladding={cladding}
             guardrail={guardrailVisible}
             openings={openingsByWall[i]}
           />

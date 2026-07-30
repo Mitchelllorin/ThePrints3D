@@ -84,6 +84,74 @@ export function sheathingLayer(
     : { label: 'OSB sheathing · 7/16"', thicknessM: OSB_T, color: '#c9a273' }
 }
 
+// ── Cladding ─────────────────────────────────────────────────────────────────
+//
+// The finish layer, and the one that changes the wall's FOOTPRINT rather than
+// just its skin. Lap siding and panels hang more or less on the wall. Masonry
+// veneer does not: brick stands off on its own ledge with a drained air gap
+// behind it, so an outside wall face can move ~4" outward. That is why cladding
+// carries a `gapM` and is not modelled as one more thin sheet.
+
+export type CladdingKind =
+  | 'none'
+  | 'vinyl-lap' | 'fiber-cement-lap' | 'wood-lap'
+  | 'panel' | 'stucco'
+  | 'brick-veneer' | 'stone-veneer'
+
+export interface CladdingSpec {
+  label: string
+  /** Material thickness at its thickest point. */
+  thicknessM: number
+  /** Clear space held BEHIND the cladding: rainscreen furring, or the drained
+   *  cavity behind masonry. Zero for finishes applied straight to the WRB. */
+  gapM: number
+  color: string
+  brand?: string
+  /** Lap siding is laid in courses; this is the exposed face height (the
+   *  "reveal"). Null for anything applied as a continuous surface. */
+  exposureM: number | null
+  /** True for veneers that need a foundation LEDGE to bear on — they carry their
+   *  own weight down to the footing rather than hanging off the wall. */
+  needsLedge: boolean
+}
+
+export function claddingSpec(kind: CladdingKind): CladdingSpec | null {
+  switch (kind) {
+    case 'vinyl-lap':
+      return { label: 'Vinyl lap siding', thicknessM: 0.011, gapM: 0, color: '#d9dcd6', exposureM: 0.102, needsLedge: false }
+    case 'fiber-cement-lap':
+      return { label: 'Fiber-cement lap siding', thicknessM: 0.008, gapM: 0, color: '#b9bfc2', brand: 'HardiePlank (James Hardie)', exposureM: 0.178, needsLedge: false }
+    case 'wood-lap':
+      return { label: 'Wood lap siding (bevel)', thicknessM: 0.019, gapM: 0, color: '#b98b5e', exposureM: 0.152, needsLedge: false }
+    case 'panel':
+      // Rainscreen panel: furred off the WRB so the cavity can drain and dry.
+      return { label: 'Rainscreen panel', thicknessM: 0.016, gapM: 0.019, color: '#6b7280', brand: 'Nichiha / Equitone', exposureM: null, needsLedge: false }
+    case 'stucco':
+      // 3-coat over lath. Wants FELT, not housewrap — see recommendedWrb.
+      return { label: 'Stucco · 3-coat over lath', thicknessM: 0.022, gapM: 0, color: '#cfc7b8', exposureM: null, needsLedge: false }
+    case 'brick-veneer':
+      // Nominal 3-5/8" brick with a 1" drained cavity. Bears on a brick ledge.
+      return { label: 'Brick veneer · 3-5/8" + 1" cavity', thicknessM: 0.092, gapM: 0.025, color: '#9c4a34', exposureM: 0.194, needsLedge: true }
+    case 'stone-veneer':
+      return { label: 'Adhered stone veneer', thicknessM: 0.038, gapM: 0, color: '#8d8577', brand: 'Cultured Stone (Boral)', exposureM: null, needsLedge: true }
+    case 'none':
+    default:
+      return null
+  }
+}
+
+/**
+ * The barrier this cladding wants behind it.
+ *
+ * Not a preference. Wet-applied finishes — stucco, adhered stone — bond to
+ * synthetic housewrap and destroy its ability to drain, which is a real failure
+ * mode rather than a style disagreement. Those want felt (traditionally two
+ * layers of Grade D paper). Everything else is happy behind housewrap.
+ */
+export function recommendedWrb(kind: CladdingKind): WrbKind {
+  return kind === 'stucco' || kind === 'stone-veneer' ? 'felt' : 'housewrap'
+}
+
 // ── Temporary fall protection ────────────────────────────────────────────────
 //
 // Not part of the finished building, but part of what the frame LOOKS like for

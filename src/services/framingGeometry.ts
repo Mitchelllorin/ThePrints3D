@@ -13,7 +13,7 @@
 import * as THREE from 'three'
 import { joistProfile } from '../data/traceLayers'
 import {
-  type EnvelopeLayer,
+  type EnvelopeLayer, type CladdingSpec,
   GUARDRAIL_TOP_M, GUARDRAIL_POST_SPACING_M, GUARDRAIL_MEMBER,
 } from './constructionCode'
 
@@ -1452,6 +1452,114 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
     }
   }
   return group
+}
+
+/**
+ * Cladding for one wall — the finish that goes over the WRB.
+ *
+ * Three shapes, because these materials genuinely differ:
+ *
+ *  COURSED (lap siding, brick)  Laid in horizontal courses with a real exposure,
+ *      each course lapping the one below. Drawn as separate courses rather than
+ *      one textured slab, so the shadow lines read as siding and a takeoff can
+ *      count them.
+ *  CONTINUOUS (stucco, adhered stone, panel)  One surface over the whole wall.
+ *  NONE  the wall is left as it is.
+ *
+ * `standoff` is how far the BACK of the cladding sits off the wall's stud face —
+ * the caller works it out from the sheathing and WRB already on the wall, plus
+ * the cladding's own cavity. Brick's cavity is why a brick house's outside face
+ * is a good 4" further out than a sided one, and it has to be modelled, not
+ * approximated: it is the difference between a wall that fits its footprint and
+ * one that does not.
+ */
+export function buildWallCladding(opts: {
+  length: number
+  height: number
+  /** Distance from wall centre to the BACK of the cladding. */
+  standoff: number
+  outward: 1 | -1
+  spec: CladdingSpec
+  openings?: WallOpening[]
+  opacity?: number
+}): THREE.Group {
+  const { length, height, standoff, outward, spec, openings = [], opacity = 1 } = opts
+  const g = new THREE.Group()
+  g.userData.courseCount = 0
+  if (length < 0.05 || height < 0.05) return g
+
+  const half = length / 2
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(spec.color),
+    roughness: spec.exposureM ? 0.8 : 0.92,
+    metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const info = spec.brand ? `${spec.label} · ${spec.brand}` : spec.label
+  const z = outward * (standoff + spec.thicknessM / 2)
+
+  const rects = openings.map((o) => {
+    const cx = o.centerM - half
+    const isDoor = o.type === 'door'
+    const sill = isDoor ? 0 : (o.sillM ?? 0.9)
+    const oh = o.heightM ?? (isDoor ? 2.06 : 1.13)
+    const yLo = isDoor ? 0 : Math.min(sill, height - 0.3)
+    return { x0: cx - o.widthM / 2, x1: cx + o.widthM / 2, y0: yLo, y1: Math.min(yLo + oh, height) }
+  })
+  /** Horizontal runs of a course left after the openings are cut out of it. */
+  const spansAt = (y0: number, y1: number): Array<[number, number]> => {
+    let spans: Array<[number, number]> = [[-half, half]]
+    for (const r of rects) {
+      if (r.y1 <= y0 || r.y0 >= y1) continue
+      const next: Array<[number, number]> = []
+      for (const [a, b] of spans) {
+        if (r.x1 <= a || r.x0 >= b) { next.push([a, b]); continue }
+        if (r.x0 > a) next.push([a, r.x0])
+        if (r.x1 < b) next.push([r.x1, b])
+      }
+      spans = next
+    }
+    return spans.filter(([a, b]) => b - a > 0.02)
+  }
+
+  const add = (w: number, h: number, x: number, y: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, spec.thicknessM), mat)
+    m.position.set(x, y, z)
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'cladding'
+    m.userData.info = info
+    g.add(m)
+  }
+
+  if (spec.exposureM) {
+    // Coursed. Each course covers its exposure; the lap behind it is implied.
+    let courses = 0
+    for (let y = 0; y < height - 0.005; y += spec.exposureM) {
+      const h = Math.min(spec.exposureM, height - y)
+      if (h < 0.01) break
+      for (const [a, b] of spansAt(y, y + h)) {
+        add(b - a, h * 0.96, (a + b) / 2, y + h / 2)   // small reveal between courses
+      }
+      courses++
+    }
+    g.userData.courseCount = courses
+  } else {
+    // Continuous: one surface, minus the openings.
+    for (const [a, b] of spansAt(0, height)) {
+      // Vertical splits only happen at openings, so re-cut per opening band.
+      add(b - a, height, (a + b) / 2, height / 2)
+    }
+    // Openings leave a hole that the single full-height piece above cannot
+    // express, so add the strips over and under each opening.
+    for (const r of rects) {
+      const w = Math.min(r.x1, half) - Math.max(r.x0, -half)
+      if (w <= 0.02) continue
+      const cx = (Math.max(r.x0, -half) + Math.min(r.x1, half)) / 2
+      if (r.y0 > 0.02) add(w, r.y0, cx, r.y0 / 2)                       // below
+      if (height - r.y1 > 0.02) add(w, height - r.y1, cx, (height + r.y1) / 2)  // above
+    }
+  }
+  return g
 }
 
 /**
