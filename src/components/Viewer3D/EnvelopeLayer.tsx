@@ -22,10 +22,10 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallEnvelope, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
+import { buildWallEnvelope, buildTemporaryGuardrail, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, wallThicknessM,
-  type WrbKind,
+  type WrbKind, type WoodSheathing,
 } from '../../services/constructionCode'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem } from '../../data/objectCatalog'
@@ -39,10 +39,13 @@ interface SkinProps {
   outward: 1 | -1
   wrapVisible: boolean
   wrbKind: WrbKind
+  woodSheathing: WoodSheathing
+  sheathe: boolean
+  guardrail: boolean
   openings: WallOpening[]
 }
 
-function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, wrbKind, openings }: SkinProps) {
+function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, wrbKind, woodSheathing, sheathe, guardrail, openings }: SkinProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
   const dx = p2.x - p1.x
@@ -56,12 +59,13 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
   const thickness = wallThicknessM(wall.framingType)
 
   const skin = useMemo(() => {
+    if (!sheathe) return null
     const g = buildWallEnvelope({
       length,
       height: wallHeight,
       thickness,
       outward,
-      sheathing: sheathingLayer(spec.material),
+      sheathing: sheathingLayer(spec.material, woodSheathing),
       // wrbLayer returns null for 'integrated' — the sheathing already carries the
       // barrier (ZIP System), so adding one would be wrong, not just redundant.
       wrb: wrapVisible ? wrbLayer(wrbKind) : null,
@@ -71,17 +75,38 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     g.userData.level = wall.level ?? 0   // so explode peels the skin per storey
     return g
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [length, wallHeight, thickness, outward, spec.material, wrapVisible, wrbKind, openings, wall.level])
+  }, [sheathe, length, wallHeight, thickness, outward, spec.material, woodSheathing, wrapVisible, wrbKind, openings, wall.level])
+
+  // Temporary fall protection, built in the same wall-local frame so abutting
+  // sections line up into one continuous run around the perimeter.
+  const rail = useMemo(() => guardrail
+    ? buildTemporaryGuardrail({
+        length, wallHeight, thickness,
+        inward: (outward === 1 ? -1 : 1),   // you fall off the inboard side
+      })
+    : null,
+    [guardrail, length, wallHeight, thickness, outward])
 
   useEffect(() => () => {
-    skin.traverse((o) => {
+    rail?.traverse((o) => {
+      if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
+    })
+  }, [rail])
+
+  useEffect(() => () => {
+    skin?.traverse((o) => {
       if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
     })
   }, [skin])
 
   if (length < 0.05) return null
   const baseY = (wall.level ?? 0) * storeyHeight
-  return <primitive object={skin} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />
+  return (
+    <>
+      {skin && <primitive object={skin} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
+      {rail && <primitive object={rail} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
+    </>
+  )
 }
 
 export default function EnvelopeLayer() {
@@ -92,6 +117,8 @@ export default function EnvelopeLayer() {
   const sheathingVisible = useUISettingsStore((s) => s.sheathingVisible)
   const wrapVisible = useUISettingsStore((s) => s.wrapVisible)
   const wrbKind = useUISettingsStore((s) => s.wrbKind)
+  const woodSheathing = useUISettingsStore((s) => s.woodSheathing)
+  const guardrailVisible = useUISettingsStore((s) => s.guardrailVisible)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'walls')
@@ -174,7 +201,9 @@ export default function EnvelopeLayer() {
     return out
   }, [skinWalls, placedObjects, pixelToWorld])
 
-  if (!sheathingVisible || skinWalls.length === 0) return null
+  // The guardrail is not part of the envelope — it can be shown on bare studs, so
+  // this layer stays mounted when only the rail is on.
+  if ((!sheathingVisible && !guardrailVisible) || skinWalls.length === 0) return null
 
   return (
     <group name="envelope" ref={groupRef}>
@@ -199,6 +228,9 @@ export default function EnvelopeLayer() {
             outward={outward}
             wrapVisible={wrapVisible}
             wrbKind={wrbKind}
+            woodSheathing={woodSheathing}
+            sheathe={sheathingVisible}
+            guardrail={guardrailVisible}
             openings={openingsByWall[i]}
           />
         )

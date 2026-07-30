@@ -12,7 +12,10 @@
  */
 import * as THREE from 'three'
 import { joistProfile } from '../data/traceLayers'
-import type { EnvelopeLayer } from './constructionCode'
+import {
+  type EnvelopeLayer,
+  GUARDRAIL_TOP_M, GUARDRAIL_POST_SPACING_M, GUARDRAIL_MEMBER,
+} from './constructionCode'
 
 const STUD_WIDTH_M = 0.038    // 1-1/2" nominal stud face
 const PLATE_H_M = 0.038       // one plate's thickness
@@ -1449,6 +1452,68 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
     }
   }
   return group
+}
+
+/**
+ * Temporary 2x4 guardrail along the top of a wall — jobsite fall protection.
+ *
+ * How it actually gets built: posts and rail are nailed to the wall panel while
+ * it is still lying flat on the deck, then once the walls are stood the sections
+ * are linked with more 2x4 into one continuous run around the perimeter. So the
+ * rail belongs to the WALL, not to the floor, which is why it is built here in
+ * wall-local space and simply inherits the wall's position and angle — abutting
+ * sections then line up into a continuous rail for free.
+ *
+ * `y = 0` is the wall's base; the rail sits above `wallHeight`, measured off the
+ * deck that lands on the wall's top plate (see GUARDRAIL_TOP_M).
+ *
+ * Posts run to the INBOARD face, which is the side you can fall from.
+ */
+export function buildTemporaryGuardrail(opts: {
+  length: number
+  wallHeight: number
+  thickness: number
+  /** Which face is inboard: the side workers stand on. */
+  inward: 1 | -1
+  opacity?: number
+}): THREE.Group {
+  const { length, wallHeight, thickness, inward, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (length < 0.2) return g
+
+  const { thick, wide } = GUARDRAIL_MEMBER
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#c8a465'), roughness: 0.8, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const add = (w: number, h: number, d: number, x: number, y: number, z: number, info: string) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat)
+    m.position.set(x, y, z)
+    m.castShadow = true
+    m.userData.layer = 'guardrail'
+    m.userData.info = info
+    g.add(m)
+  }
+
+  const half = length / 2
+  // Posts are lapped onto the inboard face of the wall, so they sit just inside it.
+  const postZ = inward * (Math.max(STUD_WIDTH_M, thickness) / 2 - thick / 2)
+  const topY = wallHeight + GUARDRAIL_TOP_M
+  const midY = wallHeight + GUARDRAIL_TOP_M / 2
+  // Posts reach from partway down the wall (where they are nailed off) to the top
+  // rail — that overlap onto the studs is what makes the rail stand up.
+  const postBottom = wallHeight - 0.6
+  const postH = topY - postBottom
+
+  const n = Math.max(2, Math.ceil(length / GUARDRAIL_POST_SPACING_M) + 1)
+  for (let i = 0; i < n; i++) {
+    const x = -half + (length * i) / (n - 1)
+    add(thick, postH, wide, x, postBottom + postH / 2, postZ, 'Temp guardrail post · 2x4')
+  }
+  // Continuous top rail + midrail, full wall length so neighbours meet end to end.
+  add(length, wide, thick, 0, topY, postZ, 'Temp guardrail · 2x4 top rail (42")')
+  add(length, wide, thick, 0, midY, postZ, 'Temp guardrail · 2x4 midrail')
+  return g
 }
 
 // ── Exterior envelope: sheathing + WRB ───────────────────────────────────────

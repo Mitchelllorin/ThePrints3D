@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { WrbKind } from '../services/constructionCode'
+import type { WrbKind, WoodSheathing } from '../services/constructionCode'
 
 export interface UISettings {
   // Panels / toolbars / menus
@@ -38,6 +38,10 @@ export interface UISettings {
   /** Which water-resistive barrier: housewrap (default), felt, fluid-applied, or
    *  integrated (sheathing already carries it — ZIP System and similar). */
   wrbKind: WrbKind
+  /** OSB or CDX plywood on wood-framed exteriors (steel gets glass-mat either way). */
+  woodSheathing: WoodSheathing
+  /** Temporary 2x4 jobsite guardrail along the top of exterior walls. */
+  guardrailVisible: boolean
   // Workspace lighting / background
   bgColor: string
   lightColor: string
@@ -78,6 +82,8 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   sheathingVisible: false,
   wrapVisible: true,
   wrbKind: 'housewrap',
+  woodSheathing: 'osb',
+  guardrailVisible: false,
   bgColor: '#0b0e14',
   lightColor: '#ffffff',
   dirIntensity: 1.0,

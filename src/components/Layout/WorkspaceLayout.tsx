@@ -13,7 +13,7 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
-import type { WrbKind } from '../../services/constructionCode'
+import type { WrbKind, WoodSheathing } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -294,6 +294,17 @@ function SettingsContent() {
             { value: 'integrated', label: 'Integrated in sheathing (ZIP)' },
           ]}
           onChange={(v) => setUI({ wrbKind: v as WrbKind })} />
+        {/* OSB vs plywood is a real field choice — plywood survives getting
+            rained on before dry-in, which is why crews still pay for it. */}
+        <Select label="Wood sheathing" val={ui.woodSheathing}
+          options={[
+            { value: 'osb', label: 'OSB 7/16"' },
+            { value: 'plywood', label: 'CDX plywood 15/32"' },
+          ]}
+          onChange={(v) => setUI({ woodSheathing: v as WoodSheathing })} />
+        {/* Temporary fall protection — what the frame looks like for most of its
+            life on site, and half the time it never comes off. */}
+        <Toggle label="Temp guardrail (2x4)" val={ui.guardrailVisible} onChange={(v) => setUI({ guardrailVisible: v })} />
       </CollapsibleSection>
 
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>

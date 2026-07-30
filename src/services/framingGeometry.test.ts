@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope } from './framingGeometry'
-import { sheathingLayer, wrbLayer, wallTakesEnvelope } from './constructionCode'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildTemporaryGuardrail } from './framingGeometry'
+import {
+  sheathingLayer, wrbLayer, wallTakesEnvelope,
+  GUARDRAIL_TOP_M, GUARDRAIL_POST_SPACING_M,
+} from './constructionCode'
 
 const meshCount = (g: THREE.Object3D) => {
   let n = 0
@@ -101,11 +104,65 @@ describe('exterior envelope: sheathing + housewrap', () => {
     }
   })
 
+  it('offers OSB and plywood on wood, glass-mat regardless on steel', () => {
+    expect(sheathingLayer('wood', 'osb').label).toMatch(/OSB/)
+    expect(sheathingLayer('wood', 'plywood').label).toMatch(/plywood/i)
+    // Different real thicknesses — the wall's outside face genuinely moves.
+    expect(sheathingLayer('wood', 'plywood').thicknessM)
+      .toBeGreaterThan(sheathingLayer('wood', 'osb').thicknessM)
+    // Steel ignores the wood choice entirely.
+    expect(sheathingLayer('steel', 'plywood').label).toMatch(/Glass-mat/)
+  })
+
   it('only exterior stud walls take an envelope', () => {
     expect(wallTakesEnvelope('exterior-bearing', 'wood-2x8')).toBe(true)
     expect(wallTakesEnvelope('partition', 'wood-2x4')).toBe(false)
     expect(wallTakesEnvelope('interior-bearing', 'wood-2x6')).toBe(false)
     expect(wallTakesEnvelope('exterior-bearing', 'cmu')).toBe(false)  // its own assembly
+  })
+})
+
+describe('temporary jobsite guardrail', () => {
+  const base = { length: 6, wallHeight: 2.44, thickness: 0.1905, inward: -1 as const }
+
+  it('puts the top rail 42" above the deck, with a midrail halfway', () => {
+    const g = buildTemporaryGuardrail(base)
+    const top = withInfo(g, /top rail/)[0]
+    const mid = withInfo(g, /midrail/)[0]
+    expect(top).toBeTruthy()
+    expect(mid).toBeTruthy()
+    // OSHA 1926.502: 42" top rail, midrail about halfway.
+    expect(top.position.y - base.wallHeight).toBeCloseTo(GUARDRAIL_TOP_M, 3)
+    expect(mid.position.y - base.wallHeight).toBeCloseTo(GUARDRAIL_TOP_M / 2, 3)
+  })
+
+  it('spaces posts at 6 ft or closer for a 2x4 top rail', () => {
+    const g = buildTemporaryGuardrail({ ...base, length: 12 })
+    const posts = withInfo(g, /post/).map((m) => m.position.x).sort((a, b) => a - b)
+    expect(posts.length).toBeGreaterThan(2)
+    for (let i = 1; i < posts.length; i++) {
+      expect(posts[i] - posts[i - 1]).toBeLessThanOrEqual(GUARDRAIL_POST_SPACING_M + 1e-6)
+    }
+  })
+
+  it('runs the rail the full wall length, so abutting sections join up', () => {
+    const g = buildTemporaryGuardrail(base)
+    const top = withInfo(g, /top rail/)[0]
+    top.geometry.computeBoundingBox()
+    const bb = top.geometry.boundingBox!
+    expect(bb.max.x - bb.min.x).toBeCloseTo(base.length, 3)
+    expect(top.position.x).toBeCloseTo(0, 6)
+  })
+
+  it('hangs the rail on the inboard face — the side you can fall from', () => {
+    const inb = buildTemporaryGuardrail({ ...base, inward: -1 })
+    const out = buildTemporaryGuardrail({ ...base, inward: 1 })
+    expect(withInfo(inb, /top rail/)[0].position.z).toBeLessThan(0)
+    expect(withInfo(out, /top rail/)[0].position.z).toBeGreaterThan(0)
+  })
+
+  it('skips a wall too short to rail', () => {
+    expect(meshCount(buildTemporaryGuardrail({ ...base, length: 0.1 }))).toBe(0)
   })
 })
 

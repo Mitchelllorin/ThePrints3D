@@ -49,10 +49,15 @@ export interface EnvelopeLayer {
 
 /** 7/16" OSB — the default wood-frame sheathing. */
 export const OSB_T = 0.0111
+/** 15/32" CDX plywood — the other wood-frame option, a hair thicker than OSB. */
+export const PLYWOOD_T = 0.0119
 /** 1/2" glass-mat gypsum sheathing (DensGlass). */
 export const GLASSMAT_T = 0.0127
 /** Housewrap is film-thin; drawn thicker than life so it is visible at all. */
 export const WRB_T = 0.0015
+
+/** Wood-frame sheathing panel choice. Steel ignores this and gets glass-mat. */
+export type WoodSheathing = 'osb' | 'plywood'
 
 /**
  * Sheathing for a wall, by framing material.
@@ -61,12 +66,43 @@ export const WRB_T = 0.0015
  * combination of steel studs and wood sheathing is not how these walls are built,
  * and getting it wrong is the kind of detail a tradesperson spots immediately.
  * Georgia-Pacific's DensGlass is the specified product often enough to name.
+ *
+ * Wood frame picks between OSB and CDX plywood. They are not interchangeable in
+ * the field even though they look alike on a drawing: plywood holds up far better
+ * to getting rained on before the walls are dry-in, which is why plenty of crews
+ * still pay for it. Different real thicknesses, so the wall's outside face moves.
  */
-export function sheathingLayer(framingMaterial: 'wood' | 'steel'): EnvelopeLayer {
-  return framingMaterial === 'steel'
-    ? { label: 'Glass-mat sheathing · 1/2"', thicknessM: GLASSMAT_T, color: '#c8b560', brand: 'DensGlass (Georgia-Pacific)' }
+export function sheathingLayer(
+  framingMaterial: 'wood' | 'steel',
+  wood: WoodSheathing = 'osb',
+): EnvelopeLayer {
+  if (framingMaterial === 'steel') {
+    return { label: 'Glass-mat sheathing · 1/2"', thicknessM: GLASSMAT_T, color: '#c8b560', brand: 'DensGlass (Georgia-Pacific)' }
+  }
+  return wood === 'plywood'
+    ? { label: 'CDX plywood sheathing · 15/32"', thicknessM: PLYWOOD_T, color: '#d8b483' }
     : { label: 'OSB sheathing · 7/16"', thicknessM: OSB_T, color: '#c9a273' }
 }
+
+// ── Temporary fall protection ────────────────────────────────────────────────
+//
+// Not part of the finished building, but part of what the frame LOOKS like for
+// most of its life on site. On a multi-storey job the rail sections are nailed to
+// the wall panels while they are still flat on the deck, then linked with more
+// 2x4 once the walls are stood, making one continuous run around the perimeter.
+// They come off when the next floor goes in — and are forgotten in place often
+// enough that a frame without them looks less real than a frame with them.
+//
+// OSHA 1926.502: top rail 42" (±3"), midrail about halfway. The non-mandatory
+// wood-railing guidance pairs a 2x4 top rail with posts at 6 ft; a 2x6 top rail
+// buys you 8 ft. We build the 2x4 version, so 6 ft.
+
+/** Top-rail height above the walking surface — 42". */
+export const GUARDRAIL_TOP_M = 1.067
+/** Post spacing for a 2x4 top rail — 6 ft. */
+export const GUARDRAIL_POST_SPACING_M = 1.829
+/** Nominal 2x4, actual. */
+export const GUARDRAIL_MEMBER = { thick: 0.038, wide: 0.089 }
 
 /**
  * Water-resistive barrier options.
