@@ -13,7 +13,7 @@
 import * as THREE from 'three'
 import { joistProfile } from '../data/traceLayers'
 import {
-  type EnvelopeLayer, type CladdingSpec,
+  type EnvelopeLayer, type CladdingSpec, type BoardSpec,
   GUARDRAIL_TOP_M, GUARDRAIL_POST_SPACING_M, GUARDRAIL_MEMBER,
 } from './constructionCode'
 
@@ -1434,6 +1434,8 @@ export interface WallDrywallOpts {
   bothSides?: boolean
   /** When single-sided, which face to board: the INSIDE one. */
   inward?: 1 | -1
+  /** Board product: sets the real thickness, colour and nameplate. */
+  board?: BoardSpec
   opacity?: number
 }
 
@@ -1448,7 +1450,8 @@ const SHEET_GAP = 0.004    // visible joint between sheets
  * opening stays open). Centred on origin along X like buildWallFraming.
  */
 export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
-  const { length, height, thickness, orientation = 'vertical', openings = [], bothSides = true, inward = 1, opacity = 1 } = opts
+  const { length, height, thickness, orientation = 'vertical', openings = [], bothSides = true, inward = 1, board, opacity = 1 } = opts
+  const boardT = board?.thicknessM ?? DRYWALL_T
   const group = new THREE.Group()
   if (length < 0.05 || height < 0.05) return group
 
@@ -1456,12 +1459,15 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
   const cellH = orientation === 'horizontal' ? SHEET_SHORT : SHEET_LONG
   const depth = Math.max(STUD_WIDTH_M, thickness)
   const half = length / 2
-  const faceZ = depth / 2 + DRYWALL_T / 2
+  const faceZ = depth / 2 + boardT / 2
 
   const mat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#e8e6e1'), roughness: 0.95, metalness: 0,
+    color: new THREE.Color(board?.color ?? '#e8e6e1'), roughness: 0.95, metalness: 0,
     transparent: opacity < 1, opacity,
   })
+  const boardInfo = board
+    ? (board.brand ? `${board.label} · ${board.brand}` : board.label)
+    : 'Drywall · 1/2"'
 
   // Opening rectangles in local (x, y): x from start − half; sill/height by type.
   const rects = openings.map((o) => {
@@ -1487,11 +1493,12 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
       if (h < 0.05) continue
       if (overlapsOpening(x, x + w, y, y + h)) continue   // leave the opening open
       for (const z of zs) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w - SHEET_GAP, h - SHEET_GAP, DRYWALL_T), mat)
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w - SHEET_GAP, h - SHEET_GAP, boardT), mat)
         m.position.set(x + w / 2, y + h / 2, z)
         m.castShadow = true
         m.receiveShadow = true
         m.userData.layer = 'drywall'
+        m.userData.info = boardInfo
         group.add(m)
       }
     }

@@ -13,7 +13,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import { wallTakesEnvelope } from '../../services/constructionCode'
+import { wallTakesEnvelope, boardSpec, type BoardSpec } from '../../services/constructionCode'
 import { footprintCentroids, inwardSign } from '../../services/wallFacing'
 import type { ParsedWall, PlacedObject } from '../../types'
 
@@ -33,9 +33,12 @@ interface WallBoardProps {
    *  takes sheathing and the rest of the envelope. */
   bothSides: boolean
   inward: 1 | -1
+  /** Which board product — named `boardType` because `board` is already the
+   *  built geometry group inside this component. */
+  boardType: BoardSpec
 }
 
-function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, openings, storeyHeight, bothSides, inward }: WallBoardProps) {
+function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, openings, storeyHeight, bothSides, inward, boardType }: WallBoardProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
   const dx = p2.x - p1.x
@@ -53,10 +56,10 @@ function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, 
   const board = useMemo(() => {
     if (isMasonry) return new THREE.Group()
     const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
-    const g = buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, bothSides, inward, opacity: 0.96 })
+    const g = buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, bothSides, inward, board: boardType, opacity: 0.96 })
     g.userData.level = wall.level ?? 0  // so the shared explode peels boards floor-by-floor
     return g
-  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level, bothSides, inward])
+  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level, bothSides, inward, boardType])
 
   useEffect(() => () => {
     board.traverse((o) => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() } })
@@ -77,6 +80,8 @@ export default function DrywallLayer() {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const visible = useUISettingsStore((s) => s.drywallVisible)
   const orientation = useUISettingsStore((s) => s.drywallOrientation)
+  const boardKind = useUISettingsStore((s) => s.boardKind)
+  const boardType = useMemo(() => boardSpec(boardKind), [boardKind])
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'walls')
@@ -191,6 +196,7 @@ export default function DrywallLayer() {
             storeyHeight={storeyHeight}
             bothSides={!exterior}
             inward={exterior ? inwardSign(wall, centroids[wall.level ?? 0]) : 1}
+            boardType={boardType}
           />
         )
       })}

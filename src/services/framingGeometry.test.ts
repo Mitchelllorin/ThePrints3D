@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildTemporaryGuardrail, buildWallCladding, buildWallDrywall } from './framingGeometry'
 import {
-  sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb,
+  sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb, boardSpec,
   GUARDRAIL_TOP_M, GUARDRAIL_POST_SPACING_M,
 } from './constructionCode'
 import { outwardSign, inwardSign } from './wallFacing'
@@ -153,6 +153,32 @@ describe('drywall goes inside, sheathing goes outside', () => {
       expect(meshes.length).toBeGreaterThan(0)
       expect(meshes.every((m) => Math.sign(m.position.z) === inward)).toBe(true)
     }
+  })
+
+  it('knows which boards can go behind tile in a wet area', () => {
+    // Cement board tolerates water; KERDI-BOARD IS the waterproofing. Plain
+    // gypsum behind a shower is how you rot a wall out.
+    expect(boardSpec('gypsum-half').wetRated).toBe(false)
+    expect(boardSpec('mold-resistant').wetRated).toBe(false)   // resists mould, still not a tile backer
+    expect(boardSpec('cement-board').wetRated).toBe(true)
+    expect(boardSpec('glassmat-tile').wetRated).toBe(true)
+    expect(boardSpec('foam-waterproof').wetRated).toBe(true)
+    expect(boardSpec('foam-waterproof').brand).toMatch(/Schluter/)
+    // Only Type X is fire-rated — the board a garage separation needs.
+    expect(boardSpec('gypsum-type-x').fireRated).toBe(true)
+    expect(boardSpec('gypsum-half').fireRated).toBe(false)
+  })
+
+  it('boards at the chosen product real thickness', () => {
+    // 5/8" Type X is genuinely thicker than 1/2" gypsum, so the finished face
+    // moves — the same reason OSB and plywood are not interchangeable outside.
+    const half = boardSpec('gypsum-half')
+    const typeX = boardSpec('gypsum-type-x')
+    expect(typeX.thicknessM).toBeGreaterThan(half.thicknessM)
+    const a = buildWallDrywall({ ...base, bothSides: false, inward: 1, board: half })
+    const b = buildWallDrywall({ ...base, bothSides: false, inward: 1, board: typeX })
+    expect(firstMesh(b).position.z).toBeGreaterThan(firstMesh(a).position.z)
+    expect(withInfo(b, /Type X/).length).toBeGreaterThan(0)
   })
 
   it('never lands drywall and sheathing on the same face of a wall', () => {

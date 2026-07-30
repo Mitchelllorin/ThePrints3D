@@ -84,6 +84,62 @@ export function sheathingLayer(
     : { label: 'OSB sheathing · 7/16"', thicknessM: OSB_T, color: '#c9a273' }
 }
 
+// ── Interior board ───────────────────────────────────────────────────────────
+//
+// Gypsum board is interior-only, but "drywall" is not one product. What goes on
+// the studs depends on what the room does to it: fire separation, splashing,
+// or standing water behind tile.
+
+export type BoardKind =
+  | 'gypsum-half' | 'gypsum-type-x' | 'mold-resistant'
+  | 'cement-board' | 'glassmat-tile' | 'foam-waterproof'
+
+export interface BoardSpec {
+  label: string
+  thicknessM: number
+  color: string
+  brand?: string
+  /** Suitable behind tile in a wet area (tub/shower surround). */
+  wetRated: boolean
+  /** Fire-resistance rated — required to the garage and commonly on ceilings. */
+  fireRated: boolean
+}
+
+export const BOARD_HALF_T = 0.0127     // 1/2"
+export const BOARD_58_T = 0.0159       // 5/8"
+export const CEMENT_BOARD_T = 0.0127   // 1/2"
+export const KERDI_BOARD_T = 0.0127    // 1/2" (also 5/8", 3/4", 1", 2")
+
+export function boardSpec(kind: BoardKind): BoardSpec {
+  switch (kind) {
+    case 'gypsum-type-x':
+      // 5/8" Type X — the fire-rated board. Required on the garage side of a
+      // garage/house separation, and standard on ceilings under habitable space.
+      return { label: 'Gypsum · 5/8" Type X', thicknessM: BOARD_58_T, color: '#efe6e0', wetRated: false, fireRated: true }
+    case 'mold-resistant':
+      // The paperless/coated interior board. No paper facing = no food for mould.
+      return { label: 'Mould-resistant gypsum', thicknessM: BOARD_HALF_T, color: '#dfe7dc', brand: 'DensArmor Plus (Georgia-Pacific)', wetRated: false, fireRated: false }
+    case 'cement-board':
+      // Tile backer. Not waterproof on its own — it does not fall apart when wet,
+      // which is a different claim, and it still needs a membrane behind the tile.
+      return { label: 'Cement board (tile backer)', thicknessM: CEMENT_BOARD_T, color: '#b7b6b1', brand: 'Durock / HardieBacker', wetRated: true, fireRated: false }
+    case 'glassmat-tile':
+      // Glass-mat tile backer with the moisture barrier built into the face.
+      return { label: 'Glass-mat tile backer', thicknessM: BOARD_HALF_T, color: '#c3d3c8', brand: 'DensShield (Georgia-Pacific)', wetRated: true, fireRated: false }
+    case 'foam-waterproof':
+      // Schluter KERDI-BOARD: an extruded polystyrene panel, fleece-coated both
+      // faces, that is WATERPROOF in itself rather than merely water-tolerant.
+      // Doubles as the substrate and the waterproofing in a shower, which is why
+      // it replaces backer-plus-membrane rather than sitting alongside it. Sold as
+      // a system with the banded seams and the metal profiles people know Schluter
+      // for; the profiles are trim, this is the panel.
+      return { label: 'Waterproof foam board', thicknessM: KERDI_BOARD_T, color: '#e6a83c', brand: 'KERDI-BOARD (Schluter-Systems)', wetRated: true, fireRated: false }
+    case 'gypsum-half':
+    default:
+      return { label: 'Gypsum · 1/2"', thicknessM: BOARD_HALF_T, color: '#e8e6e1', wetRated: false, fireRated: false }
+  }
+}
+
 // ── Cladding ─────────────────────────────────────────────────────────────────
 //
 // The finish layer, and the one that changes the wall's FOOTPRINT rather than

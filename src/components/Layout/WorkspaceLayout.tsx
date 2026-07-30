@@ -13,7 +13,7 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
-import type { WrbKind, WoodSheathing, CladdingKind } from '../../services/constructionCode'
+import type { WrbKind, WoodSheathing, CladdingKind, BoardKind } from '../../services/constructionCode'
 import { recommendedWrb, wallTakesEnvelope, wallFramingSpec } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -292,6 +292,18 @@ function SettingsContent() {
         <Select label="Sheet orientation" val={ui.drywallOrientation}
           options={[{ value: 'vertical', label: 'Vertical (4×8 standing)' }, { value: 'horizontal', label: 'Horizontal (laid down)' }]}
           onChange={(v) => setUI({ drywallOrientation: v as 'vertical' | 'horizontal' })} />
+        {/* "Drywall" is not one product — what goes on the studs depends on what
+            the room does to it: fire separation, splashing, or standing water. */}
+        <Select label="Board type" val={ui.boardKind}
+          options={[
+            { value: 'gypsum-half', label: 'Gypsum 1/2"' },
+            { value: 'gypsum-type-x', label: 'Gypsum 5/8" Type X (fire)' },
+            { value: 'mold-resistant', label: 'Mould-resistant (DensArmor)' },
+            { value: 'cement-board', label: 'Cement board (Durock)' },
+            { value: 'glassmat-tile', label: 'Glass-mat tile backer (DensShield)' },
+            { value: 'foam-waterproof', label: 'Waterproof foam (Schluter KERDI-BOARD)' },
+          ]}
+          onChange={(v) => setUI({ boardKind: v as BoardKind })} />
       </CollapsibleSection>
 
       {/* Exterior envelope. Sheathe first, then wrap — the order they go on, and

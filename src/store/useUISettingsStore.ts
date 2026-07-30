@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { WrbKind, WoodSheathing, CladdingKind } from '../services/constructionCode'
+import type { WrbKind, WoodSheathing, CladdingKind, BoardKind } from '../services/constructionCode'
 
 export interface UISettings {
   // Panels / toolbars / menus
@@ -30,6 +30,8 @@ export interface UISettings {
   // Drywall boarding
   drywallVisible: boolean
   drywallOrientation: 'vertical' | 'horizontal'
+  /** Which interior board product goes on the studs. */
+  boardKind: BoardKind
   // Exterior envelope — sheathing, then housewrap over it. Two toggles rather
   // than one, because seeing the sheathing is exactly what you want while
   // checking the panel layout, and the wrap covers it up.
@@ -81,6 +83,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   gridCellSize: 1,
   drywallVisible: false,
   drywallOrientation: 'vertical',
+  boardKind: 'gypsum-half',
   sheathingVisible: false,
   wrapVisible: true,
   wrbKind: 'housewrap',
