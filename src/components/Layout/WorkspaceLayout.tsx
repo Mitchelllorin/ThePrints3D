@@ -13,6 +13,7 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
+import type { WrbKind } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -282,7 +283,17 @@ function SettingsContent() {
           the order you want to look at them in. Only exterior walls take it. */}
       <CollapsibleSection id="envelope" title="Exterior envelope" openId={openId} setOpenId={setOpenId}>
         <Toggle label="Sheathe walls" val={ui.sheathingVisible} onChange={(v) => setUI({ sheathingVisible: v })} />
-        <Toggle label="Housewrap over it" val={ui.wrapVisible} onChange={(v) => setUI({ wrapVisible: v })} />
+        <Toggle label="Barrier over it" val={ui.wrapVisible} onChange={(v) => setUI({ wrapVisible: v })} />
+        {/* Which WRB depends on what goes OVER it — housewrap behind lap siding,
+            felt behind stucco and adhered stone. See WrbKind. */}
+        <Select label="Barrier type" val={ui.wrbKind}
+          options={[
+            { value: 'housewrap', label: 'Housewrap (Tyvek-type)' },
+            { value: 'felt', label: 'Asphalt felt (tar paper)' },
+            { value: 'fluid', label: 'Fluid-applied' },
+            { value: 'integrated', label: 'Integrated in sheathing (ZIP)' },
+          ]}
+          onChange={(v) => setUI({ wrbKind: v as WrbKind })} />
       </CollapsibleSection>
 
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>

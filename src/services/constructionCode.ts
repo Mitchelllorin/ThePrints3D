@@ -69,11 +69,40 @@ export function sheathingLayer(framingMaterial: 'wood' | 'steel'): EnvelopeLayer
 }
 
 /**
- * The water-resistive barrier that goes over the sheathing. Housewrap by default
- * — the layer everyone calls Tyvek regardless of who made it.
+ * Water-resistive barrier options.
+ *
+ * Not one layer, because the right WRB depends on what goes OVER it:
+ *
+ *  housewrap  Synthetic sheet — the default, and what most people mean by
+ *             "Tyvek". Tough, wide rolls (so few seams), high vapour permeance.
+ *             The standard behind lap siding on new wood frame.
+ *  felt       Asphalt felt / Grade D paper — "tar paper". NOT obsolete: the IRC
+ *             still names No. 15 felt as the baseline WRB and treats the rest as
+ *             approved equivalents. Still the norm under STUCCO (usually two
+ *             layers) and under adhered stone, where wet-applied finishes bond to
+ *             synthetics and wreck their drainage.
+ *  fluid      Fluid-applied membrane — rolled or sprayed on, seamless.
+ *  integrated Nothing separate: the sheathing already has the barrier on its face
+ *             (ZIP System and similar), so a second layer would be wrong.
  */
-export function wrbLayer(): EnvelopeLayer {
-  return { label: 'Housewrap (WRB)', thicknessM: WRB_T, color: '#eef2f6', brand: 'Tyvek (DuPont)' }
+export type WrbKind = 'housewrap' | 'felt' | 'fluid' | 'integrated'
+
+/** #15 felt is thicker than housewrap; both are drawn thicker than life to show. */
+export const FELT_T = 0.0008
+
+export function wrbLayer(kind: WrbKind = 'housewrap'): EnvelopeLayer | null {
+  switch (kind) {
+    case 'integrated':
+      // The sheathing IS the barrier — see WrbKind. Nothing to add.
+      return null
+    case 'felt':
+      return { label: 'Asphalt felt · No. 15', thicknessM: WRB_T + FELT_T, color: '#3f3f46' }
+    case 'fluid':
+      return { label: 'Fluid-applied WRB', thicknessM: WRB_T, color: '#5b7fa6' }
+    case 'housewrap':
+    default:
+      return { label: 'Housewrap (WRB)', thicknessM: WRB_T, color: '#eef2f6', brand: 'Tyvek (DuPont)' }
+  }
 }
 
 /**

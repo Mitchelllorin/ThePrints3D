@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { WrbKind } from '../services/constructionCode'
 
 export interface UISettings {
   // Panels / toolbars / menus
@@ -34,6 +35,9 @@ export interface UISettings {
   // checking the panel layout, and the wrap covers it up.
   sheathingVisible: boolean
   wrapVisible: boolean
+  /** Which water-resistive barrier: housewrap (default), felt, fluid-applied, or
+   *  integrated (sheathing already carries it — ZIP System and similar). */
+  wrbKind: WrbKind
   // Workspace lighting / background
   bgColor: string
   lightColor: string
@@ -73,6 +77,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   drywallOrientation: 'vertical',
   sheathingVisible: false,
   wrapVisible: true,
+  wrbKind: 'housewrap',
   bgColor: '#0b0e14',
   lightColor: '#ffffff',
   dirIntensity: 1.0,

@@ -29,7 +29,7 @@ describe('exterior envelope: sheathing + housewrap', () => {
     expect(wood.label).toMatch(/OSB/)
     expect(steel.label).toMatch(/Glass-mat/)
     expect(steel.brand).toMatch(/DensGlass/)
-    expect(wrbLayer().brand).toMatch(/Tyvek/)
+    expect(wrbLayer()!.brand).toMatch(/Tyvek/)
   })
 
   it('stacks outward from the stud face: sheathing, then wrap', () => {
@@ -75,6 +75,29 @@ describe('exterior envelope: sheathing + housewrap', () => {
       const y0 = m.position.y + bb.min.y, y1 = m.position.y + bb.max.y
       const overlaps = x0 < 0.9 && x1 > -0.9 && y0 < 2.06 && y1 > 0
       expect(overlaps).toBe(false)
+    }
+  })
+
+  it('offers a WRB per what goes over it, and none when the sheathing carries it', () => {
+    // Tar paper is not obsolete — still the norm under stucco and adhered stone.
+    expect(wrbLayer('housewrap')?.brand).toMatch(/Tyvek/)
+    expect(wrbLayer('felt')?.label).toMatch(/felt/i)
+    expect(wrbLayer('fluid')?.label).toMatch(/Fluid/i)
+    // ZIP-style sheathing already has the barrier on its face; a second one would
+    // be wrong, so there is no layer to add.
+    expect(wrbLayer('integrated')).toBeNull()
+    expect(wrbLayer()?.label).toMatch(/Housewrap/)   // default
+  })
+
+  it('renders whichever barrier is chosen, still outboard of the sheathing', () => {
+    for (const kind of ['housewrap', 'felt', 'fluid'] as const) {
+      const layer = wrbLayer(kind)!
+      const g = buildWallEnvelope({ ...base, sheathing: wood, wrb: layer })
+      const sheets = withInfo(g, /OSB/)
+      const barrier = withInfo(g, new RegExp(layer.label.split(' ')[0], 'i'))
+      expect(barrier.length).toBeGreaterThan(0)
+      expect(Math.min(...barrier.map((m) => m.position.z)))
+        .toBeGreaterThan(Math.min(...sheets.map((m) => m.position.z)))
     }
   })
 

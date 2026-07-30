@@ -25,6 +25,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallEnvelope, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, wallThicknessM,
+  type WrbKind,
 } from '../../services/constructionCode'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem } from '../../data/objectCatalog'
@@ -37,10 +38,11 @@ interface SkinProps {
   storeyHeight: number
   outward: 1 | -1
   wrapVisible: boolean
+  wrbKind: WrbKind
   openings: WallOpening[]
 }
 
-function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, openings }: SkinProps) {
+function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, wrbKind, openings }: SkinProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
   const dx = p2.x - p1.x
@@ -60,14 +62,16 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
       thickness,
       outward,
       sheathing: sheathingLayer(spec.material),
-      wrb: wrapVisible ? wrbLayer() : null,
+      // wrbLayer returns null for 'integrated' — the sheathing already carries the
+      // barrier (ZIP System), so adding one would be wrong, not just redundant.
+      wrb: wrapVisible ? wrbLayer(wrbKind) : null,
       openings,
       opacity: 1,
     })
     g.userData.level = wall.level ?? 0   // so explode peels the skin per storey
     return g
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [length, wallHeight, thickness, outward, spec.material, wrapVisible, openings, wall.level])
+  }, [length, wallHeight, thickness, outward, spec.material, wrapVisible, wrbKind, openings, wall.level])
 
   useEffect(() => () => {
     skin.traverse((o) => {
@@ -87,6 +91,7 @@ export default function EnvelopeLayer() {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const sheathingVisible = useUISettingsStore((s) => s.sheathingVisible)
   const wrapVisible = useUISettingsStore((s) => s.wrapVisible)
+  const wrbKind = useUISettingsStore((s) => s.wrbKind)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'walls')
@@ -193,6 +198,7 @@ export default function EnvelopeLayer() {
             storeyHeight={storeyHeight}
             outward={outward}
             wrapVisible={wrapVisible}
+            wrbKind={wrbKind}
             openings={openingsByWall[i]}
           />
         )
