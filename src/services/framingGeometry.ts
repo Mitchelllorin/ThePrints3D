@@ -639,9 +639,35 @@ export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: num
   const g = new THREE.Group()
   const { lenX, lenZ, opacity = 1, holes = [] } = opts
   if (lenX < 0.1 || lenZ < 0.1) { g.userData.sheetCount = 0; return g }
-  // A sheet is dropped if it overlaps any opening, leaving a clean gap over it.
-  const inHole = (x0: number, z0: number, x1: number, z1: number) =>
-    holes.some((h) => x0 < h.x + h.w / 2 && x1 > h.x - h.w / 2 && z0 < h.z + h.d / 2 && z1 > h.z - h.d / 2)
+  // Sheets are CUT around an opening, not thrown away.
+  //
+  // This used to skip any sheet that so much as touched a hole, which deleted a
+  // whole 4x8 for every sheet the stairwell clipped — the opening in the deck
+  // came out up to a full sheet oversize on every side, and sheets visibly
+  // vanished as soon as stairs were placed. On site you cut the sheet and lay the
+  // offcut; nobody bins a full sheet because a stairwell nicked its corner.
+  //
+  // Both sheets and holes are axis-aligned rectangles, so cutting is rectangle
+  // subtraction: take the piece and slice off whatever the hole covers, keeping
+  // the (up to four) strips left over. Applied hole by hole so overlapping
+  // openings behave.
+  type Piece = { x0: number; z0: number; x1: number; z1: number }
+  const subtract = (pieces: Piece[], h: FloorHole): Piece[] => {
+    const hx0 = h.x - h.w / 2, hx1 = h.x + h.w / 2
+    const hz0 = h.z - h.d / 2, hz1 = h.z + h.d / 2
+    const out: Piece[] = []
+    for (const p of pieces) {
+      // No overlap → survives whole.
+      if (p.x1 <= hx0 || p.x0 >= hx1 || p.z1 <= hz0 || p.z0 >= hz1) { out.push(p); continue }
+      if (p.z0 < hz0) out.push({ ...p, z1: hz0 })                       // strip below
+      if (p.z1 > hz1) out.push({ ...p, z0: hz1 })                       // strip above
+      const zA = Math.max(p.z0, hz0), zB = Math.min(p.z1, hz1)
+      if (p.x0 < hx0) out.push({ x0: p.x0, x1: hx0, z0: zA, z1: zB })   // strip left
+      if (p.x1 > hx1) out.push({ x0: hx1, x1: p.x1, z0: zA, z1: zB })   // strip right
+    }
+    // Drop slivers too small to be a real piece of plywood.
+    return out.filter((p) => p.x1 - p.x0 > 0.05 && p.z1 - p.z0 > 0.05)
+  }
   const mat = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#caa66e'), roughness: 0.85, metalness: 0,
     transparent: opacity < 1, opacity,
@@ -659,13 +685,27 @@ export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: num
       const x0 = Math.max(-halfX, x)
       const w = Math.min(x + sw, halfX) - x0
       if (w < 0.05 || d < 0.05) continue
-      if (inHole(x0, z, x0 + w, z + d)) continue   // leave the opening clear
-      const sheet = new THREE.Mesh(new THREE.BoxGeometry(w - SHEET_GAP, SUBFLOOR_T, d - SHEET_GAP), mat)
-      sheet.position.set(x0 + w / 2, 0, z + d / 2)
-      sheet.castShadow = true; sheet.receiveShadow = true
-      sheet.userData.layer = 'floor-sheeting'
-      sheet.userData.info = 'Subfloor · 3/4" ply · 4×8'
-      g.add(sheet); count++
+      // Cut this sheet around every opening; lay whatever is left.
+      let pieces: Piece[] = [{ x0, z0: z, x1: x0 + w, z1: z + d }]
+      for (const h of holes) pieces = subtract(pieces, h)
+      if (pieces.length === 0) continue          // fully inside the opening
+      const wholeSheet = pieces.length === 1
+        && pieces[0].x1 - pieces[0].x0 >= w - 1e-6
+        && pieces[0].z1 - pieces[0].z0 >= d - 1e-6
+      for (const p of pieces) {
+        const pw = p.x1 - p.x0, pd = p.z1 - p.z0
+        const sheet = new THREE.Mesh(new THREE.BoxGeometry(pw - SHEET_GAP, SUBFLOOR_T, pd - SHEET_GAP), mat)
+        sheet.position.set((p.x0 + p.x1) / 2, 0, (p.z0 + p.z1) / 2)
+        sheet.castShadow = true; sheet.receiveShadow = true
+        sheet.userData.layer = 'floor-sheeting'
+        sheet.userData.info = wholeSheet
+          ? 'Subfloor · 3/4" ply · 4×8'
+          : 'Subfloor · 3/4" ply · cut to opening'
+        g.add(sheet)
+      }
+      // One SHEET is consumed whether or not it got cut — that is what a takeoff
+      // needs to order, so count sheets used, not pieces laid.
+      count++
     }
   }
   g.userData.sheetCount = count

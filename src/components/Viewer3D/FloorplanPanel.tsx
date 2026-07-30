@@ -1574,8 +1574,14 @@ export default function FloorplanPanel() {
       {/* ── Placement bar — tap the plan to drop it (camera is locked). ── */}
       {placeObjectType && (
         <div className={styles.placeBar}>
+          {/* SAY WHICH STOREY. Placement stamps the ACTIVE level, which persists
+              across layer switches — so after working upstairs you could arm
+              stairs meant for the ground floor and silently land them two floors
+              up with nothing on screen explaining it. The storey is part of what
+              you are about to do, so it belongs in the prompt. */}
           <span className={styles.placeHint}>
             Tap the plan to place {getCatalogItem(placeObjectType)?.label ?? placeObjectType}
+            <b> on {activeLevelLabel}</b>
             {keepPlacing && ' — keeps placing until you stop'}
           </span>
           <button

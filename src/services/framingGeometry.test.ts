@@ -341,7 +341,43 @@ describe('floor openings are framed (IRC R502.10)', () => {
   it('still cuts the deck over the opening', () => {
     const solid = buildFloorDeck({ lenX: 8, lenZ: 6 })
     const holed = buildFloorDeck({ lenX: 8, lenZ: 6, holes: [stairwell] })
-    expect(holed.userData.sheetCount as number).toBeLessThan(solid.userData.sheetCount as number)
+    expect(holed.userData.sheetCount as number).toBeLessThanOrEqual(solid.userData.sheetCount as number)
+  })
+
+  it('CUTS the sheets it touches instead of deleting them', () => {
+    // The opening used to delete every sheet it clipped, so the hole in the deck
+    // came out up to a full 4x8 oversize on each side and sheets visibly vanished
+    // when stairs were placed. Nothing may intrude on the opening, but the deck
+    // must still reach right up to its edge.
+    const g = buildFloorDeck({ lenX: 8, lenZ: 6, holes: [stairwell] })
+    const sheets: THREE.Mesh[] = []
+    g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) sheets.push(m) })
+    expect(sheets.length).toBeGreaterThan(0)
+
+    const hx0 = -stairwell.w / 2, hx1 = stairwell.w / 2
+    const hz0 = -stairwell.d / 2, hz1 = stairwell.d / 2
+    let nearestGapX = Infinity
+    for (const m of sheets) {
+      m.geometry.computeBoundingBox()
+      const bb = m.geometry.boundingBox!
+      const x0 = m.position.x + bb.min.x, x1 = m.position.x + bb.max.x
+      const z0 = m.position.z + bb.min.z, z1 = m.position.z + bb.max.z
+      // Nothing overlaps the clear opening.
+      expect(x0 < hx1 - 1e-6 && x1 > hx0 + 1e-6 && z0 < hz1 - 1e-6 && z1 > hz0 + 1e-6).toBe(false)
+      // How close the decking gets to the opening, measured beside it.
+      if (z0 < hz1 && z1 > hz0) {
+        if (x1 <= hx0) nearestGapX = Math.min(nearestGapX, hx0 - x1)
+        if (x0 >= hx1) nearestGapX = Math.min(nearestGapX, x0 - hx1)
+      }
+    }
+    // Decking reaches the opening edge (bar the sheet joint), not a sheet away.
+    expect(nearestGapX).toBeLessThan(0.05)
+  })
+
+  it('labels a cut piece differently from a full sheet', () => {
+    const g = buildFloorDeck({ lenX: 8, lenZ: 6, holes: [stairwell] })
+    expect(withInfo(g, /cut to opening/).length).toBeGreaterThan(0)
+    expect(withInfo(g, /4×8/).length).toBeGreaterThan(0)
   })
 })
 
@@ -450,11 +486,29 @@ describe('door/window openings get framed (regression lock)', () => {
 describe('floor openings (stairwell/shaft holes)', () => {
   const area = { lenX: 8, lenZ: 6 }
 
-  it('drops deck sheets over an opening, leaving fewer sheets', () => {
-    const solid = buildFloorDeck({ ...area }).userData.sheetCount as number
-    const holed = buildFloorDeck({ ...area, holes: [{ x: 0, z: 0, w: 2, d: 3 }] }).userData.sheetCount as number
-    expect(solid).toBeGreaterThan(0)
-    expect(holed).toBeLessThan(solid)
+  it('opens the deck without wasting the sheets it cuts', () => {
+    // This used to assert the count DROPPED, which only held because every sheet
+    // the opening touched was deleted outright. Sheets are cut now, so a partly
+    // clipped sheet is still one sheet you buy — the count should not fall unless
+    // a sheet lands entirely inside the opening. What must change is the covered
+    // area, not the order quantity.
+    const solid = buildFloorDeck({ ...area })
+    const holed = buildFloorDeck({ ...area, holes: [{ x: 0, z: 0, w: 2, d: 3 }] })
+    expect(solid.userData.sheetCount as number).toBeGreaterThan(0)
+    expect(holed.userData.sheetCount as number).toBeLessThanOrEqual(solid.userData.sheetCount as number)
+    // The opening is genuinely open: less plywood on the floor than before.
+    const deckArea = (g: THREE.Object3D) => {
+      let a = 0
+      g.traverse((o) => {
+        const m = o as THREE.Mesh
+        if (!m.isMesh) return
+        m.geometry.computeBoundingBox()
+        const bb = m.geometry.boundingBox!
+        a += (bb.max.x - bb.min.x) * (bb.max.z - bb.min.z)
+      })
+      return a
+    }
+    expect(deckArea(holed)).toBeLessThan(deckArea(solid))
   })
 
   it('no holes → deck unchanged', () => {
