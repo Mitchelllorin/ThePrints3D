@@ -14,7 +14,7 @@ import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import type { WrbKind, WoodSheathing, CladdingKind } from '../../services/constructionCode'
-import { recommendedWrb } from '../../services/constructionCode'
+import { recommendedWrb, wallTakesEnvelope, wallFramingSpec } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -171,6 +171,20 @@ function SettingsContent() {
   const previewMode = useAppStore((x) => x.previewMode)
   const setPreviewMode = useAppStore((x) => x.setPreviewMode)
 
+  // What the EXTERIOR walls on this plan are actually framed in, so the barrier
+  // advice fits the building rather than a guess. Steel anywhere on the shell is
+  // enough — DensGlass wants an AVB whether or not there is wood elsewhere.
+  const exteriorFramingMaterial = useAppStore((s) => {
+    for (const d of s.drawings) {
+      for (const w of d.parsedWalls) {
+        if (w.source !== 'user') continue
+        if (!wallTakesEnvelope(w.wallRole, w.framingType)) continue
+        if (wallFramingSpec(w.framingType, w.wallRole).material === 'steel') return 'steel' as const
+      }
+    }
+    return 'wood' as const
+  })
+
   // Single-open accordion, matching the panel tab strip's toggle behaviour.
   const [openId, setOpenId] = useState<string | null>('appearance')
 
@@ -292,6 +306,7 @@ function SettingsContent() {
             { value: 'housewrap', label: 'Housewrap (Tyvek-type)' },
             { value: 'felt', label: 'Asphalt felt (tar paper)' },
             { value: 'fluid', label: 'Fluid-applied' },
+            { value: 'avb', label: 'Air/vapour barrier (steel + DensGlass)' },
             { value: 'integrated', label: 'Integrated in sheathing (ZIP)' },
           ]}
           onChange={(v) => setUI({ wrbKind: v as WrbKind })} />
@@ -321,15 +336,18 @@ function SettingsContent() {
           onChange={(v) => setUI({ cladding: v as CladdingKind })} />
         {/* Wet-applied finishes bond to housewrap and wreck its drainage — a real
             failure, so say so rather than silently building a wall that leaks. */}
-        {ui.cladding !== 'none' && recommendedWrb(ui.cladding) !== ui.wrbKind && (
+        {recommendedWrb(ui.cladding, exteriorFramingMaterial) !== ui.wrbKind && (
           <button
             className={styles.uploadHintChip}
             style={{ alignSelf: 'flex-start', margin: '2px 0 6px' }}
-            onClick={() => setUI({ wrbKind: recommendedWrb(ui.cladding) })}
+            onClick={() => setUI({ wrbKind: recommendedWrb(ui.cladding, exteriorFramingMaterial) })}
           >
-            {recommendedWrb(ui.cladding) === 'felt'
-              ? 'This finish wants felt behind it — switch?'
-              : 'Housewrap suits this finish — switch?'}
+            {(() => {
+              const want = recommendedWrb(ui.cladding, exteriorFramingMaterial)
+              if (want === 'felt') return 'This finish wants felt behind it — switch?'
+              if (want === 'avb') return 'Steel + DensGlass wants an air/vapour barrier — switch?'
+              return 'Housewrap suits this wall — switch?'
+            })()}
           </button>
         )}
         <Toggle label="Temp guardrail (2x4)" val={ui.guardrailVisible} onChange={(v) => setUI({ guardrailVisible: v })} />

@@ -245,6 +245,34 @@ describe('cladding', () => {
     expect(recommendedWrb('vinyl-lap')).toBe('housewrap')
     expect(recommendedWrb('brick-veneer')).toBe('housewrap')
   })
+
+  it('asks for an air/vapour barrier on steel, and lets a wet finish overrule it', () => {
+    // Steel walls are sheathed in DensGlass and detailed with an AVB, not
+    // housewrap — housewrap there is a residential answer to a commercial wall.
+    expect(recommendedWrb('none', 'steel')).toBe('avb')
+    expect(recommendedWrb('panel', 'steel')).toBe('avb')
+    expect(recommendedWrb('vinyl-lap', 'steel')).toBe('avb')
+    // …but a wet-applied finish still wins: it will wreck a membrane it bonds to
+    // no matter what is behind it.
+    expect(recommendedWrb('stucco', 'steel')).toBe('felt')
+    // Wood is unchanged.
+    expect(recommendedWrb('vinyl-lap', 'wood')).toBe('housewrap')
+  })
+
+  it('renders the air/vapour barrier like any other', () => {
+    const avb = wrbLayer('avb')!
+    expect(avb.label).toMatch(/vapour/i)
+    const g = buildWallEnvelope({
+      length: 6, height: 2.44, thickness: 0.1524, outward: 1,
+      sheathing: sheathingLayer('steel'), wrb: avb,
+    })
+    const sheets = withInfo(g, /Glass-mat/)
+    const barrier = withInfo(g, /vapour/i)
+    expect(sheets.length).toBeGreaterThan(0)
+    expect(barrier.length).toBeGreaterThan(0)
+    expect(Math.min(...barrier.map((m) => m.position.z)))
+      .toBeGreaterThan(Math.min(...sheets.map((m) => m.position.z)))
+  })
 })
 
 describe('temporary jobsite guardrail', () => {

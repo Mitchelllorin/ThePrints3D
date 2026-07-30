@@ -141,15 +141,23 @@ export function claddingSpec(kind: CladdingKind): CladdingSpec | null {
 }
 
 /**
- * The barrier this cladding wants behind it.
+ * The barrier an assembly wants, from the cladding AND the framing behind it.
  *
- * Not a preference. Wet-applied finishes — stucco, adhered stone — bond to
- * synthetic housewrap and destroy its ability to drain, which is a real failure
- * mode rather than a style disagreement. Those want felt (traditionally two
- * layers of Grade D paper). Everything else is happy behind housewrap.
+ * Not a preference, in either direction:
+ *
+ *  • Wet-applied finishes — stucco, adhered stone — bond to synthetic housewrap
+ *    and destroy its ability to drain. That is a failure, not a style
+ *    disagreement, so they get felt (traditionally two layers of Grade D paper).
+ *  • STEEL stud walls are sheathed in glass-mat gypsum and detailed with an
+ *    AIR/VAPOUR BARRIER over it, not housewrap. Housewrap on a DensGlass wall is
+ *    a residential answer to a commercial assembly.
+ *
+ * Cladding wins where the two disagree, because a wet finish will wreck a
+ * membrane it bonds to regardless of what is behind it.
  */
-export function recommendedWrb(kind: CladdingKind): WrbKind {
-  return kind === 'stucco' || kind === 'stone-veneer' ? 'felt' : 'housewrap'
+export function recommendedWrb(kind: CladdingKind, framingMaterial: 'wood' | 'steel' = 'wood'): WrbKind {
+  if (kind === 'stucco' || kind === 'stone-veneer') return 'felt'
+  return framingMaterial === 'steel' ? 'avb' : 'housewrap'
 }
 
 // ── Temporary fall protection ────────────────────────────────────────────────
@@ -185,11 +193,15 @@ export const GUARDRAIL_MEMBER = { thick: 0.038, wide: 0.089 }
  *             approved equivalents. Still the norm under STUCCO (usually two
  *             layers) and under adhered stone, where wet-applied finishes bond to
  *             synthetics and wreck their drainage.
- *  fluid      Fluid-applied membrane — rolled or sprayed on, seamless.
+*  fluid      Fluid-applied membrane — rolled or sprayed on, seamless.
+ *  avb        Air/vapour barrier over the sheathing — self-adhered sheet or
+ *             fluid-applied. The standard companion to glass-mat sheathing on
+ *             STEEL stud walls, where the assembly is sheathing + AVB rather than
+ *             sheathing + housewrap.
  *  integrated Nothing separate: the sheathing already has the barrier on its face
  *             (ZIP System and similar), so a second layer would be wrong.
  */
-export type WrbKind = 'housewrap' | 'felt' | 'fluid' | 'integrated'
+export type WrbKind = 'housewrap' | 'felt' | 'fluid' | 'avb' | 'integrated'
 
 /** #15 felt is thicker than housewrap; both are drawn thicker than life to show. */
 export const FELT_T = 0.0008
@@ -203,6 +215,8 @@ export function wrbLayer(kind: WrbKind = 'housewrap'): EnvelopeLayer | null {
       return { label: 'Asphalt felt · No. 15', thicknessM: WRB_T + FELT_T, color: '#3f3f46' }
     case 'fluid':
       return { label: 'Fluid-applied WRB', thicknessM: WRB_T, color: '#5b7fa6' }
+    case 'avb':
+      return { label: 'Air/vapour barrier', thicknessM: WRB_T * 1.5, color: '#2f4f6f' }
     case 'housewrap':
     default:
       return { label: 'Housewrap (WRB)', thicknessM: WRB_T, color: '#eef2f6', brand: 'Tyvek (DuPont)' }
