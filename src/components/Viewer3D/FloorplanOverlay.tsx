@@ -1456,10 +1456,11 @@ export default function FloorplanOverlay() {
       ))}
 
       {/* Committed trade lines drawn on the print, coloured by field convention.
-          When not tracing/placing, tapping a run selects it (edit-on-the-fly →
-          the panel's Delete). The selected run is highlighted. */}
+          IN EDIT MODE, tapping a run selects it (edit-on-the-fly → the rail, or
+          the panel's Delete). The selected run is highlighted. Outside edit mode
+          a run is just drawn — nothing on the model answers a tap. */}
       {(() => {
-        const editable = !traceMode && !placeObjectType
+        const editable = editMode && !traceMode && !placeObjectType
         const renderRun = (trade: 'plumbing' | 'electrical' | 'hvac', l: TracedLine, color: string) => {
           const sel = selectedLine?.trade === trade && selectedLine.id === l.id
           return (
@@ -1549,7 +1550,10 @@ export default function FloorplanOverlay() {
       )}
 
       {/* Wall select: invisible click targets on each UNSELECTED wall.
-          Under canEditWalls (not editMode) so they stay live through a drag.
+
+          EDIT MODE ONLY. Edit mode exists to say "I am changing things now", so
+          nothing is selectable outside it — a tap on the model while you are just
+          looking should never grab a component.
 
           The target is the wall's REAL VOLUME — full storey height, standing at
           its own level. It used to be a flat 8cm plate lying on the print, which
@@ -1559,7 +1563,7 @@ export default function FloorplanOverlay() {
           unreachable by touching the wall — and once a floor deck went down, that
           sliver was buried under it as well. Now the thing you point at is the
           thing you select, which is the whole premise of edit mode. */}
-      {canEditWalls && !placeObjectType && userWalls.map((w, i) => {
+      {editMode && canEditWalls && !placeObjectType && userWalls.map((w, i) => {
         if (i === selectedWallIndex) return null
         const a = planeLocalToWorld([w.x1, w.y1])
         const b = planeLocalToWorld([w.x2, w.y2])

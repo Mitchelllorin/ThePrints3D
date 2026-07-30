@@ -1,16 +1,25 @@
 /**
- * HoverNameplate — point at (hover on desktop / drag-touch on mobile) ANY built
- * element and a nameplate pops up saying what it is + its metrics.
+ * HoverNameplate — IN EDIT MODE, point at (hover on desktop / drag-touch on
+ * mobile) any built element and a nameplate pops up saying what it is + its
+ * metrics, with a cyan halo on the thing you would select.
  *
  * One raycaster reads the mesh under the pointer and shows `userData.info` (rich
  * metrics, set by the geometry builders) or a humanised `userData.layer`
  * fallback — so it identifies everything in the model, not just a few things.
+ *
+ * EDIT MODE ONLY. This used to run all the time, and because it highlights
+ * whatever is under the pointer it read as selecting things while you were only
+ * looking: sweeping across a floor lit up subfloor sheets one after another, each
+ * with its own name card. On a deck of 30-odd sheets that is a strobe of cyan
+ * boxes — the "flashy, glitchy floor sheeting". It is also wasted work, since a
+ * raycast ran on every pointer move whether or not anything could be picked.
  */
 import { useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 
 interface Plate {
   pos: [number, number, number]
@@ -45,11 +54,17 @@ export default function HoverNameplate() {
   const { camera, scene, raycaster, pointer } = useThree()
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
   const [plate, setPlate] = useState<Plate | null>(null)
   const lastObj = useRef<THREE.Object3D | null>(null)
   const lastPtr = useRef({ x: 2, y: 2 })
 
   useFrame(() => {
+    // Nothing is pickable outside edit mode, so nothing should light up either.
+    if (!editMode) {
+      if (lastObj.current || plate) { lastObj.current = null; setPlate(null) }
+      return
+    }
     // Only raycast when the pointer actually moved — cheap when idle.
     if (pointer.x === lastPtr.current.x && pointer.y === lastPtr.current.y) return
     lastPtr.current = { x: pointer.x, y: pointer.y }
@@ -76,7 +91,7 @@ export default function HoverNameplate() {
     })
   })
 
-  if (!plate) return null
+  if (!plate || !editMode) return null
   // A small padding so the highlight box reads as a halo around the element
   // rather than z-fighting its own faces.
   const pad = 0.06

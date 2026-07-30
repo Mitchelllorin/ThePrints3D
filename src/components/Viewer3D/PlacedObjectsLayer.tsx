@@ -206,11 +206,11 @@ export default function PlacedObjectsLayer() {
               onPointerDown={(e) => {
                 // In place mode the floorplan handles the next click — don't steal it.
                 if (placeObjectType) return
-                // ── The standard: double-tap SELECTS (docs/INTERACTIONS.md) ──
-                // Double-tap used to toggle X-ray here, which is why the same
-                // gesture meant two different things depending on what you hit.
-                // X-ray is a card button now, so the gesture is free to mean the
-                // one thing it means everywhere else.
+                // EDIT MODE ONLY, like every other component. Objects were the one
+                // type you could select and drag with edit mode off, which is why
+                // the mode felt meaningless: you could shove the furniture around
+                // while just looking at the model.
+                if (!editMode) return
                 e.stopPropagation()
                 if (!selected) { select(obj.id); return }
                 startObjectPress(e, obj)

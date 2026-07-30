@@ -368,9 +368,11 @@ export default function RoofLayer() {
         const centre = pixelToWorld((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
         // Live world offset while this roof is being dragged.
         const live: [number, number] = bodyDrag?.id === area.id ? bodyDrag.offset : [0, 0]
+        // EDIT MODE ONLY. Outside it the roof answers no pointer at all — a press
+        // used to select it and start sliding it while you were merely looking.
         const bodyHandlers: Record<string, (e: ThreeEvent<PointerEvent>) => void> = editMode
           ? { onPointerDown: onBodyDown(area), ...hoverHandlers(area) }
-          : { onPointerDown: onBodyDown(area) }
+          : {}
 
         return (
           <group key={area.id}>

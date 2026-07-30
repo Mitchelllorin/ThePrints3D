@@ -296,6 +296,12 @@ export default function FloorJoistsLayer() {
   // (so each wall tap also popped a floor selection). Its double-click handler
   // fought the double-tap-to-finish gesture the same way, toggling ghosting as
   // you ended a run. Floors go back to selectable/draggable the moment you stop.
+  //
+  // Outside edit mode the deck is NOT selectable or draggable either. Edit mode
+  // exists to say "I am changing things now"; a press on a deck while you are
+  // only looking used to select it and start moving it, so the mode meant
+  // nothing. Double-tap-to-ghost stays — that is a VIEW toggle, not a selection,
+  // and it changes no geometry.
   const handlersFor = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => (traceMode || overlay.calibrationMode)
     ? {}
     : editMode
@@ -305,7 +311,6 @@ export default function FloorJoistsLayer() {
         onPointerOut: () => setEditHover(null),
       }
     : {
-        onPointerDown: onAreaDown(area),
         onDoubleClick: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); toggleGhostedLevel(area.level ?? 0) },
       }
   // Live world offset while this area is being dragged.

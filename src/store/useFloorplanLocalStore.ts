@@ -25,6 +25,21 @@ type DragKind = 'move' | 'corner' | 'edge' | 'rotate' | 'wall' | 'wall-end'
 
 /** What kind of model element an edit-mode hover/select points at. */
 export type EditKind = 'floor' | 'roof' | 'wall' | 'object' | 'line'
+
+/**
+ * Default stud size for a wall's structural ROLE.
+ *
+ * Exterior walls carry the roof and the insulation; interior walls mostly divide
+ * space. They are not the same stick of wood, so one global default cannot serve
+ * both — and 2x6 everywhere framed every interior wall too thick, which throws
+ * the whole model out of scale. Exterior defaults to 2x8, interior to 2x4.
+ *
+ * A default only, in both directions: pick a size by hand and it sticks (see
+ * `wallTypeChosen`).
+ */
+export function defaultWallTypeForRole(role: string): string {
+  return role === 'exterior-bearing' ? 'wood-2x8' : 'wood-2x4'
+}
 /** A hovered/selected element in edit-everything mode. */
 export interface EditTarget { kind: EditKind; id: string }
 
@@ -88,10 +103,14 @@ interface FloorplanLocalState {
   drag: DragState | null
 
   // ─── active wall type (stamped on every wall traced this session) ─
-  /** Framing material/size key, e.g. 'wood-2x6'. */
+  /** Framing material/size key, e.g. 'wood-2x8'. */
   activeWallType: string
   /** Structural role key, e.g. 'exterior-bearing'. */
   activeWallRole: string
+  /** True once the user has picked a stud size by hand. Until then the size
+   *  follows the wall's role (see `defaultWallTypeForRole`); after it, their
+   *  choice wins and the role stops overriding it. */
+  wallTypeChosen: boolean
   /** Active discipline tab. */
   activeTraceLayer: TraceLayer
   /** Height band applied to new trade runs (under-floor / in-wall / ceiling). */
@@ -282,8 +301,9 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   calibrationA: null,
   calibrationB: null,
   distanceInput: '',
-  activeWallType: 'wood-2x6',
+  activeWallType: defaultWallTypeForRole('exterior-bearing'),
   activeWallRole: 'exterior-bearing',
+  wallTypeChosen: false,
   // Floors-first: the foundation/floor goes down before walls frame on top, so
   // the Build drawer opens on Floors (not Framing) and guides the right order.
   activeTraceLayer: 'floors',
@@ -362,8 +382,17 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   ),
   setDistanceUnit: (v) => set({ distanceUnit: v }),
   setPendingTraceAfterCalibration: (v) => set({ pendingTraceAfterCalibration: v }),
-  setActiveWallType: (v) => set({ activeWallType: v }),
-  setActiveWallRole: (v) => set({ activeWallRole: v }),
+  // Picking a size is an explicit choice and sticks — from here on the role no
+  // longer moves it.
+  setActiveWallType: (v) => set({ activeWallType: v, wallTypeChosen: true }),
+  // Changing the ROLE re-defaults the stud size, UNLESS you have already picked
+  // one yourself. Exterior carries the load and the insulation, interior mostly
+  // divides space, so they are simply not the same stick of wood — and defaulting
+  // both to one size meant every interior wall rendered too thick, which throws
+  // the model out of scale.
+  setActiveWallRole: (v) => set((s) => s.wallTypeChosen
+    ? { activeWallRole: v }
+    : { activeWallRole: v, activeWallType: defaultWallTypeForRole(v) }),
   // Switching discipline drops any in-progress run anchor, so a resumed/new run
   // starts fresh in the newly selected trade instead of chaining from the old.
   // Switching tab KEEPS the active level, so you can lay a 2nd-floor floor and

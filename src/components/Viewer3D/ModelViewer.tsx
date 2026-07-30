@@ -9,6 +9,11 @@ import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { formatMeasureMm } from '../../services/unitConverter'
+/** Ground-floor assembly depth below y=0 (mirrors FLOOR_ASSEMBLY_H in
+ *  framingGeometry). Kept as a literal rather than imported: ModelViewer is the
+ *  Canvas host, and pulling the geometry module in at this level is a needless
+ *  import edge for one number. */
+const FLOOR_ASSEMBLY_DEPTH = 0.32
 import { useShallow } from 'zustand/react/shallow'
 import BuildingModel from './BuildingModel'
 import MeasureTool from './MeasureTool'
@@ -773,7 +778,16 @@ export default function ModelViewer() {
             sectionColor={gridColor}
             fadeDistance={120}
             fadeStrength={1.5}
-            position={[0, -0.01, 0]}
+            /* GRADE sits below the floor assembly, not inside it.
+               This was -0.01, which put the grid plane 10mm under the finished
+               floor — straight through the middle of the 19mm subfloor sheets
+               (they hang from y=0 down to -SUBFLOOR_T). Two coplanar-ish surfaces
+               fighting for the same depth is what made the floor sheeting flash
+               and crawl as the camera moved: grid lines popping through the
+               plywood, then losing, then winning again.
+               The ground-floor assembly is FLOOR_ASSEMBLY_H deep below y=0, so
+               grade goes just under that and nothing shares its depth. */
+            position={[0, -(FLOOR_ASSEMBLY_DEPTH + 0.02), 0]}
           />
         )}
 
