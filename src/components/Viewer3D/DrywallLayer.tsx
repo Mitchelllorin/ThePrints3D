@@ -13,6 +13,8 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
+import { wallTakesEnvelope } from '../../services/constructionCode'
+import { footprintCentroids, inwardSign } from '../../services/wallFacing'
 import type { ParsedWall, PlacedObject } from '../../types'
 
 const MIN_THICKNESS = 0.1
@@ -27,9 +29,13 @@ interface WallBoardProps {
   openings: Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>
   /** Storey-to-storey rise, so upper-floor boards stack on the floor below. */
   storeyHeight: number
+  /** Exterior walls are boarded on ONE face — the inside. Their outside face
+   *  takes sheathing and the rest of the envelope. */
+  bothSides: boolean
+  inward: 1 | -1
 }
 
-function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, openings, storeyHeight }: WallBoardProps) {
+function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, openings, storeyHeight, bothSides, inward }: WallBoardProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
   const dx = p2.x - p1.x
@@ -47,10 +53,10 @@ function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, 
   const board = useMemo(() => {
     if (isMasonry) return new THREE.Group()
     const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
-    const g = buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, opacity: 0.96 })
+    const g = buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, bothSides, inward, opacity: 0.96 })
     g.userData.level = wall.level ?? 0  // so the shared explode peels boards floor-by-floor
     return g
-  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level])
+  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level, bothSides, inward])
 
   useEffect(() => () => {
     board.traverse((o) => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() } })
@@ -154,22 +160,40 @@ export default function DrywallLayer() {
     return out
   }, [userWalls, placedObjects])
 
+  // Which way each wall faces. Shared with EnvelopeLayer via wallFacing so the
+  // two can never disagree — the inside face drywall boards is by definition the
+  // opposite of the outside face the sheathing goes on. Centroid is taken over
+  // the EXTERIOR walls, which are what actually describe the footprint.
+  const centroids = useMemo(
+    () => footprintCentroids(
+      userWalls.map(({ wall }) => wall).filter((w) => wallTakesEnvelope(w.wallRole, w.framingType)),
+    ),
+    [userWalls],
+  )
+
   if (!visible || userWalls.length === 0) return null
 
   return (
     <group name="drywall" ref={groupRef}>
-      {userWalls.map(({ wall, scaleMmPerPx }, i) => (
-        <WallBoard
-          key={i}
-          wall={wall}
-          pixelToWorld={pixelToWorld}
-          scaleMmPerPx={scaleMmPerPx}
-          wallHeight={wallHeight}
-          orientation={orientation}
-          openings={openingsByWall[i] ?? []}
-          storeyHeight={storeyHeight}
-        />
-      ))}
+      {userWalls.map(({ wall, scaleMmPerPx }, i) => {
+        // Exterior walls are boarded on the inside ONLY: the outside face takes
+        // sheathing, housewrap and cladding. Interior partitions get both faces.
+        const exterior = wallTakesEnvelope(wall.wallRole, wall.framingType)
+        return (
+          <WallBoard
+            key={i}
+            wall={wall}
+            pixelToWorld={pixelToWorld}
+            scaleMmPerPx={scaleMmPerPx}
+            wallHeight={wallHeight}
+            orientation={orientation}
+            openings={openingsByWall[i] ?? []}
+            storeyHeight={storeyHeight}
+            bothSides={!exterior}
+            inward={exterior ? inwardSign(wall, centroids[wall.level ?? 0]) : 1}
+          />
+        )
+      })}
     </group>
   )
 }

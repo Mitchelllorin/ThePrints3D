@@ -28,6 +28,7 @@ import {
   claddingSpec,
   type WrbKind, type WoodSheathing, type CladdingKind,
 } from '../../services/constructionCode'
+import { footprintCentroids, outwardSign } from '../../services/wallFacing'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem } from '../../data/objectCatalog'
 import type { ParsedWall, PlacedObject } from '../../types'
@@ -182,20 +183,9 @@ export default function EnvelopeLayer() {
     return out
   }, [drawings])
 
-  // Footprint centroid, per storey — the reference for "which way is out". Taken
-  // per level so a smaller upper floor is judged against its own outline rather
-  // than the ground floor's.
-  const centroidByLevel = useMemo(() => {
-    const acc: Record<number, { x: number; y: number; n: number }> = {}
-    for (const w of skinWalls) {
-      const lv = w.level ?? 0
-      const a = (acc[lv] ??= { x: 0, y: 0, n: 0 })
-      a.x += (w.x1 + w.x2) / 2
-      a.y += (w.y1 + w.y2) / 2
-      a.n += 1
-    }
-    return acc
-  }, [skinWalls])
+  // Which way is out — shared with DrywallLayer via wallFacing, so sheathing and
+  // drywall can never end up on the same face of a wall.
+  const centroidByLevel = useMemo(() => footprintCentroids(skinWalls), [skinWalls])
 
   // Doors/windows cut the skin too, so a window is a hole rather than a pane
   // buried behind sheathing. Nearest-wall assignment, matching DrywallLayer.
@@ -240,16 +230,7 @@ export default function EnvelopeLayer() {
   return (
     <group name="envelope" ref={groupRef}>
       {skinWalls.map((w, i) => {
-        const c = centroidByLevel[w.level ?? 0]
-        // Wall midpoint → centroid, in pixel space. The wall's local +Z axis is
-        // the left-hand perpendicular of its direction; if that points toward the
-        // centroid, the OTHER side is the outside.
-        const mx = (w.x1 + w.x2) / 2, my = (w.y1 + w.y2) / 2
-        const dirX = w.x2 - w.x1, dirY = w.y2 - w.y1
-        const toIn = c && c.n > 0 ? { x: c.x / c.n - mx, y: c.y / c.n - my } : { x: 0, y: 0 }
-        // 2D cross product picks the side the centroid sits on.
-        const side = dirX * toIn.y - dirY * toIn.x
-        const outward: 1 | -1 = side > 0 ? -1 : 1
+        const outward = outwardSign(w, centroidByLevel[w.level ?? 0])
         return (
           <WallSkin
             key={`skin-${w.level ?? 0}-${i}`}

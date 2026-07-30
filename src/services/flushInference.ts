@@ -1,13 +1,16 @@
 // Ambient inference — shared-edge suggestion. When a new floor (or roof) area is
 // placed beside an existing one, the shared edge should meet the neighbour with
 // no sliver gap or overlap. This computes that suggestion purely (pixel-space
-// rects) so the UI can offer a gentle "butt tight to the floor beside it?"
-// prompt with one-tap confirm — never a silent move.
+// rects) so the UI can offer a gentle "Flush with this edge?" prompt with one-tap
+// confirm — never a silent move.
 //
-// Prompt copy deliberately says "butt tight", not "flush": on site "flush" means
-// two faces landing in the same plane (a stud cut to the same height as the one
-// it nails to). Closing a gap between two areas in plan is butting them tight.
-// See ambient-inference-prompts memory.
+// The copy used to name the neighbour by its on-screen direction ("butt tight to
+// the floor above it"), which read as nonsense: in a PLAN view "the floor above"
+// sounds like the storey above, not the rectangle further up the screen. It also
+// made you work out which neighbour was meant before you could answer.
+//
+// It just asks about the EDGE now, which is the thing being moved and the thing
+// you are looking at. One question, no direction to decode.
 
 export interface Rect {
   x1: number
@@ -53,11 +56,11 @@ export function suggestFlushEdge(candidate: Rect, existing: Rect[], tolPx = 24):
   const ch = c.bottom - c.top
   let best: FlushSuggestion | null = null
 
-  const consider = (edge: Edge, gap: number, rect: Rect, neighbourWord: string) => {
+  const consider = (edge: Edge, gap: number, rect: Rect) => {
     const g = Math.abs(gap)
     if (g < 0.5 || g > tolPx) return // already flush, or too far to be intentional
     if (best && g >= best.gapPx) return
-    best = { rect, edge, gapPx: g, message: `Butt tight to the ${neighbourWord}?` }
+    best = { rect, edge, gapPx: g, message: 'Flush with this edge?' }
   }
 
   for (const e of existing) {
@@ -68,14 +71,14 @@ export function suggestFlushEdge(candidate: Rect, existing: Rect[], tolPx = 24):
     // Horizontal adjacency (side by side) — needs vertical overlap.
     if (vOverlap > Math.min(ch, n.bottom - n.top) * 0.3) {
       // candidate is to the RIGHT of neighbour → its left edge meets neighbour's right
-      consider('left', c.left - n.right, { x1: n.right, y1: c.top, x2: n.right + cw, y2: c.bottom }, 'floor beside it')
+      consider('left', c.left - n.right, { x1: n.right, y1: c.top, x2: n.right + cw, y2: c.bottom })
       // candidate is to the LEFT → its right edge meets neighbour's left
-      consider('right', c.right - n.left, { x1: n.left - cw, y1: c.top, x2: n.left, y2: c.bottom }, 'floor beside it')
+      consider('right', c.right - n.left, { x1: n.left - cw, y1: c.top, x2: n.left, y2: c.bottom })
     }
     // Vertical adjacency (stacked in plan) — needs horizontal overlap.
     if (hOverlap > Math.min(cw, n.right - n.left) * 0.3) {
-      consider('top', c.top - n.bottom, { x1: c.left, y1: n.bottom, x2: c.right, y2: n.bottom + ch }, 'floor above it')
-      consider('bottom', c.bottom - n.top, { x1: c.left, y1: n.top - ch, x2: c.right, y2: n.top }, 'floor below it')
+      consider('top', c.top - n.bottom, { x1: c.left, y1: n.bottom, x2: c.right, y2: n.bottom + ch })
+      consider('bottom', c.bottom - n.top, { x1: c.left, y1: n.top - ch, x2: c.right, y2: n.top })
     }
   }
   return best

@@ -1389,8 +1389,11 @@ export interface WallDrywallOpts {
   orientation?: 'vertical' | 'horizontal'
   /** Openings to leave unboarded (centreM from wall start, widthM, type). */
   openings?: WallOpening[]
-  /** Board both faces, or just the interior (default both). */
+  /** Board both faces (interior partitions), or a single face (exterior walls,
+   *  whose outside gets SHEATHING instead — see `inward`). Default both. */
   bothSides?: boolean
+  /** When single-sided, which face to board: the INSIDE one. */
+  inward?: 1 | -1
   opacity?: number
 }
 
@@ -1405,7 +1408,7 @@ const SHEET_GAP = 0.004    // visible joint between sheets
  * opening stays open). Centred on origin along X like buildWallFraming.
  */
 export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
-  const { length, height, thickness, orientation = 'vertical', openings = [], bothSides = true, opacity = 1 } = opts
+  const { length, height, thickness, orientation = 'vertical', openings = [], bothSides = true, inward = 1, opacity = 1 } = opts
   const group = new THREE.Group()
   if (length < 0.05 || height < 0.05) return group
 
@@ -1433,7 +1436,9 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
   const overlapsOpening = (x0: number, x1: number, y0: number, y1: number) =>
     rects.some((r) => x0 < r.x1 && x1 > r.x0 && y0 < r.y1 && y1 > r.y0)
 
-  const zs = bothSides ? [faceZ, -faceZ] : [faceZ]
+  // An exterior wall is boarded on the INSIDE only. Its outside face takes
+  // sheathing and the rest of the envelope; drywall out there would be nonsense.
+  const zs = bothSides ? [faceZ, -faceZ] : [inward * faceZ]
   for (let x = -half; x < half - 0.02; x += cellW + SHEET_GAP) {
     const w = Math.min(cellW, half - x)
     if (w < 0.05) continue

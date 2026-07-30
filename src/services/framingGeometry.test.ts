@@ -1,15 +1,24 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildTemporaryGuardrail, buildWallCladding } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildTemporaryGuardrail, buildWallCladding, buildWallDrywall } from './framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb,
   GUARDRAIL_TOP_M, GUARDRAIL_POST_SPACING_M,
 } from './constructionCode'
+import { outwardSign, inwardSign } from './wallFacing'
 
 const meshCount = (g: THREE.Object3D) => {
   let n = 0
   g.traverse((o) => { if ((o as THREE.Mesh).isMesh) n++ })
   return n
+}
+
+/** First mesh in a group, in traversal order. */
+const firstMesh = (g: THREE.Object3D): THREE.Mesh => {
+  let found: THREE.Mesh | null = null
+  g.traverse((o) => { const m = o as THREE.Mesh; if (!found && m.isMesh) found = m })
+  if (!found) throw new Error('group has no meshes')
+  return found
 }
 
 /** Every mesh whose nameplate text matches. */
@@ -119,6 +128,48 @@ describe('exterior envelope: sheathing + housewrap', () => {
     expect(wallTakesEnvelope('partition', 'wood-2x4')).toBe(false)
     expect(wallTakesEnvelope('interior-bearing', 'wood-2x6')).toBe(false)
     expect(wallTakesEnvelope('exterior-bearing', 'cmu')).toBe(false)  // its own assembly
+  })
+})
+
+describe('drywall goes inside, sheathing goes outside', () => {
+  const base = { length: 6, height: 2.44, thickness: 0.1905 }
+
+  it('boards both faces of an interior partition', () => {
+    const g = buildWallDrywall({ ...base, bothSides: true })
+    const zs = new Set<number>()
+    g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) zs.add(Math.sign(m.position.z)) })
+    expect(zs.has(1)).toBe(true)
+    expect(zs.has(-1)).toBe(true)
+  })
+
+  it('boards an exterior wall on the INSIDE face only', () => {
+    // The outside face takes sheathing + WRB + cladding. Drywall out there would
+    // be nonsense, and it used to happen: bothSides defaulted to true for every
+    // wall, so exterior walls got boarded outside and then sheathed over the top.
+    for (const inward of [1, -1] as const) {
+      const g = buildWallDrywall({ ...base, bothSides: false, inward })
+      const meshes: THREE.Mesh[] = []
+      g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) meshes.push(m) })
+      expect(meshes.length).toBeGreaterThan(0)
+      expect(meshes.every((m) => Math.sign(m.position.z) === inward)).toBe(true)
+    }
+  })
+
+  it('never lands drywall and sheathing on the same face of a wall', () => {
+    // The two layers ask the SAME module which way the wall faces, so this holds
+    // by construction — but it is the failure that would look worst, so lock it.
+    const wall = { x1: 0, y1: 0, x2: 100, y2: 0, level: 0 }
+    const centroid = { x: 50, y: 50 }   // building sits below the wall in plan
+    const out = outwardSign(wall, centroid)
+    const inn = inwardSign(wall, centroid)
+    expect(inn).toBe(out === 1 ? -1 : 1)
+
+    const board = buildWallDrywall({ ...base, bothSides: false, inward: inn })
+    const skin = buildWallEnvelope({
+      ...base, outward: out, sheathing: sheathingLayer('wood'), wrb: null,
+    })
+    expect(Math.sign(firstMesh(board).position.z))
+      .not.toBe(Math.sign(firstMesh(skin).position.z))
   })
 })
 
