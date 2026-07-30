@@ -30,6 +30,7 @@ import RoofLayer from './RoofLayer'
 import HoverNameplate from './HoverNameplate'
 import ExplodeDriver from './ExplodeDriver'
 import DrywallLayer from './DrywallLayer'
+import EnvelopeLayer from './EnvelopeLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
 import styles from './ModelViewer.module.css'
@@ -799,6 +800,7 @@ export default function ModelViewer() {
         <RoofLayer />
         <HoverNameplate />
         <DrywallLayer />
+        <EnvelopeLayer />
         <PlacedObjectsLayer />
         <TradeLayersRenderer />
 

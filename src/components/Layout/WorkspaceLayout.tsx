@@ -278,6 +278,13 @@ function SettingsContent() {
           onChange={(v) => setUI({ drywallOrientation: v as 'vertical' | 'horizontal' })} />
       </CollapsibleSection>
 
+      {/* Exterior envelope. Sheathe first, then wrap — the order they go on, and
+          the order you want to look at them in. Only exterior walls take it. */}
+      <CollapsibleSection id="envelope" title="Exterior envelope" openId={openId} setOpenId={setOpenId}>
+        <Toggle label="Sheathe walls" val={ui.sheathingVisible} onChange={(v) => setUI({ sheathingVisible: v })} />
+        <Toggle label="Housewrap over it" val={ui.wrapVisible} onChange={(v) => setUI({ wrapVisible: v })} />
+      </CollapsibleSection>
+
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>
     </div>
   )

@@ -24,6 +24,69 @@ export function wallThicknessM(framingType?: string): number {
   return (framingType && WALL_THICKNESS_M[framingType]) || DEFAULT_WALL_THICKNESS_M
 }
 
+// ── Building envelope ─────────────────────────────────────────────────────────
+//
+// The exterior wall assembly, outward from the stud face. Order is not a style
+// choice — it is how water and vapour are managed, so it is fixed:
+//
+//   studs → SHEATHING → WRB (housewrap) → [rainscreen] → cladding
+//
+// Only the first two are modelled here. Cladding is a bigger job (brick and
+// stone need a ledge and an air gap, which changes the wall's footprint, not just
+// its skin) and is deliberately left for its own pass.
+
+/** One layer of the exterior assembly. */
+export interface EnvelopeLayer {
+  /** Nameplate text — what a tradesperson would call it. */
+  label: string
+  /** Real thickness in metres. */
+  thicknessM: number
+  /** Render colour, chosen to look like the actual product. */
+  color: string
+  /** Brand this layer is typically specified as, for product placement. */
+  brand?: string
+}
+
+/** 7/16" OSB — the default wood-frame sheathing. */
+export const OSB_T = 0.0111
+/** 1/2" glass-mat gypsum sheathing (DensGlass). */
+export const GLASSMAT_T = 0.0127
+/** Housewrap is film-thin; drawn thicker than life so it is visible at all. */
+export const WRB_T = 0.0015
+
+/**
+ * Sheathing for a wall, by framing material.
+ *
+ * Steel-framed exteriors get GLASS-MAT gypsum (DensGlass), not plywood — the
+ * combination of steel studs and wood sheathing is not how these walls are built,
+ * and getting it wrong is the kind of detail a tradesperson spots immediately.
+ * Georgia-Pacific's DensGlass is the specified product often enough to name.
+ */
+export function sheathingLayer(framingMaterial: 'wood' | 'steel'): EnvelopeLayer {
+  return framingMaterial === 'steel'
+    ? { label: 'Glass-mat sheathing · 1/2"', thicknessM: GLASSMAT_T, color: '#c8b560', brand: 'DensGlass (Georgia-Pacific)' }
+    : { label: 'OSB sheathing · 7/16"', thicknessM: OSB_T, color: '#c9a273' }
+}
+
+/**
+ * The water-resistive barrier that goes over the sheathing. Housewrap by default
+ * — the layer everyone calls Tyvek regardless of who made it.
+ */
+export function wrbLayer(): EnvelopeLayer {
+  return { label: 'Housewrap (WRB)', thicknessM: WRB_T, color: '#eef2f6', brand: 'Tyvek (DuPont)' }
+}
+
+/**
+ * Does this wall get an exterior envelope?
+ *
+ * Only walls that face the weather. An interior partition has no sheathing and no
+ * housewrap, and masonry is its own assembly rather than a sheathed stud wall.
+ */
+export function wallTakesEnvelope(wallRole?: string, framingType?: string): boolean {
+  if (framingType === 'cmu') return false
+  return wallRole === 'exterior-bearing'
+}
+
 // ── Per-wall framing spec ─────────────────────────────────────────────────────
 // THE source of truth that lets a build honour EACH wall's own framing (material,
 // stud size, steel gauge) instead of one global setting — so a wood exterior and

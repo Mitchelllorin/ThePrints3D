@@ -29,6 +29,11 @@ export interface UISettings {
   // Drywall boarding
   drywallVisible: boolean
   drywallOrientation: 'vertical' | 'horizontal'
+  // Exterior envelope — sheathing, then housewrap over it. Two toggles rather
+  // than one, because seeing the sheathing is exactly what you want while
+  // checking the panel layout, and the wrap covers it up.
+  sheathingVisible: boolean
+  wrapVisible: boolean
   // Workspace lighting / background
   bgColor: string
   lightColor: string
@@ -66,6 +71,8 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   gridCellSize: 1,
   drywallVisible: false,
   drywallOrientation: 'vertical',
+  sheathingVisible: false,
+  wrapVisible: true,
   bgColor: '#0b0e14',
   lightColor: '#ffffff',
   dirIntensity: 1.0,

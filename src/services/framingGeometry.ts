@@ -12,6 +12,7 @@
  */
 import * as THREE from 'three'
 import { joistProfile } from '../data/traceLayers'
+import type { EnvelopeLayer } from './constructionCode'
 
 const STUD_WIDTH_M = 0.038    // 1-1/2" nominal stud face
 const PLATE_H_M = 0.038       // one plate's thickness
@@ -1443,6 +1444,126 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
         m.castShadow = true
         m.receiveShadow = true
         m.userData.layer = 'drywall'
+        group.add(m)
+      }
+    }
+  }
+  return group
+}
+
+// ── Exterior envelope: sheathing + WRB ───────────────────────────────────────
+
+export interface WallEnvelopeOpts {
+  length: number
+  height: number
+  /** Framing thickness (stud depth) — the envelope sits outboard of this. */
+  thickness: number
+  /** Which face is OUTSIDE: +1 for the +Z face, -1 for the -Z face. */
+  outward: 1 | -1
+  sheathing: EnvelopeLayer
+  wrb: EnvelopeLayer | null
+  openings?: WallOpening[]
+  opacity?: number
+}
+
+/**
+ * The exterior skin for one wall: sheathing panels, then housewrap over them.
+ *
+ * Sheathing is modelled as real 4×8 panels with visible joints, like the drywall
+ * and the subfloor — a sheet count is what a takeoff needs, and the joint pattern
+ * is how you tell sheathing from a solid slab at a glance. Panels run VERTICALLY
+ * (the long side up), which is how they go on a stud wall so each edge lands on a
+ * stud.
+ *
+ * The housewrap is ONE continuous skin, not panels, because that is exactly what
+ * it is — a roll lapped over the whole wall. It crosses window openings in reality
+ * and is cut afterwards, but here it is cut with the openings so you can see
+ * through a window.
+ *
+ * `outward` matters: sheathing on the inside face of an exterior wall would be
+ * both wrong and invisible from outside, so the caller has to say which way the
+ * wall faces. Sheet count lands on `group.userData.sheetCount`.
+ */
+export function buildWallEnvelope(opts: WallEnvelopeOpts): THREE.Group {
+  const { length, height, thickness, outward, sheathing, wrb, openings = [], opacity = 1 } = opts
+  const group = new THREE.Group()
+  group.userData.sheetCount = 0
+  if (length < 0.05 || height < 0.05) return group
+
+  const depth = Math.max(STUD_WIDTH_M, thickness)
+  const half = length / 2
+  // Stack outward from the stud face: sheathing first, then the wrap on top of it.
+  const sheathZ = outward * (depth / 2 + sheathing.thicknessM / 2)
+  const wrbZ = outward * (depth / 2 + sheathing.thicknessM + (wrb?.thicknessM ?? 0) / 2)
+
+  const sheathMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(sheathing.color), roughness: 0.9, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+
+  const rects = openings.map((o) => {
+    const cx = o.centerM - half
+    const isDoor = o.type === 'door'
+    const sill = isDoor ? 0 : (o.sillM ?? 0.9)
+    const oh = o.heightM ?? (isDoor ? 2.06 : 1.13)
+    const yLo = isDoor ? 0 : Math.min(sill, height - 0.3)
+    return { x0: cx - o.widthM / 2, x1: cx + o.widthM / 2, y0: yLo, y1: Math.min(yLo + oh, height) }
+  })
+  const overlapsOpening = (x0: number, x1: number, y0: number, y1: number) =>
+    rects.some((r) => x0 < r.x1 && x1 > r.x0 && y0 < r.y1 && y1 > r.y0)
+
+  // Vertical panels: 4' wide, 8' tall.
+  let count = 0
+  for (let x = -half; x < half - 0.02; x += SHEET_SHORT + SHEET_GAP) {
+    const w = Math.min(SHEET_SHORT, half - x)
+    if (w < 0.05) continue
+    for (let y = 0; y < height - 0.02; y += SHEET_LONG + SHEET_GAP) {
+      const h = Math.min(SHEET_LONG, height - y)
+      if (h < 0.05) continue
+      if (overlapsOpening(x, x + w, y, y + h)) continue
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(w - SHEET_GAP, h - SHEET_GAP, sheathing.thicknessM),
+        sheathMat,
+      )
+      m.position.set(x + w / 2, y + h / 2, sheathZ)
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = 'sheathing'
+      m.userData.info = sheathing.brand
+        ? `${sheathing.label} · ${sheathing.brand}`
+        : sheathing.label
+      group.add(m)
+      count++
+    }
+  }
+  group.userData.sheetCount = count
+
+  if (wrb) {
+    // One continuous membrane, minus the openings so you can see through them.
+    const wrbMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(wrb.color), roughness: 0.65, metalness: 0,
+      transparent: true, opacity: Math.min(opacity, 0.97),
+    })
+    const info = wrb.brand ? `${wrb.label} · ${wrb.brand}` : wrb.label
+    // Split the wall into horizontal courses and drop the pieces that fall in an
+    // opening — a cheap way to get "wrapped, with the windows cut out".
+    const COURSE = 1.5   // ~5' roll width
+    for (let y = 0; y < height - 0.01; y += COURSE) {
+      const h = Math.min(COURSE, height - y)
+      const spans: Array<[number, number]> = [[-half, half]]
+      for (const r of rects) {
+        if (r.y1 <= y || r.y0 >= y + h) continue
+        for (let i = spans.length - 1; i >= 0; i--) {
+          const [a, b] = spans[i]
+          if (r.x1 <= a || r.x0 >= b) continue
+          spans.splice(i, 1, ...([[a, Math.min(b, r.x0)], [Math.max(a, r.x1), b]]
+            .filter(([p, q]) => q - p > 0.02) as Array<[number, number]>))
+        }
+      }
+      for (const [a, b] of spans) {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(b - a, h, wrb.thicknessM), wrbMat)
+        m.position.set((a + b) / 2, y + h / 2, wrbZ)
+        m.userData.layer = 'sheathing'
+        m.userData.info = info
         group.add(m)
       }
     }

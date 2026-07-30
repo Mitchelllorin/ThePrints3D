@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope } from './framingGeometry'
+import { sheathingLayer, wrbLayer, wallTakesEnvelope } from './constructionCode'
 
 const meshCount = (g: THREE.Object3D) => {
   let n = 0
@@ -17,6 +18,73 @@ const withInfo = (g: THREE.Object3D, re: RegExp) => {
   })
   return out
 }
+
+describe('exterior envelope: sheathing + housewrap', () => {
+  const base = { length: 6, height: 2.44, thickness: 0.1905, outward: 1 as const }
+  const wood = sheathingLayer('wood')
+  const steel = sheathingLayer('steel')
+
+  it('specs glass-mat on steel and OSB on wood', () => {
+    // Steel studs + wood sheathing is not how these walls are built.
+    expect(wood.label).toMatch(/OSB/)
+    expect(steel.label).toMatch(/Glass-mat/)
+    expect(steel.brand).toMatch(/DensGlass/)
+    expect(wrbLayer().brand).toMatch(/Tyvek/)
+  })
+
+  it('stacks outward from the stud face: sheathing, then wrap', () => {
+    const g = buildWallEnvelope({ ...base, sheathing: wood, wrb: wrbLayer() })
+    const sheets = withInfo(g, /OSB/)
+    const wrap = withInfo(g, /Housewrap/)
+    expect(sheets.length).toBeGreaterThan(0)
+    expect(wrap.length).toBeGreaterThan(0)
+    const studFace = base.thickness / 2
+    const sheathZ = Math.min(...sheets.map((m) => m.position.z))
+    const wrapZ = Math.min(...wrap.map((m) => m.position.z))
+    // Both outboard of the studs, and the wrap sits on TOP of the sheathing.
+    expect(sheathZ).toBeGreaterThan(studFace)
+    expect(wrapZ).toBeGreaterThan(sheathZ)
+  })
+
+  it('puts the skin on the side the caller says is outside', () => {
+    const plus = buildWallEnvelope({ ...base, outward: 1, sheathing: wood, wrb: null })
+    const minus = buildWallEnvelope({ ...base, outward: -1, sheathing: wood, wrb: null })
+    expect(withInfo(plus, /OSB/).every((m) => m.position.z > 0)).toBe(true)
+    expect(withInfo(minus, /OSB/).every((m) => m.position.z < 0)).toBe(true)
+  })
+
+  it('omits the wrap when it is switched off, keeping the sheathing', () => {
+    const g = buildWallEnvelope({ ...base, sheathing: wood, wrb: null })
+    expect(withInfo(g, /OSB/).length).toBeGreaterThan(0)
+    expect(withInfo(g, /Housewrap/).length).toBe(0)
+  })
+
+  it('cuts both layers around a door, and counts sheets for takeoff', () => {
+    const solid = buildWallEnvelope({ ...base, sheathing: wood, wrb: wrbLayer() })
+    const holed = buildWallEnvelope({
+      ...base, sheathing: wood, wrb: wrbLayer(),
+      openings: [{ centerM: 3, widthM: 1.8, type: 'door' }],
+    })
+    expect(holed.userData.sheetCount as number).toBeLessThan(solid.userData.sheetCount as number)
+    expect(withInfo(holed, /Housewrap/).length).toBeGreaterThan(0)
+    // No wrap piece may span the doorway at door height.
+    for (const m of withInfo(holed, /Housewrap/)) {
+      m.geometry.computeBoundingBox()
+      const bb = m.geometry.boundingBox!
+      const x0 = m.position.x + bb.min.x, x1 = m.position.x + bb.max.x
+      const y0 = m.position.y + bb.min.y, y1 = m.position.y + bb.max.y
+      const overlaps = x0 < 0.9 && x1 > -0.9 && y0 < 2.06 && y1 > 0
+      expect(overlaps).toBe(false)
+    }
+  })
+
+  it('only exterior stud walls take an envelope', () => {
+    expect(wallTakesEnvelope('exterior-bearing', 'wood-2x8')).toBe(true)
+    expect(wallTakesEnvelope('partition', 'wood-2x4')).toBe(false)
+    expect(wallTakesEnvelope('interior-bearing', 'wood-2x6')).toBe(false)
+    expect(wallTakesEnvelope('exterior-bearing', 'cmu')).toBe(false)  // its own assembly
+  })
+})
 
 describe('floor openings are framed (IRC R502.10)', () => {
   const base = { lenX: 8, lenZ: 6, element: '2x10', ocM: 0.4064 }
