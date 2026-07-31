@@ -197,7 +197,12 @@ export default function PlacedObjectsLayer() {
         const mountY = obj.type === 'window'
           ? (obj.sillM ?? 0.9) + h / 2
           : deviceMountHeightM(obj.type, ceilingM) ?? h / 2
-        const model = isOpening ? null : <ObjectModel type={obj.type} w={w} h={h} d={d} color={color} subtype={obj.subtype} />
+        const model = isOpening ? null : (
+          <ObjectModel
+            type={obj.type} w={w} h={h} d={d} color={color} subtype={obj.subtype}
+            stair={{ treadM: obj.treadM, widthM: obj.stairWidthM, targetRiserM: obj.targetRiserM, landingM: obj.landingM }}
+          />
+        )
         return (
           <group key={obj.id} position={[live.x, (obj.level ?? 0) * storeyHeight, live.z]} rotation={[0, live.rotationY, 0]}>
             <group

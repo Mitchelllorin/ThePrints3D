@@ -333,6 +333,15 @@
 .propVal { color: #e2e8f0; }
 .unit { color: var(--bp-text-dim, #64748b); font-size: 11px; }
 
+/* A code failure. Deliberately louder than the rest of the card — the chrome is
+   near-invisible by design, but "this stair would not pass" has earned the right
+   to be read. Still text on the surface, not a boxed alert. */
+.warnText {
+  font-size: 11px;
+  line-height: 1.35;
+  color: #fbbf24;
+}
+
 .dimInput {
   width: 46px;
   background: #0f172a;

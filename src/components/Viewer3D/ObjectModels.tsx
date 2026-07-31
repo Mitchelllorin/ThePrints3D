@@ -14,6 +14,7 @@
  */
 import * as THREE from 'three'
 import { RoundedBox } from '@react-three/drei'
+import { solveStair, stairShapeFromSubtype, type StairShape } from '../../services/stairs'
 
 interface ModelProps {
   type: string
@@ -23,6 +24,8 @@ interface ModelProps {
   color: string
   /** Sub-type — e.g. stair shape: 'Straight' | 'L-shaped' | 'U-shaped' | 'Switchback'. */
   subtype?: string
+  /** Stair configurator settings; unset falls back to the code minimums. */
+  stair?: { treadM?: number; widthM?: number; targetRiserM?: number; landingM?: number | null }
 }
 
 /** Lighten (amt>0) or darken (amt<0) a colour via HSL lightness. */
@@ -74,7 +77,7 @@ function Cyl({
  * fall back to a plain beveled box sized to the item, so every catalog entry
  * renders (just blockier) until it gets a model.
  */
-export default function ObjectModel({ type, w, h, d, color, subtype }: ModelProps) {
+export default function ObjectModel({ type, w, h, d, color, subtype, stair }: ModelProps) {
   const floor = -h / 2
   const body = color
   const light = shade(color, 0.12)
@@ -187,37 +190,59 @@ export default function ObjectModel({ type, w, h, d, color, subtype }: ModelProp
       )
     }
     case 'stairs': {
-      // Configurable stair: Straight, L-shaped (quarter-turn + landing),
-      // U-shaped / Switchback (half-turn + landing). Treads climb at a ~0.18 m
-      // code-typical riser; landings are a flat slab at the turn. Proprietary —
-      // generated on-device from primitives, no external geometry.
-      const total = THREE.MathUtils.clamp(Math.round(h / 0.18), 10, 22)
-      const riser = h / total
+      // Geometry comes from the SOLVER, not from fractions of the bounding box.
+      // It used to assume a 0.18 m riser and split flights by eye (d * 0.6,
+      // w * 0.46), so the risers did not divide the storey and the treads were
+      // whatever was left over. Now the rise is the object's height, the solver
+      // returns equal legal risers, and the treads are laid at their real going.
+      const shape: StairShape = stairShapeFromSubtype(subtype)
+      const sol = solveStair({
+        totalRiseM: h,
+        shape,
+        treadM: stair?.treadM,
+        widthM: stair?.widthM ?? w,
+        targetRiserM: stair?.targetRiserM,
+        landingM: stair?.landingM,
+      })
+      const riser = sol.riserM
+      const tread = sol.treadM
       const TT = Math.max(0.04, h * 0.02)   // tread thickness
-      const shape = (subtype ?? 'Straight').toLowerCase()
       type Step = { x: number; y: number; z: number; tw: number; td: number; c: THREE.Color | string }
       const steps: Step[] = []
       const landings: Step[] = []
-      if (shape.startsWith('l')) {
-        // Lower flight up +Z, landing at the corner, upper flight turning along +X.
-        const n1 = Math.ceil(total / 2), n2 = total - n1
-        const lowerRun = d * 0.6, t1 = lowerRun / n1
-        for (let i = 0; i < n1; i++) steps.push({ x: 0, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * t1, tw: w, td: t1 * 0.95, c: i % 2 ? light : body })
-        const landY = floor + n1 * riser, landZ = -d / 2 + lowerRun + w / 2
-        landings.push({ x: 0, y: landY, z: landZ, tw: w, td: w, c: dark })
-        const upperRun = d * 0.45, t2 = upperRun / n2
-        for (let i = 0; i < n2; i++) steps.push({ x: (i + 0.5) * t2, y: landY + (i + 1) * riser, z: landZ, tw: t2 * 0.95, td: w, c: i % 2 ? light : body })
-      } else if (shape.startsWith('u') || shape.startsWith('s')) {
-        // Two flights in parallel lanes, opposite directions, landing at the far end.
-        const half = Math.ceil(total / 2), n2 = total - half
-        const run = d * 0.9, t = run / half, fw = w * 0.46, lane = w * 0.27
-        for (let i = 0; i < half; i++) steps.push({ x: -lane, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * t, tw: fw, td: t * 0.95, c: i % 2 ? light : body })
-        const landY = floor + half * riser
-        landings.push({ x: 0, y: landY, z: -d / 2 + run + w * 0.2, tw: w, td: w * 0.4, c: dark })
-        for (let i = 0; i < n2; i++) steps.push({ x: lane, y: landY + (i + 1) * riser, z: -d / 2 + run - (i + 0.5) * t, tw: fw, td: t * 0.95, c: i % 2 ? light : body })
+      const sw = sol.widthM
+      const [n1, n2 = 0] = sol.flightRisers
+      const landLen = sol.landingsM[0] ?? 0
+
+      if (shape === 'l-shaped') {
+        // Up +Z, landing at the corner, second flight turning along +X.
+        const run1 = Math.max(0, n1 - 1) * tread
+        for (let i = 0; i < n1; i++) {
+          steps.push({ x: 0, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
+        }
+        const landY = floor + n1 * riser
+        const landZ = -d / 2 + run1 + landLen / 2
+        landings.push({ x: 0, y: landY, z: landZ, tw: sw, td: landLen, c: dark })
+        for (let i = 0; i < n2; i++) {
+          steps.push({ x: sw / 2 + (i + 0.5) * tread, y: landY + (i + 1) * riser, z: landZ, tw: tread * 0.95, td: sw, c: i % 2 ? light : body })
+        }
+      } else if (shape === 'u-shaped' || shape === 'switchback') {
+        // Two flights side by side running opposite ways, landing at the far end.
+        const run1 = Math.max(0, n1 - 1) * tread
+        const lane = sw / 2 + 0.02
+        for (let i = 0; i < n1; i++) {
+          steps.push({ x: -lane, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
+        }
+        const landY = floor + n1 * riser
+        const landZ = -d / 2 + run1 + landLen / 2
+        landings.push({ x: 0, y: landY, z: landZ, tw: sw * 2 + 0.04, td: landLen, c: dark })
+        for (let i = 0; i < n2; i++) {
+          steps.push({ x: lane, y: landY + (i + 1) * riser, z: landZ - landLen / 2 - (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
+        }
       } else {
-        const t = d / total
-        for (let i = 0; i < total; i++) steps.push({ x: 0, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * t, tw: w, td: t * 0.95, c: i % 2 ? light : body })
+        for (let i = 0; i < sol.riserCount; i++) {
+          steps.push({ x: 0, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
+        }
       }
       return (
         <>

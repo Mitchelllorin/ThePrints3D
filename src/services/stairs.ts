@@ -35,6 +35,17 @@ export const TARGET_RISER_M = 0.1778
 
 export type StairShape = 'straight' | 'l-shaped' | 'u-shaped' | 'switchback'
 
+/** Map the catalog's SUBTYPE label ('L-shaped', 'Switchback', …) to a shape.
+ *  Shared so the rendered stair and the floor opening it needs can never be
+ *  computed from different shapes. */
+export function stairShapeFromSubtype(subtype?: string): StairShape {
+  const s = (subtype ?? '').toLowerCase()
+  if (s.startsWith('l')) return 'l-shaped'
+  if (s.startsWith('u')) return 'u-shaped'
+  if (s.startsWith('sw')) return 'switchback'
+  return 'straight'
+}
+
 export interface StairInput {
   /** Floor-to-floor height the stair has to climb. */
   totalRiseM: number

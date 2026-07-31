@@ -23,6 +23,7 @@ import {
 } from '../../services/framingGeometry'
 import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import { VERTICAL_CIRCULATION, getCatalogItem } from '../../data/objectCatalog'
+import { solveStair, stairOpeningM, stairShapeFromSubtype } from '../../services/stairs'
 import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight } from './editHelpers'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
@@ -240,8 +241,25 @@ export default function FloorJoistsLayer() {
       const hs: FloorHole[] = []
       for (const o of circ) {
         const item = getCatalogItem(o.type)
-        const w = (item?.defaultW ?? 1) * o.scaleX
-        const d = (item?.defaultD ?? 1) * o.scaleZ
+        let w = (item?.defaultW ?? 1) * o.scaleX
+        let d = (item?.defaultD ?? 1) * o.scaleZ
+        // A STAIR's opening is not its footprint — it has to run back far enough
+        // that somebody climbing still has headroom where the floor edge cuts
+        // across. The solver works that out from the riser; the catalog box knows
+        // nothing about it. Lifts keep their shaft footprint.
+        if (o.type === 'stairs') {
+          const sol = solveStair({
+            totalRiseM: (item?.defaultH ?? 2.9) * o.scaleY,
+            shape: stairShapeFromSubtype(o.subtype),
+            treadM: o.treadM,
+            widthM: o.stairWidthM ?? w,
+            targetRiserM: o.targetRiserM,
+            landingM: o.landingM,
+          })
+          const open = stairOpeningM(sol, FLOOR_ASSEMBLY_H)
+          w = open.widthM
+          d = open.lengthM
+        }
         const dx = o.x - centre.x, dz = o.z - centre.z
         const localX = dx * cos + dz * sin
         const localZ = -dx * sin + dz * cos

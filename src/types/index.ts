@@ -116,6 +116,23 @@ export interface PlacedObject {
    *  inside the solid wall ("the door disappeared"). Legacy objects have no
    *  level and read as 0, which is what they already were. */
   level?: number
+  /** ── Stairs ──────────────────────────────────────────────────────────────
+   *  Configurator settings for a stair. All optional: an unconfigured stair
+   *  falls back to the code minimums via solveStair, so an existing stair keeps
+   *  working and simply becomes code-correct rather than eyeballed. `subtype`
+   *  already carries the SHAPE (Straight / L-shaped / U-shaped / Switchback).
+   *
+   *  Rise is deliberately NOT stored: a stair climbs a storey, so the rise comes
+   *  from the building. Storing it would let the two disagree. */
+  /** Tread depth (going) in metres. Defaults to the 10" minimum. */
+  treadM?: number
+  /** Clear stair width in metres. Defaults to the 36" minimum. */
+  stairWidthM?: number
+  /** Riser height to aim for; the solver still caps at the 7-3/4" maximum. */
+  targetRiserM?: number
+  /** Landing length in the direction of travel. `null` means "no landing" on a
+   *  straight run; turned stairs always get one, because a turn IS a landing. */
+  landingM?: number | null
 }
 
 export type CircuitType = 'general' | 'dedicated' | 'gfci' | 'afci' | 'gfci+afci'
