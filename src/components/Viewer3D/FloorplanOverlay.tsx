@@ -410,6 +410,21 @@ export default function FloorplanOverlay() {
     || activeTraceLayer === 'hvac'
   const traceElevation = tradeLayer ? 0 : areaElevation(activeLevel, tracingAtWallTop)
 
+  // THE PRINT GOES OPAQUE OVER A DECK.
+  //
+  // "The print disappears when I pull a floor" was not the print being buried —
+  // it sits 10mm above the sheets, so lifting it would change nothing. It is
+  // CONTRAST. The plan is drawn at ~65% so you can see the workspace through it,
+  // which reads perfectly against the dark grid and washes out to nothing against
+  // opaque cream plywood. And you are usually still tracing walls onto that plan
+  // when the deck goes down, so losing it right then is the worst moment.
+  //
+  // Once a deck is under it, see-through has no value left — there is nothing to
+  // see through TO — so the transparency is spent rather than kept. The user's
+  // opacity setting still governs everywhere the plan is over open workspace.
+  const deckUnderPrint = floorsAreas.some((a) => (a.level ?? 0) === activeLevel)
+  const printOpacity = deckUnderPrint ? Math.max(overlay.opacity, 0.95) : overlay.opacity
+
   const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width
     const localZ = ((pixel[1] / imageHeight) - 0.5) * depth
@@ -1360,7 +1375,7 @@ export default function FloorplanOverlay() {
             <meshBasicMaterial
               map={texture}
               transparent
-              opacity={overlay.opacity}
+              opacity={printOpacity}
               depthWrite={false}
               side={THREE.DoubleSide}
             />

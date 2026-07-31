@@ -366,6 +366,33 @@ export default function FloorJoistsLayer() {
           return <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} />
         })}
       </group>
+      {/* PICK TARGET — one invisible slab per floor area, carrying the handlers.
+          They used to be spread onto the <primitive> group holding the joists and
+          sheets. A group has no geometry of its own, so there was nothing for a
+          ray to hit: hovering a deck in edit mode recorded nothing and tapping it
+          selected nothing, which made floors the one component the edit rail
+          could not reach. Exactly the shape of the wall bug — the fix is the
+          same, a real mesh with the handlers on it. Sits just above the deck so
+          it also catches taps aimed at the sheets. */}
+      {editMode && !traceMode && !overlay.calibrationMode && floorsAreas.map((area) => {
+        const gop = areaOpacity(area)
+        if (gop === 0) return null
+        const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
+        if (lenX < 0.1 || lenZ < 0.1) return null
+        const live = liveFor(area)
+        const y = (area.level ?? 0) * storeyHeight + 0.03
+        return (
+          <mesh
+            key={`pick-${area.id}`}
+            position={[centre.x + live[0], y, centre.z + live[1]]}
+            rotation={[0, rotRad, 0]}
+            {...handlersFor(area)}
+          >
+            <boxGeometry args={[lenX, 0.05, lenZ]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+        )
+      })}
       {/* Edit-mode hover/selection highlight + the body-drag catcher. */}
       {editMode && structural.map((area) => {
         const isHov = editHover?.kind === 'floor' && editHover.id === area.id
