@@ -22,6 +22,8 @@ describe('unitConverter', () => {
     expect(parseFeetInches("10' 6\"")).toBeCloseTo(126, 4)
     expect(parseFeetInches('10-6')).toBeCloseTo(126, 4)
     expect(parseFeetInches('126')).toBeCloseTo(126, 4)
+    expect(parseFeetInches('-1')).toBeNull()
+    expect(parseFeetInches('abc')).toBeNull()
   })
 
   it('converts area units', () => {
