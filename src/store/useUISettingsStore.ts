@@ -42,10 +42,18 @@ export interface UISettings {
   wrbKind: WrbKind
   /** OSB or CDX plywood on wood-framed exteriors (steel gets glass-mat either way). */
   woodSheathing: WoodSheathing
-  /** Temporary 2x4 jobsite guardrail along the top of exterior walls. */
-  guardrailVisible: boolean
   /** Exterior finish over the barrier. 'none' leaves the wall dried-in. */
   cladding: CladdingKind
+  /** WHEN finishes appear, as opposed to which ones.
+   *  'live'  — clad as soon as a wall exists (fine once you have stopped framing)
+   *  'later' — keep the frame bare while you build; finishes appear only when you
+   *            ask for them. Framing is the thing you are working on, and burying
+   *            it under sheeting the moment you pull a wall is the opposite of
+   *            helpful. */
+  finishTiming: 'live' | 'later'
+  /** Set by "Apply finishes now" — the switch the 'later' mode waits on. Reset
+   *  whenever you go back to framing. */
+  finishesApplied: boolean
   // Workspace lighting / background
   bgColor: string
   lightColor: string
@@ -88,8 +96,9 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   wrapVisible: true,
   wrbKind: 'housewrap',
   woodSheathing: 'osb',
-  guardrailVisible: false,
   cladding: 'none',
+  finishTiming: 'later',
+  finishesApplied: false,
   bgColor: '#0b0e14',
   lightColor: '#ffffff',
   dirIntensity: 1.0,

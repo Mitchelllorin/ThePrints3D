@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildTemporaryGuardrail, buildWallCladding, buildWallDrywall } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall } from './framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb, boardSpec,
-  GUARDRAIL_TOP_M, GUARDRAIL_POST_SPACING_M,
+  finishesVisible,
 } from './constructionCode'
 import { outwardSign, inwardSign } from './wallFacing'
 
@@ -128,6 +128,63 @@ describe('exterior envelope: sheathing + housewrap', () => {
     expect(wallTakesEnvelope('partition', 'wood-2x4')).toBe(false)
     expect(wallTakesEnvelope('interior-bearing', 'wood-2x6')).toBe(false)
     expect(wallTakesEnvelope('exterior-bearing', 'cmu')).toBe(false)  // its own assembly
+  })
+})
+
+describe('finishes appear when you say, not when you pull the wall', () => {
+  it('holds finishes back until asked, in "later" mode', () => {
+    expect(finishesVisible('later', false, false)).toBe(false)
+    expect(finishesVisible('later', true, false)).toBe(true)
+  })
+
+  it('clads as you build, in "live" mode', () => {
+    expect(finishesVisible('live', false, false)).toBe(true)
+  })
+
+  it('hides finishes mid-trace either way — you cannot draw through a clad wall', () => {
+    expect(finishesVisible('live', true, true)).toBe(false)
+    expect(finishesVisible('later', true, true)).toBe(false)
+  })
+})
+
+describe('the wall rule, whole matrix', () => {
+  // Only exterior walls get sheathing; interior walls get board on BOTH faces.
+  // Locked as a table because it is the rule most easily broken by a change
+  // somewhere else — every role, stated once.
+  const ROLES = [
+    { role: 'exterior-bearing', sheathed: true },
+    { role: 'interior-bearing', sheathed: false },
+    { role: 'interior-non-bearing', sheathed: false },
+    { role: 'partition', sheathed: false },
+  ] as const
+
+  it('sheathes exterior walls and nothing else', () => {
+    for (const { role, sheathed } of ROLES) {
+      expect(wallTakesEnvelope(role, 'wood-2x6')).toBe(sheathed)
+    }
+  })
+
+  it('boards interior walls both sides, exterior walls one', () => {
+    for (const { role, sheathed } of ROLES) {
+      // DrywallLayer asks exactly this question to decide bothSides.
+      const bothSides = !wallTakesEnvelope(role, 'wood-2x6')
+      expect(bothSides).toBe(!sheathed)
+      const g = buildWallDrywall({ length: 6, height: 2.44, thickness: 0.14, bothSides, inward: 1 })
+      const sides = new Set<number>()
+      g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) sides.add(Math.sign(m.position.z)) })
+      expect(sides.size).toBe(bothSides ? 2 : 1)
+    }
+  })
+
+  it('treats a wall with NO role as interior — the safe way to be wrong', () => {
+    // Legacy/auto walls carry no role. Boarding both faces and leaving them
+    // unsheathed is recoverable; sheathing an interior partition is not.
+    expect(wallTakesEnvelope(undefined, 'wood-2x6')).toBe(false)
+  })
+
+  it('leaves masonry out of it entirely', () => {
+    // CMU is a solid assembly, not a sheathed stud wall — no sheathing either way.
+    expect(wallTakesEnvelope('exterior-bearing', 'cmu')).toBe(false)
   })
 })
 
@@ -298,50 +355,6 @@ describe('cladding', () => {
     expect(barrier.length).toBeGreaterThan(0)
     expect(Math.min(...barrier.map((m) => m.position.z)))
       .toBeGreaterThan(Math.min(...sheets.map((m) => m.position.z)))
-  })
-})
-
-describe('temporary jobsite guardrail', () => {
-  const base = { length: 6, wallHeight: 2.44, thickness: 0.1905, inward: -1 as const }
-
-  it('puts the top rail 42" above the deck, with a midrail halfway', () => {
-    const g = buildTemporaryGuardrail(base)
-    const top = withInfo(g, /top rail/)[0]
-    const mid = withInfo(g, /midrail/)[0]
-    expect(top).toBeTruthy()
-    expect(mid).toBeTruthy()
-    // OSHA 1926.502: 42" top rail, midrail about halfway.
-    expect(top.position.y - base.wallHeight).toBeCloseTo(GUARDRAIL_TOP_M, 3)
-    expect(mid.position.y - base.wallHeight).toBeCloseTo(GUARDRAIL_TOP_M / 2, 3)
-  })
-
-  it('spaces posts at 6 ft or closer for a 2x4 top rail', () => {
-    const g = buildTemporaryGuardrail({ ...base, length: 12 })
-    const posts = withInfo(g, /post/).map((m) => m.position.x).sort((a, b) => a - b)
-    expect(posts.length).toBeGreaterThan(2)
-    for (let i = 1; i < posts.length; i++) {
-      expect(posts[i] - posts[i - 1]).toBeLessThanOrEqual(GUARDRAIL_POST_SPACING_M + 1e-6)
-    }
-  })
-
-  it('runs the rail the full wall length, so abutting sections join up', () => {
-    const g = buildTemporaryGuardrail(base)
-    const top = withInfo(g, /top rail/)[0]
-    top.geometry.computeBoundingBox()
-    const bb = top.geometry.boundingBox!
-    expect(bb.max.x - bb.min.x).toBeCloseTo(base.length, 3)
-    expect(top.position.x).toBeCloseTo(0, 6)
-  })
-
-  it('hangs the rail on the inboard face — the side you can fall from', () => {
-    const inb = buildTemporaryGuardrail({ ...base, inward: -1 })
-    const out = buildTemporaryGuardrail({ ...base, inward: 1 })
-    expect(withInfo(inb, /top rail/)[0].position.z).toBeLessThan(0)
-    expect(withInfo(out, /top rail/)[0].position.z).toBeGreaterThan(0)
-  })
-
-  it('skips a wall too short to rail', () => {
-    expect(meshCount(buildTemporaryGuardrail({ ...base, length: 0.1 }))).toBe(0)
   })
 })
 

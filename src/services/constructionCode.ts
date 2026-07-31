@@ -216,41 +216,21 @@ export function recommendedWrb(kind: CladdingKind, framingMaterial: 'wood' | 'st
   return framingMaterial === 'steel' ? 'avb' : 'housewrap'
 }
 
-// ── Temporary fall protection ────────────────────────────────────────────────
-//
-// Not part of the finished building, but part of what the frame LOOKS like for
-// most of its life on site. On a multi-storey job the rail sections are nailed to
-// the wall panels while they are still flat on the deck, then linked with more
-// 2x4 once the walls are stood, making one continuous run around the perimeter.
-// They come off when the next floor goes in — and are forgotten in place often
-// enough that a frame without them looks less real than a frame with them.
-//
-// OSHA 1926.502: top rail 42" (±3"), midrail about halfway. The non-mandatory
-// wood-railing guidance pairs a 2x4 top rail with posts at 6 ft; a 2x6 top rail
-// buys you 8 ft. We build the 2x4 version, so 6 ft.
-
-/** Top-rail height above the walking surface — 42". */
-export const GUARDRAIL_TOP_M = 1.067
-/** Post spacing for a 2x4 top rail — 6 ft. */
-export const GUARDRAIL_POST_SPACING_M = 1.829
-/** Nominal 2x4, actual. */
-export const GUARDRAIL_MEMBER = { thick: 0.038, wide: 0.089 }
-
 /**
  * Water-resistive barrier options.
  *
  * Not one layer, because the right WRB depends on what goes OVER it:
  *
- *  housewrap  Synthetic sheet — the default, and what most people mean by
+ *  housewrap  Synthetic sheet â€” the default, and what most people mean by
  *             "Tyvek". Tough, wide rolls (so few seams), high vapour permeance.
  *             The standard behind lap siding on new wood frame.
- *  felt       Asphalt felt / Grade D paper — "tar paper". NOT obsolete: the IRC
+ *  felt       Asphalt felt / Grade D paper â€” "tar paper". NOT obsolete: the IRC
  *             still names No. 15 felt as the baseline WRB and treats the rest as
  *             approved equivalents. Still the norm under STUCCO (usually two
  *             layers) and under adhered stone, where wet-applied finishes bond to
  *             synthetics and wreck their drainage.
-*  fluid      Fluid-applied membrane — rolled or sprayed on, seamless.
- *  avb        Air/vapour barrier over the sheathing — self-adhered sheet or
+*  fluid      Fluid-applied membrane â€” rolled or sprayed on, seamless.
+ *  avb        Air/vapour barrier over the sheathing â€” self-adhered sheet or
  *             fluid-applied. The standard companion to glass-mat sheathing on
  *             STEEL stud walls, where the assembly is sheathing + AVB rather than
  *             sheathing + housewrap.
@@ -265,10 +245,10 @@ export const FELT_T = 0.0008
 export function wrbLayer(kind: WrbKind = 'housewrap'): EnvelopeLayer | null {
   switch (kind) {
     case 'integrated':
-      // The sheathing IS the barrier — see WrbKind. Nothing to add.
+      // The sheathing IS the barrier â€” see WrbKind. Nothing to add.
       return null
     case 'felt':
-      return { label: 'Asphalt felt · No. 15', thicknessM: WRB_T + FELT_T, color: '#3f3f46' }
+      return { label: 'Asphalt felt Â· No. 15', thicknessM: WRB_T + FELT_T, color: '#3f3f46' }
     case 'fluid':
       return { label: 'Fluid-applied WRB', thicknessM: WRB_T, color: '#5b7fa6' }
     case 'avb':
@@ -288,6 +268,27 @@ export function wrbLayer(kind: WrbKind = 'housewrap'): EnvelopeLayer | null {
 export function wallTakesEnvelope(wallRole?: string, framingType?: string): boolean {
   if (framingType === 'cmu') return false
   return wallRole === 'exterior-bearing'
+}
+
+
+/**
+ * Should finish layers (sheathing, barrier, cladding, board) render right now?
+ *
+ * Separates WHICH finish from WHEN it appears. In 'live' mode a wall is clad the
+ * instant it exists; in 'later' mode the frame stays bare until you press
+ * "Apply finishes now". Framing is what you are working on while you build, and
+ * burying it under sheeting the moment you pull a wall hides the work.
+ *
+ * Also suppressed mid-trace regardless of mode — you cannot see what you are
+ * drawing through a finished wall.
+ */
+export function finishesVisible(
+  timing: 'live' | 'later',
+  applied: boolean,
+  tracing: boolean,
+): boolean {
+  if (tracing) return false
+  return timing === 'live' || applied
 }
 
 // ── Per-wall framing spec ─────────────────────────────────────────────────────

@@ -346,6 +346,24 @@ function SettingsContent() {
             { value: 'stone-veneer', label: 'Adhered stone veneer' },
           ]}
           onChange={(v) => setUI({ cladding: v as CladdingKind })} />
+        {/* WHEN, as opposed to WHICH. Framing is the thing you are working on
+            while you build; cladding it the instant you pull a wall hides the
+            work. Defaults to 'later' for that reason. */}
+        <Select label="Apply finishes" val={ui.finishTiming}
+          options={[
+            { value: 'later', label: 'When I say' },
+            { value: 'live', label: 'As I build' },
+          ]}
+          onChange={(v) => setUI({ finishTiming: v as 'live' | 'later', finishesApplied: false })} />
+        {ui.finishTiming === 'later' && (
+          <button
+            className={styles.uploadHintChip}
+            style={{ alignSelf: 'flex-start', margin: '2px 0 6px' }}
+            onClick={() => setUI({ finishesApplied: !ui.finishesApplied })}
+          >
+            {ui.finishesApplied ? '← Back to bare frame' : 'Apply finishes now'}
+          </button>
+        )}
         {/* Wet-applied finishes bond to housewrap and wreck its drainage — a real
             failure, so say so rather than silently building a wall that leaks. */}
         {recommendedWrb(ui.cladding, exteriorFramingMaterial) !== ui.wrbKind && (
@@ -362,7 +380,6 @@ function SettingsContent() {
             })()}
           </button>
         )}
-        <Toggle label="Temp guardrail (2x4)" val={ui.guardrailVisible} onChange={(v) => setUI({ guardrailVisible: v })} />
       </CollapsibleSection>
 
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>

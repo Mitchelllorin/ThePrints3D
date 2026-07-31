@@ -9,11 +9,12 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import { wallTakesEnvelope, boardSpec, type BoardSpec } from '../../services/constructionCode'
+import { wallTakesEnvelope, boardSpec, finishesVisible, type BoardSpec } from '../../services/constructionCode'
 import { footprintCentroids, inwardSign } from '../../services/wallFacing'
 import type { ParsedWall, PlacedObject } from '../../types'
 
@@ -80,6 +81,9 @@ export default function DrywallLayer() {
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const visible = useUISettingsStore((s) => s.drywallVisible)
   const orientation = useUISettingsStore((s) => s.drywallOrientation)
+  const finishTiming = useUISettingsStore((s) => s.finishTiming)
+  const finishesApplied = useUISettingsStore((s) => s.finishesApplied)
+  const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const boardKind = useUISettingsStore((s) => s.boardKind)
   const boardType = useMemo(() => boardSpec(boardKind), [boardKind])
 
@@ -176,6 +180,7 @@ export default function DrywallLayer() {
     [userWalls],
   )
 
+  if (!finishesVisible(finishTiming, finishesApplied, traceMode)) return null
   if (!visible || userWalls.length === 0) return null
 
   return (

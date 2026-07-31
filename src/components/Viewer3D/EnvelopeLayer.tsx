@@ -21,11 +21,12 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallEnvelope, buildWallCladding, buildTemporaryGuardrail, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
+import { buildWallEnvelope, buildWallCladding, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, wallThicknessM,
-  claddingSpec,
+  claddingSpec, finishesVisible,
   type WrbKind, type WoodSheathing, type CladdingKind,
 } from '../../services/constructionCode'
 import { footprintCentroids, outwardSign } from '../../services/wallFacing'
@@ -44,11 +45,14 @@ interface SkinProps {
   woodSheathing: WoodSheathing
   sheathe: boolean
   cladding: CladdingKind
-  guardrail: boolean
+  /** Per-storey fade: 0 hides, 0.15 ghosts, 1 is solid. Matches the walls and
+   *  floors, so a faded storey fades as ONE building rather than a frame with a
+   *  solid skin still hanging on it. */
+  ghostOpacity: number
   openings: WallOpening[]
 }
 
-function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, wrbKind, woodSheathing, sheathe, cladding, guardrail, openings }: SkinProps) {
+function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, wrbKind, woodSheathing, sheathe, cladding, ghostOpacity, openings }: SkinProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
   const dx = p2.x - p1.x
@@ -73,12 +77,12 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
       // barrier (ZIP System), so adding one would be wrong, not just redundant.
       wrb: wrapVisible ? wrbLayer(wrbKind) : null,
       openings,
-      opacity: 1,
+      opacity: ghostOpacity,
     })
     g.userData.level = wall.level ?? 0   // so explode peels the skin per storey
     return g
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheathe, length, wallHeight, thickness, outward, spec.material, woodSheathing, wrapVisible, wrbKind, openings, wall.level])
+  }, [sheathe, length, wallHeight, thickness, outward, spec.material, woodSheathing, wrapVisible, wrbKind, openings, wall.level, ghostOpacity])
 
   // Cladding sits on TOP of whatever is already on the wall, so its standoff is
   // the running total: stud face + sheathing + barrier + its own cavity. Brick's
@@ -96,11 +100,11 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     const g = buildWallCladding({
       length, height: wallHeight,
       standoff: Math.max(0.038, thickness) / 2 + skinM + cs.gapM,
-      outward, spec: cs, openings,
+      outward, spec: cs, openings, opacity: ghostOpacity,
     })
     g.userData.level = wall.level ?? 0
     return g
-  }, [cladding, length, wallHeight, thickness, skinM, outward, openings, wall.level])
+  }, [cladding, length, wallHeight, thickness, skinM, outward, openings, wall.level, ghostOpacity])
 
   useEffect(() => () => {
     clad?.traverse((o) => {
@@ -108,35 +112,12 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     })
   }, [clad])
 
-  // Temporary fall protection, built in the same wall-local frame so abutting
-  // sections line up into one continuous run around the perimeter.
-  const rail = useMemo(() => guardrail
-    ? buildTemporaryGuardrail({
-        length, wallHeight, thickness,
-        inward: (outward === 1 ? -1 : 1),   // you fall off the inboard side
-      })
-    : null,
-    [guardrail, length, wallHeight, thickness, outward])
-
-  useEffect(() => () => {
-    rail?.traverse((o) => {
-      if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
-    })
-  }, [rail])
-
-  useEffect(() => () => {
-    skin?.traverse((o) => {
-      if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
-    })
-  }, [skin])
-
   if (length < 0.05) return null
   const baseY = (wall.level ?? 0) * storeyHeight
   return (
     <>
       {skin && <primitive object={skin} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
       {clad && <primitive object={clad} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
-      {rail && <primitive object={rail} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
     </>
   )
 }
@@ -150,8 +131,15 @@ export default function EnvelopeLayer() {
   const wrapVisible = useUISettingsStore((s) => s.wrapVisible)
   const wrbKind = useUISettingsStore((s) => s.wrbKind)
   const woodSheathing = useUISettingsStore((s) => s.woodSheathing)
-  const guardrailVisible = useUISettingsStore((s) => s.guardrailVisible)
   const cladding = useUISettingsStore((s) => s.cladding)
+  // Same per-storey fade the walls and floors honour. The skin used to render at
+  // full opacity regardless, so fading or isolating a storey left its sheathing
+  // and cladding sitting there solid — the fade "wasn't applying to the plywood".
+  const finishTiming = useUISettingsStore((s) => s.finishTiming)
+  const finishesApplied = useUISettingsStore((s) => s.finishesApplied)
+  const traceMode = useFloorplanLocalStore((s) => s.traceMode)
+  const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
+  const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'walls')
@@ -225,12 +213,18 @@ export default function EnvelopeLayer() {
 
   // The guardrail is not part of the envelope — it can be shown on bare studs, so
   // this layer stays mounted when only the rail is on.
-  if ((!sheathingVisible && !guardrailVisible && cladding === 'none') || skinWalls.length === 0) return null
+  if (!finishesVisible(finishTiming, finishesApplied, traceMode)) return null
+  if ((!sheathingVisible && cladding === 'none') || skinWalls.length === 0) return null
 
   return (
     <group name="envelope" ref={groupRef}>
       {skinWalls.map((w, i) => {
         const outward = outwardSign(w, centroidByLevel[w.level ?? 0])
+        const level = w.level ?? 0
+        const ghostOpacity = isolatedFloor !== null && level !== isolatedFloor ? 0
+          : ghostedLevels.includes(level) ? 0.15
+          : 1
+        if (ghostOpacity === 0) return null
         return (
           <WallSkin
             key={`skin-${w.level ?? 0}-${i}`}
@@ -244,7 +238,7 @@ export default function EnvelopeLayer() {
             woodSheathing={woodSheathing}
             sheathe={sheathingVisible}
             cladding={cladding}
-            guardrail={guardrailVisible}
+            ghostOpacity={ghostOpacity}
             openings={openingsByWall[i]}
           />
         )
