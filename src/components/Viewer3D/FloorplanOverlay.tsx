@@ -419,11 +419,17 @@ export default function FloorplanOverlay() {
   // opaque cream plywood. And you are usually still tracing walls onto that plan
   // when the deck goes down, so losing it right then is the worst moment.
   //
-  // Once a deck is under it, see-through has no value left — there is nothing to
-  // see through TO — so the transparency is spent rather than kept. The user's
-  // opacity setting still governs everywhere the plan is over open workspace.
+  // Boosted only WHILE YOU ARE TRACING, though. The first version of this pushed
+  // the print opaque whenever a deck sat under it, which fixed reading the plan
+  // and broke seeing the floor: an opaque plan 10mm above the sheets hides the
+  // plywood you just laid. You cannot want both at once, and which one you want
+  // is decided by what you are doing — tracing means read the plan, idle means
+  // look at the building. So the boost lasts exactly as long as the trace does.
   const deckUnderPrint = floorsAreas.some((a) => (a.level ?? 0) === activeLevel)
-  const printOpacity = deckUnderPrint ? Math.max(overlay.opacity, 0.95) : overlay.opacity
+  const readingPlan = traceMode || overlay.calibrationMode
+  const printOpacity = deckUnderPrint && readingPlan
+    ? Math.max(overlay.opacity, 0.95)
+    : overlay.opacity
 
   const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width

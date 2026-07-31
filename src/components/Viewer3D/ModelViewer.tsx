@@ -759,6 +759,19 @@ export default function ModelViewer() {
           castShadow
           shadow-mapSize={[2048, 2048]}
           shadow-bias={-0.0004}
+          /* SHADOW ACNE — why the plywood decking renders "spotty".
+             The shadow camera covers 90 m at 2048², so one shadow texel is about
+             44 mm on the ground. A subfloor is a 19 mm slab made of dozens of
+             coplanar sheets: far thinner than the texel that has to resolve it,
+             and large and flat enough to show every error. The surface ends up
+             partly shadowing itself in a blotchy pattern — worst exactly where
+             the geometry is thin, flat and repeated, which is the deck.
+
+             Depth bias alone cannot fix that (push it far enough and shadows
+             detach from what casts them). normalBias offsets the lookup along the
+             surface NORMAL instead, which is the right tool for large flat
+             receivers and leaves contact shadows attached. */
+          shadow-normalBias={0.03}
           shadow-camera-near={0.5}
           shadow-camera-far={150}
           shadow-camera-left={-45}
