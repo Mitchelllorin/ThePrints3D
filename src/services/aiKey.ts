@@ -8,11 +8,38 @@
 
 const STORAGE_KEY = 'bp3d-ai-key'
 
-export function getAiKey(): string {
+/**
+ * A DEV-ONLY key from .env.local, so you stop retyping it.
+ *
+ * localStorage is per ORIGIN: http://localhost:5180 and http://192.168.1.63:5180
+ * are different stores, so testing on desktop and then on the phone over the
+ * network asked for the key twice, and clearing site data lost it again. For a
+ * solo builder running the dev server all day that is pure friction.
+ *
+ * Put VITE_GEMINI_API_KEY in .env.local (already gitignored) and the dev build
+ * picks it up with nothing to paste, on either origin.
+ *
+ * DEV ONLY, deliberately. import.meta.env inlines the value into the bundle at
+ * build time, so honouring this in a production build would ship your key to
+ * everyone who loads the app. Released builds keep asking for a key on the
+ * device, which is the existing behaviour and the safe one.
+ */
+function devKey(): string {
   try {
-    return localStorage.getItem(STORAGE_KEY) ?? ''
+    if (!import.meta.env.DEV) return ''
+    return (import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim() ?? ''
   } catch {
     return ''
+  }
+}
+
+export function getAiKey(): string {
+  try {
+    // A key pasted on the device still wins — you can override the dev default
+    // without editing a file and restarting Vite.
+    return localStorage.getItem(STORAGE_KEY) || devKey()
+  } catch {
+    return devKey()
   }
 }
 
