@@ -431,6 +431,8 @@ export default function ModelViewer() {
   const lengthFormat   = useConfigStore((s) => s.lengthFormat)
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const gestureLock    = useFloorplanLocalStore((s) => s.gestureLock)
+  const editMode       = useFloorplanLocalStore((s) => s.editMode)
+  const editSelected   = useFloorplanLocalStore((s) => s.editSelected)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
   // Construction wizard is opened from Settings → "Re-run Wizard" via the store.
@@ -465,7 +467,18 @@ export default function ModelViewer() {
   // (roof ridge/body, floor deck, placed object). Without it the camera orbited
   // underneath the drag and you fought the workspace the entire time you were
   // editing. Same "action locks, idle unlocks" model as tracing and placing.
-  const orbitEnabled = !overlay.orbitLocked && !placing && !gestureLock
+  //
+  // A SELECTION LOCKS IT TOO. gestureLock only engages once a layer has already
+  // grabbed the pointer, which is a frame too late: with something selected and
+  // ready to move, the press that was meant to drag it could still orbit instead,
+  // and the model swung away under your finger. Once you have picked a component
+  // you are working on it, so every gesture from then on should edit rather than
+  // move the camera — the same rule tracing and placing already follow.
+  //
+  // To orbit again, drop the selection (Escape, or tap empty space). That is the
+  // deliberate boundary between looking and working.
+  const editingSelection = editMode && editSelected !== null
+  const orbitEnabled = !overlay.orbitLocked && !placing && !gestureLock && !editingSelection
   const panEnabled = (!traceMode || tracePaused) && !placing
 
   function handleDragOver(e: React.DragEvent) {
@@ -721,8 +734,27 @@ export default function ModelViewer() {
       <Canvas
         shadows
         dpr={[1, 2]}
-        gl={{ antialias: true, preserveDrawingBuffer: true }}
-        camera={{ fov: 55, near: 0.1, far: 1000 }}
+        /* DEPTH PRECISION — the "flashy glitches", and the reason they change as
+           you orbit.
+
+           The camera ran near:0.1 / far:1000, a 10,000:1 ratio. Depth precision
+           is dominated by the NEAR plane, so nearly the whole depth buffer was
+           being spent inside the first metre and there was very little left at
+           the 10-30 m where the building actually sits. This model stacks layers
+           far finer than that can resolve: housewrap sits 1.5 mm off the
+           sheathing, the print 10 mm off the deck, cladding a few mm off the
+           wrap. Surfaces that close swap which one wins from frame to frame as
+           the camera moves — which is exactly why it reads as a perspective
+           problem rather than a texture one.
+
+           near 0.3 (OrbitControls already stops you 1 m from the target, so you
+           would have to be inside a wall to clip) and far 400 (maxDistance is
+           200) takes the ratio from 10,000:1 to about 1,300:1. The logarithmic
+           depth buffer then distributes what is left by log of distance instead
+           of piling it up at the near plane, which is the standard answer for a
+           scene made of thin coplanar layers. */
+        gl={{ antialias: true, preserveDrawingBuffer: true, logarithmicDepthBuffer: true }}
+        camera={{ fov: 55, near: 0.3, far: 400 }}
         style={{ touchAction: 'none', cursor: annotateMode ? 'crosshair' : 'default' }}
         onPointerMissed={() => {
           const local = useFloorplanLocalStore.getState()
