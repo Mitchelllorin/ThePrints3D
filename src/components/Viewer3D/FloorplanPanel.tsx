@@ -1598,7 +1598,7 @@ export default function FloorplanPanel() {
             Tap the plan to place {getCatalogItem(placeObjectType)?.label ?? placeObjectType}
             {keepPlacing && ' — keeps placing until you stop'}
           </span>
-          <div className={styles.btnRow}>
+          <div className={styles.placeLevels}>
             {LEVEL_OPTIONS.map((lv) => (
               <button
                 key={lv.value}

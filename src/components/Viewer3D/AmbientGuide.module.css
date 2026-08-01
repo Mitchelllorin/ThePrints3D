@@ -510,31 +510,43 @@
 }
 
 /* ── Placement bar — bottom-centre, above the tray, while placing an object ── */
+/* Placement bar — bottom-LEFT, no box, like the trace bar.
+   It used to sit at left:50% with a translateX(-50%): dead centre of the
+   workspace, in a solid dark panel, directly over the plan you were trying to
+   drop something onto. The one place it must not be. Adding the storey buttons
+   only made a centred box bigger. Same treatment the trace bar already got —
+   pinned to the corner, container gone, chips floating on the workspace. */
 .placeBar {
   position: absolute;
-  left: 50%;
-  bottom: 76px;
-  transform: translateX(-50%);
+  left: 12px;
+  bottom: 72px;            /* clear the Place tab + Explode bar along the bottom */
   z-index: 33;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-  backdrop-filter: blur(6px);
+  justify-content: flex-start;
+  flex-wrap: nowrap;       /* ONE slim row — wrapping sprawls it back toward centre */
+  gap: 6px;
+  padding: 2px;
+  background: none;
+  border: none;
   pointer-events: all;
-  max-width: calc(100vw - 24px);
+  max-width: min(92vw, 460px);
 }
 .placeHint {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #e2e8f0;
   white-space: nowrap;
+  /* No surface of its own — a shadow keeps it readable over the model, the same
+     trick the rails use, instead of a panel behind it. */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
+/* Storey chips inside the placement bar — compact, so the row stays slim enough
+   to live in the corner. */
+.placeLevels { display: flex; gap: 3px; }
+.placeLevels > button { padding: 2px 7px; font-size: 11px; }
 
-/* ── Trace bar — slim floating controls, bottom-centre, while actively tracing.
+/* ── Trace bar — slim floating controls, bottom-LEFT, while actively tracing.
    The Build drawer retracts during active tracing so the workspace is clear;
    this carries the live controls (change type, pause, build, done). ── */
 .traceBar {
