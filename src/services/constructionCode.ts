@@ -24,6 +24,36 @@ export function wallThicknessM(framingType?: string): number {
   return (framingType && WALL_THICKNESS_M[framingType]) || DEFAULT_WALL_THICKNESS_M
 }
 
+/**
+ * How thick to RENDER a wall — the one answer every layer must use.
+ *
+ * If the wall has a framing type, that governs: you picked 2x8, you get 7.5".
+ * Only a wall with no framing type falls back to measuring the traced line on the
+ * print, which is a guess from ink width and the drawing's scale.
+ *
+ * This existed in two forms and they disagreed. The framing layer measured the
+ * traced line for EVERY wall, so a 2x4 and a 2x8 came out identical — the picker
+ * changed the label and nothing else — while the envelope had already switched to
+ * the framing type, which put the sheathing at a different thickness from the
+ * studs it was supposed to be nailed to.
+ *
+ * The pixel path also clamped to a 0.1 m minimum, which is THICKER than a real
+ * 2x4 wall (0.0889), so a 2x4 could not have come out right even by accident.
+ */
+export function renderWallThicknessM(
+  wall: { framingType?: string; thickness?: number },
+  scaleMmPerPx?: number | null,
+): number {
+  if (wall.framingType && WALL_THICKNESS_M[wall.framingType]) {
+    return WALL_THICKNESS_M[wall.framingType]
+  }
+  const px = wall.thickness || 8
+  const mmPerPx = scaleMmPerPx ?? (140 / px)   // 140mm ≈ 2x4 + board both sides
+  // Floor at a stud's own face width — thin enough for any real wall, but never
+  // zero-thickness geometry.
+  return Math.max(0.038, (px * mmPerPx) / 1000)
+}
+
 // ── Building envelope ─────────────────────────────────────────────────────────
 //
 // The exterior wall assembly, outward from the stud face. Order is not a style

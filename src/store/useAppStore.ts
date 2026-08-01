@@ -1092,11 +1092,31 @@ export const useAppStore = create<AppState>()(
         const sameFootprint = (a: ParsedWall, b: ParsedWall) =>
           Math.abs(a.x1 - b.x1) < 2 && Math.abs(a.y1 - b.y1) < 2 &&
           Math.abs(a.x2 - b.x2) < 2 && Math.abs(a.y2 - b.y2) < 2
-        const clones = userWalls
-          .filter((w) => (w.level ?? 0) === fromLevel)
-          // Exterior shell only by default — interior partitions usually differ
-          // per storey, but the exterior walls stack plumb + flush.
-          .filter((w) => !exteriorOnly || w.wallRole === 'exterior-bearing')
+        // ONLY THE EXTERIOR SHELL CARRIES UP. Interior partitions differ per
+        // storey; the exterior walls stack plumb and flush.
+        //
+        // Tested on GEOMETRY, not on the wallRole label, because the label cannot
+        // be trusted here: every traced wall is stamped 'exterior-bearing' by
+        // default, so an interior wall reads as exterior unless the user
+        // remembered to change the picker — and interior walls were duly carried
+        // up. A wall that runs along the edge of the storey's footprint is
+        // exterior; one that cuts across the middle is not, whatever it is
+        // labelled.
+        const atLevel = userWalls.filter((w) => (w.level ?? 0) === fromLevel)
+        const xs = atLevel.flatMap((w) => [w.x1, w.x2])
+        const ys = atLevel.flatMap((w) => [w.y1, w.y2])
+        const minX = Math.min(...xs), maxX = Math.max(...xs)
+        const minY = Math.min(...ys), maxY = Math.max(...ys)
+        // Generous enough for a hand-traced line that wanders off the edge.
+        const tol = Math.max(12, Math.max(maxX - minX, maxY - minY) * 0.04)
+        const onPerimeter = (w: ParsedWall) =>
+          (Math.abs(w.x1 - minX) < tol && Math.abs(w.x2 - minX) < tol) ||
+          (Math.abs(w.x1 - maxX) < tol && Math.abs(w.x2 - maxX) < tol) ||
+          (Math.abs(w.y1 - minY) < tol && Math.abs(w.y2 - minY) < tol) ||
+          (Math.abs(w.y1 - maxY) < tol && Math.abs(w.y2 - maxY) < tol)
+
+        const clones = atLevel
+          .filter((w) => !exteriorOnly || onPerimeter(w))
           .filter((w) => !userWalls.some((u) => (u.level ?? 0) === toLevel && sameFootprint(u, w)))
           // SAME footprint coords → plumb (vertical) and flush (faces aligned).
           .map((w) => ({ ...w, level: toLevel }))

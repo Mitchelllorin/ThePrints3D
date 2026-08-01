@@ -25,11 +25,11 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallEnvelope, buildWallCladding, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
-  sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, wallThicknessM,
+  sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, renderWallThicknessM,
   claddingSpec, finishesVisible,
   type WrbKind, type WoodSheathing, type CladdingKind,
 } from '../../services/constructionCode'
-import { footprintCentroids, outwardSign } from '../../services/wallFacing'
+import { footprintCentroids, outwardSign, perimeterTest } from '../../services/wallFacing'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem } from '../../data/objectCatalog'
 import type { ParsedWall, PlacedObject } from '../../types'
@@ -63,7 +63,7 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
   const angle = Math.atan2(dz, dx)
 
   const spec = wallFramingSpec(wall.framingType, wall.wallRole)
-  const thickness = wallThicknessM(wall.framingType)
+  const thickness = renderWallThicknessM(wall)
 
   const skin = useMemo(() => {
     if (!sheathe) return null
@@ -161,14 +161,30 @@ export default function EnvelopeLayer() {
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
   // Exterior walls only, in pixel space (the frame the footprint centroid uses).
+  //
+  // Exterior means BOTH: the role allows an envelope, AND the wall sits on the
+  // perimeter of its storey. The role alone is not enough — every traced wall is
+  // stamped 'exterior-bearing' by default, so trusting the label sheathed every
+  // interior partition in the building. Requiring both means a mislabelled
+  // partition is saved by its position, and a perimeter wall the user has
+  // deliberately marked interior is still left alone.
   const skinWalls = useMemo(() => {
-    const out: ParsedWall[] = []
+    const user: ParsedWall[] = []
     for (const d of drawings) {
-      for (const w of d.parsedWalls) {
-        if (w.source === 'user' && wallTakesEnvelope(w.wallRole, w.framingType)) out.push(w)
-      }
+      for (const w of d.parsedWalls) if (w.source === 'user') user.push(w)
     }
-    return out
+    const byLevel = new Map<number, ParsedWall[]>()
+    for (const w of user) {
+      const lv = w.level ?? 0
+      const list = byLevel.get(lv) ?? []
+      list.push(w)
+      byLevel.set(lv, list)
+    }
+    const tests = new Map<number, (w: ParsedWall) => boolean>()
+    for (const [lv, list] of byLevel) tests.set(lv, perimeterTest(list))
+    return user.filter((w) =>
+      wallTakesEnvelope(w.wallRole, w.framingType)
+      && (tests.get(w.level ?? 0)?.(w) ?? false))
   }, [drawings])
 
   // Which way is out — shared with DrywallLayer via wallFacing, so sheathing and

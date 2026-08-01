@@ -10,6 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard, Text } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
+import { renderWallThicknessM } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -22,8 +23,6 @@ import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
 import type { ParsedWall } from '../../types'
 
-const MIN_THICKNESS = 0.1     // metres — minimum visible thickness
-const DEFAULT_THICKNESS_MM = 140  // 2×4 stud + drywall both sides
 
 interface WallMeshProps {
   wall: ParsedWall
@@ -57,8 +56,9 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
   // Thickness first — it sets how far to extend ends into a corner.
-  const mmPerPx = scaleMmPerPx ?? DEFAULT_THICKNESS_MM / (wall.thickness || 8)
-  const thicknessM = Math.max(MIN_THICKNESS, ((wall.thickness || 8) * mmPerPx) / 1000)
+  // The FRAMING TYPE governs — pick 2x8 and you get 7.5". Only a wall with no
+  // type falls back to measuring the traced line. See renderWallThicknessM.
+  const thicknessM = renderWallThicknessM(wall, scaleMmPerPx)
 
   const a = pixelToWorld(wall.x1, wall.y1)
   const b = pixelToWorld(wall.x2, wall.y2)

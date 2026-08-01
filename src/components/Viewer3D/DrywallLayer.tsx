@@ -14,12 +14,10 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import { wallTakesEnvelope, boardSpec, finishesVisible, type BoardSpec } from '../../services/constructionCode'
-import { footprintCentroids, inwardSign } from '../../services/wallFacing'
+import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, type BoardSpec } from '../../services/constructionCode'
+import { footprintCentroids, inwardSign, perimeterTest } from '../../services/wallFacing'
 import type { ParsedWall, PlacedObject } from '../../types'
 
-const MIN_THICKNESS = 0.1
-const DEFAULT_THICKNESS_MM = 140
 
 interface WallBoardProps {
   wall: ParsedWall
@@ -48,8 +46,7 @@ function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, 
   const cx = (p1.x + p2.x) / 2
   const cz = (p1.z + p2.z) / 2
   const angle = Math.atan2(dz, dx)
-  const mmPerPx = scaleMmPerPx ?? DEFAULT_THICKNESS_MM / (wall.thickness || 8)
-  const thicknessM = Math.max(MIN_THICKNESS, ((wall.thickness || 8) * mmPerPx) / 1000)
+  const thicknessM = renderWallThicknessM(wall, scaleMmPerPx)
 
   // Masonry walls are solid — no drywall boarding.
   const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
@@ -173,11 +170,28 @@ export default function DrywallLayer() {
   // two can never disagree — the inside face drywall boards is by definition the
   // opposite of the outside face the sheathing goes on. Centroid is taken over
   // the EXTERIOR walls, which are what actually describe the footprint.
+  // Exterior = the role allows it AND the wall is on the perimeter of its
+  // storey. Same combined test the envelope uses, for the same reason: the role
+  // label defaults to exterior on every traced wall, and boarding a mid-plan
+  // partition on one face only would leave its other side bare.
+  const isExteriorWall = useMemo(() => {
+    const byLevel = new Map<number, ParsedWall[]>()
+    for (const { wall } of userWalls) {
+      const lv = wall.level ?? 0
+      const list = byLevel.get(lv) ?? []
+      list.push(wall)
+      byLevel.set(lv, list)
+    }
+    const tests = new Map<number, (w: ParsedWall) => boolean>()
+    for (const [lv, list] of byLevel) tests.set(lv, perimeterTest(list))
+    return (w: ParsedWall) =>
+      wallTakesEnvelope(w.wallRole, w.framingType)
+      && (tests.get(w.level ?? 0)?.(w) ?? false)
+  }, [userWalls])
+
   const centroids = useMemo(
-    () => footprintCentroids(
-      userWalls.map(({ wall }) => wall).filter((w) => wallTakesEnvelope(w.wallRole, w.framingType)),
-    ),
-    [userWalls],
+    () => footprintCentroids(userWalls.map(({ wall }) => wall).filter(isExteriorWall)),
+    [userWalls, isExteriorWall],
   )
 
   if (!finishesVisible(finishTiming, finishesApplied, traceMode)) return null
@@ -188,7 +202,7 @@ export default function DrywallLayer() {
       {userWalls.map(({ wall, scaleMmPerPx }, i) => {
         // Exterior walls are boarded on the inside ONLY: the outside face takes
         // sheathing, housewrap and cladding. Interior partitions get both faces.
-        const exterior = wallTakesEnvelope(wall.wallRole, wall.framingType)
+        const exterior = isExteriorWall(wall)
         return (
           <WallBoard
             key={i}

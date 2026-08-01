@@ -63,3 +63,35 @@ export function outwardSign(wall: FacingWall, centroid?: { x: number; y: number 
 export function inwardSign(wall: FacingWall, centroid?: { x: number; y: number }): 1 | -1 {
   return outwardSign(wall, centroid) === 1 ? -1 : 1
 }
+
+/**
+ * Is this wall on the OUTSIDE of the building, judged by where it sits?
+ *
+ * Returns a predicate over the walls of one storey. A wall running along an edge
+ * of the storey's footprint is exterior; one cutting across the middle is not.
+ *
+ * This exists because the wallRole LABEL cannot carry the question on its own:
+ * every traced wall is stamped 'exterior-bearing' by default, so an interior wall
+ * reads as exterior unless the user changed the picker — and then it gets
+ * sheathed, and carried up to the next storey, both wrong. Geometry does not have
+ * that failure mode.
+ *
+ * Deliberately a bounding-box test rather than a true outline: it is right for
+ * the rectangular and L-shaped footprints people actually trace, and a wall that
+ * is genuinely on the perimeter of a stranger shape can still be labelled by
+ * hand. Being conservative here means a missed sheet, not a sheathed partition.
+ */
+export function perimeterTest(walls: FacingWall[]): (w: FacingWall) => boolean {
+  if (walls.length === 0) return () => false
+  const xs = walls.flatMap((w) => [w.x1, w.x2])
+  const ys = walls.flatMap((w) => [w.y1, w.y2])
+  const minX = Math.min(...xs), maxX = Math.max(...xs)
+  const minY = Math.min(...ys), maxY = Math.max(...ys)
+  // Generous enough for a hand-traced line that wanders off the edge.
+  const tol = Math.max(12, Math.max(maxX - minX, maxY - minY) * 0.04)
+  return (w) =>
+    (Math.abs(w.x1 - minX) < tol && Math.abs(w.x2 - minX) < tol) ||
+    (Math.abs(w.x1 - maxX) < tol && Math.abs(w.x2 - maxX) < tol) ||
+    (Math.abs(w.y1 - minY) < tol && Math.abs(w.y2 - minY) < tol) ||
+    (Math.abs(w.y1 - maxY) < tol && Math.abs(w.y2 - maxY) < tol)
+}
