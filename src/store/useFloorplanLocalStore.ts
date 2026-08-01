@@ -107,6 +107,10 @@ interface FloorplanLocalState {
   activeWallType: string
   /** Structural role key, e.g. 'exterior-bearing'. */
   activeWallRole: string
+  /** True once the user has picked a wall ROLE by hand. Until then the role is
+   *  inferred from where the wall is drawn (see inferWallRole); after it, their
+   *  choice is stamped on every wall until they change it again. */
+  wallRoleChosen: boolean
   /** True once the user has picked a stud size by hand. Until then the size
    *  follows the wall's role (see `defaultWallTypeForRole`); after it, their
    *  choice wins and the role stops overriding it. */
@@ -304,6 +308,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   activeWallType: defaultWallTypeForRole('exterior-bearing'),
   activeWallRole: 'exterior-bearing',
   wallTypeChosen: false,
+  wallRoleChosen: false,
   // Floors-first: the foundation/floor goes down before walls frame on top, so
   // the Build drawer opens on Floors (not Framing) and guides the right order.
   activeTraceLayer: 'floors',
@@ -390,9 +395,13 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   // divides space, so they are simply not the same stick of wood — and defaulting
   // both to one size meant every interior wall rendered too thick, which throws
   // the model out of scale.
-  setActiveWallRole: (v) => set((s) => s.wallTypeChosen
-    ? { activeWallRole: v }
-    : { activeWallRole: v, activeWallType: defaultWallTypeForRole(v) }),
+  setActiveWallRole: (v) => set((s) => ({
+    activeWallRole: v,
+    // Picking a role is an explicit choice: from here on it is stamped as-is
+    // rather than inferred from where the wall lands.
+    wallRoleChosen: true,
+    ...(s.wallTypeChosen ? {} : { activeWallType: defaultWallTypeForRole(v) }),
+  })),
   // Switching discipline drops any in-progress run anchor, so a resumed/new run
   // starts fresh in the newly selected trade instead of chaining from the old.
   // Switching tab KEEPS the active level, so you can lay a 2nd-floor floor and

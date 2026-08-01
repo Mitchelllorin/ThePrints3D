@@ -1682,16 +1682,32 @@ export default function FloorplanPanel() {
       {/* ── Placement bar — tap the plan to drop it (camera is locked). ── */}
       {placeObjectType && (
         <div className={styles.placeBar}>
-          {/* SAY WHICH STOREY. Placement stamps the ACTIVE level, which persists
-              across layer switches — so after working upstairs you could arm
-              stairs meant for the ground floor and silently land them two floors
-              up with nothing on screen explaining it. The storey is part of what
-              you are about to do, so it belongs in the prompt. */}
+          {/* PICK THE STOREY HERE. Placement stamps the ACTIVE level, and that
+              level persists across layer switches — so after working upstairs,
+              arming stairs meant for the ground floor silently lands them two
+              storeys up. Naming the storey in the prompt was not enough: you
+              still had to leave, go and change it, and come back. It is a control
+              now, sitting on the one bar you are already looking at.
+
+              Worst for stairs and lifts, which is where it kept being noticed —
+              they span a storey, so landing one on the wrong floor is not a small
+              nudge to correct. */}
           <span className={styles.placeHint}>
             Tap the plan to place {getCatalogItem(placeObjectType)?.label ?? placeObjectType}
-            <b> on {activeLevelLabel}</b>
             {keepPlacing && ' — keeps placing until you stop'}
           </span>
+          <div className={styles.btnRow}>
+            {LEVEL_OPTIONS.map((lv) => (
+              <button
+                key={lv.value}
+                className={activeLevel === lv.value ? styles.action : styles.secondary}
+                onClick={() => setActiveLevel(lv.value)}
+                title={`Place on ${lv.label}`}
+              >
+                {lv.label}
+              </button>
+            ))}
+          </div>
           <button
             className={keepPlacing ? styles.action : styles.secondary}
             onClick={() => setKeepPlacing(!keepPlacing)}

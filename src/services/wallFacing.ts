@@ -81,6 +81,32 @@ export function inwardSign(wall: FacingWall, centroid?: { x: number; y: number }
  * is genuinely on the perimeter of a stranger shape can still be labelled by
  * hand. Being conservative here means a missed sheet, not a sheathed partition.
  */
+/**
+ * What ROLE a wall should get, decided by where you just drew it.
+ *
+ * Every traced wall used to be stamped with whatever the role picker last said,
+ * and that picker defaults to exterior-bearing — so unless you changed it, every
+ * partition in the building claimed to be an exterior bearing wall. Downstream
+ * that meant partitions sheathed in plywood, partitions carried up to the next
+ * storey, and 2x8 studs in a coat cupboard.
+ *
+ * The building already knows the answer. A wall drawn along the edge of what you
+ * have traced so far is exterior; one drawn across the middle is interior. That
+ * matches how people actually work — shell first, then divide it up.
+ *
+ * `existing` is the walls already on that storey; the new wall is included in the
+ * footprint, so the very first wall of a plan is exterior, which is right.
+ *
+ * Interior comes back as INTERIOR-BEARING rather than partition: assuming a wall
+ * carries load and being wrong costs a heavier stud, while assuming it does not
+ * and being wrong is a structural mistake. Wrong in the recoverable direction,
+ * and the picker still overrides it.
+ */
+export function inferWallRole(wall: FacingWall, existing: FacingWall[]): string {
+  const sameLevel = existing.filter((w) => (w.level ?? 0) === (wall.level ?? 0))
+  return perimeterTest([...sameLevel, wall])(wall) ? 'exterior-bearing' : 'interior-bearing'
+}
+
 export function perimeterTest(walls: FacingWall[]): (w: FacingWall) => boolean {
   if (walls.length === 0) return () => false
   const xs = walls.flatMap((w) => [w.x1, w.x2])

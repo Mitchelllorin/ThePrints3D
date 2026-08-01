@@ -15,7 +15,8 @@ import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import { useFloorplanLocalStore, type DragState } from '../../store/useFloorplanLocalStore'
+import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '../../store/useFloorplanLocalStore'
+import { inferWallRole } from '../../services/wallFacing'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
 
@@ -259,6 +260,8 @@ export default function FloorplanOverlay() {
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
+  const wallRoleChosen = useFloorplanLocalStore((s) => s.wallRoleChosen)
+  const wallTypeChosen = useFloorplanLocalStore((s) => s.wallTypeChosen)
   const traceBand = useFloorplanLocalStore((s) => s.traceBand)
   const plumbElement = useFloorplanLocalStore((s) => s.plumbElement)
   const plumbSize = useFloorplanLocalStore((s) => s.plumbSize)
@@ -832,10 +835,20 @@ export default function FloorplanOverlay() {
       // Stamp the picked framing/role/material onto the wall so the build frames
       // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
       const isMasonry = activeWallType === 'cmu'
+      // ROLE COMES FROM WHERE YOU DREW IT, unless you have picked one by hand.
+      // The picker defaults to exterior-bearing, so stamping it blindly labelled
+      // every partition an exterior bearing wall — which then got sheathed,
+      // carried up a storey, and framed in 2x8. A wall along the edge of what you
+      // have traced so far is exterior; one across the middle is interior.
+      const roleForWall = wallRoleChosen
+        ? activeWallRole
+        : inferWallRole(base, userWalls)
       const wall: ParsedWall = {
         ...base,
-        framingType: activeWallType,
-        wallRole: activeWallRole,
+        // Stud size follows the role unless it too was picked by hand, so an
+        // inferred interior wall gets 2x4 rather than the exterior 2x8.
+        framingType: wallTypeChosen ? activeWallType : defaultWallTypeForRole(roleForWall),
+        wallRole: roleForWall,
         wallType: FRAMING_TO_WALLTYPE[activeWallType] ?? base.wallType,
         exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
         level: activeLevel,

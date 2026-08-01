@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { perimeterTest, outwardSign, inwardSign, footprintCentroids } from './wallFacing'
+import { perimeterTest, outwardSign, inwardSign, footprintCentroids, inferWallRole } from './wallFacing'
 
 // A 800x500 rectangle with one partition straight through the middle.
 const N = { x1: 100, y1: 100, x2: 900, y2: 100, level: 0 }
@@ -31,6 +31,31 @@ describe('which walls are on the outside', () => {
 
   it('says nothing is exterior when there are no walls', () => {
     expect(perimeterTest([])(N)).toBe(false)
+  })
+})
+
+describe('inferring a wall role from where it is drawn', () => {
+  it('calls the very first wall of a plan exterior', () => {
+    expect(inferWallRole(N, [])).toBe('exterior-bearing')
+  })
+
+  it('calls each shell wall exterior as the outline goes up', () => {
+    expect(inferWallRole(E, [N])).toBe('exterior-bearing')
+    expect(inferWallRole(S, [N, E])).toBe('exterior-bearing')
+    expect(inferWallRole(W, [N, E, S])).toBe('exterior-bearing')
+  })
+
+  it('calls a wall drawn across the middle interior', () => {
+    // The exact case that was being labelled exterior-bearing, then sheathed in
+    // plywood, carried up a storey and framed in 2x8.
+    expect(inferWallRole(PARTITION, SHELL)).toBe('interior-bearing')
+  })
+
+  it('judges against the storey it is drawn on', () => {
+    // A wall on level 1 is not made "interior" by a bigger footprint on level 0.
+    const upperShell = SHELL.map((w) => ({ ...w, level: 1 }))
+    const groundSprawl = { x1: -900, y1: -900, x2: 1900, y2: -900, level: 0 }
+    expect(inferWallRole(upperShell[0], [...upperShell.slice(1), groundSprawl])).toBe('exterior-bearing')
   })
 })
 
