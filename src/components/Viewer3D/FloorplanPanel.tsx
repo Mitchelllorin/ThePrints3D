@@ -16,6 +16,11 @@ import {
   PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER, FLOORS_PICKER, ROOF_PICKER, LEVEL_OPTIONS,
 } from '../../data/traceLayers'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
+import {
+  solveStair, stairIssues, stairOpeningM, stairShapeFromSubtype,
+  MIN_TREAD_M, MIN_WIDTH_M,
+} from '../../services/stairs'
+import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import styles from './AmbientGuide.module.css'
 import EdgeDrawer from '../Layout/EdgeDrawer'
 import LayersPanel from '../Layout/LayersPanel'
@@ -674,6 +679,28 @@ export default function FloorplanPanel() {
       }
     : null
   const objSubtypes = selectedObject ? SUBTYPES[selectedObject.type] : undefined
+
+  // Live stair solve for the configurator. The RISE is the object's own height —
+  // a stair climbs a storey, so it comes from the building rather than a field
+  // somebody can set to disagree with it.
+  const stairRiseM = selectedObject && selectedObject.type === 'stairs'
+    ? (selectedObjItem?.defaultH ?? 2.9) * selectedObject.scaleY
+    : 0
+  const stairSolution = selectedObject && selectedObject.type === 'stairs'
+    ? solveStair({
+        totalRiseM: stairRiseM,
+        shape: stairShapeFromSubtype(selectedObject.subtype),
+        treadM: selectedObject.treadM,
+        widthM: selectedObject.stairWidthM,
+        targetRiserM: selectedObject.targetRiserM,
+        landingM: selectedObject.landingM,
+      })
+    : null
+  const stairOpening = stairSolution ? stairOpeningM(stairSolution) : { lengthM: 0, widthM: 0 }
+  // Headroom under the floor above, measured from the storey rise.
+  const stairProblems = stairSolution
+    ? stairIssues(stairSolution, Math.max(0, stairRiseM - FLOOR_ASSEMBLY_H))
+    : []
 
 
   return (
@@ -1530,6 +1557,85 @@ export default function FloorplanPanel() {
               Everything is solved live, so you see the riser count and height the
               moment you change a tread, and any code failure the moment you cause
               it — rather than finding out at inspection. */}
+          {/* ── Stair configurator ────────────────────────────────────────
+              Here AND on the edit rail, on purpose. The rail is the quick reach
+              while you are working on the model; this is where you look when you
+              have a stair selected and want to read what it actually is. The card
+              is bottom-right, so it is not in the way.
+
+              These rows use stairRow, not propRow: propRow is one non-wrapping
+              line with a fixed label column, which is right for "Brand: [input]"
+              and wrong for a row of size buttons or "2.76 m · 15 risers @ 7in" —
+              that is what ran off the card and over everything beside it.
+
+              RISE is deliberately not a field: a stair climbs a storey, so it
+              comes from the building. A box for it would let the two disagree,
+              and the stair would be the one that was wrong. */}
+          {selectedObject.type === 'stairs' && stairSolution && (
+            <>
+              <div className={styles.stairRow}>
+                <span className={styles.propLabel}>Rise</span>
+                <span className={styles.stairVal}>
+                  {formatLengthFromMm(stairRiseM * 1000, activeUnit)} · {stairSolution.riserCount} risers @ {formatLengthFromMm(stairSolution.riserM * 1000, activeUnit)}
+                </span>
+              </div>
+              <div className={styles.stairRow}>
+                <span className={styles.propLabel}>Tread</span>
+                {[10, 11, 12].map((inches) => {
+                  const m = inches * 0.0254
+                  const on = Math.abs((selectedObject.treadM ?? MIN_TREAD_M) - m) < 0.002
+                  return (
+                    <button key={inches} className={on ? styles.action : styles.secondary}
+                      onClick={() => updatePlacedObject(selectedObject.id, { treadM: m })}>{inches}"</button>
+                  )
+                })}
+              </div>
+              <div className={styles.stairRow}>
+                <span className={styles.propLabel}>Width</span>
+                {[36, 42, 48].map((inches) => {
+                  const m = inches * 0.0254
+                  const on = Math.abs((selectedObject.stairWidthM ?? MIN_WIDTH_M) - m) < 0.002
+                  return (
+                    <button key={inches} className={on ? styles.action : styles.secondary}
+                      onClick={() => updatePlacedObject(selectedObject.id, { stairWidthM: m })}>{inches}"</button>
+                  )
+                })}
+              </div>
+              <div className={styles.stairRow}>
+                <span className={styles.propLabel}>Landing</span>
+                {/* A turn IS a landing, so "none" is only offered on a straight
+                    run — hiding it beats offering a choice the geometry ignores. */}
+                {stairSolution.shape === 'straight' && (
+                  <button className={selectedObject.landingM === null ? styles.action : styles.secondary}
+                    onClick={() => updatePlacedObject(selectedObject.id, { landingM: null })}>None</button>
+                )}
+                {[36, 48, 60].map((inches) => {
+                  const m = inches * 0.0254
+                  const on = selectedObject.landingM != null && Math.abs(selectedObject.landingM - m) < 0.002
+                  return (
+                    <button key={inches} className={on ? styles.action : styles.secondary}
+                      onClick={() => updatePlacedObject(selectedObject.id, { landingM: m })}>{inches}"</button>
+                  )
+                })}
+              </div>
+              <div className={styles.stairRow}>
+                <span className={styles.propLabel}>Run</span>
+                <span className={styles.stairVal}>
+                  {formatLengthFromMm(stairSolution.footprint.lengthM * 1000, activeUnit)} × {formatLengthFromMm(stairSolution.footprint.widthM * 1000, activeUnit)}
+                  {' · opening '}{formatLengthFromMm(stairOpening.lengthM * 1000, activeUnit)}
+                </span>
+              </div>
+              {stairProblems.length > 0 && (
+                <div className={styles.stairIssues}>
+                  {stairProblems.map((p) => (
+                    <p key={p.code} className={styles.warnText} style={{ margin: '2px 0' }}>
+                      ⚠ {p.message} <span style={{ opacity: 0.7 }}>({p.code})</span>
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
           <div className={styles.propRow}>
             <span className={styles.propLabel}>Brand</span>
             <input
