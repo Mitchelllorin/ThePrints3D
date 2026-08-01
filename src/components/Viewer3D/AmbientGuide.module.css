@@ -333,6 +333,37 @@
 .propVal { color: #e2e8f0; }
 .unit { color: var(--bp-text-dim, #64748b); font-size: 11px; }
 
+/* Stair configurator rows.
+   propRow is a single non-wrapping line with a fixed 56px label — right for
+   "Brand: [input]", wrong for a row of size buttons or "2.76 m · 15 risers @ 7in",
+   which simply ran off the card and over whatever was beside it. These rows wrap
+   instead: the label sits on its own line and the content flows under it. */
+.stairRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  margin: 3px 0;
+}
+.stairRow > .propLabel { width: auto; min-width: 44px; }
+/* The computed read-outs. Allowed to wrap and to shrink, which a flex child will
+   not do on its own — min-width:auto is what pushes text past its container. */
+.stairVal {
+  flex: 1 1 100%;
+  min-width: 0;
+  color: #e2e8f0;
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.stairIssues {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin: 2px 0 0;
+}
+
 /* A code failure. Deliberately louder than the rest of the card — the chrome is
    near-invisible by design, but "this stair would not pass" has earned the right
    to be read. Still text on the surface, not a boxed alert. */

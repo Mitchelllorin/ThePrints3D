@@ -13,6 +13,8 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
+import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/stairs'
+import { getCatalogItem } from '../../data/objectCatalog'
 import type { WrbKind, WoodSheathing, CladdingKind, BoardKind } from '../../services/constructionCode'
 import { recommendedWrb, wallTakesEnvelope, wallFramingSpec } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
@@ -604,6 +606,38 @@ export default function WorkspaceLayout() {
   const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
   // What the selection can be told to do. Buttons, not handles — see selectionEdit.
   const selectionEdit = useSelectionEdit()
+
+  // Stair settings for the rail, when the selection IS a stair. Solved live so
+  // the riser count follows the tread the moment you change it.
+  const placedObjects = useAppStore((s) => s.placedObjects)
+  const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
+  const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+  const stairEdit = useMemo(() => {
+    if (editSelected?.kind !== 'object') return null
+    const o = placedObjects.find((x) => x.id === editSelected.id)
+    if (!o || o.type !== 'stairs') return null
+    const item = getCatalogItem(o.type)
+    const rise = (item?.defaultH ?? 2.9) * o.scaleY
+    const sol = solveStair({
+      totalRiseM: rise,
+      shape: stairShapeFromSubtype(o.subtype),
+      treadM: o.treadM,
+      widthM: o.stairWidthM,
+      targetRiserM: o.targetRiserM,
+      landingM: o.landingM,
+    })
+    const inches = (m: number) => Math.round(m / 0.0254)
+    return {
+      riserCount: sol.riserCount,
+      riserIn: (sol.riserM / 0.0254).toFixed(2),
+      treadIn: inches(sol.treadM),
+      widthIn: inches(sol.widthM),
+      landingIn: o.landingM === null ? 0 : (o.landingM != null ? inches(o.landingM) : inches(sol.landingsM[0] ?? 0)),
+      straight: sol.shape === 'straight',
+      problems: stairIssues(sol, Math.max(0, rise - 0.32)).map((p) => `${p.message} (${p.code})`),
+      set: (patch: Parameters<typeof updatePlacedObject>[1]) => updatePlacedObject(o.id, patch),
+    }
+  }, [editSelected, placedObjects, updatePlacedObject])
   // Move step, in the active unit. Mirrors the wall D-pad's 1/6/12 so a step
   // means the same thing wherever you nudge from.
   const [editStep, setEditStep] = useState(1)
@@ -944,6 +978,67 @@ export default function WorkspaceLayout() {
                   onClick={() => selectionEdit.apply({ factor: STRETCH_STEP })}>+</button>
               </div>
             </div>
+          )}
+
+          {/* STAIR CONFIGURATOR — in the rail, not in a panel.
+              It started life inside the object property card, which covers the
+              model the moment it opens: you cannot watch a stair relay while the
+              thing telling you about it is sitting on top of it. The rail is the
+              established idiom for "what you can do to the selection" — marks on
+              the chrome edge, no container, nothing over the workspace — so the
+              configurator belongs here with the rest of them. */}
+          {stairEdit && (
+            <>
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Tread</span>
+                <div className={styles.editRailPair}>
+                  {[10, 11, 12].map((inches) => (
+                    <button key={inches}
+                      className={`${styles.editRailBtn} ${stairEdit.treadIn === inches ? styles.editRailBtnOn : ''}`}
+                      onClick={() => stairEdit.set({ treadM: inches * 0.0254 })}
+                    >{inches}</button>
+                  ))}
+                </div>
+              </div>
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Width</span>
+                <div className={styles.editRailPair}>
+                  {[36, 42, 48].map((inches) => (
+                    <button key={inches}
+                      className={`${styles.editRailBtn} ${stairEdit.widthIn === inches ? styles.editRailBtnOn : ''}`}
+                      onClick={() => stairEdit.set({ stairWidthM: inches * 0.0254 })}
+                    >{inches}</button>
+                  ))}
+                </div>
+              </div>
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Landing</span>
+                <div className={styles.editRailPair}>
+                  {/* A turn IS a landing, so "none" only appears on a straight run. */}
+                  {stairEdit.straight && (
+                    <button
+                      className={`${styles.editRailBtn} ${stairEdit.landingIn === 0 ? styles.editRailBtnOn : ''}`}
+                      onClick={() => stairEdit.set({ landingM: null })}
+                    >∅</button>
+                  )}
+                  {[36, 48].map((inches) => (
+                    <button key={inches}
+                      className={`${styles.editRailBtn} ${stairEdit.landingIn === inches ? styles.editRailBtnOn : ''}`}
+                      onClick={() => stairEdit.set({ landingM: inches * 0.0254 })}
+                    >{inches}</button>
+                  ))}
+                </div>
+              </div>
+              {/* The solve, as a mark rather than a read-out panel. */}
+              <span className={styles.editRailNote}>
+                {stairEdit.riserCount}R @ {stairEdit.riserIn}"
+              </span>
+              {stairEdit.problems.length > 0 && (
+                <span className={styles.editRailWarn} title={stairEdit.problems.join('\n')}>
+                  ⚠ {stairEdit.problems.length}
+                </span>
+              )}
+            </>
           )}
         </div>
       )}
