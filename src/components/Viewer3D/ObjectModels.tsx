@@ -214,34 +214,53 @@ export default function ObjectModel({ type, w, h, d, color, subtype, stair }: Mo
       const [n1, n2 = 0] = sol.flightRisers
       const landLen = sol.landingsM[0] ?? 0
 
+      // CENTRE THE STAIR ON ITS OWN RUN, not on the catalog box.
+      //
+      // The treads were laid from -d/2, where d is the CATALOG depth (3.6 m) —
+      // but their real extent is the solved run, which for a typical storey is
+      // about 4 m. So the stair overshot its own footprint and sat off-centre
+      // from the point you dropped it: you let go in one place and it drew itself
+      // a couple of hundred mil further on. The catalog box is a rough size for a
+      // tray icon; the solve is the truth, so measure from the solve.
+      //
+      // A flight of n risers gets n-1 treads: the top riser lands you on the
+      // floor (or the landing) above, and there is no tread up there.
+      const treads1 = Math.max(0, n1 - 1)
+      const treads2 = Math.max(0, n2 - 1)
+      // How far the whole assembly reaches along Z, per shape.
+      const extentZ = shape === 'straight'
+        ? Math.max(0, sol.riserCount - 1) * tread
+        : shape === 'l-shaped'
+          ? treads1 * tread + landLen
+          : Math.max(treads1, treads2) * tread + landLen
+      const z0 = -extentZ / 2   // near end of the run, centred on the object
+
       if (shape === 'l-shaped') {
         // Up +Z, landing at the corner, second flight turning along +X.
-        const run1 = Math.max(0, n1 - 1) * tread
-        for (let i = 0; i < n1; i++) {
-          steps.push({ x: 0, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
+        for (let i = 0; i < treads1; i++) {
+          steps.push({ x: 0, y: floor + (i + 1) * riser, z: z0 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
         }
         const landY = floor + n1 * riser
-        const landZ = -d / 2 + run1 + landLen / 2
+        const landZ = z0 + treads1 * tread + landLen / 2
         landings.push({ x: 0, y: landY, z: landZ, tw: sw, td: landLen, c: dark })
-        for (let i = 0; i < n2; i++) {
+        for (let i = 0; i < treads2; i++) {
           steps.push({ x: sw / 2 + (i + 0.5) * tread, y: landY + (i + 1) * riser, z: landZ, tw: tread * 0.95, td: sw, c: i % 2 ? light : body })
         }
       } else if (shape === 'u-shaped' || shape === 'switchback') {
         // Two flights side by side running opposite ways, landing at the far end.
-        const run1 = Math.max(0, n1 - 1) * tread
         const lane = sw / 2 + 0.02
-        for (let i = 0; i < n1; i++) {
-          steps.push({ x: -lane, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
+        for (let i = 0; i < treads1; i++) {
+          steps.push({ x: -lane, y: floor + (i + 1) * riser, z: z0 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
         }
         const landY = floor + n1 * riser
-        const landZ = -d / 2 + run1 + landLen / 2
+        const landZ = z0 + treads1 * tread + landLen / 2
         landings.push({ x: 0, y: landY, z: landZ, tw: sw * 2 + 0.04, td: landLen, c: dark })
-        for (let i = 0; i < n2; i++) {
+        for (let i = 0; i < treads2; i++) {
           steps.push({ x: lane, y: landY + (i + 1) * riser, z: landZ - landLen / 2 - (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
         }
       } else {
-        for (let i = 0; i < sol.riserCount; i++) {
-          steps.push({ x: 0, y: floor + (i + 1) * riser, z: -d / 2 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
+        for (let i = 0; i < Math.max(0, sol.riserCount - 1); i++) {
+          steps.push({ x: 0, y: floor + (i + 1) * riser, z: z0 + (i + 0.5) * tread, tw: sw, td: tread * 0.95, c: i % 2 ? light : body })
         }
       }
       return (

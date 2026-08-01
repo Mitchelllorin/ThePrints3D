@@ -17,6 +17,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '../../store/useFloorplanLocalStore'
 import { inferWallRole } from '../../services/wallFacing'
+import { solveStair } from '../../services/stairs'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
 
@@ -1252,6 +1253,19 @@ export default function FloorplanOverlay() {
   }
 
   const ghostItem = placeObjectType ? getCatalogItem(placeObjectType) : null
+  // Footprint the ghost should show. Doors/windows are drawn as a thin marker in
+  // the wall; a stair is whatever the solver says it is; everything else is its
+  // catalog size.
+  const ghostDims = (() => {
+    const w = ghostItem?.defaultW ?? 1
+    const d = ghostItem?.defaultD ?? 1
+    if (placeObjectType === 'door' || placeObjectType === 'window') return { w, d: 0.06 }
+    if (placeObjectType === 'stairs') {
+      const sol = solveStair({ totalRiseM: ghostItem?.defaultH ?? 2.9 })
+      return { w: sol.footprint.widthM, d: Math.max(0.3, sol.footprint.lengthM) }
+    }
+    return { w, d }
+  })()
 
   // Arm an item → it appears hi-vis at the EDGE of the workspace (near-left
   // corner of the plan), not centred over it — so it's clearly grabbable and
@@ -1559,9 +1573,13 @@ export default function FloorplanOverlay() {
           Mounted (hidden) the moment a tray item is armed; positioned by direct
           ref mutation on pointermove. position prop is only the mount default —
           no re-render happens during a placement session, so imperative moves stick. */}
+      {/* The ghost is the REAL size of what will land. For a stair that is the
+          solved run, not the catalog box: a typical storey solves to about 4 m of
+          run against a 3.6 m catalog depth, so dragging the box meant grabbing
+          one thing and dropping another. */}
       {placeObjectType && ghostItem && (
         <mesh ref={ghostRef} visible={false} position={[0, ghostItem.defaultH / 2, 0]}>
-          <boxGeometry args={[ghostItem.defaultW, ghostItem.defaultH, (placeObjectType === 'door' || placeObjectType === 'window') ? 0.06 : ghostItem.defaultD]} />
+          <boxGeometry args={[ghostDims.w, ghostItem.defaultH, ghostDims.d]} />
           {/* Hi-vis "grab me": the item's colour, glowing, with a bright outline so
               it clearly reads as the thing to pick up and drag into place. */}
           <meshStandardMaterial
