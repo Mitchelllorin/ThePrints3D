@@ -17,7 +17,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '../../store/useFloorplanLocalStore'
 import { inferWallRole } from '../../services/wallFacing'
-import { solveStair } from '../../services/stairs'
+import { solveStair, stairShapeFromSubtype } from '../../services/stairs'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
 
@@ -1268,6 +1268,7 @@ export default function FloorplanOverlay() {
     if (placeObjectType === 'stairs') {
       const sol = solveStair({
         totalRiseM: ghostItem?.defaultH ?? 2.9,
+        shape: stairShapeFromSubtype(placeStairCfg.subtype),
         treadM: placeStairCfg.treadM,
         widthM: placeStairCfg.stairWidthM,
         landingM: placeStairCfg.landingM,

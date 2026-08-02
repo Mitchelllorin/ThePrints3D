@@ -159,7 +159,7 @@ interface FloorplanLocalState {
    *  You size a stair to the hole it has to fit, so deciding after you have
    *  dropped it is backwards — and the ghost can show the real footprint while
    *  you aim. Cleared when the placement is disarmed. */
-  placeStairCfg: { treadM?: number; stairWidthM?: number; landingM?: number | null }
+  placeStairCfg: { subtype?: string; treadM?: number; stairWidthM?: number; landingM?: number | null }
   /** When on, placement stays armed after each drop so you can place several
    *  (e.g. a row of electrical boxes) without re-selecting from the tray. */
   keepPlacing: boolean

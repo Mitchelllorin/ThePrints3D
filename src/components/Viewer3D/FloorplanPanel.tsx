@@ -1752,6 +1752,19 @@ export default function FloorplanPanel() {
               see whether it lands in the space you have. */}
           {placeObjectType === 'stairs' && (
             <>
+              {/* SHAPE first — it changes the footprint more than anything else,
+                  so it belongs before the sizes. Short labels because this bar
+                  lives in the corner and must stay narrow. */}
+              <span className={styles.placeLevels}>
+                {([['Straight','—'],['L-shaped','L'],['U-shaped','U'],['Switchback','S']] as const).map(([full, short]) => {
+                  const on = (placeStairCfg.subtype ?? 'Straight') === full
+                  return (
+                    <button key={full} className={on ? styles.action : styles.secondary}
+                      title={full}
+                      onClick={() => setPlaceStairCfg({ subtype: full })}>{short}</button>
+                  )
+                })}
+              </span>
               <span className={styles.placeLevels}>
                 {[10, 11, 12].map((inches) => {
                   const m = inches * 0.0254

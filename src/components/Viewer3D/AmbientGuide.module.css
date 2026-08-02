@@ -284,12 +284,15 @@
    climbing into whatever is above it. */
 .propCard {
   position: absolute;
-  right: 60px;             /* clear of the ~44px edit rail at right: 6px */
+  right: 56px;             /* clear of the ~44px edit rail at right: 6px */
   bottom: 64px;            /* clear of the explode bar along the bottom */
   left: auto;
   transform: none;
-  width: 320px;
-  max-width: calc(100vw - 84px);
+  /* NARROW. It was 320px — nearly two thirds of a phone-width workspace, and
+     with the stair rows in it that is a wall of buttons standing over the model.
+     The controls are chips, not form fields, so they do not need the width. */
+  width: 232px;
+  max-width: calc(100vw - 76px);
   max-height: calc(100dvh - 150px);
   overflow-y: auto;
   display: flex;
@@ -357,7 +360,14 @@
   color: #cbd5e1;
   margin: 3px 0;
 }
-.stairRow > .propLabel { width: auto; min-width: 44px; }
+.stairRow > .propLabel { width: auto; min-width: 38px; font-size: 10px; }
+/* Chips, not buttons: the configurator sits over the model, so its controls are
+   as small as they can be and still be hit on a phone. */
+.stairRow > button {
+  padding: 2px 7px;
+  font-size: 11px;
+  min-height: 24px;
+}
 /* The computed read-outs. Allowed to wrap and to shrink, which a flex child will
    not do on its own — min-width:auto is what pushes text past its container. */
 .stairVal {
@@ -572,12 +582,15 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  /* WRAPS, growing UP the left edge. nowrap kept it to one row, but the row can
-     only grow SIDEWAYS — and the spec chip ("Ground · I-Joist · 16\" OC") is wide
-     enough to shove Done into the middle of the workspace. Measured: Done landed
-     at centre-x 229 on a 506px viewport, i.e. dead centre. Wrapping drops it to
-     the next line AT THE LEFT EDGE instead, which is where it belongs. */
-  flex-wrap: wrap;
+  /* A COLUMN, stacked up from the bottom-left. Every control starts at the same
+     left edge, so nothing can drift toward the middle however long its label is.
+     nowrap put them in one row that could only grow sideways (Done measured at
+     centre-x 229 on a 506px viewport). Wrapping fixed Done but not "Find the
+     rest", which still shared the first row with the spec chip and ran from
+     x=166 to 281 — straight across the centre line at 253. A column cannot do
+     that: width is whatever the widest single control is. */
+  flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
   padding: 2px;
   /* No box — the chips (which keep their own faint pill) float bottom-left. */
