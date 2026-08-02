@@ -274,14 +274,24 @@
 }
 
 /* ── Property card (selected placed object) ────────────────────────────────── */
-/* Bottom-right corner — never overlaps the floorplan centre. */
+/* Bottom-right, INSIDE the right rail and ABOVE the explode bar.
+   It had `right: 12px` and no vertical anchor at all, so it floated wherever the
+   DOM put it and sat underneath both of its neighbours — the edit rail (right:6,
+   z-index 56) and the explode bar (bottom:14 right:14, z-index 56) are both above
+   this card's z-index 31. Fine while the card was short; adding the stair rows
+   made it tall enough to grow straight into them.
+   Now it is pinned clear of both and capped in height, so it scrolls instead of
+   climbing into whatever is above it. */
 .propCard {
   position: absolute;
-  right: 12px;
+  right: 60px;             /* clear of the ~44px edit rail at right: 6px */
+  bottom: 64px;            /* clear of the explode bar along the bottom */
   left: auto;
   transform: none;
   width: 320px;
-  max-width: calc(100% - 24px);
+  max-width: calc(100vw - 84px);
+  max-height: calc(100dvh - 150px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -524,13 +534,18 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  flex-wrap: nowrap;       /* ONE slim row — wrapping sprawls it back toward centre */
-  gap: 6px;
+  /* WRAPS, and grows UP the left edge. nowrap put tread + width + storey chips
+     in one row on a phone-width viewport and ran them clean off the screen —
+     the storey buttons were simply unreachable. Wrapping upward from the
+     bottom-left keeps every chip on the perimeter instead of sprawling toward
+     the centre, which is what nowrap was guarding against. */
+  flex-wrap: wrap;
+  gap: 4px;
   padding: 2px;
   background: none;
   border: none;
   pointer-events: all;
-  max-width: min(92vw, 460px);
+  max-width: min(62vw, 320px);
 }
 .placeHint {
   font-size: 12px;
@@ -557,14 +572,19 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  flex-wrap: nowrap;       /* ONE slim row — wrapping let a long chip sprawl tall toward centre */
-  gap: 6px;
+  /* WRAPS, growing UP the left edge. nowrap kept it to one row, but the row can
+     only grow SIDEWAYS — and the spec chip ("Ground · I-Joist · 16\" OC") is wide
+     enough to shove Done into the middle of the workspace. Measured: Done landed
+     at centre-x 229 on a 506px viewport, i.e. dead centre. Wrapping drops it to
+     the next line AT THE LEFT EDGE instead, which is where it belongs. */
+  flex-wrap: wrap;
+  gap: 4px;
   padding: 2px;
   /* No box — the chips (which keep their own faint pill) float bottom-left. */
   background: none;
   border: none;
   pointer-events: all;
-  max-width: min(92vw, 420px);
+  max-width: min(62vw, 320px);
 }
 .traceBarChip {
   display: flex;

@@ -118,10 +118,20 @@ export const ROOF_PICKER = {
 }
 export const ROOF_DEFAULTS = { element: 'Gable', size: '6:12' }
 
-/** Roof pitch string ('6:12') → rise/run ratio (0.5 for 6:12). */
-export function pitchToRatio(size: string): number {
-  const [rise, run] = size.split(':').map(Number)
-  return run ? rise / run : 0.5
+/**
+ * Roof pitch string ('6:12') → rise/run ratio (0.5 for 6:12).
+ *
+ * Survives a roof with no pitch on it. This used to call .split straight on the
+ * argument, so a roof area whose `size` was missing threw a TypeError — and it
+ * threw from inside the takeoff, during render, which unmounted that whole part
+ * of the tree. The visible symptom was nothing to do with roofs or takeoffs: the
+ * EDIT RAIL disappeared and the controls "went all messed up" whenever a roof was
+ * around. A missing pitch is a gap in the data, not a reason to take the UI down,
+ * so it falls back to the 6:12 default.
+ */
+export function pitchToRatio(size?: string | null): number {
+  const [rise, run] = String(size ?? ROOF_DEFAULTS.size).split(':').map(Number)
+  return Number.isFinite(rise) && Number.isFinite(run) && run ? rise / run : 0.5
 }
 
 // ── Field-convention colours: a plumber/sparky reads these like real plans ────

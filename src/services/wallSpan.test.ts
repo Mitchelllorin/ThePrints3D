@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import { wallHeightM, wallCoversLevel } from './constructionCode'
 import { buildWallFraming } from './framingGeometry'
+import { pitchToRatio } from '../data/traceLayers'
 
 // A typical storey: 8' ceiling + floor assembly.
 const CEILING = 2.44
@@ -65,5 +66,25 @@ describe('walls that span more than one storey', () => {
       const bb = m.geometry.boundingBox!
       expect(bb.max.y - bb.min.y).toBeGreaterThan(wanted * 0.85)
     }
+  })
+})
+
+describe('a roof with no pitch must not take the UI down', () => {
+  it('falls back instead of throwing on a missing pitch', () => {
+    // This threw `Cannot read properties of undefined (reading 'split')` from
+    // inside the takeoff, DURING RENDER, which unmounted that part of the tree.
+    // The symptom looked nothing like a roof problem: the edit rail vanished and
+    // the controls "went all messed up" whenever a roof was present.
+    expect(() => pitchToRatio(undefined)).not.toThrow()
+    expect(() => pitchToRatio(null)).not.toThrow()
+    expect(() => pitchToRatio('')).not.toThrow()
+    expect(() => pitchToRatio('nonsense')).not.toThrow()
+    expect(pitchToRatio(undefined)).toBeCloseTo(0.5, 6)   // the 6:12 default
+  })
+
+  it('still reads a real pitch correctly', () => {
+    expect(pitchToRatio('6:12')).toBeCloseTo(0.5, 6)
+    expect(pitchToRatio('12:12')).toBeCloseTo(1, 6)
+    expect(pitchToRatio('3:12')).toBeCloseTo(0.25, 6)
   })
 })

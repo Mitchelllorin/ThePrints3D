@@ -129,6 +129,8 @@ export default function FloorplanPanel() {
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const keepPlacing = useFloorplanLocalStore((s) => s.keepPlacing)
   const setKeepPlacing = useFloorplanLocalStore((s) => s.setKeepPlacing)
+  const placeStairCfg  = useFloorplanLocalStore((s) => s.placeStairCfg)
+  const setPlaceStairCfg = useFloorplanLocalStore((s) => s.setPlaceStairCfg)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const setSelectedObjectId = useFloorplanLocalStore((s) => s.setSelectedObjectId)
   const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
@@ -480,6 +482,18 @@ export default function FloorplanPanel() {
       prevTracingActive.current = tracingActive
     }
   }, [tracingActive, setDrawerOpen])
+
+  // ARMING AN OBJECT RETRACTS THE PLACE DRAWER. Same rule tracing follows: an
+  // action owns the workspace, so the menu that started it gets out of the way.
+  // Without this the tray stayed open down the left AND the placement bar stacked
+  // on top of it — two surfaces fighting for the same edge while you were trying
+  // to see where the thing would land.
+  const prevPlacing = useRef(false)
+  useEffect(() => {
+    const placing = placeObjectType !== null
+    if (placing && !prevPlacing.current) setDrawerOpen('place', false)
+    prevPlacing.current = placing
+  }, [placeObjectType, setDrawerOpen])
 
   // ── state machine ─────────────────────────────────────────────────────────
   // No drawing at all — render nothing (the drop zone in ModelViewer handles it)
@@ -1732,6 +1746,36 @@ export default function FloorplanPanel() {
             Tap the plan to place {getCatalogItem(placeObjectType)?.label ?? placeObjectType}
             {keepPlacing && ' — keeps placing until you stop'}
           </span>
+          {/* CONFIGURE BEFORE PLACING. A stair is sized to the hole it has to
+              fit, so choosing its tread and width after dropping it is backwards
+              — and the ghost shows the real footprint while you aim, so you can
+              see whether it lands in the space you have. */}
+          {placeObjectType === 'stairs' && (
+            <>
+              <span className={styles.placeLevels}>
+                {[10, 11, 12].map((inches) => {
+                  const m = inches * 0.0254
+                  const on = Math.abs((placeStairCfg.treadM ?? MIN_TREAD_M) - m) < 0.002
+                  return (
+                    <button key={`t${inches}`} className={on ? styles.action : styles.secondary}
+                      title={`Tread ${inches}"`}
+                      onClick={() => setPlaceStairCfg({ treadM: m })}>{inches}"</button>
+                  )
+                })}
+              </span>
+              <span className={styles.placeLevels}>
+                {[36, 42, 48].map((inches) => {
+                  const m = inches * 0.0254
+                  const on = Math.abs((placeStairCfg.stairWidthM ?? MIN_WIDTH_M) - m) < 0.002
+                  return (
+                    <button key={`w${inches}`} className={on ? styles.action : styles.secondary}
+                      title={`Width ${inches}"`}
+                      onClick={() => setPlaceStairCfg({ stairWidthM: m })}>{inches}"</button>
+                  )
+                })}
+              </span>
+            </>
+          )}
           <div className={styles.placeLevels}>
             {LEVEL_OPTIONS.map((lv) => (
               <button

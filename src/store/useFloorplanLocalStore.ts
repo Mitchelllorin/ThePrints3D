@@ -155,6 +155,11 @@ interface FloorplanLocalState {
   selectedWallIndex: number | null
   /** Catalog type currently armed for placement (positioned via the ghost). */
   placeObjectType: string | null
+  /** Stair settings chosen BEFORE placing, stamped onto the stair when it lands.
+   *  You size a stair to the hole it has to fit, so deciding after you have
+   *  dropped it is backwards — and the ghost can show the real footprint while
+   *  you aim. Cleared when the placement is disarmed. */
+  placeStairCfg: { treadM?: number; stairWidthM?: number; landingM?: number | null }
   /** When on, placement stays armed after each drop so you can place several
    *  (e.g. a row of electrical boxes) without re-selecting from the tray. */
   keepPlacing: boolean
@@ -253,6 +258,7 @@ interface FloorplanLocalState {
   setSelectedWallIndex: (v: number | null) => void
   setPlaceObjectType: (v: string | null) => void
   setKeepPlacing: (v: boolean) => void
+  setPlaceStairCfg: (v: FloorplanLocalState['placeStairCfg']) => void
   setPlaceGhost: (v: { x: number; z: number; rotationY: number } | null) => void
   requestPlaceCommit: () => void
   setSelectedObjectId: (v: string | null) => void
@@ -334,6 +340,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   selectedWallIndex: null,
   placeObjectType: null,
   keepPlacing: false,
+  placeStairCfg: {},
   placeGhost: null,
   placeCommitNonce: 0,
   selectedObjectId: null,
@@ -428,6 +435,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setSelectedWallIndex: (v) => set({ selectedWallIndex: v, activePanel: v != null ? 'wall' : null }),
   setPlaceObjectType: (v) => set({ placeObjectType: v, placeGhost: null }),
   setKeepPlacing: (v) => set({ keepPlacing: v }),
+  setPlaceStairCfg: (v) => set((s) => ({ placeStairCfg: { ...s.placeStairCfg, ...v } })),
   setPlaceGhost: (v) => set({ placeGhost: v }),
   requestPlaceCommit: () => set((s) => ({ placeCommitNonce: s.placeCommitNonce + 1 })),
   setSelectedObjectId: (v) => set({ selectedObjectId: v, activePanel: v ? 'object' : null }),

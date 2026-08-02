@@ -248,6 +248,7 @@ export default function FloorplanOverlay() {
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const keepPlacing = useFloorplanLocalStore((s) => s.keepPlacing)
+  const placeStairCfg = useFloorplanLocalStore((s) => s.placeStairCfg)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
   const wallTrimArmed = useFloorplanLocalStore((s) => s.wallTrimArmed)
   const setWallTrimArmed = useFloorplanLocalStore((s) => s.setWallTrimArmed)
@@ -1240,6 +1241,10 @@ export default function FloorplanOverlay() {
       // Stamp the storey being worked, so the object renders on that floor and
       // only cuts openings in that floor's walls.
       level: activeLevel,
+      // Stair settings chosen before placing — you size a stair to the hole it
+      // has to fit, so it lands already configured rather than needing a second
+      // pass. Spread last so it only ever adds stair fields.
+      ...(placeObjectType === 'stairs' ? placeStairCfg : {}),
     })
     setPlaceObjectType(null)
     hideGhost()
@@ -1261,7 +1266,12 @@ export default function FloorplanOverlay() {
     const d = ghostItem?.defaultD ?? 1
     if (placeObjectType === 'door' || placeObjectType === 'window') return { w, d: 0.06 }
     if (placeObjectType === 'stairs') {
-      const sol = solveStair({ totalRiseM: ghostItem?.defaultH ?? 2.9 })
+      const sol = solveStair({
+        totalRiseM: ghostItem?.defaultH ?? 2.9,
+        treadM: placeStairCfg.treadM,
+        widthM: placeStairCfg.stairWidthM,
+        landingM: placeStairCfg.landingM,
+      })
       return { w: sol.footprint.widthM, d: Math.max(0.3, sol.footprint.lengthM) }
     }
     return { w, d }
