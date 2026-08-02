@@ -14,7 +14,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, type BoardSpec } from '../../services/constructionCode'
+import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec } from '../../services/constructionCode'
 import { footprintCentroids, inwardSign, perimeterTest } from '../../services/wallFacing'
 import type { ParsedWall, PlacedObject } from '../../types'
 
@@ -209,7 +209,7 @@ export default function DrywallLayer() {
             wall={wall}
             pixelToWorld={pixelToWorld}
             scaleMmPerPx={scaleMmPerPx}
-            wallHeight={wallHeight}
+            wallHeight={wallHeightM(wall, wallHeight, storeyHeight)}
             orientation={orientation}
             openings={openingsByWall[i] ?? []}
             storeyHeight={storeyHeight}

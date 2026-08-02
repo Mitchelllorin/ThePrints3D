@@ -10,7 +10,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard, Text } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
-import { renderWallThicknessM } from '../../services/constructionCode'
+import { renderWallThicknessM, wallHeightM } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -308,7 +308,7 @@ export default function LiveWallsLayer() {
           wall={wall}
           pixelToWorld={pixelToWorld}
           scaleMmPerPx={scaleMmPerPx}
-          wallHeight={wallHeight}
+          wallHeight={wallHeightM(wall, wallHeight, storeyHeight)}
           material={wallMaterial}
           steelGauge={wallGauge}
           topTrackStyle={steelTrackTop === 'double' ? 'deep' : steelTrackTop}

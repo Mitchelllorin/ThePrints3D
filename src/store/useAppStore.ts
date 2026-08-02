@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { current, enableMapSet } from 'immer'
 import { immer } from 'zustand/middleware/immer'
+import { wallCoversLevel } from '../services/constructionCode'
 
 // Trade-layer visibility uses a Set in the immer store.
 enableMapSet()
@@ -1117,7 +1118,10 @@ export const useAppStore = create<AppState>()(
 
         const clones = atLevel
           .filter((w) => !exteriorOnly || onPerimeter(w))
-          .filter((w) => !userWalls.some((u) => (u.level ?? 0) === toLevel && sameFootprint(u, w)))
+          // A wall that already SPANS into the storey above is up there already —
+          // cloning it would bury a second wall inside the first.
+          .filter((w) => !wallCoversLevel(w, toLevel))
+          .filter((w) => !userWalls.some((u) => wallCoversLevel(u, toLevel) && sameFootprint(u, w)))
           // SAME footprint coords → plumb (vertical) and flush (faces aligned).
           .map((w) => ({ ...w, level: toLevel }))
         if (clones.length === 0) return

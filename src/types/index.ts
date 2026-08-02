@@ -65,6 +65,18 @@ export interface ParsedWall {
   /** Storey this wall stands on (0 = ground, 1 = 2nd floor, …). Drives its 3D
    *  base elevation so upper-floor walls stack on the floor below. */
   level?: number
+  /** How many storeys this wall runs THROUGH, starting at `level`. Default 1.
+   *
+   *  A stairwell wall, a two-storey foyer, a vaulted great-room wall, a shaft or
+   *  a flue does not stop at the next floor — there is no floor there to stop on.
+   *  Those are BALLOON framed: continuous studs the whole way up, rather than two
+   *  platform-framed walls stacked with a top plate and a rim band through the
+   *  middle of the opening.
+   *
+   *  Because the framing builder already puts plates only at the true top and
+   *  bottom with studs running the full height between them, a wall given its
+   *  real span comes out balloon framed for free — the span is the whole feature. */
+  spanLevels?: number
   /** X-ray this wall — render it see-through so you can see what's behind/inside
    *  (studs, MEP) without deleting it. Toggled from the wall edit panel. */
   transparent?: boolean

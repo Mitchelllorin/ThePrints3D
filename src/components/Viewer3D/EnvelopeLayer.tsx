@@ -25,7 +25,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallEnvelope, buildWallCladding, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
-  sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, renderWallThicknessM,
+  sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, renderWallThicknessM, wallHeightM,
   claddingSpec, finishesVisible,
   type WrbKind, type WoodSheathing, type CladdingKind,
 } from '../../services/constructionCode'
@@ -246,7 +246,7 @@ export default function EnvelopeLayer() {
             key={`skin-${w.level ?? 0}-${i}`}
             wall={w}
             pixelToWorld={pixelToWorld}
-            wallHeight={wallHeight}
+            wallHeight={wallHeightM(w, wallHeight, storeyHeight)}
             storeyHeight={storeyHeight}
             outward={outward}
             wrapVisible={wrapVisible}

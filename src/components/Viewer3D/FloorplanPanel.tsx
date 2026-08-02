@@ -1408,6 +1408,34 @@ export default function FloorplanPanel() {
           <div className={styles.step}>
             <span className={styles.stepLabel}>Wall selected</span>
             <span className={styles.stepHint}>Wall {selectedWallIndex + 1} of {userWalls.length}</span>
+            {/* SPAN — how many storeys this wall runs through.
+                A stairwell wall, a two-storey foyer, a vaulted wall or a shaft
+                does not stop at the next floor, because there is no floor there
+                to stop on. Those are BALLOON framed: continuous studs the whole
+                way, not two platform walls stacked with a top plate and a rim
+                band through the middle of the opening. Setting the span gives
+                exactly that, since the framing builder puts plates only at the
+                true top and bottom.
+
+                A control rather than a guess: a wall beside a stairwell MIGHT be
+                full height, and guessing wrong frames the building wrong without
+                saying so. */}
+            <div className={styles.stairRow}>
+              <span className={styles.propLabel}>Spans</span>
+              {[1, 2, 3].map((n) => {
+                const on = (userWalls[selectedWallIndex].spanLevels ?? 1) === n
+                return (
+                  <button
+                    key={n}
+                    className={on ? styles.action : styles.secondary}
+                    onClick={() => { updateUserWall(drawing.id, selectedWallIndex, { spanLevels: n }); if (modelReady) buildModel() }}
+                    title={n === 1 ? 'One storey (platform framed)' : `${n} storeys, continuous studs (balloon framed)`}
+                  >
+                    {n === 1 ? '1 storey' : `${n} storeys`}
+                  </button>
+                )
+              })}
+            </div>
             <label className={styles.row}>
               <span className={styles.propLabel}>Interior</span>
               <select

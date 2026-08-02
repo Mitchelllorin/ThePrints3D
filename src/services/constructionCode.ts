@@ -25,6 +25,43 @@ export function wallThicknessM(framingType?: string): number {
 }
 
 /**
+ * How TALL to render a wall — the one answer every layer must use.
+ *
+ * Almost every wall is one storey and stops at the ceiling. A wall with a span
+ * runs through the floors above it instead: `level` is where it starts,
+ * `spanLevels` is how many storeys it passes through, and it finishes at the
+ * ceiling of the last one. Each extra storey adds a full storey rise (ceiling
+ * plus the floor assembly that would have landed on it, which for a spanning
+ * wall is exactly the floor that is NOT there).
+ *
+ * Keeping this in one place for the same reason the thickness is: the framing,
+ * the board and the envelope all have to agree, and when they each worked it out
+ * for themselves the sheathing ended up a different size from the studs it was
+ * nailed to.
+ */
+export function wallHeightM(
+  wall: { spanLevels?: number },
+  ceilingM: number,
+  storeyHeightM: number,
+): number {
+  const span = Math.max(1, Math.round(wall.spanLevels ?? 1))
+  return ceilingM + (span - 1) * storeyHeightM
+}
+
+/**
+ * Does a wall starting at `level` with a span reach INTO the given storey?
+ *
+ * Used to stop carry-up cloning a wall on top of itself: a two-storey stairwell
+ * wall already occupies the floor above, so copying it up would bury a second
+ * wall inside the first.
+ */
+export function wallCoversLevel(wall: { level?: number; spanLevels?: number }, level: number): boolean {
+  const base = wall.level ?? 0
+  const span = Math.max(1, Math.round(wall.spanLevels ?? 1))
+  return level >= base && level < base + span
+}
+
+/**
  * How thick to RENDER a wall — the one answer every layer must use.
  *
  * If the wall has a framing type, that governs: you picked 2x8, you get 7.5".
