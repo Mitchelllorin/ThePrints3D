@@ -1,243 +1,444 @@
+/**
+ * Preset drawings — practice plans that look like plans.
+ *
+ * These are NOT downloaded images. A preset is a wall list, and the raster is an
+ * SVG drawn from it at load time, so there is no asset to license and nothing
+ * binary in the repo. That also means "make them realistic" is a data problem
+ * rather than a scraping one.
+ *
+ * The old presets were abstract: boxes subdivided into more boxes, every wall the
+ * same weight, rooms labelled R1..R4. Nothing about them read as a house, and
+ * tracing one taught you nothing about tracing a real drawing.
+ *
+ * These are laid out in FEET from actual residential proportions — 12x12 and
+ * 14x12 bedrooms, a 6x8 bath, a 3 ft hall, 10-14 ft kitchens — and drawn with the
+ * conventions a real plan uses:
+ *
+ *   • EXTERIOR walls heavier than interior ones (2x6 shell, 2x4 partitions), so
+ *     the shell reads at a glance and a trace picks up the right thickness
+ *   • doors as a jamb gap with a SWING ARC, not a dashed line
+ *   • windows as the standard triple line broken into the wall
+ *   • rooms named AND dimensioned the way a plan labels them, because that is
+ *     what you actually read off a drawing
+ *   • dimension strings with ticks along two sides
+ *
+ * Room sizes checked against standard residential sizing rather than picked by
+ * eye: bedrooms 10x12 to 14x16, a full bath about 6x9, kitchens from 10x12,
+ * living rooms from 14x16.
+ */
 import type { Drawing, ParsedOpening, ParsedRoom, ParsedWall, WorkspaceWizardInputs } from '../types'
 
 export type PresetDifficulty = 'easy' | 'medium' | 'hard'
 
-interface PresetDefinition {
+/** Everything below is authored in FEET, at this many millimetres per pixel. */
+const MM_PER_PX = 10
+const FT_MM = 304.8
+/** Feet → drawing pixels. */
+const ft = (n: number): number => (n * FT_MM) / MM_PER_PX
+/** Margin around the plan, in feet, leaving room for the dimension strings. */
+const MARGIN_FT = 4
+
+/** Wall weights in real inches, drawn to scale like everything else. */
+const EXT_IN = 5.5   // 2x6 shell
+const INT_IN = 3.5   // 2x4 partition
+const inToPx = (n: number): number => (n * 25.4) / MM_PER_PX
+
+type Seg = [number, number, number, number]   // x1,y1,x2,y2 in FEET
+
+interface RoomSpec {
+  name: string
+  /** x1,y1,x2,y2 in feet. */
+  box: Seg
+}
+
+interface OpeningSpec {
+  type: 'door' | 'window'
+  /** Centre of the opening, in feet. */
+  at: [number, number]
+  /** Clear width in feet — 3 ft entry, 2'-8" interior, 3-6 ft windows. */
+  widthFt: number
+  orientation: 'horizontal' | 'vertical'
+  /** Which way a door swings, for the arc. Ignored by windows. */
+  swing?: 'up' | 'down' | 'left' | 'right'
+}
+
+interface PlanSpec {
   id: PresetDifficulty
   name: string
-  widthPx: number
-  heightPx: number
-  mmPerPx: number
-  walls: ParsedWall[]
-  openings: ParsedOpening[]
-  rooms: ParsedRoom[]
+  /** Overall footprint in feet. */
+  widthFt: number
+  depthFt: number
+  /** Interior partitions in feet; the shell is generated from the footprint. */
+  partitions: Seg[]
+  rooms: RoomSpec[]
+  openings: OpeningSpec[]
   wizardInputs: WorkspaceWizardInputs
 }
 
-function rectWalls(x1: number, y1: number, x2: number, y2: number, thickness = 10): ParsedWall[] {
+// ── The plans ────────────────────────────────────────────────────────────────
+
+// EASY — a two-bedroom bungalow, 32' x 26'. One clean rectangle, a central hall
+// everything opens off, wet rooms grouped on one side. The layout a first trace
+// should meet: every wall orthogonal, nothing re-entrant.
+const EASY: PlanSpec = {
+  id: 'easy',
+  name: 'Two-Bed Bungalow',
+  widthFt: 32,
+  depthFt: 26,
+  partitions: [
+    [12, 0, 12, 12],    // bed 1 | closet+bath
+    [18, 0, 18, 12],    // closet+bath | bed 2
+    [12, 4, 18, 4],     // closet | bath
+    [0, 12, 22, 12],    // bedrooms | hall
+    [0, 15, 22, 15],    // hall | living
+    [22, 12, 22, 26],   // living | kitchen
+  ],
+  rooms: [
+    { name: 'BED 1', box: [0, 0, 12, 12] },
+    { name: 'CLO', box: [12, 0, 18, 4] },
+    { name: 'BATH', box: [12, 4, 18, 12] },
+    { name: 'BED 2', box: [18, 0, 32, 12] },
+    { name: 'HALL', box: [0, 12, 22, 15] },
+    { name: 'LIVING', box: [0, 15, 22, 26] },
+    { name: 'KITCHEN', box: [22, 12, 32, 26] },
+  ],
+  openings: [
+    { type: 'door', at: [11, 26], widthFt: 3, orientation: 'horizontal', swing: 'up' },      // entry
+    { type: 'door', at: [6, 12], widthFt: 2.67, orientation: 'horizontal', swing: 'up' },    // bed 1
+    { type: 'door', at: [15, 12], widthFt: 2.5, orientation: 'horizontal', swing: 'up' },    // bath
+    { type: 'door', at: [20, 12], widthFt: 2.67, orientation: 'horizontal', swing: 'up' },   // bed 2
+    { type: 'door', at: [22, 20], widthFt: 3, orientation: 'vertical', swing: 'right' },     // kitchen
+    // Cased opening, hall to living. Without it the front door lets you into the
+    // living room and no further — the bedrooms were unreachable.
+    { type: 'door', at: [9, 15], widthFt: 5, orientation: 'horizontal', swing: 'down' },
+    { type: 'window', at: [5, 26], widthFt: 4, orientation: 'horizontal' },
+    { type: 'window', at: [16, 26], widthFt: 4, orientation: 'horizontal' },
+    { type: 'window', at: [6, 0], widthFt: 3, orientation: 'horizontal' },
+    { type: 'window', at: [25, 0], widthFt: 4, orientation: 'horizontal' },
+    { type: 'window', at: [32, 19], widthFt: 3, orientation: 'vertical' },
+    { type: 'window', at: [0, 20], widthFt: 3, orientation: 'vertical' },
+  ],
+  wizardInputs: {
+    set1BuildingBasics: '32ft x 26ft footprint, 8ft ceiling, 1 floor, slab foundation',
+    set1Clarifications: 'Single-storey bungalow, rectangular footprint.',
+    set2StructuralDetails: 'Exterior 2x6 bearing walls, 2x4 interior partitions, one entry door.',
+    set2Clarifications: 'Bath and kitchen share the service side for a common plumbing wall.',
+    set3FinishingDetails: 'Lap siding over OSB and housewrap, 1/2in gypsum interior.',
+    set3Clarifications: 'Tile backer in the bath.',
+    completedGroup: 'group3',
+    completedAt: Date.now(),
+  },
+}
+
+// MEDIUM — a three-bed ranch, 44' x 28', with an ensuite and a utility room. The
+// step up is room COUNT and a wet core: two baths backing onto one stack.
+const MEDIUM: PlanSpec = {
+  id: 'medium',
+  name: 'Three-Bed Ranch',
+  widthFt: 44,
+  depthFt: 28,
+  partitions: [
+    [0, 14, 30, 14],    // bedrooms | hall
+    [0, 17, 30, 17],    // hall | living side
+    [12, 0, 12, 14],    // bed 2 | bath
+    [19, 0, 19, 14],    // bath | bed 3
+    [30, 0, 30, 28],    // main house | master suite
+    [30, 11, 44, 11],   // ensuite+closet | master bed
+    [38, 0, 38, 11],    // ensuite | closet
+    [12, 17, 12, 28],   // living | kitchen
+    [24, 17, 24, 28],   // kitchen | utility
+  ],
+  rooms: [
+    { name: 'BED 2', box: [0, 0, 12, 14] },
+    { name: 'BATH', box: [12, 0, 19, 14] },
+    { name: 'BED 3', box: [19, 0, 30, 14] },
+    { name: 'HALL', box: [0, 14, 30, 17] },
+    { name: 'LIVING', box: [0, 17, 12, 28] },
+    { name: 'KITCHEN', box: [12, 17, 24, 28] },
+    { name: 'UTILITY', box: [24, 17, 30, 28] },
+    { name: 'ENSUITE', box: [30, 0, 38, 11] },
+    { name: 'CLO', box: [38, 0, 44, 11] },
+    { name: 'MASTER', box: [30, 11, 44, 28] },
+  ],
+  openings: [
+    { type: 'door', at: [6, 28], widthFt: 3, orientation: 'horizontal', swing: 'up' },       // entry
+    { type: 'door', at: [6, 14], widthFt: 2.67, orientation: 'horizontal', swing: 'up' },
+    { type: 'door', at: [15, 14], widthFt: 2.5, orientation: 'horizontal', swing: 'up' },
+    { type: 'door', at: [24, 14], widthFt: 2.67, orientation: 'horizontal', swing: 'up' },
+    { type: 'door', at: [30, 20], widthFt: 2.67, orientation: 'vertical', swing: 'right' },  // master
+    { type: 'door', at: [34, 11], widthFt: 2.5, orientation: 'horizontal', swing: 'down' },  // ensuite
+    { type: 'door', at: [27, 17], widthFt: 2.67, orientation: 'horizontal', swing: 'down' }, // utility
+    { type: 'door', at: [6, 17], widthFt: 5, orientation: 'horizontal', swing: 'down' },     // hall → living
+    { type: 'door', at: [18, 17], widthFt: 5, orientation: 'horizontal', swing: 'down' },    // hall → kitchen
+    { type: 'window', at: [6, 0], widthFt: 4, orientation: 'horizontal' },
+    { type: 'window', at: [24, 0], widthFt: 4, orientation: 'horizontal' },
+    { type: 'window', at: [36, 0], widthFt: 3, orientation: 'horizontal' },
+    { type: 'window', at: [6, 28], widthFt: 5, orientation: 'horizontal' },
+    { type: 'window', at: [18, 28], widthFt: 4, orientation: 'horizontal' },
+    { type: 'window', at: [37, 28], widthFt: 5, orientation: 'horizontal' },
+    { type: 'window', at: [0, 22], widthFt: 3, orientation: 'vertical' },
+    { type: 'window', at: [44, 20], widthFt: 4, orientation: 'vertical' },
+  ],
+  wizardInputs: {
+    set1BuildingBasics: '44ft x 28ft footprint, 9ft ceiling, 1 floor, crawlspace foundation',
+    set1Clarifications: 'Single-storey ranch with a master suite at one end.',
+    set2StructuralDetails: 'Exterior 2x6 bearing walls, 2x4 partitions, bearing wall on the hall line.',
+    set2Clarifications: 'Bath and ensuite share a wet wall with the utility room.',
+    set3FinishingDetails: 'Brick veneer front, lap siding elsewhere, 1/2in gypsum interior.',
+    set3Clarifications: 'Tile backer in both baths.',
+    completedGroup: 'group3',
+    completedAt: Date.now(),
+  },
+}
+
+// HARD — two storeys, 36' x 30', with a stair, an open great room and a garage
+// bay. The step up is the STAIR: an opening that has to be framed, a wall that
+// wants to span both storeys, and a fire separation to the garage.
+const HARD: PlanSpec = {
+  id: 'hard',
+  name: 'Two-Storey with Garage',
+  widthFt: 36,
+  depthFt: 30,
+  partitions: [
+    [22, 0, 22, 30],    // house | garage (fire separation)
+    [0, 18, 22, 18],    // front rooms | rear rooms
+    [10, 0, 10, 18],    // entry side | great room
+    [0, 8, 10, 8],      // entry | powder+closet
+    [5, 8, 5, 18],      // powder | closet
+    [10, 18, 10, 30],   // stair | kitchen
+    [10, 24, 22, 24],   // kitchen | pantry
+  ],
+  rooms: [
+    { name: 'ENTRY', box: [0, 0, 10, 8] },
+    { name: 'PWDR', box: [0, 8, 5, 18] },
+    { name: 'CLO', box: [5, 8, 10, 18] },
+    { name: 'GREAT ROOM', box: [10, 0, 22, 18] },
+    { name: 'STAIR', box: [0, 18, 10, 30] },
+    { name: 'KITCHEN', box: [10, 18, 22, 24] },
+    { name: 'PANTRY', box: [10, 24, 22, 30] },
+    { name: 'GARAGE', box: [22, 0, 36, 30] },
+  ],
+  openings: [
+    { type: 'door', at: [5, 0], widthFt: 3, orientation: 'horizontal', swing: 'down' },      // entry
+    { type: 'door', at: [29, 30], widthFt: 9, orientation: 'horizontal', swing: 'up' },      // garage
+    { type: 'door', at: [22, 9], widthFt: 2.83, orientation: 'vertical', swing: 'left' },    // house↔garage
+    { type: 'door', at: [2.5, 8], widthFt: 2.5, orientation: 'horizontal', swing: 'down' },  // powder
+    { type: 'door', at: [16, 18], widthFt: 5, orientation: 'horizontal', swing: 'up' },      // kitchen
+    { type: 'door', at: [16, 24], widthFt: 2.67, orientation: 'horizontal', swing: 'down' }, // pantry
+    { type: 'door', at: [10, 4], widthFt: 5, orientation: 'vertical', swing: 'right' },      // entry → great room
+    { type: 'door', at: [5, 18], widthFt: 4, orientation: 'horizontal', swing: 'down' },     // → stair
+    { type: 'window', at: [16, 0], widthFt: 6, orientation: 'horizontal' },
+    { type: 'window', at: [0, 13], widthFt: 3, orientation: 'vertical' },
+    { type: 'window', at: [0, 24], widthFt: 4, orientation: 'vertical' },
+    { type: 'window', at: [5, 30], widthFt: 4, orientation: 'horizontal' },
+    { type: 'window', at: [16, 30], widthFt: 5, orientation: 'horizontal' },
+    { type: 'window', at: [36, 8], widthFt: 3, orientation: 'vertical' },
+  ],
+  wizardInputs: {
+    set1BuildingBasics: '36ft x 30ft footprint, 9ft ceiling, 2 floors, basement foundation',
+    set1Clarifications: 'Two storeys over a basement, attached garage on one side.',
+    set2StructuralDetails: 'Exterior 2x6 bearing walls, stair opening framed with doubled headers and trimmers.',
+    set2Clarifications: 'The stairwell wall runs full height through both storeys.',
+    set3FinishingDetails: 'Fibre-cement lap siding over OSB and housewrap, 5/8in Type X to the garage.',
+    set3Clarifications: 'Garage separation is fire-rated; the garage slab steps down and slopes to the door.',
+    completedGroup: 'group3',
+    completedAt: Date.now(),
+  },
+}
+
+const PLANS: Record<PresetDifficulty, PlanSpec> = { easy: EASY, medium: MEDIUM, hard: HARD }
+
+// ── Spec → drawing data ──────────────────────────────────────────────────────
+
+function seg(s: Seg, thicknessPx: number): ParsedWall {
+  const [x1, y1, x2, y2] = s
+  return {
+    x1: ft(x1 + MARGIN_FT), y1: ft(y1 + MARGIN_FT),
+    x2: ft(x2 + MARGIN_FT), y2: ft(y2 + MARGIN_FT),
+    thickness: thicknessPx, source: 'auto', detectionConfidence: 1,
+  }
+}
+
+function planWalls(plan: PlanSpec): ParsedWall[] {
+  const { widthFt: w, depthFt: d } = plan
+  const shell: Seg[] = [[0, 0, w, 0], [w, 0, w, d], [w, d, 0, d], [0, d, 0, 0]]
   return [
-    { x1, y1, x2, y2: y1, thickness, source: 'auto', detectionConfidence: 1 },
-    { x1: x2, y1, x2, y2, thickness, source: 'auto', detectionConfidence: 1 },
-    { x1: x2, y1: y2, x2: x1, y2, thickness, source: 'auto', detectionConfidence: 1 },
-    { x1, y1: y2, x2: x1, y2: y1, thickness, source: 'auto', detectionConfidence: 1 },
+    ...shell.map((s) => seg(s, inToPx(EXT_IN))),
+    ...plan.partitions.map((s) => seg(s, inToPx(INT_IN))),
   ]
 }
 
-const EASY_WALLS: ParsedWall[] = [
-  ...rectWalls(120, 120, 1080, 780, 12),
-  { x1: 600, y1: 120, x2: 600, y2: 520, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 120, y1: 430, x2: 600, y2: 430, thickness: 10, source: 'auto', detectionConfidence: 1 },
-]
+function planRooms(plan: PlanSpec): ParsedRoom[] {
+  return plan.rooms.map((r, i) => {
+    const [x1, y1, x2, y2] = r.box
+    const px1 = ft(x1 + MARGIN_FT), py1 = ft(y1 + MARGIN_FT)
+    const px2 = ft(x2 + MARGIN_FT), py2 = ft(y2 + MARGIN_FT)
+    return {
+      id: `${plan.id}-room-${i + 1}`,
+      cx: (px1 + px2) / 2, cy: (py1 + py2) / 2,
+      x1: px1, y1: py1, x2: px2, y2: py2,
+      areaPx: Math.max(1, (px2 - px1) * (py2 - py1)),
+      areaSqM: (x2 - x1) * (y2 - y1) * 0.092903,
+    }
+  })
+}
 
-const MEDIUM_WALLS: ParsedWall[] = [
-  ...rectWalls(100, 100, 1180, 820, 12),
-  ...rectWalls(100, 100, 360, 300, 10),
-  { x1: 360, y1: 300, x2: 720, y2: 300, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 720, y1: 300, x2: 720, y2: 620, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 360, y1: 620, x2: 980, y2: 620, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 980, y1: 360, x2: 980, y2: 820, thickness: 10, source: 'auto', detectionConfidence: 1 },
-]
-
-const HARD_WALLS: ParsedWall[] = [
-  ...rectWalls(80, 80, 1220, 860, 12),
-  { x1: 420, y1: 80, x2: 420, y2: 520, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 760, y1: 80, x2: 760, y2: 640, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 80, y1: 340, x2: 420, y2: 340, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 420, y1: 520, x2: 980, y2: 520, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 760, y1: 260, x2: 1220, y2: 260, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 980, y1: 520, x2: 980, y2: 860, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 320, y1: 700, x2: 980, y2: 700, thickness: 10, source: 'auto', detectionConfidence: 1 },
-  { x1: 320, y1: 700, x2: 320, y2: 860, thickness: 10, source: 'auto', detectionConfidence: 1 },
-]
-
-function createRooms(idPrefix: string, rooms: Array<[number, number, number, number]>): ParsedRoom[] {
-  return rooms.map(([x1, y1, x2, y2], index) => ({
-    id: `${idPrefix}-room-${index + 1}`,
-    cx: (x1 + x2) / 2,
-    cy: (y1 + y2) / 2,
-    x1,
-    y1,
-    x2,
-    y2,
-    areaPx: Math.max(1, (x2 - x1) * (y2 - y1)),
-    areaSqM: null,
+function planOpenings(plan: PlanSpec): ParsedOpening[] {
+  return plan.openings.map((o) => ({
+    x: ft(o.at[0] + MARGIN_FT),
+    y: ft(o.at[1] + MARGIN_FT),
+    widthPx: ft(o.widthFt),
+    widthMm: o.widthFt * FT_MM,
+    orientation: o.orientation,
+    type: o.type,
   }))
 }
 
-const PRESET_DEFINITIONS: Record<PresetDifficulty, PresetDefinition> = {
-  easy: {
-    id: 'easy',
-    name: 'Easy Starter Cottage',
-    widthPx: 1200,
-    heightPx: 900,
-    mmPerPx: 10,
-    walls: EASY_WALLS,
-    openings: [
-      { x: 360, y: 120, widthPx: 110, widthMm: 1100, orientation: 'horizontal', type: 'window' },
-      { x: 840, y: 430, widthPx: 100, widthMm: 1000, orientation: 'horizontal', type: 'door' },
-    ],
-    rooms: createRooms('easy', [
-      [120, 120, 600, 430],
-      [600, 120, 1080, 430],
-      [120, 430, 600, 780],
-      [600, 430, 1080, 780],
-    ]),
-    wizardInputs: {
-      set1BuildingBasics: '12m x 8m footprint, wall height 3m, 1 floor, slab foundation',
-      set1Clarifications: 'Simple starter layout with straight exterior walls.',
-      set2StructuralDetails: 'One load-bearing central partition, 1 main entry door, 1 large front window.',
-      set2Clarifications: 'Keep partitions aligned to the print for clean snapping.',
-      set3FinishingDetails: 'Concrete block exterior, painted gypsum interior, 200mm wall thickness.',
-      set3Clarifications: 'No special finish overrides.',
-      completedGroup: 'group3',
-      completedAt: Date.now(),
-    },
-  },
-  medium: {
-    id: 'medium',
-    name: 'Medium Family House',
-    widthPx: 1280,
-    heightPx: 920,
-    mmPerPx: 12,
-    walls: MEDIUM_WALLS,
-    openings: [
-      { x: 260, y: 100, widthPx: 120, widthMm: 1440, orientation: 'horizontal', type: 'window' },
-      { x: 1120, y: 480, widthPx: 110, widthMm: 1320, orientation: 'vertical', type: 'door' },
-      { x: 720, y: 620, widthPx: 90, widthMm: 1080, orientation: 'horizontal', type: 'door' },
-    ],
-    rooms: createRooms('medium', [
-      [100, 100, 360, 300],
-      [360, 100, 1180, 300],
-      [100, 300, 720, 620],
-      [720, 300, 980, 620],
-      [100, 620, 980, 820],
-      [980, 100, 1180, 820],
-    ]),
-    wizardInputs: {
-      set1BuildingBasics: '18m x 11m footprint, wall height 3.2m, 2 floors, slab foundation',
-      set1Clarifications: 'Upper floor repeats most of the lower footprint except the rear service zone.',
-      set2StructuralDetails: 'Load-bearing walls along the main axes, multiple door and window openings.',
-      set2Clarifications: 'Keep opening markers visible for jamb alignment.',
-      set3FinishingDetails: 'Brick exterior, gypsum interior, 220mm wall thickness, soffit over entry.',
-      set3Clarifications: 'Review the soffit and stair opening after generation.',
-      completedGroup: 'group3',
-      completedAt: Date.now(),
-    },
-  },
-  hard: {
-    id: 'hard',
-    name: 'Hard Mixed-Use Core',
-    widthPx: 1300,
-    heightPx: 940,
-    mmPerPx: 14,
-    walls: HARD_WALLS,
-    openings: [
-      { x: 180, y: 80, widthPx: 130, widthMm: 1820, orientation: 'horizontal', type: 'window' },
-      { x: 1080, y: 260, widthPx: 100, widthMm: 1400, orientation: 'horizontal', type: 'window' },
-      { x: 980, y: 760, widthPx: 110, widthMm: 1540, orientation: 'vertical', type: 'door' },
-      { x: 540, y: 700, widthPx: 90, widthMm: 1260, orientation: 'horizontal', type: 'door' },
-    ],
-    rooms: createRooms('hard', [
-      [80, 80, 420, 340],
-      [420, 80, 760, 260],
-      [760, 80, 1220, 260],
-      [80, 340, 420, 860],
-      [420, 260, 760, 520],
-      [760, 260, 1220, 520],
-      [420, 520, 980, 700],
-      [320, 700, 980, 860],
-      [980, 520, 1220, 860],
-    ]),
-    wizardInputs: {
-      set1BuildingBasics: '22m x 14m footprint, wall height 3.6m, 3 floors with basement, raft foundation',
-      set1Clarifications: 'Core walls and stair zones stack through the building.',
-      set2StructuralDetails: 'Several load-bearing walls, mixed office and residential openings, stair and service shafts.',
-      set2Clarifications: 'Preserve the service core, stair, and corridor walls during tracing.',
-      set3FinishingDetails: 'Concrete and glass exterior, gypsum interior, 250mm wall thickness, bulkheads and reveals.',
-      set3Clarifications: 'Special attention to stair bulkheads and storefront glazing.',
-      completedGroup: 'group3',
-      completedAt: Date.now(),
-    },
-  },
+/** Feet as a plan reads them: 12 → 12'-0", 2.67 → 2'-8". */
+function ftIn(n: number): string {
+  const whole = Math.floor(n + 1e-6)
+  const inches = Math.round((n - whole) * 12)
+  return inches === 0 ? `${whole}'-0"` : `${whole}'-${inches}"`
 }
 
-function drawSvg(definition: PresetDefinition): string {
-  const wallLines = definition.walls.map((wall) => `
-    <line x1="${wall.x1}" y1="${wall.y1}" x2="${wall.x2}" y2="${wall.y2}" stroke="#111827" stroke-width="${wall.thickness}" stroke-linecap="round" />
-  `).join('')
-  const roomLabels = definition.rooms.map((room, index) => `
-    <text x="${room.cx}" y="${room.cy}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="26" fill="#64748b">R${index + 1}</text>
-  `).join('')
-  const openings = definition.openings.map((opening) => {
-    const half = opening.widthPx / 2
-    if (opening.orientation === 'horizontal') {
-      return `<line x1="${opening.x - half}" y1="${opening.y}" x2="${opening.x + half}" y2="${opening.y}" stroke="${opening.type === 'door' ? '#0ea5e9' : '#38bdf8'}" stroke-width="8" stroke-dasharray="18 10" />`
-    }
-    return `<line x1="${opening.x}" y1="${opening.y - half}" x2="${opening.x}" y2="${opening.y + half}" stroke="${opening.type === 'door' ? '#0ea5e9' : '#38bdf8'}" stroke-width="8" stroke-dasharray="18 10" />`
+// ── SVG ──────────────────────────────────────────────────────────────────────
+
+const INK = '#1e293b'
+const THIN = '#94a3b8'
+const PAPER = '#f8fafc'
+
+/** Door: a gap knocked in the wall, a leaf, and the swing arc. */
+function doorSymbol(o: OpeningSpec): string {
+  const cx = ft(o.at[0] + MARGIN_FT), cy = ft(o.at[1] + MARGIN_FT)
+  const w = ft(o.widthFt), half = w / 2
+  const horiz = o.orientation === 'horizontal'
+  const hx = horiz ? cx - half : cx
+  const hy = horiz ? cy : cy - half
+  const ex = horiz ? cx + half : cx
+  const ey = horiz ? cy : cy + half
+  const sw = o.swing ?? (horiz ? 'up' : 'right')
+  const lx = horiz ? hx : hx + (sw === 'left' ? -w : w)
+  const ly = horiz ? hy + (sw === 'up' ? -w : w) : hy
+  const sweep = horiz ? (sw === 'up' ? 1 : 0) : (sw === 'right' ? 1 : 0)
+  return `
+    <line x1="${hx}" y1="${hy}" x2="${ex}" y2="${ey}" stroke="${PAPER}" stroke-width="${inToPx(EXT_IN) + 3}" />
+    <line x1="${hx}" y1="${hy}" x2="${lx}" y2="${ly}" stroke="${INK}" stroke-width="2.5" />
+    <path d="M ${lx} ${ly} A ${w} ${w} 0 0 ${sweep} ${ex} ${ey}" fill="none" stroke="${THIN}" stroke-width="1.4" stroke-dasharray="6 5" />`
+}
+
+/** Window: the wall broken by the standard triple line. */
+function windowSymbol(o: OpeningSpec): string {
+  const cx = ft(o.at[0] + MARGIN_FT), cy = ft(o.at[1] + MARGIN_FT)
+  const w = ft(o.widthFt), half = w / 2
+  const t = inToPx(EXT_IN)
+  const offs = [-t / 3, 0, t / 3]
+  if (o.orientation === 'horizontal') {
+    return `
+      <line x1="${cx - half}" y1="${cy}" x2="${cx + half}" y2="${cy}" stroke="${PAPER}" stroke-width="${t + 3}" />
+      ${offs.map((d) => `<line x1="${cx - half}" y1="${cy + d}" x2="${cx + half}" y2="${cy + d}" stroke="${INK}" stroke-width="1.5" />`).join('')}`
+  }
+  return `
+    <line x1="${cx}" y1="${cy - half}" x2="${cx}" y2="${cy + half}" stroke="${PAPER}" stroke-width="${t + 3}" />
+    ${offs.map((d) => `<line x1="${cx + d}" y1="${cy - half}" x2="${cx + d}" y2="${cy + half}" stroke="${INK}" stroke-width="1.5" />`).join('')}`
+}
+
+/** A dimension string with end ticks. */
+function dimension(x1: number, y1: number, x2: number, y2: number, label: string): string {
+  const t = 5
+  const horiz = y1 === y2
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2
+  const tick = (x: number, y: number) => horiz
+    ? `<line x1="${x}" y1="${y - t}" x2="${x}" y2="${y + t}" stroke="${THIN}" stroke-width="1.2" />`
+    : `<line x1="${x - t}" y1="${y}" x2="${x + t}" y2="${y}" stroke="${THIN}" stroke-width="1.2" />`
+  return `
+    <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${THIN}" stroke-width="1.2" />
+    ${tick(x1, y1)}${tick(x2, y2)}
+    <text x="${mx}" y="${my - 6}" text-anchor="middle" font-family="Inter, Arial, sans-serif"
+          font-size="13" fill="${THIN}"${horiz ? '' : ` transform="rotate(-90 ${mx} ${my})"`}>${label}</text>`
+}
+
+function drawSvg(plan: PlanSpec): string {
+  const W = ft(plan.widthFt + MARGIN_FT * 2)
+  const H = ft(plan.depthFt + MARGIN_FT * 2)
+  const m = ft(MARGIN_FT)
+
+  const walls = planWalls(plan).map((w) => `
+    <line x1="${w.x1}" y1="${w.y1}" x2="${w.x2}" y2="${w.y2}" stroke="${INK}" stroke-width="${w.thickness}" stroke-linecap="square" />`).join('')
+
+  const symbols = plan.openings.map((o) => (o.type === 'door' ? doorSymbol(o) : windowSymbol(o))).join('')
+
+  const labels = plan.rooms.map((r) => {
+    const [x1, y1, x2, y2] = r.box
+    const cx = ft((x1 + x2) / 2 + MARGIN_FT), cy = ft((y1 + y2) / 2 + MARGIN_FT)
+    const tight = (x2 - x1) < 7 || (y2 - y1) < 5
+    return `
+      <text x="${cx}" y="${cy}" text-anchor="middle" font-family="Inter, Arial, sans-serif"
+            font-size="${tight ? 11 : 15}" font-weight="600" fill="#475569">${r.name}</text>
+      ${tight ? '' : `<text x="${cx}" y="${cy + 17}" text-anchor="middle" font-family="Inter, Arial, sans-serif"
+            font-size="12" fill="${THIN}">${ftIn(x2 - x1)} x ${ftIn(y2 - y1)}</text>`}`
   }).join('')
 
+  const dims = dimension(m, m - 22, W - m, m - 22, ftIn(plan.widthFt))
+    + dimension(m - 22, m, m - 22, H - m, ftIn(plan.depthFt))
+
   return `
-  <svg xmlns="http://www.w3.org/2000/svg" width="${definition.widthPx}" height="${definition.heightPx}" viewBox="0 0 ${definition.widthPx} ${definition.heightPx}">
-    <rect width="100%" height="100%" fill="#f8fafc" />
-    <rect x="24" y="24" width="${definition.widthPx - 48}" height="${definition.heightPx - 48}" rx="18" fill="none" stroke="#cbd5e1" stroke-width="4" />
-    ${wallLines}
-    ${openings}
-    ${roomLabels}
-    <text x="50" y="${definition.heightPx - 40}" font-family="Inter, Arial, sans-serif" font-size="22" fill="#334155">${definition.name} · Trace on the 3D grid</text>
+  <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect width="100%" height="100%" fill="${PAPER}" />
+    ${dims}
+    ${walls}
+    ${symbols}
+    ${labels}
+    <text x="${m}" y="${H - 14}" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${plan.name}</text>
+    <text x="${W - m}" y="${H - 14}" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="12" fill="${THIN}">1:100 · ${ftIn(plan.widthFt)} x ${ftIn(plan.depthFt)}</text>
   </svg>`
 }
 
 export function listPresetDefinitions() {
-  return (Object.keys(PRESET_DEFINITIONS) as PresetDifficulty[]).map((id) => ({
-    id,
-    name: PRESET_DEFINITIONS[id].name,
-  }))
+  return (Object.keys(PLANS) as PresetDifficulty[]).map((id) => ({ id, name: PLANS[id].name }))
 }
 
 export function createPresetDrawing(difficulty: PresetDifficulty, practiceMode: boolean): Pick<Drawing, 'name' | 'file' | 'pageCount' | 'currentPage' | 'previewUrl' | 'rasterUrl' | 'rasterWidth' | 'rasterHeight' | 'parsedWalls' | 'parsedRooms' | 'parsedOpenings' | 'parsedText' | 'parsedSymbols' | 'parsedAnnotationCandidates' | 'parseProgress' | 'floorNumber' | 'status' | 'scaleMmPerPx' | 'scaleNotation' | 'scaleConfidence' | 'uploadedAt' | 'type'> & { wizardInputs: WorkspaceWizardInputs; overlayScale: [number, number] } {
-  const definition = PRESET_DEFINITIONS[difficulty]
-  const svg = drawSvg(definition)
+  const plan = PLANS[difficulty]
+  const svg = drawSvg(plan)
+  const widthPx = Math.round(ft(plan.widthFt + MARGIN_FT * 2))
+  const heightPx = Math.round(ft(plan.depthFt + MARGIN_FT * 2))
+
   let file: File
   try {
     file = new File([svg], `${difficulty}-preset.svg`, { type: 'image/svg+xml' })
   } catch {
     const blob = new Blob([svg], { type: 'image/svg+xml' })
-    file = Object.assign(blob, {
-      name: `${difficulty}-preset.svg`,
-      lastModified: Date.now(),
-    }) as unknown as File
+    file = Object.assign(blob, { name: `${difficulty}-preset.svg`, lastModified: Date.now() }) as unknown as File
   }
   const url = URL.createObjectURL(file)
-  const worldWidthM = (definition.widthPx * definition.mmPerPx) / 1000
-  const worldDepthM = (definition.heightPx * definition.mmPerPx) / 1000
 
   return {
-    name: `${definition.name}${practiceMode ? ' (Practice)' : ''}`,
+    name: `${plan.name}${practiceMode ? ' (Practice)' : ''}`,
     file,
     pageCount: 1,
     currentPage: 1,
     previewUrl: url,
     rasterUrl: url,
-    rasterWidth: definition.widthPx,
-    rasterHeight: definition.heightPx,
-    parsedWalls: practiceMode ? [] : definition.walls,
-    parsedRooms: practiceMode ? [] : definition.rooms,
-    parsedOpenings: practiceMode ? [] : definition.openings,
+    rasterWidth: widthPx,
+    rasterHeight: heightPx,
+    parsedWalls: practiceMode ? [] : planWalls(plan),
+    parsedRooms: practiceMode ? [] : planRooms(plan),
+    parsedOpenings: practiceMode ? [] : planOpenings(plan),
     parsedText: [],
     parsedSymbols: [],
     parsedAnnotationCandidates: [],
     parseProgress: 100,
     floorNumber: 0,
     status: 'ready',
-    scaleMmPerPx: definition.mmPerPx,
-    scaleNotation: `1:${Math.round(definition.mmPerPx * 10)}`,
+    scaleMmPerPx: MM_PER_PX,
+    scaleNotation: '1:100',
     scaleConfidence: 'parsed',
     uploadedAt: Date.now(),
     type: 'floor-plan',
-    wizardInputs: {
-      ...definition.wizardInputs,
-      completedAt: Date.now(),
-    },
-    overlayScale: [Math.max(4, worldWidthM), Math.max(4, worldDepthM)],
+    wizardInputs: { ...plan.wizardInputs, completedAt: Date.now() },
+    overlayScale: [
+      Math.max(4, (widthPx * MM_PER_PX) / 1000),
+      Math.max(4, (heightPx * MM_PER_PX) / 1000),
+    ],
   }
 }
