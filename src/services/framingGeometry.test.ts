@@ -590,3 +590,58 @@ describe('floor openings (stairwell/shaft holes)', () => {
     expect(g.children.length).toBeGreaterThan(0)
   })
 })
+
+describe('two walls meeting make ONE framed corner', () => {
+  const base = { length: 4, height: 2.44, thickness: 0.14, material: 'wood' as const }
+  const studsIn = (g: THREE.Object3D) => {
+    const out: THREE.Mesh[] = []
+    g.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      m.geometry.computeBoundingBox()
+      const bb = m.geometry.boundingBox!
+      if (bb.max.y - bb.min.y > base.height * 0.6) out.push(m)   // tall members only
+    })
+    return out
+  }
+
+  it('gives the THROUGH wall a backer the butting wall can nail to', () => {
+    // The 'lap' wall carries the corner: an extra member set back in depth,
+    // turned across the wall — the third stud of a three-stud corner.
+    const through = buildWallFraming({ ...base, capLap: { start: 'lap' } })
+    const plain = buildWallFraming({ ...base })
+    const offCentre = studsIn(through).filter((m) => Math.abs(m.position.z) > 1e-6)
+    expect(offCentre.length).toBeGreaterThan(0)
+    expect(studsIn(through).length).toBeGreaterThan(studsIn(plain).length)
+  })
+
+  it('does NOT double up the wall that butts into the post', () => {
+    // Framing both sides is the bug: two packs side by side, tied to nothing.
+    const butting = buildWallFraming({ ...base, capLap: { start: 'back' } })
+    const plain = buildWallFraming({ ...base })
+    expect(studsIn(butting).length).toBeLessThan(studsIn(plain).length)
+    expect(studsIn(butting).every((m) => Math.abs(m.position.z) < 1e-6)).toBe(true)
+  })
+
+  it('puts the doubling on ONE side of the corner, not both', () => {
+    // The count near the corner is not the story — a three-stud corner plus the
+    // butting wall's single end stud is four members either way. What matters is
+    // WHERE they are: all the doubling belongs to the through wall, and the
+    // butting wall arrives with one stud that nails to it. Two independent
+    // doubled ends is the bug, however the totals happen to add up.
+    const half = base.length / 2
+    const nearCorner = (g: THREE.Object3D) =>
+      studsIn(g).filter((m) => m.position.x < -half + 0.12).length
+    const through = nearCorner(buildWallFraming({ ...base, capLap: { start: 'lap' } }))
+    const butting = nearCorner(buildWallFraming({ ...base, capLap: { start: 'back' } }))
+    const plain = nearCorner(buildWallFraming({ ...base }))
+    expect(through).toBeGreaterThan(plain)   // carries the post
+    expect(butting).toBeLessThan(plain)      // butts into it
+  })
+
+  it('leaves a wall with no corner exactly as it was', () => {
+    const a = studsIn(buildWallFraming({ ...base })).length
+    const b = studsIn(buildWallFraming({ ...base, capLap: {} })).length
+    expect(a).toBe(b)
+  })
+})

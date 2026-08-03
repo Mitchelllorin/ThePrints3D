@@ -258,9 +258,33 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   const xs: number[] = []
   for (let x = -half; x < half - 1e-4; x += spacingM) xs.push(Math.round(x * 1000) / 1000)
   xs.push(half)
-  // Doubled end posts: an extra stud just inside each end (corner/end packs).
+  // END PACKS — and a real CORNER POST where two walls meet.
+  //
+  // Every end used to get the same doubled stud, so a corner came out as two
+  // separate packs sitting beside each other: framed twice, tied together not at
+  // all. A carpenter frames a corner ONCE — the through wall carries a three-stud
+  // post (two in the wall plus a backer turned across it, which is what the
+  // butting wall nails to and what the drywall lands on), and the wall that butts
+  // into it does NOT double up, because the post is already there.
+  //
+  // capLap already says which wall is which at each end: 'lap' runs through,
+  // 'back' butts into it. Same signal, so the plates and the studs agree.
   const endInset = studW
-  xs.push(-half + endInset, half - endInset)
+  const cornerPost = (endX: number, sign: 1 | -1, role?: 'lap' | 'back') => {
+    if (role === 'back') return          // butts into the other wall's post
+    xs.push(endX + sign * endInset)      // the doubled stud
+    if (role === 'lap') {
+      // The backer, turned across the wall behind the post. Off-centre in depth
+      // so it presents a nailing face to the wall arriving at right angles.
+      const bx = endX + sign * (endInset * 0.5)
+      add(
+        new THREE.BoxGeometry(studW, studH, studW),
+        bx, studY, (studDepth - studW) / 2,
+      )
+    }
+  }
+  cornerPost(-half, 1, capLap?.start)
+  cornerPost(half, -1, capLap?.end)
 
   const seen = new Set<number>()
   for (const x of xs) {
