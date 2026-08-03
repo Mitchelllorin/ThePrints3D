@@ -53,6 +53,13 @@ export interface SelectionEdit {
   /** Only the verbs this selection can actually express. */
   verbs: EditVerb[]
   apply: (step: EditStep) => void
+  /** Delete whatever is selected.
+   *
+   *  Every type could already be deleted — but from four different panels, one
+   *  per type, none of them the edit rail. So once you had selected something in
+   *  edit mode, the surface you were working on could not remove it and you had
+   *  to go hunting for the right card. Routed here like every other verb. */
+  remove: () => void
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -84,6 +91,13 @@ export function useSelectionEdit(): SelectionEdit | null {
   const updateUserWall = useAppStore((s) => s.updateUserWall)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const updateTradeLine = useAppStore((s) => s.updateTradeLine)
+  const removePlacedObject = useAppStore((s) => s.removePlacedObject)
+  const removeFloorsArea = useAppStore((s) => s.removeFloorsArea)
+  const removeRoofArea = useAppStore((s) => s.removeRoofArea)
+  const deleteUserWall = useAppStore((s) => s.deleteUserWall)
+  const removePlumbingLine = useAppStore((s) => s.removePlumbingLine)
+  const removeElectricalLine = useAppStore((s) => s.removeElectricalLine)
+  const removeHvacLine = useAppStore((s) => s.removeHvacLine)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageWidth = drawing?.rasterWidth ?? 1400
@@ -106,6 +120,7 @@ export function useSelectionEdit(): SelectionEdit | null {
       if (!o) return null
       return {
         label, verbs: ['move', 'rotate', 'stretch'] as EditVerb[],
+        remove: () => removePlacedObject(o.id),
         apply: ({ dx = 0, dz = 0, rot = 0, factor = 1 }: EditStep) => updatePlacedObject(o.id, {
           x: o.x + dx, z: o.z + dz,
           rotationY: o.rotationY + rot,
@@ -120,6 +135,7 @@ export function useSelectionEdit(): SelectionEdit | null {
       return {
         // No rotation field on an axis-aligned rect, so Rotate is never offered.
         label, verbs: ['move', 'stretch'] as EditVerb[],
+        remove: () => (kind === 'roof' ? removeRoofArea(a.id) : removeFloorsArea(a.id)),
         apply: ({ dx = 0, dz = 0, factor = 1 }: EditStep) => {
           if (factor !== 1) {
             // Stretch about the centre: grow/shrink the rect's half-extents.
@@ -153,6 +169,14 @@ export function useSelectionEdit(): SelectionEdit | null {
     const halfLen = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1) / 2
     return {
       label, verbs: ['move', 'rotate', 'stretch'] as EditVerb[],
+      remove: () => {
+        if (kind === 'wall' && drawing) { deleteUserWall(drawing.id, Number(id)); return }
+        // A run's id does not say which trade owns it, so ask each list.
+        const sid = String(id)
+        if (plumbingLines.some((l) => l.id === sid)) removePlumbingLine(sid)
+        else if (electricalLines.some((l) => l.id === sid)) removeElectricalLine(sid)
+        else removeHvacLine(sid)
+      },
       apply: ({ dx = 0, dz = 0, rot = 0, factor = 1 }: EditStep) => {
         const [dpx, dpy] = toPx(dx, dz)
         const ang = baseAng - rot           // screen yaw runs opposite plan yaw
@@ -170,5 +194,7 @@ export function useSelectionEdit(): SelectionEdit | null {
       plumbingLines, electricalLines, hvacLines, drawing,
       overlayW, overlayD, rotRad, imageWidth, imageHeight, storeyHeight,
       translateFloorsArea, translateRoofArea, updateFloorsArea, updateRoofArea,
-      updateUserWall, updatePlacedObject, updateTradeLine])
+      updateUserWall, updatePlacedObject, updateTradeLine,
+      removePlacedObject, removeFloorsArea, removeRoofArea, deleteUserWall,
+      removePlumbingLine, removeElectricalLine, removeHvacLine])
 }

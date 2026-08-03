@@ -980,6 +980,20 @@ export default function WorkspaceLayout() {
             </div>
           )}
 
+          {/* DELETE. The one verb every selection has, and it was the one the
+              rail could not do — each type's delete lived in its own panel, so
+              selecting something in edit mode meant leaving edit mode to remove
+              it. Last in the rail, away from the movement controls, because it
+              is the destructive one. */}
+          <div className={styles.editRailGroup}>
+            <button
+              className={`${styles.editRailBtn} ${styles.editRailDanger}`}
+              aria-label={`Delete ${selectionEdit.label.toLowerCase()}`}
+              title={`Delete this ${selectionEdit.label.toLowerCase()}`}
+              onClick={() => selectionEdit.remove()}
+            >🗑</button>
+          </div>
+
           {/* STAIR CONFIGURATOR — in the rail, not in a panel.
               It started life inside the object property card, which covers the
               model the moment it opens: you cannot watch a stair relay while the

@@ -542,6 +542,11 @@
    is marks on the workspace, not buttons in a container. */
 .editRailBtnOn { color: var(--bp-accent, #38bdf8); font-weight: 700; }
 
+/* Delete. Dim like everything else until you reach for it — the rail is marks on
+   the workspace, and a permanently red button shouting at you is not that. */
+.editRailDanger { color: #94a3b8; }
+.editRailDanger:hover { color: #f87171; }
+
 /* The stair solve, as a mark: "16R @ 6.85"". Small, dim, no surface. */
 .editRailNote {
   color: var(--bp-text-dim, #94a3b8);
