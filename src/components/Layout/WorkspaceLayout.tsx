@@ -15,8 +15,6 @@ import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/stairs'
 import { getCatalogItem } from '../../data/objectCatalog'
-import type { WrbKind, WoodSheathing, CladdingKind, BoardKind } from '../../services/constructionCode'
-import { recommendedWrb, wallTakesEnvelope, wallFramingSpec } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -173,20 +171,6 @@ function SettingsContent() {
   const previewMode = useAppStore((x) => x.previewMode)
   const setPreviewMode = useAppStore((x) => x.setPreviewMode)
 
-  // What the EXTERIOR walls on this plan are actually framed in, so the barrier
-  // advice fits the building rather than a guess. Steel anywhere on the shell is
-  // enough — DensGlass wants an AVB whether or not there is wood elsewhere.
-  const exteriorFramingMaterial = useAppStore((s) => {
-    for (const d of s.drawings) {
-      for (const w of d.parsedWalls) {
-        if (w.source !== 'user') continue
-        if (!wallTakesEnvelope(w.wallRole, w.framingType)) continue
-        if (wallFramingSpec(w.framingType, w.wallRole).material === 'steel') return 'steel' as const
-      }
-    }
-    return 'wood' as const
-  })
-
   // Single-open accordion, matching the panel tab strip's toggle behaviour.
   const [openId, setOpenId] = useState<string | null>('appearance')
 
@@ -289,100 +273,9 @@ function SettingsContent() {
         <Slider label="Cell size" val={ui.gridCellSize} min={0.5} max={10} step={0.5} unit="m" onChange={(v) => setUI({ gridCellSize: v })} />
       </CollapsibleSection>
 
-      <CollapsibleSection id="drywall" title="Drywall" openId={openId} setOpenId={setOpenId}>
-        <Toggle label="Board walls" val={ui.drywallVisible} onChange={(v) => setUI({ drywallVisible: v })} />
-        <Select label="Sheet orientation" val={ui.drywallOrientation}
-          options={[{ value: 'vertical', label: 'Vertical (4×8 standing)' }, { value: 'horizontal', label: 'Horizontal (laid down)' }]}
-          onChange={(v) => setUI({ drywallOrientation: v as 'vertical' | 'horizontal' })} />
-        {/* "Drywall" is not one product — what goes on the studs depends on what
-            the room does to it: fire separation, splashing, or standing water. */}
-        <Select label="Board type" val={ui.boardKind}
-          options={[
-            { value: 'gypsum-half', label: 'Gypsum 1/2"' },
-            { value: 'gypsum-type-x', label: 'Gypsum 5/8" Type X (fire)' },
-            { value: 'mold-resistant', label: 'Mould-resistant (DensArmor)' },
-            { value: 'cement-board', label: 'Cement board (Durock)' },
-            { value: 'glassmat-tile', label: 'Glass-mat tile backer (DensShield)' },
-            { value: 'foam-waterproof', label: 'Waterproof foam (Schluter KERDI-BOARD)' },
-          ]}
-          onChange={(v) => setUI({ boardKind: v as BoardKind })} />
-      </CollapsibleSection>
-
-      {/* Exterior envelope. Sheathe first, then wrap — the order they go on, and
-          the order you want to look at them in. Only exterior walls take it. */}
-      <CollapsibleSection id="envelope" title="Exterior envelope" openId={openId} setOpenId={setOpenId}>
-        <Toggle label="Sheathe walls" val={ui.sheathingVisible} onChange={(v) => setUI({ sheathingVisible: v })} />
-        <Toggle label="Barrier over it" val={ui.wrapVisible} onChange={(v) => setUI({ wrapVisible: v })} />
-        {/* Which WRB depends on what goes OVER it — housewrap behind lap siding,
-            felt behind stucco and adhered stone. See WrbKind. */}
-        <Select label="Barrier type" val={ui.wrbKind}
-          options={[
-            { value: 'housewrap', label: 'Housewrap (Tyvek-type)' },
-            { value: 'felt', label: 'Asphalt felt (tar paper)' },
-            { value: 'fluid', label: 'Fluid-applied' },
-            { value: 'avb', label: 'Air/vapour barrier (steel + DensGlass)' },
-            { value: 'integrated', label: 'Integrated in sheathing (ZIP)' },
-          ]}
-          onChange={(v) => setUI({ wrbKind: v as WrbKind })} />
-        {/* OSB vs plywood is a real field choice — plywood survives getting
-            rained on before dry-in, which is why crews still pay for it. */}
-        <Select label="Wood sheathing" val={ui.woodSheathing}
-          options={[
-            { value: 'osb', label: 'OSB 7/16"' },
-            { value: 'plywood', label: 'CDX plywood 15/32"' },
-          ]}
-          onChange={(v) => setUI({ woodSheathing: v as WoodSheathing })} />
-        {/* Temporary fall protection — what the frame looks like for most of its
-            life on site, and half the time it never comes off. */}
-        {/* Cladding. Masonry veneer stands off on its own ledge with a drained
-            cavity, so picking it genuinely moves the outside face of the wall. */}
-        <Select label="Cladding" val={ui.cladding}
-          options={[
-            { value: 'none', label: 'None (dried-in)' },
-            { value: 'vinyl-lap', label: 'Vinyl lap siding' },
-            { value: 'fiber-cement-lap', label: 'Fiber-cement lap (Hardie)' },
-            { value: 'wood-lap', label: 'Wood bevel siding' },
-            { value: 'panel', label: 'Rainscreen panel' },
-            { value: 'stucco', label: 'Stucco (3-coat)' },
-            { value: 'brick-veneer', label: 'Brick veneer (+ledge)' },
-            { value: 'stone-veneer', label: 'Adhered stone veneer' },
-          ]}
-          onChange={(v) => setUI({ cladding: v as CladdingKind })} />
-        {/* WHEN, as opposed to WHICH. Framing is the thing you are working on
-            while you build; cladding it the instant you pull a wall hides the
-            work. Defaults to 'later' for that reason. */}
-        <Select label="Apply finishes" val={ui.finishTiming}
-          options={[
-            { value: 'later', label: 'When I say' },
-            { value: 'live', label: 'As I build' },
-          ]}
-          onChange={(v) => setUI({ finishTiming: v as 'live' | 'later', finishesApplied: false })} />
-        {ui.finishTiming === 'later' && (
-          <button
-            className={styles.uploadHintChip}
-            style={{ alignSelf: 'flex-start', margin: '2px 0 6px' }}
-            onClick={() => setUI({ finishesApplied: !ui.finishesApplied })}
-          >
-            {ui.finishesApplied ? '← Back to bare frame' : 'Apply finishes now'}
-          </button>
-        )}
-        {/* Wet-applied finishes bond to housewrap and wreck its drainage — a real
-            failure, so say so rather than silently building a wall that leaks. */}
-        {recommendedWrb(ui.cladding, exteriorFramingMaterial) !== ui.wrbKind && (
-          <button
-            className={styles.uploadHintChip}
-            style={{ alignSelf: 'flex-start', margin: '2px 0 6px' }}
-            onClick={() => setUI({ wrbKind: recommendedWrb(ui.cladding, exteriorFramingMaterial) })}
-          >
-            {(() => {
-              const want = recommendedWrb(ui.cladding, exteriorFramingMaterial)
-              if (want === 'felt') return 'This finish wants felt behind it — switch?'
-              if (want === 'avb') return 'Steel + DensGlass wants an air/vapour barrier — switch?'
-              return 'Housewrap suits this wall — switch?'
-            })()}
-          </button>
-        )}
-      </CollapsibleSection>
+      {/* Sheathing, barrier, cladding and board USED to live here. They are not
+          settings — they are decisions about the building, and they belong in the
+          Build drawer with Floors, Framing and Roof. See FinishesPanel. */}
 
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>
     </div>

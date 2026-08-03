@@ -24,6 +24,7 @@ import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import styles from './AmbientGuide.module.css'
 import EdgeDrawer from '../Layout/EdgeDrawer'
 import LayersPanel from '../Layout/LayersPanel'
+import FinishesPanel from '../Layout/FinishesPanel'
 
 // ── Discipline layer tabs (Framing/Plumbing/Electrical wired; HVAC placeholder)
 const TRACE_LAYERS = TRACE_LAYER_ORDER.map((key) => ({ key, label: LAYER_LABELS[key], color: LAYER_COLORS[key] }))
@@ -1543,6 +1544,17 @@ export default function FloorplanPanel() {
           </div>
         )}
 
+        {/* FINISHES — what the building is made of, in the drawer where the
+            building gets made. Sheathing, barrier, cladding and board used to sit
+            in Settings next to the grid colour, which meant leaving the thing you
+            were doing to decide about the thing you were doing. Last in the
+            drawer because it is the last stage of the work. */}
+        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && !traceMode && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>Finishes</span>
+            <FinishesPanel />
+          </div>
+        )}
       </EdgeDrawer>
 
       {/* ── Property card for the selected placed object (above the tray) ── */}
