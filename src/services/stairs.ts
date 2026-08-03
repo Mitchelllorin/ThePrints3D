@@ -189,3 +189,41 @@ export function stairOpeningM(s: StairSolution, floorAssemblyM = 0.32): { length
   const lengthM = Math.min(s.footprint.lengthM, treadsBack * s.treadM)
   return { lengthM: Math.max(s.treadM, lengthM), widthM: s.footprint.widthM }
 }
+
+/**
+ * WHERE that opening goes, and how big its axis-aligned footprint is.
+ *
+ * `stairOpeningM` answers how long the hole is; this answers where it sits. The
+ * two were separated and only the first one was used, so the deck above got a
+ * correctly-sized opening centred on the middle of the stair — half of it over
+ * treads that never needed opening, and the top of the flight still under solid
+ * deck. The hole did not line up with the stairs.
+ *
+ * The opening is measured BACK FROM THE TOP, so it belongs against the top end
+ * of the run. A stair climbs along its own local +Z, which means the shift is
+ * (footprint − opening) / 2 carried out along wherever the object is facing.
+ *
+ * The returned w/d are the bounding box of the turned opening, because a floor
+ * hole is axis-aligned: exact at 0/90/180/270 — the angles people build at — and
+ * generous rather than wrong in between.
+ */
+export function stairHolePlacement(opts: {
+  /** Opening length along the run, from stairOpeningM. */
+  openingLengthM: number
+  /** Opening width across the run, from stairOpeningM. */
+  openingWidthM: number
+  /** The stair's full run, from the solution's footprint. */
+  footprintLengthM: number
+  /** The object's yaw in radians. */
+  yaw?: number
+}): { shiftX: number; shiftZ: number; w: number; d: number } {
+  const { openingLengthM: d, openingWidthM: w, footprintLengthM, yaw = 0 } = opts
+  const runShift = Math.max(0, footprintLengthM - d) / 2
+  const ca = Math.abs(Math.cos(yaw)), sa = Math.abs(Math.sin(yaw))
+  return {
+    shiftX: Math.sin(yaw) * runShift,
+    shiftZ: Math.cos(yaw) * runShift,
+    w: w * ca + d * sa,
+    d: w * sa + d * ca,
+  }
+}

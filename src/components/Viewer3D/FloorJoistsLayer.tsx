@@ -23,7 +23,7 @@ import {
 } from '../../services/framingGeometry'
 import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import { VERTICAL_CIRCULATION, getCatalogItem } from '../../data/objectCatalog'
-import { solveStair, stairOpeningM, stairShapeFromSubtype } from '../../services/stairs'
+import { solveStair, stairOpeningM, stairShapeFromSubtype, stairHolePlacement } from '../../services/stairs'
 import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
@@ -243,6 +243,10 @@ export default function FloorJoistsLayer() {
         const item = getCatalogItem(o.type)
         let w = (item?.defaultW ?? 1) * o.scaleX
         let d = (item?.defaultD ?? 1) * o.scaleZ
+        // Where the opening sits relative to the object, and its axis-aligned
+        // size. A lift shaft is centred on itself and square to the plan, so it
+        // starts as no shift at its own footprint.
+        let place = { shiftX: 0, shiftZ: 0, w, d }
         // A STAIR's opening is not its footprint — it has to run back far enough
         // that somebody climbing still has headroom where the floor edge cuts
         // across. The solver works that out from the riser; the catalog box knows
@@ -259,12 +263,20 @@ export default function FloorJoistsLayer() {
           const open = stairOpeningM(sol, FLOOR_ASSEMBLY_H)
           w = open.widthM
           d = open.lengthM
+          // WHERE the hole goes — the half of this that was missing. See
+          // stairHolePlacement: the opening is measured back from the TOP, so
+          // centring it on the stair left the top of the flight under solid deck.
+          place = stairHolePlacement({
+            openingLengthM: d, openingWidthM: w,
+            footprintLengthM: sol.footprint.lengthM,
+            yaw: o.rotationY ?? 0,
+          })
         }
-        const dx = o.x - centre.x, dz = o.z - centre.z
+        const dx = o.x + place.shiftX - centre.x, dz = o.z + place.shiftZ - centre.z
         const localX = dx * cos + dz * sin
         const localZ = -dx * sin + dz * cos
-        if (Math.abs(localX) < lenX / 2 + w / 2 && Math.abs(localZ) < lenZ / 2 + d / 2) {
-          hs.push({ x: localX, z: localZ, w, d })
+        if (Math.abs(localX) < lenX / 2 + place.w / 2 && Math.abs(localZ) < lenZ / 2 + place.d / 2) {
+          hs.push({ x: localX, z: localZ, w: place.w, d: place.d })
         }
       }
       if (hs.length) map[area.id] = hs
