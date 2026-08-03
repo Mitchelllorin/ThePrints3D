@@ -444,17 +444,24 @@
    It needs its OWN lifted offset: sharing .explodeBarLifted set both bars to the
    same absolute `bottom`, which stacked them exactly on top of each other the
    moment the Place drawer opened. */
-.floorBarLifted { bottom: calc(42dvh + 56px); }
+/* FLOOR BAR — vertical, right edge, SHARING the edit rail's space.
+   It was a horizontal strip above the explode bar, which meant the right edge
+   carried two separate things and the bottom-right corner was crowded. It runs
+   down the right edge now, in exactly the slot the edit rail uses, and the two
+   take turns: floors while you are looking, tools while you are editing, back to
+   floors when you finish. One surface, one place to look, and the workspace keeps
+   the space that a second bar used to cost it. */
+.floorBarLifted { bottom: auto; }
 .floorBar {
   position: absolute;
-  bottom: calc(62px + env(safe-area-inset-bottom, 0px));
-  right: 14px;
+  top: 70px;
+  right: 6px;
   z-index: 56;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  height: 30px;
-  padding: 0 4px;
+  gap: 6px;
+  padding: 0;
   /* No box — floats over the model. */
   background: none;
   border: none;
@@ -586,8 +593,13 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  padding: 2px 6px;
+  /* Square-ish and centred: they stack vertically now, so a fixed width keeps
+     the column straight whether the label is "All" or "2". */
+  width: 26px;
+  padding: 3px 0;
+  text-align: center;
   border-radius: 4px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
   transition: background 0.12s, color 0.12s;
 }
 .floorBtn:hover { color: var(--bp-text, #f1f5f9); }
@@ -616,7 +628,7 @@
   .explodeSlider { width: 90px; }
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
      the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
-  .floorBar { bottom: calc(152px + env(safe-area-inset-bottom, 0px)); right: 10px; }
+  .floorBar { top: 62px; right: 2px; }
   .editRail { top: 62px; right: 2px; gap: 8px; }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }

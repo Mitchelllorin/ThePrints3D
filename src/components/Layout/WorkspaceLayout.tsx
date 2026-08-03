@@ -1066,9 +1066,12 @@ export default function WorkspaceLayout() {
           here now, beside isolate, adding no new buttons. */}
       {/* Stays hidden mid-trace on purpose — you're placing points, not
           inspecting floors, and the workspace stays clear while you tap. */}
-      {hasDrawings && !calibrationMode && !traceMode && availableFloors.length > 1 && (
-        <div className={`${styles.floorBar} ${placeDrawerOpen ? styles.floorBarLifted : ''}`}>
-          <span className={styles.explodeLabel}>Floor</span>
+      {/* Hidden while the EDIT RAIL is using this slot — the two share the right
+          edge and take turns rather than competing for it. */}
+      {hasDrawings && !calibrationMode && !traceMode && availableFloors.length > 1
+        && !(editMode && selectionEdit) && (
+        <div className={styles.floorBar}>
+          <span className={styles.editRailCaption}>Floor</span>
           <button
             className={`${styles.floorBtn} ${isolatedFloor === null && ghostedLevels.length === 0 ? styles.floorBtnActive : ''}`}
             onClick={() => { setIsolatedFloor(null); ghostedLevels.forEach((l) => toggleGhostedLevel(l)) }}
