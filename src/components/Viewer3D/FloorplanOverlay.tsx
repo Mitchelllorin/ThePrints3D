@@ -18,6 +18,7 @@ import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '../../store/useFloorplanLocalStore'
 import { inferWallRole } from '../../services/wallFacing'
 import { solveStair, stairShapeFromSubtype } from '../../services/stairs'
+import { seatInGap } from '../../services/openingSeat'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
 
@@ -1096,12 +1097,32 @@ export default function FloorplanOverlay() {
   // without taking the placement away from you.
   const devicePose = (x: number, z: number) => {
     const type = placeObjectType ?? ''
-    // Doors/windows belong IN a wall — snap them onto the nearest wall centreline
-    // (like wall devices) so the opening lands exactly on the wall and frames in,
-    // instead of only framing when dropped pixel-perfectly on the line.
+    // A GAP ALREADY LEFT IN THE WALL IS A DOORWAY — seat into it first.
+    //
+    // Walls get traced as separate runs with a space left for the opening, and
+    // that space is where the door goes. Centreline snapping could never put it
+    // there: the projection along a wall is clamped to that wall's own length,
+    // so a point standing in the gap is off the end of BOTH flanking runs and
+    // got pulled back to whichever end was nearest, sliding the door out of the
+    // opening it was aimed at. No amount of aiming fixed it, because there is no
+    // wall in a gap to snap to.
+    if (isWallMountedType(type)) {
+      const seat = seatInGap(x, z, wallSegsWorld)
+      if (seat) return { x: seat.x, z: seat.z, rotationY: seat.yaw, fitWidthM: seat.widthM }
+    }
+    // Otherwise: doors/windows belong IN a wall — snap them onto the nearest wall
+    // centreline (like wall devices) so the opening lands exactly on the wall and
+    // frames in, instead of only framing when dropped pixel-perfectly on the line.
     const snapped = isWallMountedType(type) ? snapToWall(x, z) : { x, z }
     return { x: snapped.x, z: snapped.z, rotationY: autoOrientYaw(snapped.x, snapped.z) }
   }
+
+  /** The placement walls as world-space ground segments, for gap seating. */
+  const wallSegsWorld = placementWalls.map((w) => {
+    const a = planeLocalToWorld([w.x1, w.y1])
+    const b = planeLocalToWorld([w.x2, w.y2])
+    return { ax: a[0], az: a[2], bx: b[0], bz: b[2] }
+  })
 
   // Ray → the point on the WALL FACE the pointer is actually over.
   //
@@ -1204,7 +1225,7 @@ export default function FloorplanOverlay() {
     commitPlacement(devicePose(p.x, p.z))
   }
 
-  const commitPlacement = (pose: { x: number; z: number; rotationY: number }) => {
+  const commitPlacement = (pose: { x: number; z: number; rotationY: number; fitWidthM?: number }) => {
     if (!placeObjectType || !drawing) return
     const placingType = placeObjectType   // captured: closeAllPanels() clears it below
     const item = getCatalogItem(placeObjectType)
@@ -1231,7 +1252,9 @@ export default function FloorplanOverlay() {
       x: pose.x,
       z: pose.z,
       rotationY: pose.rotationY,
-      scaleX: 1,
+      // Seated into an existing gap? Fill it, rather than dropping a stock-width
+      // leaf into an opening that was framed for something else.
+      scaleX: pose.fitWidthM && item?.defaultW ? pose.fitWidthM / item.defaultW : 1,
       scaleZ: 1,
       scaleY: 1,
       label: item?.label ?? placeObjectType,
