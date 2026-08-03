@@ -19,6 +19,7 @@ import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '
 import { inferWallRole } from '../../services/wallFacing'
 import { solveStair, stairShapeFromSubtype } from '../../services/stairs'
 import { seatInGap } from '../../services/openingSeat'
+import { squarePointToAxis } from '../../services/wallTraceReducer'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
 
@@ -153,14 +154,21 @@ function RubberBandPreview({
   const traceStyle      = useFloorplanLocalStore((s) => s.traceStyle)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const traceStart      = useFloorplanLocalStore((s) => s.traceStart)
+  const squareWalls     = useFloorplanLocalStore((s) => s.squareWalls)
   const calibrationA    = useFloorplanLocalStore((s) => s.calibrationA)
   const calibrationB    = useFloorplanLocalStore((s) => s.calibrationB)
 
   const tracePreviewPoints = useMemo(() => {
     if (!traceMode || tracePaused || traceStyle !== 'line' || activeTraceLayer === 'floors' || activeTraceLayer === 'roof' || !traceStart || !hoverPixel) return null
-    return [planeLocalToTrace(traceStart), planeLocalToTrace(hoverPixel)] as
+    // The rubber band shows the SQUARED line. Previewing the raw pointer and then
+    // squaring on commit means the wall jumps at the moment you let go, so you
+    // are aiming at something that is not what you will get.
+    const end = squareWalls
+      ? squarePointToAxis(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
+      : hoverPixel
+    return [planeLocalToTrace(traceStart), planeLocalToTrace(end)] as
       [[number, number, number], [number, number, number]]
-  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace])
+  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace, squareWalls])
 
   const floorsPreviewRect = useMemo(() => {
     if (!traceMode || tracePaused || (activeTraceLayer !== 'floors' && activeTraceLayer !== 'roof') || !traceStart || !hoverPixel) return null
@@ -263,6 +271,7 @@ export default function FloorplanOverlay() {
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
+  const squareWalls = useFloorplanLocalStore((s) => s.squareWalls)
   const wallRoleChosen = useFloorplanLocalStore((s) => s.wallRoleChosen)
   const wallTypeChosen = useFloorplanLocalStore((s) => s.wallTypeChosen)
   const traceBand = useFloorplanLocalStore((s) => s.traceBand)
@@ -834,7 +843,9 @@ export default function FloorplanOverlay() {
       // Final squaring: a near-horizontal/vertical wall ends up EXACTLY square
       // even if it snapped onto a slightly-crooked print/reference line. Genuine
       // diagonals are left alone. Kills the "it drew me a crooked wall" case.
-      const base = squareWallToAxis(extendWallToNearbyWall(snappedWall, refWalls))
+      // 45° tolerance = ALWAYS snap to the nearer axis. The old 7° let anything
+      // worse through as "deliberate", which is how crooked walls got in.
+      const base = squareWallToAxis(extendWallToNearbyWall(snappedWall, refWalls), squareWalls ? 45 : 0)
       // Stamp the picked framing/role/material onto the wall so the build frames
       // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
       const isMasonry = activeWallType === 'cmu'

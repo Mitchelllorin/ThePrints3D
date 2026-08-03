@@ -115,6 +115,9 @@ interface FloorplanLocalState {
    *  follows the wall's role (see `defaultWallTypeForRole`); after it, their
    *  choice wins and the role stops overriding it. */
   wallTypeChosen: boolean
+  /** Walls snap SQUARE (to the nearest axis) unless this is off. On by default:
+   *  buildings are square, so a diagonal is the exception you ask for. */
+  squareWalls: boolean
   /** Active discipline tab. */
   activeTraceLayer: TraceLayer
   /** Height band applied to new trade runs (under-floor / in-wall / ceiling). */
@@ -239,6 +242,7 @@ interface FloorplanLocalState {
   markCalibrationHandled: (id: string) => void
   setDistanceUnit: (v: CalibrationUnit) => void
   setPendingTraceAfterCalibration: (v: boolean) => void
+  setSquareWalls: (v: boolean) => void
   setActiveWallType: (v: string) => void
   setActiveWallRole: (v: string) => void
   setActiveTraceLayer: (v: TraceLayer) => void
@@ -315,6 +319,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   activeWallRole: 'exterior-bearing',
   wallTypeChosen: false,
   wallRoleChosen: false,
+  squareWalls: true,
   // Floors-first: the foundation/floor goes down before walls frame on top, so
   // the Build drawer opens on Floors (not Framing) and guides the right order.
   activeTraceLayer: 'floors',
@@ -396,6 +401,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setPendingTraceAfterCalibration: (v) => set({ pendingTraceAfterCalibration: v }),
   // Picking a size is an explicit choice and sticks — from here on the role no
   // longer moves it.
+  setSquareWalls: (v) => set({ squareWalls: v }),
   setActiveWallType: (v) => set({ activeWallType: v, wallTypeChosen: true }),
   // Changing the ROLE re-defaults the stud size, UNLESS you have already picked
   // one yourself. Exterior carries the load and the insulation, interior mostly

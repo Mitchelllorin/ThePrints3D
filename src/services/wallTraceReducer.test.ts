@@ -6,6 +6,8 @@ import {
   reduceStrokeToWall,
   reduceStrokeToWalls,
   simplifyStroke,
+  squarePointToAxis,
+  squareWallToAxis,
 } from './wallTraceReducer'
 import type { ParsedWall } from '../types'
 
@@ -128,5 +130,39 @@ describe('mergeAutoAndUserWalls', () => {
     expect(merged.some((w) => w.source === 'user')).toBe(true)
     expect(merged.some((w) => w.y1 === 60)).toBe(true)
     expect(merged.some((w) => w.y1 === 20)).toBe(false)
+  })
+})
+
+describe('square by default', () => {
+  it('pulls a point onto the axis it is closest to', () => {
+    // Mostly horizontal, 40px off → flattened to horizontal.
+    expect(squarePointToAxis(0, 0, 800, 40)).toEqual([800, 0])
+    // Mostly vertical → flattened to vertical.
+    expect(squarePointToAxis(0, 0, 40, 800)).toEqual([0, 800])
+  })
+
+  it('squares a BADLY off wall, not just a slightly off one', () => {
+    // The old 7° tolerance let this through as "deliberate". 30° is a slip.
+    const [x, y] = squarePointToAxis(0, 0, 800, 460)
+    expect(y).toBe(0)
+    expect(x).toBe(800)
+  })
+
+  it('keeps the dominant run length rather than shrinking the wall', () => {
+    const [x, y] = squarePointToAxis(100, 100, 900, 160)
+    expect(x).toBe(900)   // full horizontal run preserved
+    expect(y).toBe(100)   // snapped back to the anchor's row
+  })
+
+  it('squares a true diagonal to whichever axis it leans on', () => {
+    // Exactly 45°: ties go horizontal, deterministically.
+    expect(squarePointToAxis(0, 0, 500, 500)).toEqual([500, 0])
+  })
+
+  it('a 45 degree tolerance squares every wall, which is the point', () => {
+    const crooked = { x1: 0, y1: 0, x2: 800, y2: 300, thickness: 8, source: 'user' as const }
+    expect(squareWallToAxis(crooked, 45).y2).toBe(0)
+    // …and with squaring off, the wall is left exactly as drawn.
+    expect(squareWallToAxis(crooked, 0)).toEqual(crooked)
   })
 })

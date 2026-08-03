@@ -141,6 +141,8 @@ export default function FloorplanPanel() {
   const setActiveWallType = useFloorplanLocalStore((s) => s.setActiveWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
   const setActiveWallRole = useFloorplanLocalStore((s) => s.setActiveWallRole)
+  const squareWalls    = useFloorplanLocalStore((s) => s.squareWalls)
+  const setSquareWalls = useFloorplanLocalStore((s) => s.setSquareWalls)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
   const traceBand = useFloorplanLocalStore((s) => s.traceBand)
@@ -746,6 +748,20 @@ export default function FloorplanPanel() {
           {framingActive && hasTrace && (
             <button data-tour="find-rest" className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={handleSmartRefine} disabled={seedProcessing} title="Detect the matching walls across the plan">
               {seedProcessing ? 'Finding…' : '✨ Find the rest'}
+            </button>
+          )}
+          {/* SQUARE / ANGLE. Square is the default and stays on until you say
+              otherwise — buildings are square, so a diagonal is the exception you
+              ask for, not something you fall into with an unsteady hand. Lives on
+              the trace bar because you decide it mid-run, on the one wall that
+              needs it, not in a settings panel. */}
+          {framingActive && (
+            <button
+              className={`${styles.traceBarBtn} ${squareWalls ? styles.traceBarBuild : ''}`}
+              onClick={() => setSquareWalls(!squareWalls)}
+              title={squareWalls ? 'Walls snap square — tap for free angle' : 'Free angle — tap to snap square'}
+            >
+              {squareWalls ? '⊾ Square' : '∠ Angle'}
             </button>
           )}
           {/* No "End run" button — double-tapping the workspace ends the current

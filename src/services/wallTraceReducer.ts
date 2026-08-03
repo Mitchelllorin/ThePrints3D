@@ -33,6 +33,25 @@ function snapSegmentAngle(start: StrokePoint, end: StrokePoint): StrokePoint {
  * so a trace that snapped onto a slightly-crooked reference wall still ends up
  * straight. Genuine diagonals (> tolDeg off both axes) are left untouched.
  */
+/**
+ * SQUARE BY DEFAULT — force a traced point onto the axis it is closest to.
+ *
+ * Buildings are square. A wall drawn 4° off is a mistake every time, not a
+ * design choice, and it used to survive because squaring only applied within a
+ * 7° tolerance — anything worse was assumed deliberate and kept. That is exactly
+ * backwards: small errors are the common case and large ones are usually a slip
+ * of the finger too.
+ *
+ * So squaring is unconditional and the exception is explicit: turn it off (the
+ * trace bar's angle toggle) when you genuinely want a diagonal — an angled bay, a
+ * splayed corner — and it is off only while you say so.
+ */
+export function squarePointToAxis(
+  ax: number, ay: number, px: number, py: number,
+): [number, number] {
+  return Math.abs(px - ax) >= Math.abs(py - ay) ? [px, ay] : [ax, py]
+}
+
 export function squareWallToAxis(w: ParsedWall, tolDeg = 7): ParsedWall {
   const deg = Math.abs((Math.atan2(w.y2 - w.y1, w.x2 - w.x1) * 180) / Math.PI)
   const offH = Math.min(deg, Math.abs(deg - 180))
