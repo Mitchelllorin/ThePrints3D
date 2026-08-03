@@ -515,8 +515,8 @@ interface AppState {
   removeFloorsArea: (id: string) => void
   /** Drag-move a floor area by a pixel-space delta (both corners). */
   translateFloorsArea: (id: string, dxPx: number, dyPx: number) => void
-  /** Patch a floor area's pixel rect — used by the gizmo's Stretch mode. */
-  updateFloorsArea: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
+  /** Patch a floor area's pixel rect (Stretch) or its X-ray flag. */
+  updateFloorsArea: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2' | 'transparent'>>) => void
   /** Clone the floor area(s) on `fromLevel` up to the next storey — a guaranteed
    *  full upper floor matching the one below (no perspective-prone re-tracing). */
   carryFloorUp: (fromLevel: number) => void
@@ -529,8 +529,8 @@ interface AppState {
   removeRoofArea: (id: string) => void
   /** Drag-move a roof area by a pixel-space delta (both corners). */
   translateRoofArea: (id: string, dxPx: number, dyPx: number) => void
-  /** Patch a roof area's pixel rect — used by the gizmo's Stretch mode. */
-  updateRoofArea: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
+  /** Patch a roof area's pixel rect (Stretch) or its X-ray flag. */
+  updateRoofArea: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2' | 'transparent'>>) => void
   /** Commit a ridge edit (pitch/shape) for a roof area. Pass null to clear the
    *  override and fall back to the auto `size`-derived pitch. */
   setRoofRidge: (id: string, ridge: import('../types').RoofRidge | null) => void

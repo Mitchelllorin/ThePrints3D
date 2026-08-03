@@ -873,6 +873,28 @@ export default function WorkspaceLayout() {
             </div>
           )}
 
+          {/* X-RAY — the answer to "how do I make this see-through?".
+              Captioned, not just an icon, because the whole problem was that
+              nobody could find it: it lived inside the wall panel AND the object
+              panel, worded differently in each, and floors and roofs had no way
+              to do it at all. One mark, one word, same place for everything you
+              can select. Accent when it is on, so the rail tells you the state
+              of the thing you are looking at. */}
+          {selectionEdit.xray && (
+            <div className={styles.editRailGroup}>
+              <span className={styles.editRailCaption}>X-ray</span>
+              <button
+                className={`${styles.editRailBtn} ${selectionEdit.xray.on ? styles.editRailBtnOn : ''}`}
+                aria-pressed={selectionEdit.xray.on}
+                aria-label={`X-ray this ${selectionEdit.label.toLowerCase()}`}
+                title={selectionEdit.xray.on
+                  ? 'X-ray on — tap to make solid again'
+                  : `See through this ${selectionEdit.label.toLowerCase()}`}
+                onClick={() => selectionEdit.xray!.toggle()}
+              >◐</button>
+            </div>
+          )}
+
           {/* DELETE. The one verb every selection has, and it was the one the
               rail could not do — each type's delete lived in its own panel, so
               selecting something in edit mode meant leaving edit mode to remove

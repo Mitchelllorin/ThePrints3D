@@ -24,7 +24,7 @@ import {
 import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import { VERTICAL_CIRCULATION, getCatalogItem } from '../../data/objectCatalog'
 import { solveStair, stairOpeningM, stairShapeFromSubtype } from '../../services/stairs'
-import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight } from './editHelpers'
+import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
 
@@ -343,9 +343,13 @@ export default function FloorJoistsLayer() {
   const decked = structural.filter((a) => !FLOOR_SLAB_TYPES.has(a.elementType))
 
   // Isolation: only show areas on the active floor. Ghosted: semi-transparent.
+  // X-ray is the user's own per-area call, so it beats the storey-wide ghost —
+  // you turned this one see-through to look through it, and a floor-level
+  // setting should not quietly put it back.
   const areaOpacity = (area: TracedLine) => {
     const level = area.level ?? 0
     if (isolatedFloor !== null && level !== isolatedFloor) return 0
+    if (area.transparent) return XRAY_OPACITY
     if (ghostedLevels.includes(level)) return 0.15
     return undefined // default (fully opaque)
   }

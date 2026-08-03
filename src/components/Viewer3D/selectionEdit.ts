@@ -32,6 +32,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { worldDeltaToPixel } from './editHelpers'
+import type { ParsedWall } from '../../types'
 
 export type EditVerb = 'move' | 'rotate' | 'stretch'
 
@@ -60,6 +61,19 @@ export interface SelectionEdit {
    *  edit mode, the surface you were working on could not remove it and you had
    *  to go hunting for the right card. Routed here like every other verb. */
   remove: () => void
+  /** X-ray whatever is selected, or null when this type cannot go see-through.
+   *
+   *  Same story as delete, and worse: making something transparent is the move
+   *  you reach for CONSTANTLY — it is how you look inside a wall or under a roof
+   *  — and it was hidden two clicks deep in a per-type panel, spelled
+   *  differently for each type, and missing entirely for floors and roofs. There
+   *  was no answer to "how do I make this see-through?" that worked twice in a
+   *  row. Now there is one: select it, tap the rail.
+   *
+   *  Null for trade runs — a pipe is a thin tube with nothing inside it, so a
+   *  transparent one would just be a hard-to-see pipe. Same honesty rule the
+   *  verbs follow: a control that would do nothing is not offered. */
+  xray: { on: boolean; toggle: () => void } | null
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -121,6 +135,10 @@ export function useSelectionEdit(): SelectionEdit | null {
       return {
         label, verbs: ['move', 'rotate', 'stretch'] as EditVerb[],
         remove: () => removePlacedObject(o.id),
+        xray: {
+          on: !!o.transparent,
+          toggle: () => updatePlacedObject(o.id, { transparent: !o.transparent }),
+        },
         apply: ({ dx = 0, dz = 0, rot = 0, factor = 1 }: EditStep) => updatePlacedObject(o.id, {
           x: o.x + dx, z: o.z + dz,
           rotationY: o.rotationY + rot,
@@ -136,6 +154,14 @@ export function useSelectionEdit(): SelectionEdit | null {
         // No rotation field on an axis-aligned rect, so Rotate is never offered.
         label, verbs: ['move', 'stretch'] as EditVerb[],
         remove: () => (kind === 'roof' ? removeRoofArea(a.id) : removeFloorsArea(a.id)),
+        xray: {
+          on: !!a.transparent,
+          toggle: () => {
+            const patch = { transparent: !a.transparent }
+            if (kind === 'roof') updateRoofArea(a.id, patch)
+            else updateFloorsArea(a.id, patch)
+          },
+        },
         apply: ({ dx = 0, dz = 0, factor = 1 }: EditStep) => {
           if (factor !== 1) {
             // Stretch about the centre: grow/shrink the rect's half-extents.
@@ -169,6 +195,15 @@ export function useSelectionEdit(): SelectionEdit | null {
     const halfLen = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1) / 2
     return {
       label, verbs: ['move', 'rotate', 'stretch'] as EditVerb[],
+      // A wall is the thing people most want to see through; a run is not.
+      xray: kind === 'wall' && drawing
+        ? {
+            on: !!(seg as ParsedWall).transparent,
+            toggle: () => updateUserWall(drawing.id, Number(id), {
+              transparent: !(seg as ParsedWall).transparent,
+            }),
+          }
+        : null,
       remove: () => {
         if (kind === 'wall' && drawing) { deleteUserWall(drawing.id, Number(id)); return }
         // A run's id does not say which trade owns it, so ask each list.

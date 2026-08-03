@@ -18,6 +18,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { wallFramingSpec } from '../../services/constructionCode'
+import { XRAY_OPACITY } from './editHelpers'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
@@ -317,8 +318,11 @@ export default function LiveWallsLayer() {
           opacity={(() => {
             const level = wall.level ?? 0
             if (isolatedFloor !== null && level !== isolatedFloor) return 0
+            // Per-wall X-ray before the storey ghost, matching every other
+            // layer: your call on this wall beats a floor-wide setting.
+            if (wall.transparent) return XRAY_OPACITY
             if (ghostedLevels.includes(level)) return 0.15
-            return wall.transparent ? 0.16 : built ? 1 : 0.7
+            return built ? 1 : 0.7
           })()}
           built={built}
           activeUnit={activeUnit}

@@ -24,6 +24,18 @@ export function rayToGround(e: ThreeEvent<PointerEvent>): THREE.Vector3 | null {
 export const EDIT_TAP_PX = 5
 
 /**
+ * How see-through an X-rayed element is — ONE number, because an element is not
+ * one mesh.
+ *
+ * A wall is studs, sheathing, housewrap, cladding and board. X-ray used to reach
+ * only the studs, which are the part already hidden inside the other four: you
+ * pressed the button, the rail said it was on, and the wall looked exactly the
+ * same. Every layer that draws part of an element reads this, so "X-ray" means
+ * the whole element goes see-through, not one hidden slice of it.
+ */
+export const XRAY_OPACITY = 0.16
+
+/**
  * Convert a WORLD-space delta (metres) into an image-PIXEL delta, undoing the
  * overlay rotation + scale — so an area drag tracks the cursor on the print and
  * the stored pixel rect moves the right amount.

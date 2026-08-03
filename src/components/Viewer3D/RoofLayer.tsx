@@ -25,7 +25,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildRoofByType, buildRidgeRoof, ridgeIsShaped, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { pitchToRatio } from '../../data/traceLayers'
-import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight } from './editHelpers'
+import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
 import type { RoofRidge, TracedLine } from '../../types'
 
 const RAFTER_OC_M = 0.4064   // 16" on-centre common rafters
@@ -109,6 +109,26 @@ function RoofAreaMesh({
     r.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
     return r
   }, [lenX, lenZ, shaped, ridge.pitch, ridge.crossFrac, ridge.insetA, ridge.insetB, area.elementType, area.level, overhangM])
+
+  // X-ray. A roof is the single most in-the-way thing in the model — it covers
+  // everything you built underneath — so seeing through it has to be one tap.
+  // Applied to the built materials rather than at build time so toggling it
+  // does not rebuild the rafters. The original opacity is remembered on first
+  // touch, so turning X-ray off restores what the material actually had.
+  useEffect(() => {
+    const on = !!area.transparent
+    roof.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return
+      const mats = Array.isArray(o.material) ? o.material : [o.material]
+      for (const m of mats) {
+        const base: number = (o.userData.baseMaterialOpacity ??= m.opacity)
+        m.transparent = on || base < 1
+        m.opacity = on ? XRAY_OPACITY : base
+        m.depthWrite = !on
+        m.needsUpdate = true
+      }
+    })
+  }, [roof, area.transparent])
 
   useEffect(() => () => {
     roof.traverse((o) => {

@@ -358,6 +358,28 @@ export function finishesVisible(
   return timing === 'live' || applied
 }
 
+// ── Masonry veneer support ───────────────────────────────────────────────────
+//
+// A brick or stone veneer does not hang on the wall — it stands on the ground, on
+// a shelf cast into the foundation, and is only TIED back to the wall for
+// stability. That is why it needs a ledge, and why the cavity behind it has to
+// drain: water gets through brick, runs down the back face, lands on flashing and
+// leaves through the weeps. Miss any part of that and you have built a bucket.
+//
+// IRC R703.8: ties one per 2.67 sq ft and no more than 24" apart each way; weeps
+// no more than 33" o.c. in the course immediately above the flashing.
+
+/** Vertical face of the foundation shelf. */
+export const LEDGE_DROP_M = 0.203        // 8"
+/** Bearing beyond the veneer's own thickness, so it is not perched on the edge. */
+export const LEDGE_BEARING_EXTRA_M = 0.025
+/** Weep spacing — 24" is common practice, inside the 33" the code allows. */
+export const WEEP_SPACING_M = 0.610
+/** Tie spacing, each way. Exactly 24" — a rounded 0.610 sits over the limit. */
+export const TIE_SPACING_M = 0.6096
+/** How far the flashing turns UP the sheathing behind the veneer. */
+export const FLASHING_UPTURN_M = 0.203
+
 // ── Per-wall framing spec ─────────────────────────────────────────────────────
 // THE source of truth that lets a build honour EACH wall's own framing (material,
 // stud size, steel gauge) instead of one global setting — so a wood exterior and

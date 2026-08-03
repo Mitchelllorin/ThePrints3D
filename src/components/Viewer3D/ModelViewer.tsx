@@ -35,6 +35,25 @@ import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
 import styles from './ModelViewer.module.css'
 
+/**
+ * Dev-only: hand the live scene graph to `window.__scene`.
+ *
+ * The stores are already exposed for the same reason (see main.tsx) — you can
+ * inject a roof area and read it back. But half the questions worth asking are
+ * about what actually got RENDERED: is that wall really see-through, did the
+ * sheathing land on the outside face, are the joists at 16" o.c. The store
+ * cannot answer any of those, and eyeballing a screenshot cannot answer them
+ * precisely. With the scene in hand you measure instead of guess. Stripped in
+ * production builds.
+ */
+function DevSceneHandle() {
+  const { scene } = useThree()
+  useEffect(() => {
+    ;(window as unknown as Record<string, unknown>).__scene = scene
+  }, [scene])
+  return null
+}
+
 function CameraRig() {
   const { camera } = useThree()
   const initialized = useRef(false)
@@ -774,6 +793,7 @@ export default function ModelViewer() {
           local.closeAllPanels()
         }}
       >
+        {import.meta.env.DEV && <DevSceneHandle />}
         <CameraRig />
         <PrintAutoFrame />
         <DrawerRecenter />

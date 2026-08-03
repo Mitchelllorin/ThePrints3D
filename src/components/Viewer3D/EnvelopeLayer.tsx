@@ -23,7 +23,8 @@ import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
-import { buildWallEnvelope, buildWallCladding, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
+import { XRAY_OPACITY } from './editHelpers'
+import { buildWallEnvelope, buildWallCladding, buildVeneerSupport, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, renderWallThicknessM, wallHeightM,
   claddingSpec, finishesVisible,
@@ -106,6 +107,27 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     return g
   }, [cladding, length, wallHeight, thickness, skinM, outward, openings, wall.level, ghostOpacity])
 
+  // What a masonry veneer stands on: ledge, flashing, weeps and ties. Only the
+  // GROUND storey gets it — the shelf is cast into the foundation, so a veneer on
+  // an upper floor is carried by a shelf angle, which is a different detail.
+  const ledge = useMemo(() => {
+    const cs = claddingSpec(cladding)
+    if (!cs?.needsLedge || (wall.level ?? 0) !== 0) return null
+    const g = buildVeneerSupport({
+      length, height: wallHeight,
+      standoff: Math.max(0.038, thickness) / 2 + skinM + cs.gapM,
+      outward, spec: cs, opacity: ghostOpacity,
+    })
+    g.userData.level = 0
+    return g
+  }, [cladding, length, wallHeight, thickness, skinM, outward, wall.level, ghostOpacity])
+
+  useEffect(() => () => {
+    ledge?.traverse((o) => {
+      if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
+    })
+  }, [ledge])
+
   useEffect(() => () => {
     clad?.traverse((o) => {
       if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() }
@@ -118,6 +140,7 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     <>
       {skin && <primitive object={skin} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
       {clad && <primitive object={clad} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
+      {ledge && <primitive object={ledge} position={[cx, baseY, cz]} rotation={[0, -angle, 0]} />}
     </>
   )
 }
@@ -237,7 +260,11 @@ export default function EnvelopeLayer() {
       {skinWalls.map((w, i) => {
         const outward = outwardSign(w, centroidByLevel[w.level ?? 0])
         const level = w.level ?? 0
+        // X-ray is this wall's own setting, so it wins over the storey-wide
+        // ghost: you asked to see through THIS wall, and the skin is most of
+        // what was blocking the view.
         const ghostOpacity = isolatedFloor !== null && level !== isolatedFloor ? 0
+          : w.transparent ? XRAY_OPACITY
           : ghostedLevels.includes(level) ? 0.15
           : 1
         if (ghostOpacity === 0) return null

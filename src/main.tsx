@@ -7,12 +7,17 @@ import './styles/mobile.css'
 import App from './App.tsx'
 import { useAppStore } from './store/useAppStore'
 import { useFloorplanLocalStore } from './store/useFloorplanLocalStore'
+import { useUISettingsStore } from './store/useUISettingsStore'
 
 // Dev-only: expose the stores so verification scripts can inject state (e.g. a
 // roof area) and read it back without driving the full trace UI. Stripped in prod.
 if (import.meta.env.DEV) {
   ;(window as unknown as Record<string, unknown>).__appStore = useAppStore
   ;(window as unknown as Record<string, unknown>).__floorplanLocalStore = useFloorplanLocalStore
+  // The finishes live here — sheathing, cladding, board, X-ray timing. Half of
+  // what is worth measuring only exists once finishes are on, so verifying it
+  // meant hand-driving the Settings drawer first. Now it does not.
+  ;(window as unknown as Record<string, unknown>).__uiSettingsStore = useUISettingsStore
 }
 
 // Dev self-heal: the production build ships a PWA service worker that precaches

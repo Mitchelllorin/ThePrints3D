@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall, buildVeneerSupport } from './framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb, boardSpec,
   finishesVisible,
@@ -643,5 +643,66 @@ describe('two walls meeting make ONE framed corner', () => {
     const a = studsIn(buildWallFraming({ ...base })).length
     const b = studsIn(buildWallFraming({ ...base, capLap: {} })).length
     expect(a).toBe(b)
+  })
+})
+
+describe('masonry veneer stands on something', () => {
+  const base = { length: 6, height: 2.44, standoff: 0.12, outward: 1 as const }
+  const brick = claddingSpec('brick-veneer')!
+  const lap = claddingSpec('vinyl-lap')!
+
+  it('builds nothing for cladding that hangs on the wall', () => {
+    // Lap siding is fastened to the wall; it does not need a shelf.
+    expect(meshCount(buildVeneerSupport({ ...base, spec: lap }))).toBe(0)
+  })
+
+  it('gives brick a ledge wide enough to carry veneer AND cavity', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    const ledge = withInfo(g, /Brick ledge/)[0]
+    expect(ledge).toBeTruthy()
+    ledge.geometry.computeBoundingBox()
+    const depth = ledge.geometry.boundingBox!.max.z - ledge.geometry.boundingBox!.min.z
+    // Perching brick on its own thickness leaves the cavity unsupported.
+    expect(depth).toBeGreaterThan(brick.thicknessM + brick.gapM)
+  })
+
+  it('puts the ledge BELOW the wall base, so the veneer bears on its top', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    expect(withInfo(g, /Brick ledge/)[0].position.y).toBeLessThan(0)
+  })
+
+  it('flashes the ledge and turns it UP behind the veneer', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    expect(withInfo(g, /Through-wall flashing/).length).toBe(1)
+    const upturn = withInfo(g, /Flashing upturn/)[0]
+    expect(upturn).toBeTruthy()
+    // Behind the veneer, not out in the cavity.
+    expect(upturn.position.z).toBeLessThan(base.standoff + 1e-6)
+  })
+
+  it('weeps the first course — flashing without weeps is a bucket', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    const weeps = withInfo(g, /Weep/)
+    expect(weeps.length).toBeGreaterThan(0)
+    // Inside the 33" the code allows, at every gap.
+    const xs = weeps.map((m) => m.position.x).sort((a, b) => a - b)
+    for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeLessThanOrEqual(0.84)
+    // Just above the flashing, not up the wall.
+    expect(Math.max(...weeps.map((m) => m.position.y))).toBeLessThan(0.15)
+  })
+
+  it('ties the veneer back no more than 24 inches apart each way', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    const ties = withInfo(g, /Veneer tie/)
+    expect(ties.length).toBeGreaterThan(0)
+    // Round finely enough to group a row without inventing spacing: at 1mm,
+    // 0.4 and 1.0096 read as 610mm apart and a legal 24" course looks illegal.
+    const rows = [...new Set(ties.map((m) => Math.round(m.position.y * 1e5)))].sort((a, b) => a - b)
+    for (let i = 1; i < rows.length; i++) expect((rows[i] - rows[i - 1]) / 1e5).toBeLessThanOrEqual(0.6096 + 1e-6)
+  })
+
+  it('honours the outward side, like the rest of the envelope', () => {
+    const out = buildVeneerSupport({ ...base, outward: -1, spec: brick })
+    expect(withInfo(out, /Brick ledge/)[0].position.z).toBeLessThan(0)
   })
 })

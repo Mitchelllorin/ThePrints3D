@@ -16,6 +16,7 @@ import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec, type BoardKind } from '../../services/constructionCode'
 import { footprintCentroids, inwardSign, perimeterTest } from '../../services/wallFacing'
+import { XRAY_OPACITY } from './editHelpers'
 import type { ParsedWall, PlacedObject } from '../../types'
 
 
@@ -54,10 +55,17 @@ function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, 
   const board = useMemo(() => {
     if (isMasonry) return new THREE.Group()
     const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
-    const g = buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, bothSides, inward, board: boardType, opacity: 0.96 })
+    // X-ray the wall, X-ray its board. The board is the layer standing between
+    // you and everything you turned X-ray ON to look at — the studs, the MEP in
+    // the bay — so leaving it opaque made the whole toggle look broken.
+    const g = buildWallDrywall({
+      length, height: wallHeight, thickness: thicknessM, orientation,
+      openings: wallOpenings, bothSides, inward, board: boardType,
+      opacity: wall.transparent ? XRAY_OPACITY : 0.96,
+    })
     g.userData.level = wall.level ?? 0  // so the shared explode peels boards floor-by-floor
     return g
-  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level, bothSides, inward, boardType])
+  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level, bothSides, inward, boardType, wall.transparent])
 
   useEffect(() => () => {
     board.traverse((o) => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() } })

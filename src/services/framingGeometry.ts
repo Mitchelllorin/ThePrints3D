@@ -14,6 +14,7 @@ import * as THREE from 'three'
 import { joistProfile } from '../data/traceLayers'
 import {
   type EnvelopeLayer, type CladdingSpec, type BoardSpec,
+  LEDGE_DROP_M, LEDGE_BEARING_EXTRA_M, WEEP_SPACING_M, TIE_SPACING_M, FLASHING_UPTURN_M,
 } from './constructionCode'
 
 const STUD_WIDTH_M = 0.038    // 1-1/2" nominal stud face
@@ -1527,6 +1528,95 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
     }
   }
   return group
+}
+
+/**
+ * What a masonry veneer STANDS ON, and how the cavity behind it drains.
+ *
+ * Brick and stone veneer do not hang off the wall. They stand on a shelf cast
+ * into the foundation and are only TIED back for stability — which is why the
+ * cladding spec carries `needsLedge`, and why that flag sat unread while the
+ * veneer floated at the wall base with nothing beneath it.
+ *
+ * Four parts, and they only work together:
+ *   LEDGE     the foundation stepped out to carry the veneer's full thickness
+ *   FLASHING  sitting on the ledge and turned UP the sheathing behind, so water
+ *             running down the back of the brick is caught rather than soaking in
+ *   WEEPS     open head joints in the first course above the flashing, letting
+ *             that water back out
+ *   TIES      corrugated metal back to the studs, holding the veneer upright
+ *
+ * Leave the weeps out and the flashing turns the cavity into a bucket, which is
+ * worse than having neither. So they are built as one assembly rather than as
+ * options.
+ */
+export function buildVeneerSupport(opts: {
+  length: number
+  height: number
+  /** Distance from wall centre to the BACK of the veneer (its cavity face). */
+  standoff: number
+  outward: 1 | -1
+  spec: CladdingSpec
+  opacity?: number
+}): THREE.Group {
+  const { length, height, standoff, outward, spec, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (length < 0.05 || !spec.needsLedge) return g
+
+  const half = length / 2
+  const cavity = spec.gapM
+  const veneer = spec.thicknessM
+  // The shelf carries the veneer AND the cavity, plus a margin so the brick is
+  // not perched on the lip.
+  const bearing = cavity + veneer + LEDGE_BEARING_EXTRA_M
+
+  const add = (
+    w: number, h: number, d: number, x: number, y: number, z: number,
+    color: string, info: string, rough = 0.9, metal = 0,
+  ) => {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color), roughness: rough, metalness: metal,
+        transparent: opacity < 1, opacity,
+      }),
+    )
+    m.position.set(x, y, z)
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'foundation'
+    m.userData.info = info
+    g.add(m)
+  }
+
+  // LEDGE — concrete, top flush with the wall base so the veneer bears on it.
+  const ledgeZ = outward * (standoff + bearing / 2)
+  add(length, LEDGE_DROP_M, bearing, 0, -LEDGE_DROP_M / 2, ledgeZ,
+      '#b9bcc2', `Brick ledge · ${(bearing * 39.37).toFixed(1)}" bearing`)
+
+  // FLASHING — on the ledge, turned up the sheathing behind the veneer.
+  const FLASH_T = 0.002
+  add(length, FLASH_T, bearing, 0, FLASH_T / 2, ledgeZ,
+      '#3f4650', 'Through-wall flashing', 0.5, 0.4)
+  add(length, FLASHING_UPTURN_M, FLASH_T, 0, FLASHING_UPTURN_M / 2, outward * (standoff - FLASH_T),
+      '#3f4650', 'Flashing upturn', 0.5, 0.4)
+
+  // WEEPS — open head joints in the first course above the flashing.
+  const weepY = FLASH_T + 0.04
+  const weepZ = outward * (standoff + cavity + veneer / 2)
+  for (let x = -half + WEEP_SPACING_M / 2; x < half; x += WEEP_SPACING_M) {
+    add(0.012, 0.05, veneer * 1.02, x, weepY, weepZ,
+        '#241a16', 'Weep (open head joint)', 1)
+  }
+
+  // TIES — corrugated metal back to the studs, both ways at 24".
+  const tieZ = outward * (standoff - cavity / 2)
+  for (let y = 0.4; y < height - 0.1; y += TIE_SPACING_M) {
+    for (let x = -half + TIE_SPACING_M / 2; x < half; x += TIE_SPACING_M) {
+      add(0.022, 0.002, cavity + 0.02, x, y, tieZ,
+          '#cdd2d9', 'Veneer tie (corrugated)', 0.3, 0.85)
+    }
+  }
+  return g
 }
 
 /**
