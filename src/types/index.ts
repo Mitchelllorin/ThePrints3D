@@ -65,6 +65,13 @@ export interface ParsedWall {
   /** Storey this wall stands on (0 = ground, 1 = 2nd floor, …). Drives its 3D
    *  base elevation so upper-floor walls stack on the floor below. */
   level?: number
+  /** Interior board for THIS wall, overriding the building-wide default.
+   *
+   *  Board is not one choice for a whole house. The wall behind a tub wants a
+   *  tile backer, the garage side of a separation wall wants 5/8" Type X, and the
+   *  bedroom next to both is happy with 1/2" gypsum. A single global setting
+   *  cannot express a bathroom, which is most of what makes a plan a plan. */
+  boardKind?: string
   /** How many storeys this wall runs THROUGH, starting at `level`. Default 1.
    *
    *  A stairwell wall, a two-storey foyer, a vaulted great-room wall, a shaft or
@@ -212,6 +219,11 @@ export interface RoofRidge {
 /** A room (enclosed region) detected by flood-filling the rasterized image. */
 export interface ParsedRoom {
   id: string
+  /** What the plan calls it — 'BATH', 'KITCHEN', 'BED 1'. Present on preset and
+   *  labelled plans; absent when a room was found purely by geometry. It is what
+   *  lets the app know a bathroom is a bathroom, and therefore that the walls
+   *  around it want tile backer rather than gypsum. */
+  name?: string
   /** Centroid in pixel coordinates */
   cx: number
   cy: number

@@ -16,6 +16,7 @@ import {
   PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER, FLOORS_PICKER, ROOF_PICKER, LEVEL_OPTIONS,
 } from '../../data/traceLayers'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
+import { suggestWetWalls } from '../../services/wetWalls'
 import {
   solveStair, stairIssues, stairOpeningM, stairShapeFromSubtype,
   MIN_TREAD_M, MIN_WIDTH_M,
@@ -191,6 +192,11 @@ export default function FloorplanPanel() {
   const roofOverhangIn = useConfigStore((s) => s.roofOverhangIn)
   // Nudge step for moving a selected wall, expressed in the active unit.
   const [nudgeStep, setNudgeStep] = useState(1)
+  // Dismissal of the wet-wall suggestion. MUST live up here with the other
+  // hooks: this component returns early when there is no drawing, so a useState
+  // added further down runs on some renders and not others — React sees the hook
+  // count change the moment a drawing loads and throws, which blanks the screen.
+  const [wetDismissed, setWetDismissed] = useState(false)
   // Storeys the user marked "Custom" (trace/import their own) instead of the
   // default "Typical" — the floor below stacked straight up. Drives the auto-
   // stack below so an upper floor defaults to a copy of the one under it.
@@ -697,6 +703,13 @@ export default function FloorplanPanel() {
     : null
   const objSubtypes = selectedObject ? SUBTYPES[selectedObject.type] : undefined
 
+  // Walls the plan says are wet but whose board does not agree yet.
+  const wetSuggestions = wetDismissed || !drawing ? [] :
+    suggestWetWalls(drawing.parsedWalls, drawing.parsedRooms ?? [])
+      // The card edits by USER-wall index, so report in those terms.
+      .map((sg) => ({ ...sg, index: userWalls.findIndex((w) => w === drawing.parsedWalls[sg.index]) }))
+      .filter((sg) => sg.index >= 0)
+
   // Live stair solve for the configurator. The RISE is the object's own height —
   // a stair climbs a storey, so it comes from the building rather than a field
   // somebody can set to disagree with it.
@@ -768,6 +781,29 @@ export default function FloorplanPanel() {
           {/* No "End run" button — double-tapping the workspace ends the current
               wall run (the natural "I'm done with this line" gesture). */}
           <button className={styles.traceBarBtn} onClick={cancelTracing} title="Finish tracing">✓ Done</button>
+        </div>
+      )}
+
+      {/* WET WALLS — the plan already says which rooms hold water, so it can say
+          which walls want a backer. A suggestion, never a silent change: a half
+          bath with no shower does not need backer on all four sides and only the
+          person building it knows that. */}
+      {wetSuggestions.length > 0 && !traceMode && !overlay.calibrationMode && (
+        <div className={styles.offPrintToast}>
+          <span>
+            {wetSuggestions.length} wall{wetSuggestions.length > 1 ? 's' : ''} around the{' '}
+            {wetSuggestions[0].roomName.toLowerCase()} — board {wetSuggestions[0].boardKind === 'glassmat-tile' ? 'for tile' : 'mould-resistant'}?
+          </span>
+          <div className={styles.btnRow}>
+            <button
+              className={styles.action}
+              onClick={() => {
+                for (const s of wetSuggestions) updateUserWall(drawing.id, s.index, { boardKind: s.boardKind })
+                if (modelReady) buildModel()
+              }}
+            >Board them</button>
+            <button className={styles.secondary} onClick={() => setWetDismissed(true)}>Not now</button>
+          </div>
         </div>
       )}
 
@@ -1467,6 +1503,26 @@ export default function FloorplanPanel() {
                 )
               })}
             </div>
+            {/* BOARD for THIS wall. The wall behind a tub wants a tile backer,
+                the garage side of a separation wall wants Type X, and the bedroom
+                next to both is fine with gypsum — one building-wide setting
+                cannot say that. "Default" hands the wall back to the global. */}
+            <label className={styles.row}>
+              <span className={styles.propLabel}>Board</span>
+              <select
+                className={styles.select}
+                value={userWalls[selectedWallIndex].boardKind ?? ''}
+                onChange={(e) => { updateUserWall(drawing.id, selectedWallIndex, { boardKind: e.target.value || undefined }); if (modelReady) buildModel() }}
+              >
+                <option value="">Default (building)</option>
+                <option value="gypsum-half">Gypsum 1/2"</option>
+                <option value="gypsum-type-x">Gypsum 5/8" Type X</option>
+                <option value="mold-resistant">Mould-resistant</option>
+                <option value="cement-board">Cement board</option>
+                <option value="glassmat-tile">Glass-mat tile backer</option>
+                <option value="foam-waterproof">Waterproof foam (KERDI)</option>
+              </select>
+            </label>
             <label className={styles.row}>
               <span className={styles.propLabel}>Interior</span>
               <select

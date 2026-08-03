@@ -14,7 +14,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec } from '../../services/constructionCode'
+import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec, type BoardKind } from '../../services/constructionCode'
 import { footprintCentroids, inwardSign, perimeterTest } from '../../services/wallFacing'
 import type { ParsedWall, PlacedObject } from '../../types'
 
@@ -215,7 +215,9 @@ export default function DrywallLayer() {
             storeyHeight={storeyHeight}
             bothSides={!exterior}
             inward={exterior ? inwardSign(wall, centroids[wall.level ?? 0]) : 1}
-            boardType={boardType}
+            /* A wall's OWN board wins over the building-wide default — the wall
+               behind a tub is a tile backer even when the house is gypsum. */
+            boardType={wall.boardKind ? boardSpec(wall.boardKind as BoardKind) : boardType}
           />
         )
       })}

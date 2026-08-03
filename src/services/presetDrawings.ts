@@ -111,6 +111,7 @@ const EASY: PlanSpec = {
     // Cased opening, hall to living. Without it the front door lets you into the
     // living room and no further — the bedrooms were unreachable.
     { type: 'door', at: [9, 15], widthFt: 5, orientation: 'horizontal', swing: 'down' },
+    { type: 'door', at: [12, 2], widthFt: 2.5, orientation: 'vertical', swing: 'left' },     // closet ← bed 1
     { type: 'window', at: [5, 26], widthFt: 4, orientation: 'horizontal' },
     { type: 'window', at: [16, 26], widthFt: 4, orientation: 'horizontal' },
     { type: 'window', at: [6, 0], widthFt: 3, orientation: 'horizontal' },
@@ -170,6 +171,7 @@ const MEDIUM: PlanSpec = {
     { type: 'door', at: [27, 17], widthFt: 2.67, orientation: 'horizontal', swing: 'down' }, // utility
     { type: 'door', at: [6, 17], widthFt: 5, orientation: 'horizontal', swing: 'down' },     // hall → living
     { type: 'door', at: [18, 17], widthFt: 5, orientation: 'horizontal', swing: 'down' },    // hall → kitchen
+    { type: 'door', at: [41, 11], widthFt: 2.5, orientation: 'horizontal', swing: 'down' },  // closet ← master
     { type: 'window', at: [6, 0], widthFt: 4, orientation: 'horizontal' },
     { type: 'window', at: [24, 0], widthFt: 4, orientation: 'horizontal' },
     { type: 'window', at: [36, 0], widthFt: 3, orientation: 'horizontal' },
@@ -227,6 +229,7 @@ const HARD: PlanSpec = {
     { type: 'door', at: [16, 24], widthFt: 2.67, orientation: 'horizontal', swing: 'down' }, // pantry
     { type: 'door', at: [10, 4], widthFt: 5, orientation: 'vertical', swing: 'right' },      // entry → great room
     { type: 'door', at: [5, 18], widthFt: 4, orientation: 'horizontal', swing: 'down' },     // → stair
+    { type: 'door', at: [7.5, 8], widthFt: 2.5, orientation: 'horizontal', swing: 'up' },    // coat closet ← entry
     { type: 'window', at: [16, 0], widthFt: 6, orientation: 'horizontal' },
     { type: 'window', at: [0, 13], widthFt: 3, orientation: 'vertical' },
     { type: 'window', at: [0, 24], widthFt: 4, orientation: 'vertical' },
@@ -247,6 +250,11 @@ const HARD: PlanSpec = {
 }
 
 const PLANS: Record<PresetDifficulty, PlanSpec> = { easy: EASY, medium: MEDIUM, hard: HARD }
+
+/** Exported so the suite can assert every room is actually reachable. Building a
+ *  plan whose closet has no door is easy to do and impossible to see in code. */
+export function presetPlans(): PlanSpec[] { return [EASY, MEDIUM, HARD] }
+export type { PlanSpec, RoomSpec, OpeningSpec }
 
 // ── Spec → drawing data ──────────────────────────────────────────────────────
 
@@ -275,6 +283,9 @@ function planRooms(plan: PlanSpec): ParsedRoom[] {
     const px2 = ft(x2 + MARGIN_FT), py2 = ft(y2 + MARGIN_FT)
     return {
       id: `${plan.id}-room-${i + 1}`,
+      // The name is what lets the app tell a bathroom from a bedroom, and
+      // therefore which walls want a tile backer. See wetWalls.
+      name: r.name,
       cx: (px1 + px2) / 2, cy: (py1 + py2) / 2,
       x1: px1, y1: py1, x2: px2, y2: py2,
       areaPx: Math.max(1, (px2 - px1) * (py2 - py1)),
@@ -422,7 +433,12 @@ export function createPresetDrawing(difficulty: PresetDifficulty, practiceMode: 
     rasterWidth: widthPx,
     rasterHeight: heightPx,
     parsedWalls: practiceMode ? [] : planWalls(plan),
-    parsedRooms: practiceMode ? [] : planRooms(plan),
+    // ROOMS SURVIVE PRACTICE MODE. Practice is about tracing the walls yourself;
+    // you never trace a room, and the room names are what let the app reason
+    // about the plan at all — that a BATH is a bathroom, so the walls around it
+    // want a tile backer. Stripping them left the app unable to read its own
+    // drawing while you practised on it.
+    parsedRooms: planRooms(plan),
     parsedOpenings: practiceMode ? [] : planOpenings(plan),
     parsedText: [],
     parsedSymbols: [],
