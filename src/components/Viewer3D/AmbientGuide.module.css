@@ -284,7 +284,14 @@
    climbing into whatever is above it. */
 .propCard {
   position: absolute;
-  right: 56px;             /* clear of the ~44px edit rail at right: 6px */
+  /* CLEAR OF THE EDIT RAIL — measured, not estimated.
+     This said 56px and "clear of the ~44px edit rail". The rail is not 44px: its
+     move D-pad is three 26px columns, so it measures 90px and runs from x=542 to
+     x=632 in a 634px workspace. The card's right edge landed at 578, burying
+     36px of the rail across a 300px-tall band — which is ROTATE, STRETCH, X-RAY
+     and delete. Selecting a door put two surfaces on top of each other and you
+     could use neither. 90 (rail) + 6 (its inset) + 8 (gap) = 104. */
+  right: 104px;
   bottom: 64px;            /* clear of the explode bar along the bottom */
   left: auto;
   transform: none;
@@ -292,7 +299,9 @@
      with the stair rows in it that is a wall of buttons standing over the model.
      The controls are chips, not form fields, so they do not need the width. */
   width: 232px;
-  max-width: calc(100vw - 76px);
+  /* Must subtract the rail's lane too, or on a phone the clamp hands the card
+     back the width the rail is standing in and they overlap again. */
+  max-width: calc(100vw - 124px);
   max-height: calc(100dvh - 150px);
   overflow-y: auto;
   display: flex;
