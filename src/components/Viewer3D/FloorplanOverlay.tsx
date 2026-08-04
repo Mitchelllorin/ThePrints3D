@@ -1040,10 +1040,25 @@ export default function FloorplanOverlay() {
   // interior partitions change floor to floor (a second floor needs stairs, and
   // that opening moves the layout) — matching against every storey's walls at
   // once let an upstairs door align itself to a downstairs partition.
-  const placementWalls = useMemo(
-    () => userWalls.filter((w) => (w.level ?? 0) === activeLevel),
-    [userWalls, activeLevel],
-  )
+  //
+  // A DETECTED WALL IS STILL A WALL. This looked only at `source === 'user'`,
+  // so on a preset — whose walls all arrive as 'auto' — the list came back
+  // EMPTY and there was nothing on the plan to snap or orient against. Doors and
+  // windows dropped wherever the pointer was, flat, un-oriented, and no amount
+  // of aiming helped, because as far as placement was concerned the building had
+  // no walls at all. Same for any plan built from "Find the rest".
+  //
+  // Traced walls still WIN: they are the ones you drew, and detection can throw
+  // off noise (a title block full of parallel lines reads as dozens of walls).
+  // So the auto set is a FALLBACK, used only on a storey where you have not
+  // traced anything yet — which is exactly the preset case and never overrides
+  // work you did by hand.
+  const placementWalls = useMemo(() => {
+    const onLevel = (w: { level?: number }) => (w.level ?? 0) === activeLevel
+    const traced = userWalls.filter(onLevel)
+    if (traced.length > 0) return traced
+    return drawing ? drawing.parsedWalls.filter((w) => w.source !== 'user' && onLevel(w)) : []
+  }, [userWalls, activeLevel, drawing])
   // Click-target half-width for walls, ~20px of the print mapped to metres.
   const wallPickWidthM = Math.max(0.25, 20 * (width / imageWidth))
 
