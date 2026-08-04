@@ -1212,17 +1212,25 @@ export default function FloorplanOverlay() {
     ghostRef.current.rotation.y = pose.rotationY
   }
 
-  // Only DRAG moves the ghost — a bare hover must not.
+  // What moves the ghost, which is NOT the same question on a finger and a mouse.
   //
-  // This was wired straight to onPointerMove, which on a phone is fine: there is
-  // no hover, so move only fires while a finger is down and the press-drag-drop
-  // flow works. On a mouse it fires the moment the pointer moves ANYWHERE, so
-  // the ghost parked hi-vis at the plan's edge teleported to the cursor before
-  // you could reach it — the item looked like it vanished the instant you went
-  // to grab it. `buttons` is non-zero only while a mouse button or finger is
-  // actually down, which is the same test on both.
+  // TOUCH has no hover. A move event only ever arrives with a finger already
+  // down, so press-drag-drop is the entire interaction: the item parks hi-vis at
+  // the plan's edge, you grab it, you drag it, you let go. Gating on `buttons`
+  // is what makes that work.
+  //
+  // A MOUSE hovers, and gating it on `buttons` too meant nothing happened until
+  // you pressed — so unless you already knew there was an item parked in the
+  // corner waiting to be grabbed, there was no preview at all. The ghost
+  // following the cursor is the thing people actually remember and want: you see
+  // exactly what you are about to drop, and exactly where, before committing.
+  //
+  // The old objection — that a hovering mouse "teleported the parked ghost away
+  // before you could reach it" — was really a complaint about being made to
+  // fetch it. When the ghost tracks the cursor there is nothing to fetch: it is
+  // already under your hand, and a click drops it.
   const dragGhost = (event: ThreeEvent<PointerEvent>) => {
-    if (event.buttons === 0) return
+    if (event.pointerType === 'touch' && event.buttons === 0) return
     moveGhost(event)
   }
 

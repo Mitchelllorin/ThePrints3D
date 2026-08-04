@@ -32,6 +32,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { worldDeltaToPixel } from './editHelpers'
+import { followWall, segYawDelta } from '../../services/openingFollow'
 import type { ParsedWall } from '../../types'
 
 export type EditVerb = 'move' | 'rotate' | 'stretch'
@@ -129,6 +130,18 @@ export function useSelectionEdit(): SelectionEdit | null {
     const toPx = (dx: number, dz: number) =>
       worldDeltaToPixel(dx, dz, rotRad, overlayW, overlayD, imageWidth, imageHeight)
 
+    /** Print pixels → world position. Same transform every render layer uses, so
+     *  an object rewritten here lands exactly where its print position says. */
+    const pxToWorld = (px: number, py: number) => {
+      const localX = ((px / imageWidth) - 0.5) * overlayW
+      const localZ = ((py / imageHeight) - 0.5) * overlayD
+      const c = Math.cos(rotRad), s = Math.sin(rotRad)
+      return {
+        x: overlay.position[0] + localX * c + localZ * s,
+        z: overlay.position[1] - localX * s + localZ * c,
+      }
+    }
+
     if (kind === 'object') {
       const o = placedObjects.find((x) => x.id === id)
       if (!o) return null
@@ -221,7 +234,36 @@ export function useSelectionEdit(): SelectionEdit | null {
           x1: ncx - Math.cos(ang) * len, y1: ncy - Math.sin(ang) * len,
           x2: ncx + Math.cos(ang) * len, y2: ncy + Math.sin(ang) * len,
         }
-        if (kind === 'wall' && drawing) updateUserWall(drawing.id, Number(id), ends)
+        if (kind === 'wall' && drawing) {
+          // THE OPENINGS COME TOO.
+          //
+          // A door is its own object with its own position, not a child of the
+          // wall, so nothing told it the wall had moved: rotate a wall and it
+          // swung away while every door and window in it stayed behind, hanging
+          // where the wall used to be. Read each opening's position along and
+          // across the OLD wall, write it back against the NEW one, and turn its
+          // facing by however much the wall turned. Done before the wall itself
+          // is written so `seg` is still the old line.
+          const before = { x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2 }
+          const yaw = segYawDelta(before, ends)
+          // Same reach the framing and boarding use to decide which wall an
+          // opening belongs to, so it cannot be framed into one and towed by
+          // another.
+          const reachPx = Math.max(((seg as ParsedWall).thickness || 8) * 2.5, 28)
+          for (const o of placedObjects) {
+            if (o.type !== 'door' && o.type !== 'window') continue
+            if (o.pxX == null || o.pxY == null) continue
+            const moved = followWall(o.pxX, o.pxY, before, ends, reachPx)
+            if (!moved) continue
+            const w = pxToWorld(moved.x, moved.y)
+            updatePlacedObject(o.id, {
+              pxX: moved.x, pxY: moved.y,
+              x: w.x, z: w.z,
+              rotationY: o.rotationY - yaw,   // screen yaw runs opposite plan yaw
+            })
+          }
+          updateUserWall(drawing.id, Number(id), ends)
+        }
         else updateTradeLine(String(id), ends)
       },
     }
