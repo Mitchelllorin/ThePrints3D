@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard, Text } from '@react-three/drei'
+import { labelText } from './labelStyle'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -50,7 +51,7 @@ function CeilingMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, ov
     <>
       <primitive object={ceiling} position={[centre.x, y, centre.z]} rotation={[0, rotRad, 0]} />
       <Billboard position={[centre.x, y + 0.45, centre.z]}>
-        <Text fontSize={0.26 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.02 * labelScale} outlineColor="#0b1120">
+        <Text {...labelText(0.26 * labelScale, labelColor)}>
           Ceiling
         </Text>
       </Billboard>

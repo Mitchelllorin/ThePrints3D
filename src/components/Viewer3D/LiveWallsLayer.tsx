@@ -9,6 +9,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard, Text } from '@react-three/drei'
+import { labelText } from './labelStyle'
 import { useExplodeChildren } from './explodeRuntime'
 import { renderWallThicknessM, wallHeightM } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
@@ -139,7 +140,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       {/* Nameplate — the wall's real length while tracing; hidden once built. */}
       {!built && (
         <Billboard position={[cx, baseY + wallHeight + 0.28, cz]}>
-          <Text fontSize={0.32 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.025 * labelScale} outlineColor="#0b1120">
+          <Text {...labelText(0.32 * labelScale, labelColor)}>
             {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
           </Text>
         </Billboard>

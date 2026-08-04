@@ -18,6 +18,7 @@ import { useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
+import { labelText } from './labelStyle'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 
@@ -106,7 +107,7 @@ export default function HoverNameplate() {
         <meshBasicMaterial color="#22d3ee" transparent opacity={0.22} depthWrite={false} depthTest={false} />
       </mesh>
       <Billboard position={plate.pos}>
-        <Text fontSize={0.24 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.024 * labelScale} outlineColor="#0b1120">
+        <Text {...labelText(0.24 * labelScale, labelColor)}>
           {plate.text}
         </Text>
       </Billboard>

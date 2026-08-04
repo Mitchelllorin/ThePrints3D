@@ -36,9 +36,15 @@ function AnnotationPin({ ann, selected, onSelect, onDeselect }: PinProps) {
             border: `2px solid ${ann.color}`,
             borderRadius: 8,
             padding: '4px 10px',
-            color: selected ? '#fff' : '#f1f5f9',
-            fontSize: 12,
-            fontWeight: 600,
+            color: selected ? '#fff' : '#f8fafc',
+            // Annotations are read at arm's length on a phone, on site, often in
+            // daylight — and they sit over a busy model. Heavier and a shade
+            // larger, with a hard dark shadow so the glyphs keep their edge
+            // wherever the card happens to be floating.
+            fontSize: 13.5,
+            fontWeight: 700,
+            letterSpacing: 0.2,
+            textShadow: '0 1px 3px rgba(0,0,0,0.95)',
             whiteSpace: 'pre-wrap',
             maxWidth: 220,
             wordBreak: 'break-word',
@@ -56,7 +62,7 @@ function AnnotationPin({ ann, selected, onSelect, onDeselect }: PinProps) {
           }}
           title={ann.text}
         >
-          <span style={{ fontSize: 14, lineHeight: 1 }}>{ann.icon}</span>
+          <span style={{ fontSize: 16, lineHeight: 1 }}>{ann.icon}</span>
           <span style={{ flex: 1 }}>{ann.text}</span>
         </div>
       </Html>

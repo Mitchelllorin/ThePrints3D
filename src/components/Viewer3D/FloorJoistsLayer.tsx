@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
+import { labelText } from './labelStyle'
 import { explodeRuntime } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -177,7 +178,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
       />
       {sheetCount > 0 && (
         <Billboard position={[centre.x, 0.5, centre.z]}>
-          <Text fontSize={0.26 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.02 * labelScale} outlineColor="#0b1120">
+          <Text {...labelText(0.26 * labelScale, labelColor)}>
             {`${sheetCount} sheets · 4×8`}
           </Text>
         </Billboard>
