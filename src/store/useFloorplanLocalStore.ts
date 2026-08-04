@@ -269,6 +269,9 @@ interface FloorplanLocalState {
   setDetailExplodeId: (v: string | null) => void
   setWallDetailExplode: (v: boolean) => void
   selectAreaExclusive: (kind: 'floor' | 'roof', id: string) => void
+  /** Open (or close) the property card for the current selection. In edit mode
+   *  selecting no longer opens it on its own, so this is how you ask for it. */
+  openSelectionPanel: () => void
   // Coordinated openers — one panel at a time (each sets activePanel + clears the rest).
   openPicker: () => void
   openPanelBoard: () => void
@@ -460,10 +463,39 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   // selectedObjectId) could never attach to a floor or roof. Every selector now
   // writes editSelected too, so whatever is picked is THE selection whichever
   // path picked it. See docs/INTERACTIONS.md.
-  selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'object', id } }),
-  selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'wall', id: String(i) } }),
-  selectLineExclusive: (trade, id) => set({ activePanel: 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'line', id } }),
-  selectAreaExclusive: (kind, id) => set({ activePanel: 'area', selectedArea: { kind, id }, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null, editSelected: { kind, id } }),
+  // SELECTING SOMETHING DOES NOT OPEN A PANEL WHILE YOU ARE EDITING.
+  //
+  // Every one of these used to raise `activePanel` as well, so in edit mode a
+  // single tap put a property card on the workspace whether or not you wanted
+  // one. Most of the time you do not: you tapped the thing to NUDGE it, and the
+  // rail already carries move, rotate, stretch, X-ray and delete. The card just
+  // stood in front of the model you were trying to watch, and there was no way
+  // to select anything without summoning it.
+  //
+  // Edit mode → the rail, and nothing else. The card is one deliberate tap away
+  // (openSelectionPanel, on the rail) for the things the rail cannot express:
+  // a door's swing, a board type, a stair's landing.
+  //
+  // Outside edit mode the card is still how you inspect what you tapped, which
+  // is the whole point of tapping when you are not editing.
+  selectObjectExclusive: (id) => set((s) => ({ activePanel: s.editMode ? null : 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'object', id } })),
+  selectWallExclusive: (i) => set((s) => ({ activePanel: s.editMode ? null : 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'wall', id: String(i) } })),
+  selectLineExclusive: (trade, id) => set((s) => ({ activePanel: s.editMode ? null : 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'line', id } })),
+  selectAreaExclusive: (kind, id) => set((s) => ({ activePanel: s.editMode ? null : 'area', selectedArea: { kind, id }, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null, editSelected: { kind, id } })),
+  /** Open the property card for whatever is currently selected — the deliberate
+   *  tap that replaces the card appearing on its own. Toggles, so the same mark
+   *  puts it away again. */
+  openSelectionPanel: () => set((s) => {
+    if (s.activePanel) return { activePanel: null }
+    const k = s.editSelected?.kind
+    return {
+      activePanel: k === 'object' ? 'object'
+        : k === 'wall' ? 'wall'
+        : k === 'line' ? 'line'
+        : k === 'floor' || k === 'roof' ? 'area'
+        : null,
+    }
+  }),
   armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, editSelected: null }),
   // Toggling the same panel closes it; opening a different one clears every
   // selection/floater so the single-panel rule holds across both UI systems.

@@ -221,6 +221,7 @@ export default function FloorplanPanel() {
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
   // The wall-type picker shows before tracing begins, and can be reopened
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
+  const objectPanelOpen = useFloorplanLocalStore((s) => s.activePanel === 'object')
   const pickerOpen = useFloorplanLocalStore((s) => s.activePanel === 'picker')
   const panelBoardOpen = useFloorplanLocalStore((s) => s.activePanel === 'panelBoard')
   const openPicker = useFloorplanLocalStore((s) => s.openPicker)
@@ -1613,8 +1614,14 @@ export default function FloorplanPanel() {
         )}
       </EdgeDrawer>
 
-      {/* ── Property card for the selected placed object (above the tray) ── */}
-      {selectedObject && objDims && (
+      {/* ── Property card for the selected placed object (above the tray) ──
+          Gated on activePanel, not merely on there being a selection. In edit
+          mode selecting something no longer raises a panel (see
+          selectObjectExclusive), so tapping a thing to nudge it leaves the
+          workspace clear; the card comes back on the rail's ⋯ mark when you
+          actually want the specs. Outside edit mode selection still opens it,
+          which is what tapping is for when you are not editing. */}
+      {selectedObject && objDims && objectPanelOpen && (
         <div className={styles.propCard} style={{ bottom: trayVisible ? 76 : 16 }}>
           <div className={styles.propHeader}>
             <span className={styles.propTitle}>{selectedObject.label}</span>

@@ -406,7 +406,16 @@
 .explodeBar {
   position: absolute;
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  right: 14px;
+  /* OFF THE RIGHT EDGE — the rail owns that now.
+     Explode sat bottom-right, directly under a rail that used to be short and
+     now scrolls the full height of the workspace. Two controls stacked in one
+     column, and the rail is the one you are reaching for constantly.
+     Bottom-CENTRE keeps it on the perimeter (it is a 34px strip on the bottom
+     edge, not something standing in the middle of the view) and clear of all
+     three neighbours: the rail on the right, Edit bottom-left, and the property
+     card that now opens on the left. */
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 56;
   display: flex;
   align-items: center;
@@ -484,7 +493,24 @@
   background: none;
   border: none;
   pointer-events: auto;
+  /* THE RAIL SCROLLS, so everything fits in it.
+     It was a fixed column that simply grew: add the stair rows to a selection
+     and it ran off the bottom of a phone, which is the whole reason the
+     type-specific controls ended up in a separate floating card in the first
+     place. A card is a second surface competing for the same edge and standing
+     on the model. One scrolling rail is the same idea done once — no matter how
+     many verbs a selection has, they are all in the one place, on the perimeter.
+     Bounded so it never reaches the explode bar along the bottom. */
+  max-height: calc(100dvh - 150px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* No visible scrollbar — a track and thumb is exactly the boxed chrome this
+     rail exists to avoid. It scrolls by drag/wheel like the model does. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
 }
+.editRail::-webkit-scrollbar { width: 0; height: 0; }
 
 /* What's selected — the rail's only prose, so you know what the buttons act on. */
 .editRailLabel {
@@ -622,8 +648,18 @@
     bottom: calc(100px + env(safe-area-inset-bottom, 0px));
     min-height: 44px;
     height: 44px;
+    /* Back to the right edge on a phone, undoing the desktop centring: down here
+       Explode and the Place tab overlap horizontally, which is exactly why this
+       bar is lifted a row in the first place. Centring it would put it straight
+       on top of the tab. */
+    left: auto;
+    transform: none;
     right: 10px;
   }
+  /* And keep the rail off it. The rail scrolls to a bounded height; on a phone
+     the explode bar is lifted to 100px, so a desktop-sized bound would run the
+     bottom of the rail through it. */
+  .editRail { max-height: calc(100dvh - 230px); }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { width: 90px; }
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put

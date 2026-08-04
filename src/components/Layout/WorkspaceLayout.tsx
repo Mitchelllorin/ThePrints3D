@@ -505,6 +505,8 @@ export default function WorkspaceLayout() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+  const activePanel = useFloorplanLocalStore((s) => s.activePanel)
+  const openSelectionPanel = useFloorplanLocalStore((s) => s.openSelectionPanel)
   const stairEdit = useMemo(() => {
     if (editSelected?.kind !== 'object') return null
     const o = placedObjects.find((x) => x.id === editSelected.id)
@@ -872,6 +874,22 @@ export default function WorkspaceLayout() {
               </div>
             </div>
           )}
+
+          {/* SPECS — the property card, on request only.
+              Selecting something used to raise the card by itself, so you could
+              not tap a thing to nudge it without a panel landing in front of the
+              model. The rail already does move/rotate/stretch/X-ray/delete; this
+              is only for what the rail cannot say — a door's swing, a board type.
+              Tap again to put it away. */}
+          <div className={styles.editRailGroup}>
+            <button
+              className={`${styles.editRailBtn} ${activePanel ? styles.editRailBtnOn : ''}`}
+              aria-pressed={!!activePanel}
+              aria-label={`Specs for this ${selectionEdit.label.toLowerCase()}`}
+              title={activePanel ? 'Hide specs' : `Specs for this ${selectionEdit.label.toLowerCase()}`}
+              onClick={() => openSelectionPanel()}
+            >⋯</button>
+          </div>
 
           {/* X-RAY — the answer to "how do I make this see-through?".
               Captioned, not just an icon, because the whole problem was that
