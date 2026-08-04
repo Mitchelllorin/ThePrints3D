@@ -125,6 +125,68 @@ function OrbitEnabledGuard({ controlsRef, enabled }: {
 }
 
 /**
+ * IDLE SPIN — the model turns itself when you leave it alone.
+ *
+ * A still 3D view reads as a picture. One slow revolution and it reads as a
+ * thing you can walk around, which is the whole pitch in the first two seconds
+ * somebody looks at the screen.
+ *
+ * Rules that keep it from being annoying, which is the real design problem:
+ *   • ANY input stops it dead and restarts the clock — pointer, wheel, key.
+ *     Touching the model must never fight you.
+ *   • It only starts after a real pause (IDLE_MS), so it cannot creep in between
+ *     two deliberate drags.
+ *   • Never while the workspace is busy — tracing, calibrating, placing, editing.
+ *     Those own the view, and a moving camera under a trace is unusable.
+ *   • Slow. This is ambient, not a carousel.
+ * OrbitControls does the spinning itself (autoRotate), so damping, the tether
+ * and the target all keep working exactly as they do under your own hand.
+ */
+const IDLE_MS = 4000
+const IDLE_SPIN_SPEED = 0.35
+
+function IdleSpin({ controlsRef, allowed }: {
+  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>
+  allowed: boolean
+}) {
+  const { gl } = useThree()
+  const lastInput = useRef(0)
+
+  useEffect(() => {
+    const el = gl.domElement
+    // performance.now() rather than Date.now(): monotonic, and this only ever
+    // measures an elapsed gap.
+    const touch = () => { lastInput.current = performance.now() }
+    touch()
+    const opts = { passive: true } as const
+    el.addEventListener('pointerdown', touch, opts)
+    el.addEventListener('pointermove', touch, opts)
+    el.addEventListener('wheel', touch, opts)
+    window.addEventListener('keydown', touch, opts)
+    return () => {
+      el.removeEventListener('pointerdown', touch)
+      el.removeEventListener('pointermove', touch)
+      el.removeEventListener('wheel', touch)
+      window.removeEventListener('keydown', touch)
+    }
+  }, [gl])
+
+  useFrame(() => {
+    const ctrl = controlsRef.current
+    if (!ctrl) return
+    const idle = allowed && performance.now() - lastInput.current > IDLE_MS
+    if (ctrl.autoRotate !== idle) {
+      ctrl.autoRotate = idle
+      ctrl.autoRotateSpeed = IDLE_SPIN_SPEED
+    }
+    // autoRotate only advances when update() is called, and damping means
+    // OrbitControls wants that every frame anyway.
+    if (idle) ctrl.update()
+  })
+  return null
+}
+
+/**
  * Camera tether — you cannot fling the model off into space.
  *
  * OrbitControls pans the TARGET with nothing bounding it, so one stray
@@ -458,6 +520,9 @@ export default function ModelViewer() {
   const wizardOpen     = useFloorplanLocalStore((s) => s.wizardOpen)
   const setWizardOpen  = useFloorplanLocalStore((s) => s.setWizardOpen)
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
+  // Read here too (DrawerRecenter has its own copy) so the idle spin can stand
+  // down while the plan is being calibrated.
+  const calibratingNow = useAppStore((s) => s.floorplanOverlay.calibrationMode)
   const tracePaused    = useFloorplanLocalStore((s) => s.tracePaused)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const [exportOpen, setExportOpen]     = useState(false)
@@ -896,6 +961,13 @@ export default function ModelViewer() {
         <OrbitEnabledGuard controlsRef={controlsRef} enabled={orbitEnabled} />
         <CameraPresetApplier controlsRef={controlsRef} />
         <CameraTether controlsRef={controlsRef} />
+        {/* Only spin when the workspace is genuinely idle: orbit is on, nothing
+            is being traced or calibrated or placed, and nothing is selected for
+            editing. Anything that owns the view owns the camera too. */}
+        <IdleSpin
+          controlsRef={controlsRef}
+          allowed={orbitEnabled && !traceMode && !placeObjectType && !calibratingNow && !editSelected}
+        />
 
 
       </Canvas>

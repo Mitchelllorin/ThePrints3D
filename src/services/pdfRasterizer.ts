@@ -1,11 +1,23 @@
 import * as pdfjsLib from 'pdfjs-dist'
+// `?url` hands this to VITE'S resolver and gives back the real emitted asset
+// path, in dev and in a build.
+//
+// It used to be `new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url)`.
+// That looks right and is not: 'pdfjs-dist/...' is a BARE SPECIFIER, and Vite
+// only rewrites `new URL()` when the path is ./-relative. So it resolved
+// literally against this file — /src/services/pdfjs-dist/build/pdf.worker.min.mjs
+// — which does not exist, and the dev server answered it with index.html.
+// pdf.js was being asked to start a Web Worker from an HTML document. The worker
+// never came up and page.render() never settled: every PDF upload hung partway
+// through rasterizing, with no error anywhere.
+//
+// It stayed hidden because the presets are SVG/PNG and take the image path, so
+// nothing that ran regularly went through pdf.js at all.
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { RASTER_SCALE } from './constants'
 
 // Configure worker once
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString()
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 export interface RasterResult {
   /** Blob URL of the rendered page as PNG */
