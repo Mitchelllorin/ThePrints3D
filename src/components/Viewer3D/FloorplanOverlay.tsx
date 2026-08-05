@@ -68,12 +68,21 @@ function genLineId() {
   return `line-${_lineSeq++}-${Math.round(performance.now())}`
 }
 
-// Ground plane (y=0) for projecting the pointer ray to a floor point — used by
-// the placement catcher so the ghost tracks even when the 3D build is in front.
+// Plane for projecting the pointer ray onto a floor — used by the placement
+// catcher so the ghost tracks even when the 3D build is in front of the print.
+//
+// `y` is the elevation of the storey being worked on. This was fixed at grade,
+// and the camera looks DOWN, so a ray meets y=0 at a different x/z than it meets
+// the second-floor deck: upstairs the ghost sat at ground height and drifted
+// away from the cursor, further the higher the storey, while the object itself
+// rendered on the floor you had selected. Preview and result on two planes.
 const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-function rayToGround(e: ThreeEvent<PointerEvent>): THREE.Vector3 | null {
+const LEVEL_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+function rayToGround(e: ThreeEvent<PointerEvent>, y = 0): THREE.Vector3 | null {
   const p = new THREE.Vector3()
-  return e.ray.intersectPlane(GROUND_PLANE, p) ? p : null
+  if (y === 0) return e.ray.intersectPlane(GROUND_PLANE, p) ? p : null
+  LEVEL_PLANE.constant = -y   // plane constant is the NEGATIVE offset along the normal
+  return e.ray.intersectPlane(LEVEL_PLANE, p) ? p : null
 }
 
 const DEFAULT_WIDTH = 12
@@ -1078,8 +1087,18 @@ export default function FloorplanOverlay() {
   // WorkspaceLayout, not here. This was one of three competing window-level
   // handlers, so one press disarmed the tool AND closed unrelated drawers.
 
-  // Yaw that aligns an object with the nearest user wall (so it sits IN/along
-  // the wall). Returns 0 when no wall is close enough to snap to.
+  // Yaw that aligns an object with the nearest wall, so it sits IN/along it.
+  //
+  // ORIENTING REACHES FURTHER THAN SNAPPING, deliberately. They used to share a
+  // 1.2 m cutoff, which is about four feet — drop a window a hand's width past
+  // that and it came down at 0 degrees, square to the world instead of square to
+  // the wall it was obviously meant for. Turning is free and reversible: nothing
+  // moves, the thing just faces the right way, and being turned toward a wall
+  // 2 m off is right far more often than facing due north is. MOVING something
+  // is the part that has to stay tight, because a snap that reaches too far
+  // teleports what you are placing out from under your hand — so snapToWall
+  // keeps its own, shorter reach.
+  const ORIENT_REACH_M = 3.0
   const autoOrientYaw = (x: number, z: number): number => {
     let best = Infinity, yaw = 0
     for (const w of placementWalls) {
@@ -1088,7 +1107,7 @@ export default function FloorplanOverlay() {
       const d = segDist(x, z, a[0], a[2], b[0], b[2])
       if (d < best) { best = d; yaw = -Math.atan2(b[2] - a[2], b[0] - a[0]) }
     }
-    return best < 1.2 ? yaw : 0
+    return best < ORIENT_REACH_M ? yaw : 0
   }
 
   // Snap a point onto the nearest user wall (projected onto the wall centreline)
@@ -1204,15 +1223,27 @@ export default function FloorplanOverlay() {
   // first wall the ray grazed and "wouldn't go inside" the building. The ground
   // fallback never fired, because the ray had not missed the walls — it had
   // passed through one.
+  /** Elevation of the storey being worked on — the deck you are placing onto. */
+  const placeFloorY = activeLevel * storeyHeight
+
+  // Cast onto THIS STOREY'S deck, not grade.
+  //
+  // Everything cast at y=0. The camera looks down, so a ray meets grade at a
+  // different x/z than it meets the second-floor deck — on an upper storey the
+  // ghost sat at ground height AND drifted away from the cursor, further the
+  // higher you went, while the object itself rendered up on the floor you had
+  // selected. The preview and the result were on two different planes.
   const rayToPlacement = (e: ThreeEvent<PointerEvent>): THREE.Vector3 | null =>
     isWallMountedType(placeObjectType ?? '')
-      ? (rayToWall(e) ?? rayToGround(e))
-      : rayToGround(e)
+      ? (rayToWall(e) ?? rayToGround(e, placeFloorY))
+      : rayToGround(e, placeFloorY)
 
   // Standing height for the placement ghost, so it previews at the real mount
-  // height (wall devices / ceiling fixtures) instead of on the floor.
+  // height (wall devices / ceiling fixtures) instead of on the floor — and on
+  // the storey you are actually working on, so a stair being placed upstairs
+  // previews upstairs.
   const ghostY = (type: string, fallbackH: number) =>
-    deviceMountHeightM(type, ceilingM) ?? fallbackH / 2
+    placeFloorY + (deviceMountHeightM(type, ceilingM) ?? fallbackH / 2)
 
   // Press/drag moves the ghost (imperative — no re-render, so the ghost stays
   // visible). The camera is locked while placing, so the print never drifts.

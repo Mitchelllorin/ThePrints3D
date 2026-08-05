@@ -289,13 +289,22 @@ function PrintAutoFrame() {
     // [NaN, NaN, NaN].  When the real size arrives the key already matches so
     // the camera is never corrected, leaving the print permanently invisible.
     if (!size.width || !size.height) return
-    // Reframe on a new drawing, a changed footprint, OR when trace mode starts
-    // (to always bring the print into view before the first tap — pan is locked
-    // during an active trace run, so this is the last chance to centre the plan).
+    // Reframe on a new drawing or a changed footprint — and NOT on trace start.
+    //
+    // Re-framing when a trace begins was added to guarantee the plan was in view
+    // before the first tap. It also yanks the camera out from under you every
+    // time you start ANY pull, and a roof is the case that breaks: you line up an
+    // angled view to pull a roof, the pull starts, and the camera snaps to the
+    // top-down print framing — the one perspective from which a roof cannot be
+    // pulled at all. The framing it forces is wrong for the job it interrupts.
+    //
+    // The print-disappearing bug this shipped with was the NaN camera guarded
+    // above, not the framing; that guard stays and does the real work. If the
+    // plan is genuinely off screen the answer is a camera preset the user asks
+    // for, not one taken from them mid-action.
     const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}`
-    const traceModeStarted = traceMode && !lastFramedForTrace.current
     lastFramedForTrace.current = traceMode
-    if (lastKey.current === key && !traceModeStarted) return
+    if (lastKey.current === key) return
     lastKey.current = key
     const mobile = typeof window !== 'undefined' && window.innerWidth < 768
     setCameraPreset(framePrintPreset(w, d, position, size.width / size.height, 55, mobile))
