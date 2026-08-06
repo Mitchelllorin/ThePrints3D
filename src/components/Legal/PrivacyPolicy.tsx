@@ -83,16 +83,16 @@ export default function PrivacyPolicy({ onClose }: Props) {
           <h3>Contact</h3>
           <p>
             Questions, or a request to access or delete your data? Contact us at{' '}
-            <a href="mailto:info@theprints3D.com" className={styles.link}>
-              info@theprints3D.com
+            <a href="mailto:privacy@theprints3d.com" className={styles.link}>
+              privacy@theprints3d.com
             </a>
             . We respond within 30 days.
           </p>
           <p>
             The full policy is published at{' '}
-            <a href="https://theprints3D.com/privacy" className={styles.link}
+            <a href="https://theprints3d.com/privacy.html" className={styles.link}
                target="_blank" rel="noopener noreferrer">
-              theprints3D.com/privacy
+              theprints3d.com/privacy.html
             </a>
             .
           </p>

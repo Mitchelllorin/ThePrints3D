@@ -11,7 +11,7 @@
 
 ThePrints3D is a React + TypeScript web application that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. All processing happens client-side — no drawings ever leave your device.
 
-🌐 **[Website](https://theprints3d.com)** &nbsp;|&nbsp; 📱 **[Get it on Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app)**
+🌐 **[Website](https://theprints3d.com)** &nbsp;|&nbsp; 📱 **Google Play listing coming soon**
 
 ---
 
@@ -33,8 +33,8 @@ ThePrints3D is a React + TypeScript web application that ingests architectural d
 | **Construction calculators** | On-the-fly estimating helpers |
 | **Project library** | Save and reopen projects from browser IndexedDB |
 | **Share PNG** | Export a snapshot of the current 3D view |
-| **PWA / offline** | Installable; works offline after first load |
-| **Privacy-first** | 100 % client-side — no server, no uploads |
+| **PWA / offline** | Installable; core workflows work on-device |
+| **Privacy-first** | Drawing processing stays on-device; no account required |
 
 ---
 
@@ -101,8 +101,8 @@ src/
 │   ├── drawingProcessor.ts     # End-to-end processing pipeline
 │   ├── materialEstimator.ts    # Bill-of-materials estimator
 │   ├── projectStorage.ts       # IndexedDB project persistence
-│   ├── datasetCollector.ts     # Anonymous feature collection for model training
-│   ├── pilotMetrics.ts         # Pilot CSV snapshot/export utilities
+│   ├── datasetCollector.ts     # Local dataset preparation utilities
+│   ├── pilotMetrics.ts         # Local pilot CSV snapshot/export utilities
 │   └── logger.ts               # Structured event logging
 ├── store/
 │   └── useAppStore.ts          # Centralised state + actions (Zustand + Immer)
@@ -162,6 +162,17 @@ A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smo
 | PWA | vite-plugin-pwa + Workbox |
 | Testing | Vitest |
 | Linting | ESLint 10 + typescript-eslint |
+
+---
+
+## Privacy and Play Store
+
+- **Privacy policy:** `https://theprints3d.com/privacy.html`
+- **Data safety page:** `https://theprints3d.com/datasafety.html`
+- **Support email:** `info@theprints3d.com`
+- **Privacy contact:** `privacy@theprints3d.com`
+
+The Android app package name is `com.theprints3d.app`. For Play Console, use the policy URLs above once the site is live on `theprints3d.com`.
 
 ---
 
