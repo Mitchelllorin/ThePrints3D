@@ -612,13 +612,28 @@ export default function FloorplanPanel() {
   // The storey directly below + how many user walls stand on it — drives the
   // "carry walls up" action so an upper floor can stack plumb on the one below.
   const belowLevelLabel = LEVEL_OPTIONS.find((l) => l.value === activeLevel - 1)?.label ?? 'below'
+  // Count DETECTED walls as walls too. These were user-only, so on a preset (or
+  // any plan built by detection) the storey below read as empty, the carry-up
+  // control never appeared, and there was nothing to stack.
   const wallsBelowCount = drawing.parsedWalls.filter(
-    (w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1,
+    (w) => (w.level ?? 0) === activeLevel - 1,
   ).length
   const wallsAtActiveLevel = drawing.parsedWalls.filter(
-    (w) => w.source === 'user' && (w.level ?? 0) === activeLevel,
+    (w) => (w.level ?? 0) === activeLevel,
   ).length
   const floorMode: 'typical' | 'custom' = customLevels.includes(activeLevel) ? 'custom' : 'typical'
+
+  // NO AUTOMATIC CARRY-UP HOOK HERE.
+  //
+  // A useEffect at this point in the file froze the app on load: there are early
+  // returns above (a wall/object/line/area selection can bail out before this
+  // line), so the hook was called conditionally, which breaks the Rules of Hooks
+  // and re-renders forever. Exactly the failure the previous commit fixed —
+  // "blank screen from a hook after an early return".
+  //
+  // Carrying the shell up therefore stays on the TYPICAL button below, where it
+  // is an explicit act. If it should happen on its own, the hook has to live at
+  // the top of the component with the other hooks, above every early return.
   const chooseTypical = () => {
     setCustomLevels((prev) => prev.filter((l) => l !== activeLevel))
     if (wallsBelowCount > 0 && wallsAtActiveLevel === 0) {

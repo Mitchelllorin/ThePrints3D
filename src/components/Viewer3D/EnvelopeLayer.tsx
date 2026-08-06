@@ -24,6 +24,7 @@ import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { XRAY_OPACITY } from './editHelpers'
+import { modelWalls } from '../../services/modelWalls'
 import { buildWallEnvelope, buildWallCladding, buildVeneerSupport, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, renderWallThicknessM, wallHeightM,
@@ -192,10 +193,10 @@ export default function EnvelopeLayer() {
   // partition is saved by its position, and a perimeter wall the user has
   // deliberately marked interior is still left alone.
   const skinWalls = useMemo(() => {
-    const user: ParsedWall[] = []
-    for (const d of drawings) {
-      for (const w of d.parsedWalls) if (w.source === 'user') user.push(w)
-    }
+    // Detected walls are part of the shell too — see modelWalls. Skinning only
+    // traced walls meant a plan you had detected rather than traced got no
+    // envelope at all, and the perimeter test had nothing to measure against.
+    const user: ParsedWall[] = modelWalls(drawings).map((m) => m.wall)
     const byLevel = new Map<number, ParsedWall[]>()
     for (const w of user) {
       const lv = w.level ?? 0

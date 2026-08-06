@@ -1103,7 +1103,15 @@ export const useAppStore = create<AppState>()(
         // up. A wall that runs along the edge of the storey's footprint is
         // exterior; one that cuts across the middle is not, whatever it is
         // labelled.
-        const atLevel = userWalls.filter((w) => (w.level ?? 0) === fromLevel)
+        // CARRY UP WHATEVER IS ACTUALLY DOWN THERE — traced or detected.
+        //
+        // This read only `userWalls`, so a storey whose walls came from detection
+        // (a preset, or "Find the rest") had nothing to carry: switching to the
+        // floor above produced an empty storey and you had to trace the whole
+        // shell again by hand. The shell is the shell however it got there.
+        // Clones are stamped 'user' below, because once carried they are walls
+        // you own and can edit like any other.
+        const atLevel = d.parsedWalls.filter((w) => (w.level ?? 0) === fromLevel)
         const xs = atLevel.flatMap((w) => [w.x1, w.x2])
         const ys = atLevel.flatMap((w) => [w.y1, w.y2])
         const minX = Math.min(...xs), maxX = Math.max(...xs)
@@ -1123,7 +1131,7 @@ export const useAppStore = create<AppState>()(
           .filter((w) => !wallCoversLevel(w, toLevel))
           .filter((w) => !userWalls.some((u) => wallCoversLevel(u, toLevel) && sameFootprint(u, w)))
           // SAME footprint coords → plumb (vertical) and flush (faces aligned).
-          .map((w) => ({ ...w, level: toLevel }))
+          .map((w) => ({ ...w, level: toLevel, source: 'user' as const }))
         if (clones.length === 0) return
         // Clones inherit corners from already-clean source walls — append as-is.
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, [...userWalls, ...clones])

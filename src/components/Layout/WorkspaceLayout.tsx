@@ -258,6 +258,22 @@ function SettingsContent() {
         <Toggle label="Sample room" val={previewMode} onChange={setPreviewMode} />
       </CollapsibleSection>
 
+      {/* HOW MUCH THE BUILD DOES FOR YOU.
+          These are settings rather than one baked-in behaviour because there is
+          no single right answer: tracing every wall is the point of the app for
+          one person and busywork for the next, and which one you are changes
+          with the job. Defaults are the helpful end; both switches turn off. */}
+      <CollapsibleSection id="buildhelp" title="Build help" openId={openId} setOpenId={setOpenId}>
+        <Toggle
+          label="Presets: trace it yourself"
+          val={ui.presetMode === 'practice'}
+          onChange={(v) => setUI({ presetMode: v ? 'practice' : 'ready' })}
+        />
+        {/* No "carry exterior up" toggle: carrying up is the TYPICAL button on
+            an upper storey, an explicit act, so a switch here would describe
+            something that does not happen on its own. */}
+      </CollapsibleSection>
+
       <CollapsibleSection id="wordmark" title="3D wordmark" openId={openId} setOpenId={setOpenId}>
         <Toggle label="Visible" val={ui.logo3DVisible} onChange={(v) => setUI({ logo3DVisible: v })} />
         <Toggle label="Motion" val={ui.logo3DAnimated} onChange={(v) => setUI({ logo3DAnimated: v })} />
@@ -410,6 +426,7 @@ export default function WorkspaceLayout() {
   const drawings            = useAppStore((s) => s.drawings)
   const addDrawings         = useAppStore((s) => s.addDrawings)
   const loadPresetDrawing   = useAppStore((s) => s.loadPresetDrawing)
+  const presetMode          = useUISettingsStore((s) => s.presetMode)
   const hasHistory = useAppStore((s) => s.historyPast.length > 0)
   const traceModeActive = useFloorplanLocalStore((s) => s.traceMode)
   const traceStartPt = useFloorplanLocalStore((s) => s.traceStart)
@@ -588,7 +605,18 @@ export default function WorkspaceLayout() {
 
   const handleLoadPreset = (presetId: PresetDifficulty) => {
     try {
-      loadPresetDrawing(presetId, true)
+      // PRACTICE IS A CHOICE, NOT THE ONLY OPTION.
+      //
+      // This passed a hard-coded `true` — practice mode — which strips
+      // parsedWalls to []. The walls then exist only as ink on the image, and
+      // everything that reasons about walls has nothing to reason about: doors
+      // have nothing to orient to or seat into, "Find the rest" has no seed, the
+      // envelope has no perimeter. And there was no UI anywhere to turn it off,
+      // so it was not a choice anyone could make.
+      //
+      // Practice is still exactly right for someone learning to read a plan, so
+      // it stays — as a setting, defaulting off. See Settings → Build help.
+      loadPresetDrawing(presetId, presetMode === 'practice')
       // UX convention: a one-shot pick (preset, file, etc.) retracts the panel.
       closePanels()
     } catch (error) {

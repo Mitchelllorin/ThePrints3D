@@ -50,6 +50,23 @@ export interface UISettings {
    *            ask for them. Framing is the thing you are working on, and burying
    *            it under sheeting the moment you pull a wall is the opposite of
    *            helpful. */
+  // ── How much the build does for you ────────────────────────────────────────
+  //
+  // Not one right answer, so not one hard-coded behaviour. Some people want to
+  // trace every wall themselves — that is the point of the app and it is how you
+  // learn a plan. Others want the shell to appear so they can get to the parts
+  // they care about. Both are legitimate, and which one you want changes with
+  // your skill and with the job, so both are settings with a helpful default.
+
+  /** Presets: 'ready' ships the plan's walls in the data; 'practice' strips them
+   *  so you trace the whole thing yourself over the print.
+   *
+   *  Default 'ready'. Practice USED to be hard-coded on with no way off, and
+   *  because it empties parsedWalls it also silently disabled everything that
+   *  reasons about walls — door orientation, seating openings, "Find the rest".
+   *  A beginner met a plan the app believed was empty. Practice is a choice now,
+   *  not the only option. */
+  presetMode: 'ready' | 'practice'
   finishTiming: 'live' | 'later'
   /** Set by "Apply finishes now" — the switch the 'later' mode waits on. Reset
    *  whenever you go back to framing. */
@@ -97,6 +114,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   wrbKind: 'housewrap',
   woodSheathing: 'osb',
   cladding: 'none',
+  presetMode: 'ready',
   finishTiming: 'later',
   finishesApplied: false,
   bgColor: '#0b0e14',

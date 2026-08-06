@@ -20,6 +20,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { wallFramingSpec } from '../../services/constructionCode'
 import { XRAY_OPACITY } from './editHelpers'
+import { modelWalls } from '../../services/modelWalls'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
@@ -197,15 +198,10 @@ export default function LiveWallsLayer() {
     )
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
-  const userWalls = useMemo(() => {
-    const out: Array<{ wall: ParsedWall; scaleMmPerPx: number | null }> = []
-    for (const d of drawings) {
-      for (const w of d.parsedWalls) {
-        if (w.source === 'user') out.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
-      }
-    }
-    return out
-  }, [drawings])
+  // Traced walls AND detected ones — see modelWalls. Detected walls were built
+  // by nothing, so "Find the rest" changed the data and never the model. Traced
+  // walls stay first in the list, so `selectedWallIndex` still means what it did.
+  const userWalls = useMemo(() => modelWalls(drawings), [drawings])
 
   // Which wall ends meet another wall (shared endpoint, ~4px tolerance) — those
   // are corners, and get extended so the framing joins instead of gapping.

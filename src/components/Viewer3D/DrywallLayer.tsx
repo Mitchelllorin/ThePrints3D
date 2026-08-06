@@ -17,6 +17,7 @@ import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec, type BoardKind } from '../../services/constructionCode'
 import { footprintCentroids, inwardSign, perimeterTest } from '../../services/wallFacing'
 import { XRAY_OPACITY } from './editHelpers'
+import { modelWalls } from '../../services/modelWalls'
 import type { ParsedWall, PlacedObject } from '../../types'
 
 
@@ -112,15 +113,9 @@ export default function DrywallLayer() {
     return new THREE.Vector3(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
-  const userWalls = useMemo(() => {
-    const out: Array<{ wall: ParsedWall; scaleMmPerPx: number | null }> = []
-    for (const d of drawings) {
-      for (const w of d.parsedWalls) {
-        if (w.source === 'user') out.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
-      }
-    }
-    return out
-  }, [drawings])
+  // Detected walls get boarded too — see modelWalls. A wall the app found but
+  // never boarded is a wall you can see through, which reads as a hole.
+  const userWalls = useMemo(() => modelWalls(drawings), [drawings])
 
   // Assign placed doors/windows to their nearest wall (pixel space) so the board
   // is cut around them — same logic the framing uses.
