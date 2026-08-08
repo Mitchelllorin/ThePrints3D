@@ -8,7 +8,7 @@ import { extractRooms } from './roomExtractor'
 import { detectOpenings } from './openingDetector'
 import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
-import { inferScaleFromStructure } from './scaleInference'
+import { inferScaleFromPaper, inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
 import { filterWallsForNoisyPrint } from './noisyPrintFilter'
 import { inferCorners } from './wallTraceReducer'
@@ -29,6 +29,7 @@ export async function processDrawing(
   drawing: Drawing,
   onProgress: (pct: number) => void,
   drywall: DrywallConfig = 'single-layer',
+  pageOverride?: number,
 ): Promise<DrawingPatch> {
   try {
     let lastProgress = 0
@@ -38,8 +39,9 @@ export async function processDrawing(
       onProgress(next)
     }
 
-    // 1. Rasterize
-    const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8))
+    // 1. Rasterize. For a multi-page set this also PICKS the sheet — the floor
+    //    plan is rarely page 1 — unless the caller has named one.
+    const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8), pageOverride)
     // Cache a grayscale "ink" buffer so tracing can snap to the actual printed
     // line under the stroke — even on lines detection discarded as noise.
     setInkBuffer(drawing.id, raster.imageData)
@@ -60,6 +62,7 @@ export async function processDrawing(
         rasterWidth: raster.width,
         rasterHeight: raster.height,
         pageCount: raster.pageCount,
+        currentPage: raster.page,
         parsedWalls: [],
         parsedRooms: [],
         parsedOpenings: [],
@@ -130,7 +133,18 @@ export async function processDrawing(
       scaleMmPerPx = deriveScaleFromNotation(raster.scaleNotation)
     }
     if (scaleMmPerPx == null && drawing.scaleMmPerPx == null) {
-      scaleMmPerPx = inferScaleFromStructure(result.walls, drywall)?.scaleMmPerPx ?? null
+      // Paper-anchored first. When the sheet states its own size the question
+      // collapses from "what is the scale" to "which of the standard scales",
+      // which is a far easier one to get right — the free-range version put the
+      // real 1-&-2-family set out by about 4×, calling every wall 600mm of
+      // masonry. Falls through to the unanchored guess for photos and images,
+      // where nothing says how big the paper was.
+      scaleMmPerPx =
+        (raster.pxPerPaperInch
+          ? inferScaleFromPaper(result.walls, raster.pxPerPaperInch, drywall)?.scaleMmPerPx
+          : null) ??
+        inferScaleFromStructure(result.walls, drywall)?.scaleMmPerPx ??
+        null
     }
     const effectiveScale = scaleMmPerPx ?? drawing.scaleMmPerPx
 
@@ -200,6 +214,7 @@ export async function processDrawing(
       rasterWidth: raster.width,
       rasterHeight: raster.height,
       pageCount: raster.pageCount,
+      currentPage: raster.page,
       parsedWalls: walls,
       parsedRooms: rooms,
       parsedOpenings: openings,

@@ -437,7 +437,9 @@ interface AppState {
   carryWallsUp: (id: string, fromLevel: number, exteriorOnly?: boolean) => void
   clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
-  processDrawing: (id: string) => Promise<void>
+  /** @param pageOverride 1-based sheet to build from, instead of the one the
+   *  page-picker chose. The "wrong sheet" escape hatch for multi-page sets. */
+  processDrawing: (id: string, pageOverride?: number) => Promise<void>
   toggleLayer: (id: LayerId) => void
   setLayerOpacity: (id: LayerId, opacity: number) => void
   setSidebarOpen: (open: boolean) => void
@@ -1155,7 +1157,7 @@ export const useAppStore = create<AppState>()(
         s.selectedDrawingId = id
       }),
 
-    processDrawing: async (id) => {
+    processDrawing: async (id, pageOverride) => {
       const drawing = get().drawings.find((d) => d.id === id)
       if (!drawing || drawing.status === 'processing') return
 
@@ -1173,7 +1175,7 @@ export const useAppStore = create<AppState>()(
           const d = s.drawings.find((d) => d.id === id)
           if (d) d.parseProgress = pct
         })
-      }, drywallCfg)
+      }, drywallCfg, pageOverride)
 
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)

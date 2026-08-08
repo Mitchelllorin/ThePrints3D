@@ -15,6 +15,9 @@ import * as pdfjsLib from 'pdfjs-dist'
 // nothing that ran regularly went through pdf.js at all.
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { RASTER_SCALE } from './constants'
+import {
+  rankPlanPages, scorePlanSheet, thumbnailScale, type PlanSheetScore,
+} from './planSheet'
 
 // Configure worker once
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -27,6 +30,19 @@ export interface RasterResult {
   width: number
   height: number
   pageCount: number
+  /** 1-based page this result was rendered from. */
+  page: number
+  /** Every page scored as a candidate floor plan, best first. Empty when there
+   *  was nothing to choose between (an image, or a one-page PDF). */
+  pageRanking: Array<{ page: number } & PlanSheetScore>
+  /** True when no sheet carried a wall signature and the pick fell back to page
+   *  1 — worth saying out loud, because the sheet is probably wrong. */
+  pagePickWeak: boolean
+  /** Raster pixels per inch of PAPER. Known exactly for a PDF, because the page
+   *  states its own size; null for a photo or an image, where nothing says how
+   *  big the sheet was. Lets scale inference choose among the ~16 standard
+   *  drawing scales instead of searching a continuum. */
+  pxPerPaperInch: number | null
   /** Scale notation found in text layer, e.g. "1:100" */
   scaleNotation: string | null
   /** How the scale was determined: 'parsed' if found in text layer, 'fallback' otherwise */
@@ -65,19 +81,93 @@ function pickBestScaleNotation(fullText: string): string | null {
   return preferred?.notation ?? candidates[0].notation
 }
 
-/** Rasterize the first page of a PDF file. */
+/** Render one page small, just to look at its shape. */
+async function renderThumbnail(
+  pdf: pdfjsLib.PDFDocumentProxy,
+  pageNum: number,
+): Promise<ImageData | null> {
+  try {
+    const page = await pdf.getPage(pageNum)
+    const base = page.getViewport({ scale: 1 })
+    const viewport = page.getViewport({ scale: thumbnailScale(base.width, base.height) })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(viewport.width))
+    canvas.height = Math.max(1, Math.round(viewport.height))
+    // NOT `willReadFrequently` — it forces a software canvas and this set went
+    // from seconds a page to ~90s when that flag was on a RENDER target. The
+    // flag is for surfaces read over and over; this one is read exactly once.
+    const ctx = canvas.getContext('2d')!
+    // Sheets are ink on white; without this a transparent background
+    // reads as luma 0 — solid ink — and every page scores as a black square.
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    await page.render({ canvas, canvasContext: ctx, viewport }).promise
+    return ctx.getImageData(0, 0, canvas.width, canvas.height)
+  } catch {
+    // One unrenderable page must not sink the whole pick.
+    return null
+  }
+}
+
+/**
+ * Rasterize the FLOOR PLAN page of a PDF — not blindly page 1.
+ *
+ * A real set is seven sheets and the plan is rarely the first one; page 1 is
+ * usually the site plan or a cover. Every page is rendered small, scored for
+ * the wall signature, and the winner is the one rendered for real. See
+ * ./planSheet.ts for what "the wall signature" means.
+ *
+ * @param pageOverride 1-based page to use instead of the pick — the escape
+ *                     hatch for "that's the wrong sheet".
+ */
 export async function rasterizePDF(
   file: File,
-  onProgress?: (pct: number) => void
+  onProgress?: (pct: number) => void,
+  pageOverride?: number,
 ): Promise<RasterResult> {
   const arrayBuffer = await file.arrayBuffer()
   onProgress?.(10)
 
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
   const pdf = await loadingTask.promise
-  onProgress?.(30)
+  onProgress?.(20)
 
-  const page = await pdf.getPage(1)
+  let pageNum = 1
+  let pageRanking: Array<{ page: number } & PlanSheetScore> = []
+  let pagePickWeak = false
+
+  if (pageOverride && pageOverride >= 1 && pageOverride <= pdf.numPages) {
+    pageNum = pageOverride
+  } else if (pdf.numPages > 1) {
+    // SCORED FROM PIXELS, deliberately, having tried the faster way.
+    //
+    // Reading each page's vector operator list instead looked obviously better
+    // — no rasterizing at all. Measured on the real 1-&-2-family set it was
+    // both barely faster AND wrong: 19s against 29s (two sheets carry 146k and
+    // 284k paths, and building their operator lists costs as much as drawing
+    // them), and it picked the SECTIONS sheet over the floor plan.
+    //
+    // It failed for a reason worth keeping: a path's bounding box carries no
+    // STROKE WIDTH, so the thin-line test — the one thing that separates a wall
+    // face from a detail drawn at 1"=1'-0" — cannot be applied to it. Rendering
+    // is what turns line weight into something measurable. The cost buys the
+    // correctness.
+    const scores: Array<{ page: number } & PlanSheetScore> = []
+    for (let p = 1; p <= pdf.numPages; p++) {
+      // A page that would not render scores as a blank one rather than
+      // shifting every page after it up a slot.
+      const thumb = await renderThumbnail(pdf, p)
+      scores.push({ page: p, ...scorePlanSheet(thumb ?? new ImageData(1, 1)) })
+      onProgress?.(20 + (p / pdf.numPages) * 20)
+    }
+    const pick = rankPlanPages(scores)
+    pageNum = pick.page
+    pageRanking = pick.ranked
+    pagePickWeak = pick.weak
+  }
+  onProgress?.(40)
+
+  const page = await pdf.getPage(pageNum)
   const viewport = page.getViewport({ scale: RASTER_SCALE })
 
   const canvas = document.createElement('canvas')
@@ -128,6 +218,13 @@ export async function rasterizePDF(
     width: canvas.width,
     height: canvas.height,
     pageCount: pdf.numPages,
+    page: pageNum,
+    pageRanking,
+    pagePickWeak,
+    // PDF user space is 72 units to the inch, so paper inches = points / 72 and
+    // the rendered resolution follows. Measured off the page rather than
+    // assumed from RASTER_SCALE, so it stays true if that ever changes.
+    pxPerPaperInch: canvas.width / (page.getViewport({ scale: 1 }).width / 72),
     scaleNotation,
     scaleConfidence: scaleNotation !== null ? 'parsed' : 'fallback',
     textTokens,
@@ -176,6 +273,11 @@ export async function rasterizeImage(
     width: w,
     height: h,
     pageCount: 1,
+    page: 1,
+    pageRanking: [],
+    pagePickWeak: false,
+    // A photo of a print says nothing about how big the paper was.
+    pxPerPaperInch: null,
     scaleNotation: null,
     scaleConfidence: 'fallback' as const,
     textTokens: [],
@@ -185,10 +287,11 @@ export async function rasterizeImage(
 /** Route to the right rasterizer based on file type. */
 export async function rasterizeFile(
   file: File,
-  onProgress?: (pct: number) => void
+  onProgress?: (pct: number) => void,
+  pageOverride?: number,
 ): Promise<RasterResult> {
   if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-    return rasterizePDF(file, onProgress)
+    return rasterizePDF(file, onProgress, pageOverride)
   }
   return rasterizeImage(file, onProgress)
 }
