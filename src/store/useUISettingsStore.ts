@@ -44,6 +44,15 @@ export interface UISettings {
   woodSheathing: WoodSheathing
   /** Exterior finish over the barrier. 'none' leaves the wall dried-in. */
   cladding: CladdingKind
+  /** Show the cladding, separately from WHICH cladding it is.
+   *  Visibility and product choice were one control: the only way to see what
+   *  was under the siding was to set the siding to 'none' and lose your choice.
+   *  Every other layer has its own switch; this one now does too. */
+  claddingVisible: boolean
+  /** Show the floating dimension nameplates on walls, joists and ceilings.
+   *  They are the right thing while you are laying something out and pure
+   *  clutter once a storey is full of them. */
+  dimensionsVisible: boolean
   /** WHEN finishes appear, as opposed to which ones.
    *  'live'  — clad as soon as a wall exists (fine once you have stopped framing)
    *  'later' — keep the frame bare while you build; finishes appear only when you
@@ -58,15 +67,26 @@ export interface UISettings {
   // they care about. Both are legitimate, and which one you want changes with
   // your skill and with the job, so both are settings with a helpful default.
 
-  /** Presets: 'ready' ships the plan's walls in the data; 'practice' strips them
-   *  so you trace the whole thing yourself over the print.
+  /** Presets: 'practice' strips the plan's walls so you trace the whole thing
+   *  yourself over the print; 'ready' ships them in the data.
    *
-   *  Default 'ready'. Practice USED to be hard-coded on with no way off, and
-   *  because it empties parsedWalls it also silently disabled everything that
-   *  reasons about walls — door orientation, seating openings, "Find the rest".
-   *  A beginner met a plan the app believed was empty. Practice is a choice now,
-   *  not the only option. */
+   *  Default 'practice', because that is what a preset is FOR. It briefly
+   *  defaulted to 'ready' and a preset then arrived as a finished house — walls
+   *  up before you had touched it — which leaves nothing to practise on.
+   *  'ready' stays for the times you want the shell handed to you; be aware it
+   *  is also the mode where everything that reasons about walls has data to
+   *  reason about (door orientation, seating openings, "Find the rest"), since
+   *  practice legitimately empties parsedWalls. */
   presetMode: 'ready' | 'practice'
+  /** Bumped when a DEFAULT changes in a way an existing install should follow.
+   *  Settings persist whole, so a stored copy of the old default would outlive
+   *  the change forever otherwise. See `load()`. */
+  settingsRev: number
+  /** Carry the exterior shell up automatically when you move to an upper storey,
+   *  so a 2nd floor starts as the 1st floor over again unless you say otherwise.
+   *  Interior partitions never carry — they genuinely differ floor to floor.
+   *  Off means every storey is traced or imported by hand. */
+  autoCarryShellUp: boolean
   finishTiming: 'live' | 'later'
   /** Set by "Apply finishes now" — the switch the 'later' mode waits on. Reset
    *  whenever you go back to framing. */
@@ -85,6 +105,9 @@ export interface UISettings {
   labelColor: string
   labelScale: number
 }
+
+/** rev 2 — presets go back to PRACTICE by default. */
+const SETTINGS_REV = 2
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
   // Menus/panels/toolbars default to ALMOST transparent so the workspace stays
@@ -114,7 +137,11 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   wrbKind: 'housewrap',
   woodSheathing: 'osb',
   cladding: 'none',
-  presetMode: 'ready',
+  claddingVisible: true,
+  dimensionsVisible: true,
+  presetMode: 'practice',
+  settingsRev: SETTINGS_REV,
+  autoCarryShellUp: true,
   finishTiming: 'later',
   finishesApplied: false,
   bgColor: '#0b0e14',
@@ -131,7 +158,22 @@ const STORAGE_KEY = 'bp3d-ui-settings'
 function load(): UISettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return { ...DEFAULT_UI_SETTINGS, ...JSON.parse(raw) }
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<UISettings>
+      const stored = { ...DEFAULT_UI_SETTINGS, ...saved }
+      // Settings are saved as a whole object, so an install that saved the old
+      // 'ready' default keeps it forever even after the default changes. Move
+      // those installs over ONCE — after that the stored rev matches and the
+      // user's own choice, whichever way, is what sticks.
+      // Read the rev off the SAVED copy, not the merged one: merging fills the
+      // missing field in from the current default, which is the very value the
+      // check is trying to detect the absence of.
+      if ((saved.settingsRev ?? 0) < 2) {
+        stored.presetMode = 'practice'
+        stored.settingsRev = SETTINGS_REV
+      }
+      return stored
+    }
   } catch { /* ignore */ }
   return { ...DEFAULT_UI_SETTINGS }
 }

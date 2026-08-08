@@ -304,22 +304,41 @@
 }
 
 /* ── Layers panel — four trade-layer rows (bottom "Place & Layers" drawer) ─── */
-.layerList { display: flex; flex-direction: column; gap: 8px; }
+/* The whole list is now every layer in the model rather than four trades, so it
+   is sized for a LIST: tight rows, hairline separation, no row-sized gaps. Four
+   comfortable rows and thirteen comfortable rows are different objects — at this
+   length "comfortable" fills the workspace, which is the one thing the chrome
+   must never do. */
+.layerList { display: flex; flex-direction: column; gap: 3px; }
+.layerGroupBlock { display: flex; flex-direction: column; gap: 3px; }
+
+/* Group caption inside the layer list. Deliberately a caption and not a panel —
+   the list stays one column of rows, and the heading is just a quiet marker in
+   it rather than a box around a box. */
+.layerGroup {
+  margin: 7px 0 1px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--bp-text-dim, #94a3b8);
+  opacity: 0.6;
+}
 
 .layerRow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 30px;
-  padding: 3px 8px;
+  gap: 8px;
+  min-height: 24px;
+  padding: 1px 7px;
   border: 1px solid var(--bp-border);
-  border-radius: 7px;
+  border-radius: 6px;
 }
 .layerRowActive { border-color: var(--bp-accent, #38bdf8); }
 
 .layerDot {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.4);
@@ -331,21 +350,21 @@
   background: none;
   border: none;
   color: var(--bp-text, #f1f5f9);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
   padding: 0;
 }
 
 .layerToggle {
-  min-width: 44px;
-  min-height: 26px;
+  min-width: 34px;
+  min-height: 20px;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
   border: 1px solid var(--bp-border);
   color: #94a3b8;
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 600;
-  border-radius: 7px;
+  border-radius: 6px;
   cursor: pointer;
 }
 .layerToggleOn {
@@ -406,42 +425,84 @@
 .explodeBar {
   position: absolute;
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  /* OFF THE RIGHT EDGE — the rail owns that now.
-     Explode sat bottom-right, directly under a rail that used to be short and
-     now scrolls the full height of the workspace. Two controls stacked in one
-     column, and the rail is the one you are reaching for constantly.
-     Bottom-CENTRE keeps it on the perimeter (it is a 34px strip on the bottom
-     edge, not something standing in the middle of the view) and clear of all
-     three neighbours: the rail on the right, Edit bottom-left, and the property
-     card that now opens on the left. */
-  left: 50%;
-  transform: translateX(-50%);
+  /* STOOD ON END, on the right edge.
+     It was a horizontal strip lying across the bottom-centre: label + 120px of
+     slider + Reset, ~180px of chrome reaching in along the one axis the model
+     wants most. Vertical costs the workspace a ~30px column of edge instead,
+     and a slider that moves the way the building comes apart — up — reads as
+     the thing it does.
+     Right edge because that column already answers "what am I looking at"
+     (floors, x-ray, edit). It sits at the BOTTOM of it, and the rail above is
+     bounded so the two never meet — see .editRail's max-height. */
+  right: 8px;
+  left: auto;
+  transform: none;
   z-index: 56;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 4px;
+  gap: 4px;
+  padding: 0;
   /* No box — floats over the model. */
   background: none;
   border: none;
   pointer-events: auto;
 }
-.explodeLabel {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--bp-text, #f1f5f9);
-  white-space: nowrap;
+/* An icon, in the rail's own idiom — dim glyph, no box, no permanent caption.
+   The word was set sideways to keep the column narrow and simply could not be
+   read at 8px on its side. */
+.explodeIcon {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--bp-text-dim, #94a3b8);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
-.explodeSlider { width: 120px; accent-color: var(--bp-accent, #38bdf8); cursor: pointer; }
+.explodeBar:hover .explodeIcon { color: var(--bp-text, #f1f5f9); }
+/* The word, on hover only, and ABSOLUTE so it costs the column no width when
+   it is not showing — it hangs off to the left, over the workspace, for the
+   moment you are pointing at the control anyway. */
+.explodeLabel {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  margin-right: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--bp-text-dim, #94a3b8);
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+.explodeBar:hover .explodeLabel { opacity: 1; }
+.explodeSlider {
+  /* vertical-lr + rtl puts 0 at the BOTTOM and full separation at the top,
+     which is the direction the parts actually travel. (vertical-rl alone
+     inverts it.) `slider-vertical` is the pre-Chrome-111 spelling, kept for
+     older Android WebViews; the two agree on direction. */
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  width: 20px;
+  height: 110px;
+  accent-color: var(--bp-accent, #38bdf8);
+  cursor: pointer;
+}
 .explodeReset {
   background: none;
   border: none;
+  padding: 0;
   color: var(--bp-text-dim, #94a3b8);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
   cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
 .explodeReset:hover { color: var(--bp-text, #f1f5f9); }
 /* When the bottom Place sheet is open, float the explode control ABOVE it so it
@@ -500,8 +561,9 @@
      place. A card is a second surface competing for the same edge and standing
      on the model. One scrolling rail is the same idea done once — no matter how
      many verbs a selection has, they are all in the one place, on the perimeter.
-     Bounded so it never reaches the explode bar along the bottom. */
-  max-height: calc(100dvh - 150px);
+     Bounded so it never reaches the explode column along the bottom: that is
+     70 (top) + ~126 (explode) + 14 (its offset) + 20 (gap). */
+  max-height: calc(100dvh - 230px);
   overflow-y: auto;
   overflow-x: hidden;
   /* No visible scrollbar — a track and thumb is exactly the boxed chrome this
@@ -642,29 +704,17 @@
 }
 
 @media (max-width: 767px), (max-height: 600px) {
-  /* Sits one row ABOVE the Edit + Place band: Explode (right) and the Place tab
-     (centre) overlap horizontally, so they can't share a height. */
-  .explodeBar {
-    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
-    min-height: 44px;
-    height: 44px;
-    /* Back to the right edge on a phone, undoing the desktop centring: down here
-       Explode and the Place tab overlap horizontally, which is exactly why this
-       bar is lifted a row in the first place. Centring it would put it straight
-       on top of the tab. */
-    left: auto;
-    transform: none;
-    right: 10px;
-  }
-  /* And keep the rail off it. The rail scrolls to a bounded height; on a phone
-     the explode bar is lifted to 100px, so a desktop-sized bound would run the
-     bottom of the rail through it. */
-  .editRail { max-height: calc(100dvh - 230px); }
+  /* Now that it is a narrow column it no longer needs a row of its own: the
+     Place tab (centre) and Edit (left) are horizontal neighbours, not vertical
+     ones. It drops into the same clear band as Edit, off the gesture bar. */
+  .explodeBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); right: 4px; }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
-  .explodeSlider { width: 90px; }
+  .explodeSlider { height: 96px; }
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
      the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
   .floorBar { top: 62px; right: 2px; }
-  .editRail { top: 62px; right: 2px; gap: 8px; }
+  /* Same sum as desktop, phone numbers: 62 (top) + ~112 (shorter explode) + 46
+     (its offset) + 20 (gap). */
+  .editRail { top: 62px; right: 2px; gap: 8px; max-height: calc(100dvh - 240px); }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }

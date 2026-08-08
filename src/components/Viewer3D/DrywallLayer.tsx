@@ -14,7 +14,7 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec, type BoardKind } from '../../services/constructionCode'
+import { wallMayTakeEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec, type BoardKind } from '../../services/constructionCode'
 import { footprintCentroids, inwardSign, perimeterTest } from '../../services/wallFacing'
 import { XRAY_OPACITY } from './editHelpers'
 import { modelWalls } from '../../services/modelWalls'
@@ -188,7 +188,12 @@ export default function DrywallLayer() {
     const tests = new Map<number, (w: ParsedWall) => boolean>()
     for (const [lv, list] of byLevel) tests.set(lv, perimeterTest(list))
     return (w: ParsedWall) =>
-      wallTakesEnvelope(w.wallRole, w.framingType)
+      // wallMayTakeEnvelope, not wallTakesEnvelope. A DETECTED wall has no role,
+      // so this answered "not exterior" for every one of them — which flows
+      // straight into bothSides below and boarded the whole building on BOTH
+      // faces, exterior walls included. Unlabelled means undecided; the
+      // perimeter test decides.
+      wallMayTakeEnvelope(w)
       && (tests.get(w.level ?? 0)?.(w) ?? false)
   }, [userWalls])
 

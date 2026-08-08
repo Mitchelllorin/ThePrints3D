@@ -322,7 +322,12 @@ export function wrbLayer(kind: WrbKind = 'housewrap'): EnvelopeLayer | null {
       return { label: 'Air/vapour barrier', thicknessM: WRB_T * 1.5, color: '#2f4f6f' }
     case 'housewrap':
     default:
-      return { label: 'Housewrap (WRB)', thicknessM: WRB_T, color: '#eef2f6', brand: 'Tyvek (DuPont)' }
+      // Named the way it is named on site. "Housewrap (WRB)" is what it IS, but
+      // nobody on a job says it — and an unlabelled white sheet over the
+      // sheathing reads as drywall on the outside of the building, which is the
+      // one thing it must never look like. Nominative use of DuPont's mark, with
+      // the attribution kept in `brand` so the credit travels with the label.
+      return { label: 'Tyvek® housewrap (WRB)', thicknessM: WRB_T, color: '#eef2f6', brand: 'Tyvek® (DuPont)' }
   }
 }
 
@@ -335,6 +340,31 @@ export function wrbLayer(kind: WrbKind = 'housewrap'): EnvelopeLayer | null {
 export function wallTakesEnvelope(wallRole?: string, framingType?: string): boolean {
   if (framingType === 'cmu') return false
   return wallRole === 'exterior-bearing'
+}
+
+/**
+ * Same question, for a wall that may not carry a ROLE at all.
+ *
+ * A traced wall is stamped with a role by the picker. A DETECTED wall is not —
+ * detection reports geometry, not intent. Asking wallTakesEnvelope about one
+ * therefore always answered "no", with two visible consequences the moment
+ * detected walls started being built:
+ *
+ *   the envelope skipped them        → "sheathing does nothing"
+ *   drywall read them as partitions  → boarded on BOTH faces, inside and out
+ *
+ * Neither was a sheathing or a boarding bug. Both were this: an unlabelled wall
+ * being treated as a definite "not exterior" instead of an "unknown".
+ *
+ * So an absent role means UNDECIDED, and the caller's geometry test decides —
+ * every caller already ANDs this with a perimeter test, which is the more
+ * trustworthy signal anyway. A role that IS set still wins: mark a perimeter
+ * wall interior by hand and it stays interior.
+ */
+export function wallMayTakeEnvelope(wall: { wallRole?: string; framingType?: string }): boolean {
+  if (wall.framingType === 'cmu') return false
+  if (!wall.wallRole) return true          // undecided — let geometry answer
+  return wallTakesEnvelope(wall.wallRole, wall.framingType)
 }
 
 

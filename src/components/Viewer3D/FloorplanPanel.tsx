@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
 import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -84,6 +85,7 @@ export default function FloorplanPanel() {
   const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
   const carryWallsUp    = useAppStore((s) => s.carryWallsUp)
   const carryFloorUp    = useAppStore((s) => s.carryFloorUp)
+  const autoCarryShellUp = useUISettingsStore((s) => s.autoCarryShellUp)
   const clearFloorLevel = useAppStore((s) => s.clearFloorLevel)
   const setRoofOverhang = useAppStore((s) => s.setRoofOverhang)
   const assignDrawingToLevel = useAppStore((s) => s.assignDrawingToLevel)
@@ -238,15 +240,21 @@ export default function FloorplanPanel() {
   // (carry* dedupe by footprint) and guarded on the storey being empty, so it
   // fires once on entry and never loops.
   useEffect(() => {
+    if (!autoCarryShellUp) return
     if (!drawing || activeLevel <= 0 || customLevels.includes(activeLevel)) return
-    const userWalls = drawing.parsedWalls.filter((w) => w.source === 'user')
-    const below = userWalls.filter((w) => (w.level ?? 0) === activeLevel - 1).length
-    const here = userWalls.filter((w) => (w.level ?? 0) === activeLevel).length
+    // COUNT DETECTED WALLS AS WALLS. This looked only at source 'user', so a
+    // storey whose shell came from detection — a preset, or "Find the rest" —
+    // read as empty, `below` was 0, and the carry never fired. The floor below
+    // plainly had walls; they just were not ones you had traced by hand. That is
+    // why upper storeys had to be pulled manually all of a sudden.
+    const walls = drawing.parsedWalls
+    const below = walls.filter((w) => (w.level ?? 0) === activeLevel - 1).length
+    const here = walls.filter((w) => (w.level ?? 0) === activeLevel).length
     if (below === 0 || here > 0) return
     carryWallsUp(drawing.id, activeLevel - 1)
     carryFloorUp(activeLevel - 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeLevel, drawing?.id, customLevels])
+  }, [autoCarryShellUp, activeLevel, drawing?.id, customLevels])
   // "Find the rest" can fire as soon as one wall is traced — in either Line
   // (2-point) or Freehand mode. (Was gated on an 8+ point freehand stroke,
   // which never matched line-mode tracing.)

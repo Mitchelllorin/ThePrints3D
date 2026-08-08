@@ -27,7 +27,7 @@ import { XRAY_OPACITY } from './editHelpers'
 import { modelWalls } from '../../services/modelWalls'
 import { buildWallEnvelope, buildWallCladding, buildVeneerSupport, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import {
-  sheathingLayer, wrbLayer, wallTakesEnvelope, wallFramingSpec, renderWallThicknessM, wallHeightM,
+  sheathingLayer, wrbLayer, wallMayTakeEnvelope, wallFramingSpec, renderWallThicknessM, wallHeightM,
   claddingSpec, finishesVisible,
   type WrbKind, type WoodSheathing, type CladdingKind,
 } from '../../services/constructionCode'
@@ -155,7 +155,13 @@ export default function EnvelopeLayer() {
   const wrapVisible = useUISettingsStore((s) => s.wrapVisible)
   const wrbKind = useUISettingsStore((s) => s.wrbKind)
   const woodSheathing = useUISettingsStore((s) => s.woodSheathing)
-  const cladding = useUISettingsStore((s) => s.cladding)
+  const claddingKind = useUISettingsStore((s) => s.cladding)
+  const claddingVisible = useUISettingsStore((s) => s.claddingVisible)
+  // Hiding the cladding must not cost you the cladding you picked. Switching the
+  // product to 'none' was the only way to see the wrap underneath, and it threw
+  // the choice away — so visibility is its own switch and 'none' stays a real
+  // answer ("dried-in") rather than doubling as "hidden".
+  const cladding = claddingVisible ? claddingKind : 'none'
   // Same per-storey fade the walls and floors honour. The skin used to render at
   // full opacity regardless, so fading or isolating a storey left its sheathing
   // and cladding sitting there solid — the fade "wasn't applying to the plywood".
@@ -207,7 +213,12 @@ export default function EnvelopeLayer() {
     const tests = new Map<number, (w: ParsedWall) => boolean>()
     for (const [lv, list] of byLevel) tests.set(lv, perimeterTest(list))
     return user.filter((w) =>
-      wallTakesEnvelope(w.wallRole, w.framingType)
+      // wallMayTakeEnvelope, not wallTakesEnvelope: a DETECTED wall carries no
+      // role, and treating that as a definite "not exterior" meant the whole
+      // envelope skipped it — sheathing appeared to do nothing on any plan built
+      // from detection. Unlabelled means undecided; the perimeter test below is
+      // what actually decides.
+      wallMayTakeEnvelope(w)
       && (tests.get(w.level ?? 0)?.(w) ?? false))
   }, [drawings])
 

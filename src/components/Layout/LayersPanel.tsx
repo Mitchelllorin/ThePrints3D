@@ -1,41 +1,165 @@
 /**
- * LayersPanel — the 4 trade layers (Framing / Plumbing / Electrical / HVAC),
- * each a colour dot + name (tap to make active) + On/Off visibility toggle, with
- * the active layer highlighted. Shared by the bottom "Place & Layers" drawer.
+ * LayersPanel — an On/Off for EVERY layer in the model, big and small.
+ *
+ * It used to list four: Framing, Plumbing, Electrical, HVAC. Everything else you
+ * can see — the floor deck, the roof, the sheathing, the wrap, the cladding, the
+ * board, the print you are tracing over — was either buried in another panel or
+ * had no switch at all. So "let me look at what is under this" meant hunting
+ * through drawers, and in the cladding's case it meant setting the product to
+ * 'none' and losing the choice you had made.
+ *
+ * One list, in build order: what is under the building, then the shell, then the
+ * skin on it, then the trades inside it, then the reference layers that are not
+ * part of the building at all. A row is a row whichever store owns it — the
+ * split between "trade layers" (app store) and "construction layers" (UI
+ * settings) is an implementation detail and has no business being visible here.
+ *
+ * Trade rows keep their second job: tapping the NAME makes that layer the active
+ * one to trace on. The rest are toggles only, because there is nothing to trace
+ * on a sheet of housewrap.
  */
 import { useAppStore } from '../../store/useAppStore'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import { LAYER_COLORS } from '../../data/traceLayers'
+import type { TraceLayer } from '../../data/traceLayers'
 import styles from './WorkspaceLayout.module.css'
 
-const LAYER_ROWS: Array<{ key: 'framing' | 'plumbing' | 'electrical' | 'hvac'; label: string; color: string }> = [
-  { key: 'framing', label: 'Framing', color: '#ffffff' },
-  { key: 'plumbing', label: 'Plumbing', color: '#60a5fa' },
-  { key: 'electrical', label: 'Electrical', color: '#facc15' },
-  { key: 'hvac', label: 'HVAC', color: '#4ade80' },
+/** A row backed by the trade-layer set — tap the name to trace on it. */
+interface TradeRow {
+  kind: 'trade'
+  key: TraceLayer
+  label: string
+  color: string
+}
+/** A row backed by a boolean in UI settings. */
+interface FlagRow {
+  kind: 'flag'
+  key: 'sheathingVisible' | 'wrapVisible' | 'claddingVisible' | 'drywallVisible'
+    | 'gridVisible' | 'dimensionsVisible'
+  label: string
+  color: string
+}
+/** The print overlay lives on the drawing, not in either layer store. */
+interface PrintRow {
+  kind: 'print'
+  label: string
+  color: string
+}
+
+type Row = TradeRow | FlagRow | PrintRow
+type Group = { title: string; rows: Row[] }
+
+// Colours are the material's own where there is one — OSB tan, housewrap white,
+// gypsum off-white — so the dot reads as the thing rather than as decoration.
+const GROUPS: Group[] = [
+  {
+    title: 'Structure',
+    rows: [
+      { kind: 'trade', key: 'floors', label: 'Floors & joists', color: LAYER_COLORS.floors },
+      { kind: 'trade', key: 'framing', label: 'Framing', color: LAYER_COLORS.framing },
+      { kind: 'trade', key: 'roof', label: 'Roof', color: LAYER_COLORS.roof },
+    ],
+  },
+  {
+    title: 'Envelope',
+    rows: [
+      { kind: 'flag', key: 'sheathingVisible', label: 'Sheathing', color: '#c9a273' },
+      { kind: 'flag', key: 'wrapVisible', label: 'Tyvek® / barrier', color: '#eef2f6' },
+      { kind: 'flag', key: 'claddingVisible', label: 'Cladding', color: '#8fa3b8' },
+      { kind: 'flag', key: 'drywallVisible', label: 'Board (drywall)', color: '#e8e6e1' },
+    ],
+  },
+  {
+    title: 'Trades',
+    rows: [
+      { kind: 'trade', key: 'plumbing', label: 'Plumbing', color: LAYER_COLORS.plumbing },
+      { kind: 'trade', key: 'electrical', label: 'Electrical', color: LAYER_COLORS.electrical },
+      { kind: 'trade', key: 'hvac', label: 'HVAC', color: LAYER_COLORS.hvac },
+    ],
+  },
+  {
+    title: 'Reference',
+    rows: [
+      { kind: 'print', label: 'Print overlay', color: '#93c5fd' },
+      { kind: 'flag', key: 'dimensionsVisible', label: 'Dimensions', color: '#cbd5e1' },
+      { kind: 'flag', key: 'gridVisible', label: 'Grid', color: '#2b3b5c' },
+    ],
+  },
 ]
 
 export default function LayersPanel() {
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const toggleTradeLayerVisible = useAppStore((s) => s.toggleTradeLayerVisible)
+  const overlayVisible = useAppStore((s) => s.floorplanOverlay.visible)
+  const updateFloorplanOverlay = useAppStore((s) => s.updateFloorplanOverlay)
+  const ui = useUISettingsStore()
+  const setUI = useUISettingsStore((s) => s.set)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
 
+  const isOn = (row: Row): boolean => {
+    if (row.kind === 'trade') return visibleLayers.has(row.key)
+    if (row.kind === 'print') return overlayVisible
+    return ui[row.key]
+  }
+
+  const toggle = (row: Row) => {
+    if (row.kind === 'trade') toggleTradeLayerVisible(row.key)
+    else if (row.kind === 'print') updateFloorplanOverlay({ visible: !overlayVisible })
+    else setUI({ [row.key]: !ui[row.key] } as Partial<typeof ui>)
+  }
+
+  /** Everything at once — the fastest way back from a model you have stripped
+   *  down to one layer, and the fastest way to strip it. */
+  const setAll = (on: boolean) => {
+    for (const g of GROUPS) {
+      for (const row of g.rows) {
+        if (isOn(row) !== on) toggle(row)
+      }
+    }
+  }
+
   return (
     <div className={styles.layerList}>
-      {LAYER_ROWS.map((l) => {
-        const on = visibleLayers.has(l.key)
-        const active = activeTraceLayer === l.key
-        return (
-          <div key={l.key} className={`${styles.layerRow} ${active ? styles.layerRowActive : ''}`}>
-            <span className={styles.layerDot} style={{ background: l.color }} />
-            <button className={styles.layerName} onClick={() => setActiveTraceLayer(l.key)}>{l.label}</button>
-            <button className={`${styles.layerToggle} ${on ? styles.layerToggleOn : ''}`}
-              onClick={() => toggleTradeLayerVisible(l.key)} aria-pressed={on}>
-              {on ? 'On' : 'Off'}
-            </button>
-          </div>
-        )
-      })}
+      <div className={styles.layerRow}>
+        <span className={styles.layerDot} style={{ background: 'transparent', borderStyle: 'dashed' }} />
+        <span className={styles.layerName} style={{ opacity: 0.7 }}>All layers</span>
+        <button className={styles.layerToggle} onClick={() => setAll(true)}>On</button>
+        <button className={styles.layerToggle} onClick={() => setAll(false)}>Off</button>
+      </div>
+
+      {GROUPS.map((g) => (
+        // NOT nested .layerList — that applied the list's row gap twice and
+        // spread thirteen rows down the whole workspace.
+        <div key={g.title} className={styles.layerGroupBlock}>
+          <p className={styles.layerGroup}>{g.title}</p>
+          {g.rows.map((row) => {
+            const on = isOn(row)
+            const active = row.kind === 'trade' && activeTraceLayer === row.key
+            const rowKey = row.kind === 'print' ? 'print' : row.key
+            return (
+              <div key={rowKey} className={`${styles.layerRow} ${active ? styles.layerRowActive : ''}`}>
+                <span className={styles.layerDot} style={{ background: row.color }} />
+                {row.kind === 'trade' ? (
+                  <button className={styles.layerName} onClick={() => setActiveTraceLayer(row.key)}>
+                    {row.label}
+                  </button>
+                ) : (
+                  <span className={styles.layerName}>{row.label}</span>
+                )}
+                <button
+                  className={`${styles.layerToggle} ${on ? styles.layerToggleOn : ''}`}
+                  onClick={() => toggle(row)}
+                  aria-pressed={on}
+                >
+                  {on ? 'On' : 'Off'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      ))}
     </div>
   )
 }

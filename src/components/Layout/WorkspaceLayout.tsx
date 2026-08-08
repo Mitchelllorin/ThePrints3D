@@ -269,9 +269,11 @@ function SettingsContent() {
           val={ui.presetMode === 'practice'}
           onChange={(v) => setUI({ presetMode: v ? 'practice' : 'ready' })}
         />
-        {/* No "carry exterior up" toggle: carrying up is the TYPICAL button on
-            an upper storey, an explicit act, so a switch here would describe
-            something that does not happen on its own. */}
+        <Toggle
+          label="Carry exterior up a storey"
+          val={ui.autoCarryShellUp}
+          onChange={(v) => setUI({ autoCarryShellUp: v })}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection id="wordmark" title="3D wordmark" openId={openId} setOpenId={setOpenId}>
@@ -614,8 +616,11 @@ export default function WorkspaceLayout() {
       // envelope has no perimeter. And there was no UI anywhere to turn it off,
       // so it was not a choice anyone could make.
       //
-      // Practice is still exactly right for someone learning to read a plan, so
-      // it stays — as a setting, defaulting off. See Settings → Build help.
+      // Practice is right for someone learning to read a plan, which is who a
+      // preset is for, so it is the DEFAULT again — a preset that arrives as a
+      // finished house leaves nothing to practise on. 'ready' is one switch
+      // away for when you want the shell handed to you. See Settings → Build
+      // help.
       loadPresetDrawing(presetId, presetMode === 'practice')
       // UX convention: a one-shot pick (preset, file, etc.) retracts the panel.
       closePanels()
@@ -819,22 +824,33 @@ export default function WorkspaceLayout() {
         </div>
       )}
 
-      {/* Persistent Explode slider — always reachable on its own SOLID surface
-          (so it can't vanish at low UI opacity), bottom-right. RETAINED on mobile
+      {/* Persistent Explode slider — a narrow VERTICAL column on the right edge,
+          pulled up rather than dragged sideways, so it takes a strip of chrome
+          instead of a bar across the middle of the bottom. RETAINED on mobile
           even with the Place sheet open (Android parity) — it just lifts above the
           sheet so it never overlaps. Hidden only during calibration. */}
       {hasDrawings && !calibrationMode && !traceMode && (
         <div className={`${styles.explodeBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
+          <span className={styles.explodeIcon} title="Explode" aria-hidden>⇕</span>
           <span className={styles.explodeLabel}>Explode</span>
           <input
             className={styles.explodeSlider}
             type="range" min={0} max={1} step={0.01} value={explodeAmount}
             onChange={(e) => setExplodeAmount(Number(e.target.value))}
             aria-label="Explode separation"
+            title="Explode"
           />
-          {explodeAmount > 0 && (
-            <button className={styles.explodeReset} onClick={() => setExplodeAmount(0)} aria-label="Reset explode">Reset</button>
-          )}
+          {/* Reserved even at 0 so the slider never shifts down the moment you
+              touch it — a control that moves under your finger. */}
+          <button
+            className={styles.explodeReset}
+            style={{ visibility: explodeAmount > 0 ? 'visible' : 'hidden' }}
+            onClick={() => setExplodeAmount(0)}
+            aria-label="Reset explode"
+            aria-hidden={explodeAmount === 0}
+          >
+            ×
+          </button>
         </div>
       )}
 

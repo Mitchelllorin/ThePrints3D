@@ -150,6 +150,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   const deck = useMemo(() => buildFloorDeck({ lenX, lenZ, holes }), [lenX, lenZ, holeKey])
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
+  const dimensionsVisible = useUISettingsStore((s) => s.dimensionsVisible)
   const ref = useRef<THREE.Group>(null)
   const level = area.level ?? 0
   useFloorExplode(ref, level * storeyHeight, level, DECK_LIFT)
@@ -176,7 +177,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
         rotation={[0, rotRad, 0]}
         {...(bodyHandlers ?? {})}
       />
-      {sheetCount > 0 && (
+      {sheetCount > 0 && dimensionsVisible && (
         <Billboard position={[centre.x, 0.5, centre.z]}>
           <Text {...labelText(0.26 * labelScale, labelColor)}>
             {`${sheetCount} sheets · 4×8`}

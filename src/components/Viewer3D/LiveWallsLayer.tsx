@@ -56,6 +56,7 @@ interface WallMeshProps {
 function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, storeyHeight, detailExplode }: WallMeshProps) {
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
+  const dimensionsVisible = useUISettingsStore((s) => s.dimensionsVisible)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
   // Thickness first — it sets how far to extend ends into a corner.
@@ -138,8 +139,9 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
         rotation={[0, -angle, 0]}
         onDoubleClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleGhostedLevel(wall.level ?? 0) }}
       />
-      {/* Nameplate — the wall's real length while tracing; hidden once built. */}
-      {!built && (
+      {/* Nameplate — the wall's real length while tracing; hidden once built,
+          and hideable outright when a storey full of them stops helping. */}
+      {!built && dimensionsVisible && (
         <Billboard position={[cx, baseY + wallHeight + 0.28, cz]}>
           <Text {...labelText(0.32 * labelScale, labelColor)}>
             {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}

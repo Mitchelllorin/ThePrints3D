@@ -42,6 +42,7 @@ function CeilingMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, ov
   }, [lenX, lenZ, area.size, area.level])
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
+  const dimensionsVisible = useUISettingsStore((s) => s.dimensionsVisible)
   useEffect(() => () => disposeGroup(ceiling), [ceiling])
   if (lenX < 0.1 || lenZ < 0.1) return null
   // Joist bottoms rest on this storey's wall top plate.
@@ -50,11 +51,13 @@ function CeilingMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, ov
   return (
     <>
       <primitive object={ceiling} position={[centre.x, y, centre.z]} rotation={[0, rotRad, 0]} />
-      <Billboard position={[centre.x, y + 0.45, centre.z]}>
-        <Text {...labelText(0.26 * labelScale, labelColor)}>
-          Ceiling
-        </Text>
-      </Billboard>
+      {dimensionsVisible && (
+        <Billboard position={[centre.x, y + 0.45, centre.z]}>
+          <Text {...labelText(0.26 * labelScale, labelColor)}>
+            Ceiling
+          </Text>
+        </Billboard>
+      )}
     </>
   )
 }

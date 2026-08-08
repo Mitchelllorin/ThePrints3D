@@ -47,7 +47,7 @@ describe('exterior envelope: sheathing + housewrap', () => {
   it('stacks outward from the stud face: sheathing, then wrap', () => {
     const g = buildWallEnvelope({ ...base, sheathing: wood, wrb: wrbLayer() })
     const sheets = withInfo(g, /OSB/)
-    const wrap = withInfo(g, /Housewrap/)
+    const wrap = withInfo(g, /housewrap/i)
     expect(sheets.length).toBeGreaterThan(0)
     expect(wrap.length).toBeGreaterThan(0)
     const studFace = base.thickness / 2
@@ -68,7 +68,7 @@ describe('exterior envelope: sheathing + housewrap', () => {
   it('omits the wrap when it is switched off, keeping the sheathing', () => {
     const g = buildWallEnvelope({ ...base, sheathing: wood, wrb: null })
     expect(withInfo(g, /OSB/).length).toBeGreaterThan(0)
-    expect(withInfo(g, /Housewrap/).length).toBe(0)
+    expect(withInfo(g, /housewrap/i).length).toBe(0)
   })
 
   it('cuts both layers around a door, and counts sheets for takeoff', () => {
@@ -78,9 +78,9 @@ describe('exterior envelope: sheathing + housewrap', () => {
       openings: [{ centerM: 3, widthM: 1.8, type: 'door' }],
     })
     expect(holed.userData.sheetCount as number).toBeLessThan(solid.userData.sheetCount as number)
-    expect(withInfo(holed, /Housewrap/).length).toBeGreaterThan(0)
+    expect(withInfo(holed, /housewrap/i).length).toBeGreaterThan(0)
     // No wrap piece may span the doorway at door height.
-    for (const m of withInfo(holed, /Housewrap/)) {
+    for (const m of withInfo(holed, /housewrap/i)) {
       m.geometry.computeBoundingBox()
       const bb = m.geometry.boundingBox!
       const x0 = m.position.x + bb.min.x, x1 = m.position.x + bb.max.x
@@ -98,7 +98,7 @@ describe('exterior envelope: sheathing + housewrap', () => {
     // ZIP-style sheathing already has the barrier on its face; a second one would
     // be wrong, so there is no layer to add.
     expect(wrbLayer('integrated')).toBeNull()
-    expect(wrbLayer()?.label).toMatch(/Housewrap/)   // default
+    expect(wrbLayer()?.label).toMatch(/housewrap/i)   // default
   })
 
   it('renders whichever barrier is chosen, still outboard of the sheathing', () => {
