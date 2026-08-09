@@ -431,6 +431,8 @@ export default function WorkspaceLayout() {
   const addDrawings         = useAppStore((s) => s.addDrawings)
   const loadPresetDrawing   = useAppStore((s) => s.loadPresetDrawing)
   const presetMode          = useUISettingsStore((s) => s.presetMode)
+  const setUI               = useUISettingsStore((s) => s.set)
+  const showcaseCladding    = useUISettingsStore((s) => s.cladding)
   const hasHistory = useAppStore((s) => s.historyPast.length > 0)
   const traceModeActive = useFloorplanLocalStore((s) => s.traceMode)
   const traceStartPt = useFloorplanLocalStore((s) => s.traceStart)
@@ -630,6 +632,57 @@ export default function WorkspaceLayout() {
       console.error('Failed to load preset:', presetId, error)
     }
   }
+  /**
+   * A FINISHED HOUSE, STANDING, IN ONE TAP.
+   *
+   * Every other way in gives you a job to do: a preset is a print to trace, an
+   * upload is a print to build. Nothing in the app ever just SHOWED you the
+   * thing the app makes. That left no way to see what you were working towards
+   * before doing the work — and no way to hand someone the phone and let them
+   * turn a building over in their hands.
+   *
+   * Not a special mode and not a canned scene: it is the ordinary preset path
+   * with the switches set the way they would be at the END of a build — walls
+   * in the data rather than stripped out, and finishes applied instead of
+   * waiting to be asked for. So everything works on it exactly as it works on
+   * a model you built: explode, x-ray, layers, edit, inspect, measure.
+   */
+  const loadShowcaseModel = () => {
+    try {
+      // 'hard' is Two-Storey with Garage. 'medium' is the Three-Bed Ranch —
+      // a single storey that merely SHIPS a second-floor sheet, so it loads as
+      // one level with an empty floor above and shows none of the stacking.
+      loadPresetDrawing('hard', false)
+      setUI({
+        // The finish layers wait for an explicit "apply" during a build, which
+        // is right while you are still framing and wrong for something whose
+        // whole purpose is to be looked at.
+        finishesApplied: true,
+        sheathingVisible: true,
+        wrapVisible: true,
+        claddingVisible: true,
+        drywallVisible: true,
+        // Default cladding is 'none' — a dried-in shell. A showcase should be
+        // clad, or the exterior reads as unfinished.
+        cladding: showcaseCladding === 'none' ? 'fiber-cement-lap' : showcaseCladding,
+      })
+      // Stand the upper storey up too. Carrying the shell up normally happens
+      // the moment you MOVE to floor 2 — nobody has moved anywhere here, so a
+      // showcase would otherwise be a two-storey house with an empty second
+      // floor, which is the one thing it must not be.
+      const app = useAppStore.getState()
+      const ground = app.drawings.find((d) => (d.floorNumber ?? 0) === 0) ?? app.drawings[0]
+      if (ground) {
+        app.carryWallsUp(ground.id, 0)
+        app.carryFloorUp(0)
+      }
+      useAppStore.getState().buildForMe()
+      closePanels()
+    } catch (error) {
+      console.error('Failed to load showcase model:', error)
+    }
+  }
+
   // Start the guided "build a whole house" walkthrough. Drops a starter plan
   // first if the workspace is empty so step 1 (the plan) is already satisfied.
   const startGuidedTour = () => {
@@ -806,6 +859,12 @@ export default function WorkspaceLayout() {
             <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Scan</button>
             <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Tour</button>
           </div>
+          {/* The only door into a FINISHED house. Everything else here hands
+              you a job; this hands you the result, to turn over and pull
+              apart before deciding whether the work is worth it. */}
+          <button className={styles.showcaseChip} onClick={loadShowcaseModel}>
+            See a finished house
+          </button>
           <PresetPanel onLoad={handleLoadPreset} />
         </div>
       )}
