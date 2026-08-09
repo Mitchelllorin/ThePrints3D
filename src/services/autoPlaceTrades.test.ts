@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { autoPlaceOutlets, outletPositionsAlong } from './autoPlaceTrades'
+import { autoPlaceOutlets, outletPositionsAlong, nudgeClear } from './autoPlaceTrades'
 import { OUTLET_MAX_SPACING_M, electricalMountM } from './tradeRules'
 import type { ParsedWall } from '../types'
 
@@ -119,5 +119,71 @@ describe('autoPlaceOutlets', () => {
   it('says why each device is there', () => {
     const devices = autoPlaceOutlets({ walls: room(), scaleMmPerPx: MM_PER_PX })
     expect(devices[0].reason).toMatch(/210\.52/)
+  })
+})
+
+describe('heating type changes electrical placement', () => {
+  // A baseboard heater lives under a window and a receptacle may not sit
+  // directly above one — which is exactly where spacing wants to put it. This
+  // is why heating has to be settled BEFORE electrical, not bolted on after.
+  const windowOnTopWall = [{ pxX: 500, pxY: 0 }]
+
+  it('keeps receptacles off the baseboard under a window', () => {
+    const devices = autoPlaceOutlets({
+      walls: room(),
+      scaleMmPerPx: MM_PER_PX,
+      heating: 'electric-baseboard',
+      windows: windowOnTopWall,
+    })
+    const onTopWall = devices.filter((d) => Math.abs(d.pxY) < 0.001)
+    // Nothing within the keep-out of the window centre (500px = 5m).
+    for (const d of onTopWall) {
+      expect(Math.abs(d.pxX - 500) * (MM_PER_PX / 1000)).toBeGreaterThanOrEqual(1.2 - 1e-6)
+    }
+  })
+
+  it('leaves placement alone for systems with nothing on the wall', () => {
+    const plain = autoPlaceOutlets({ walls: room(), scaleMmPerPx: MM_PER_PX, heating: 'forced-air', windows: windowOnTopWall })
+    const hydronic = autoPlaceOutlets({ walls: room(), scaleMmPerPx: MM_PER_PX, heating: 'in-floor-hydronic', windows: windowOnTopWall })
+    const minisplit = autoPlaceOutlets({ walls: room(), scaleMmPerPx: MM_PER_PX, heating: 'mini-split', windows: windowOnTopWall })
+    // A mini-split head is up near the ceiling and a hydronic floor has no wall
+    // emitter at all, so neither displaces a receptacle.
+    expect(hydronic.map((d) => d.pxX)).toEqual(plain.map((d) => d.pxX))
+    expect(minisplit.map((d) => d.pxX)).toEqual(plain.map((d) => d.pxX))
+  })
+
+  it('still covers the wall — it shifts outlets, it does not silently drop them', () => {
+    // A missing receptacle is a code violation of its own, so nudging must not
+    // become deleting.
+    const plain = autoPlaceOutlets({ walls: room(), scaleMmPerPx: MM_PER_PX, heating: 'forced-air', windows: windowOnTopWall })
+    const baseboard = autoPlaceOutlets({
+      walls: room(), scaleMmPerPx: MM_PER_PX, heating: 'electric-baseboard', windows: windowOnTopWall,
+    })
+    expect(baseboard.length).toBe(plain.length)
+  })
+
+  it('explains itself when it had to move one', () => {
+    const devices = autoPlaceOutlets({
+      walls: room(), scaleMmPerPx: MM_PER_PX, heating: 'electric-baseboard', windows: windowOnTopWall,
+    })
+    expect(devices.some((d) => /shifted clear/.test(d.reason))).toBe(true)
+  })
+})
+
+describe('nudgeClear', () => {
+  it('leaves a clear position untouched', () => {
+    expect(nudgeClear(5, [1], 10)).toBe(5)
+  })
+
+  it('moves to the nearer clear side', () => {
+    expect(nudgeClear(5.2, [5], 10)).toBeCloseTo(3.8, 6)
+  })
+
+  it('takes the other side when the first would fall off the wall', () => {
+    expect(nudgeClear(0.5, [0.4], 10)).toBeCloseTo(1.6, 6)
+  })
+
+  it('gives up honestly when the wall has nowhere legal left', () => {
+    expect(nudgeClear(1, [1], 1.5)).toBeNull()
   })
 })

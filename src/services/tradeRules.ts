@@ -160,3 +160,95 @@ export function plumbingRule(fixtureType: string): PlumbingRule | null {
 export function bandForElectrical(elementType: string): MountRule['band'] {
   return ELECTRICAL_MOUNTS[norm(elementType)]?.band ?? 'in-wall'
 }
+
+// ─── Heating: the type decides which trade even owns the work ─────────────────
+//
+// "HVAC" is not one system. Only ONE of the common heating types has ducts, and
+// the others are not really HVAC work at all: electric baseboard is an
+// ELECTRICAL job, and in-floor hydronic is closer to PLUMBING. Model heating as
+// "ducts from an air handler" and you have modelled the wrong building for a
+// large share of housing — baseboard alone is the norm across much of Canada.
+//
+// This has to be settled BEFORE devices are placed, not bolted on after: a
+// baseboard heater lives under a window, and a receptacle may not sit directly
+// above one — which is exactly where receptacle spacing wants to put it.
+
+export type HeatingType =
+  /** Furnace or air handler with a duct trunk and registers. The ducted one. */
+  | 'forced-air'
+  /** Electric resistance baseboards. No ducts; dedicated 240V circuits. */
+  | 'electric-baseboard'
+  /** Ductless mini-split heads, line-set through the wall to an outdoor unit. */
+  | 'mini-split'
+  /** Boiler and manifold feeding PEX loops in the floor. No ducts. */
+  | 'in-floor-hydronic'
+
+export interface HeatingRule {
+  label: string
+  /** Which trade actually installs and owns the distribution. */
+  ownedBy: 'hvac' | 'electrical' | 'plumbing'
+  /** True only for the one system that has a duct trunk. */
+  ducted: boolean
+  /** Where an emitter sits, m AFF. Null when there is nothing on the wall to
+   *  place (in-floor has no emitter — the floor IS the emitter). */
+  emitterMountM: number | null
+  /** Emitters belong under windows on exterior walls. */
+  underWindows: boolean
+  /** A receptacle must not sit directly above this emitter. */
+  blocksReceptacleAbove: boolean
+  note: string
+}
+
+export const HEATING_SYSTEMS: Record<HeatingType, HeatingRule> = {
+  'forced-air': {
+    label: 'Forced air (furnace / air handler)',
+    ownedBy: 'hvac',
+    ducted: true,
+    emitterMountM: 0,
+    underWindows: false,
+    blocksReceptacleAbove: false,
+    note: 'Trunk from an interior air handler to floor or ceiling registers. The only ducted system.',
+  },
+  'electric-baseboard': {
+    label: 'Electric baseboard',
+    ownedBy: 'electrical',
+    ducted: false,
+    // Sits ON the floor; ~3" to the top of a typical unit is close enough for
+    // placement, and the clearance below is what matters on site.
+    emitterMountM: 3 * IN,
+    underWindows: true,
+    blocksReceptacleAbove: true,
+    note: 'No ducts. Dedicated 240V circuits, units under windows. A receptacle may not sit directly above a unit.',
+  },
+  'mini-split': {
+    label: 'Ductless mini-split (heat pump)',
+    ownedBy: 'hvac',
+    ducted: false,
+    // High-wall head, just below the ceiling. Floor-standing units exist and
+    // look much like a baseboard — that variant is a per-unit override, not a
+    // different heating type.
+    emitterMountM: 84 * IN,
+    underWindows: false,
+    blocksReceptacleAbove: false,
+    note: 'No ducts. One head per zone, line-set (refrigerant pair + condensate + control) through the wall to an outdoor condenser.',
+  },
+  'in-floor-hydronic': {
+    label: 'In-floor water (hydronic radiant)',
+    ownedBy: 'plumbing',
+    ducted: false,
+    // The floor is the emitter — there is nothing on a wall to place.
+    emitterMountM: null,
+    underWindows: false,
+    blocksReceptacleAbove: false,
+    note: 'No ducts. Boiler and manifold feeding PEX loops in the floor build-up.',
+  },
+}
+
+/** The heating type most houses get unless told otherwise. */
+export const DEFAULT_HEATING: HeatingType = 'forced-air'
+
+/** True when this heating system puts an emitter on the wall under windows —
+ *  the case receptacle placement has to keep clear of. */
+export function heatingBlocksReceptacles(type: HeatingType): boolean {
+  return HEATING_SYSTEMS[type].blocksReceptacleAbove
+}
