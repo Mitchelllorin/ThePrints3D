@@ -64,9 +64,26 @@ def export(
         },
         do_constant_folding=True,
     )
+    # ── Inline the weights ──
+    # torch's exporter splits anything sizeable into a `<name>.onnx.data`
+    # sidecar. That is fine for a server and BROKEN for us: the browser loads
+    # the model from a plain URL, and onnxruntime-web will not go and find a
+    # companion file it was never told about — so the session fails to create
+    # and the app silently falls back to the classical detector, which looks
+    # exactly like "the AI did nothing".
+    #
+    # A few megabytes wants to be ONE file that a static host can serve.
+    import onnx
+
+    model_proto = onnx.load(out_path, load_external_data=True)
+    onnx.save_model(model_proto, out_path, save_as_external_data=False)
+    sidecar = Path(str(out_path) + '.data')
+    if sidecar.exists():
+        sidecar.unlink()
+
     print(f'Exported ONNX model → {out_path}')
     size_mb = Path(out_path).stat().st_size / 1024 / 1024
-    print(f'File size: {size_mb:.2f} MB')
+    print(f'File size: {size_mb:.2f} MB (single self-contained file)')
 
     # ── Sanity check with ONNX Runtime ──
     try:
@@ -86,7 +103,23 @@ def export(
         print('onnxruntime not installed — skipping runtime check.')
 
 
+def _make_console_utf8() -> None:
+    """Stop a Windows cp1252 console from killing the export.
+
+    torch.onnx's own progress output contains emoji. On a default Windows
+    console that raises UnicodeEncodeError from inside the exporter — after the
+    graph has been captured, so the work is done and thrown away. Same failure
+    mode bit the trainer at the end of every epoch.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+
 def main() -> None:
+    _make_console_utf8()
     # Determine repo root (two levels up from this file)
     repo_root = Path(__file__).resolve().parent.parent.parent
     default_out = str(repo_root / 'public' / 'models' / 'floorplan-wall-segmentation.onnx')

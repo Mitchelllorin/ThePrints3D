@@ -317,11 +317,122 @@ class CubiCasa5kDataset(Dataset):
         return img_t, mask_t
 
 
+class SyntheticWallDataset(Dataset):
+    """The corpus `synth.py` writes — and the only one whose weights we can ship.
+
+    CubiCasa5k is CC BY-NC, so a model trained on it cannot go into a paid app
+    (see ops/train/README.md). The synthetic generator exists to sidestep that:
+    plans we produce ourselves, masks that are exact by construction rather than
+    parsed out of an SVG, and as many as we care to render.
+
+    Layout, as written by `synth.py --out <root>`::
+
+        <root>/train/images/plan_000000.png
+        <root>/train/masks/plan_000000.png
+        <root>/val/...
+
+    Image and mask share a filename — pairing is by name, not by ordering, so a
+    missing or half-written file is caught here instead of silently training a
+    picture against somebody else's mask.
+
+    Augmentation and normalisation deliberately mirror `CubiCasa5kDataset`: the
+    browser sends one tensor shape, normalised one way (see IMG_MEAN in
+    src/services/aiWallDetector.ts), and the two datasets must not disagree
+    about what that is.
+    """
+
+    def __init__(
+        self,
+        root: str,
+        img_size: int = 256,
+        split: str = 'train',
+        augment: bool = True,
+        transform: Optional[Callable] = None,
+    ) -> None:
+        super().__init__()
+        self.img_size = img_size
+        self.augment = augment and split == 'train'
+        self.transform = transform
+
+        base = Path(root) / ('train' if split == 'all' else split)
+        img_dir, mask_dir = base / 'images', base / 'masks'
+        if not img_dir.is_dir() or not mask_dir.is_dir():
+            raise FileNotFoundError(
+                f'No synthetic split at {base!r}. Generate one first:\n'
+                f'  python ops/train/synth.py --out {root} --count 3000 --augment'
+            )
+
+        self.pairs: List[Tuple[Path, Path]] = []
+        for img_path in sorted(img_dir.glob('*.png')):
+            mask_path = mask_dir / img_path.name
+            if mask_path.exists():
+                self.pairs.append((img_path, mask_path))
+
+        if not self.pairs:
+            raise FileNotFoundError(f'No image/mask pairs found under {base!r}.')
+
+    def __len__(self) -> int:
+        return len(self.pairs)
+
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        img_path, mask_path = self.pairs[idx]
+
+        img = Image.open(img_path).convert('RGB')
+        mask = Image.open(mask_path).convert('L')
+        if img.size != (self.img_size, self.img_size):
+            img = img.resize((self.img_size, self.img_size), Image.BILINEAR)
+        if mask.size != (self.img_size, self.img_size):
+            # NEAREST for the mask: a wall pixel must stay 0 or 255. Interpolating
+            # it would invent half-walls along every edge and blur the very
+            # boundary the model is being asked to find.
+            mask = mask.resize((self.img_size, self.img_size), Image.NEAREST)
+
+        if self.augment:
+            if torch.rand(1) < 0.5:
+                img = TF.hflip(img)
+                mask = TF.hflip(mask)
+            if torch.rand(1) < 0.5:
+                img = TF.vflip(img)
+                mask = TF.vflip(mask)
+            angle = float(torch.randint(-10, 11, (1,)))
+            img = TF.rotate(img, angle)
+            mask = TF.rotate(mask, angle)
+            img = TF.adjust_brightness(img, 1.0 + float(torch.empty(1).uniform_(-0.3, 0.3)))
+            img = TF.adjust_contrast(img, 1.0 + float(torch.empty(1).uniform_(-0.2, 0.2)))
+
+        img_t: torch.Tensor = TF.to_tensor(img)
+        img_t = TF.normalize(img_t, _IMG_MEAN, _IMG_STD)
+        mask_t = (TF.to_tensor(mask) > 0.5).float()
+
+        if self.transform:
+            img_t = self.transform(img_t)
+
+        return img_t, mask_t
+
+
+def build_dataset(
+    root: str,
+    img_size: int = 256,
+    split: str = 'train',
+    augment: bool = True,
+) -> Dataset:
+    """Pick the loader that matches what is actually on disk.
+
+    A synthetic corpus has `<root>/train/images`; CubiCasa has `<id>/model.svg`
+    scattered through it. Sniffing the layout means the same train command works
+    for either, and nobody has to remember a flag to stay on the shippable side
+    of the licence line.
+    """
+    if (Path(root) / 'train' / 'images').is_dir():
+        return SyntheticWallDataset(root, img_size=img_size, split=split, augment=augment)
+    return CubiCasa5kDataset(root, img_size=img_size, split=split, augment=augment)
+
+
 if __name__ == '__main__':
     import sys
 
     root = sys.argv[1] if len(sys.argv) > 1 else 'data/cubicasa5k'
-    ds = CubiCasa5kDataset(root, split='train')
+    ds = build_dataset(root, split='train')
     print(f'Train samples : {len(ds)}')
     img, mask = ds[0]
     print(f'Image shape   : {img.shape}  dtype={img.dtype}')
