@@ -96,11 +96,49 @@ export const STUD_OC_M = 16 * IN
 
 // ─── Service entry (from OUTSIDE the building) ────────────────────────────────
 
-/** Where each trade's service enters and the band it starts routing in. */
-export const SERVICE_ENTRY: Record<'plumbing' | 'electrical' | 'hvac', { band: MountRule['band']; note: string }> = {
-  plumbing:   { band: 'under-floor', note: 'Water main + sewer enter below grade / under the floor, from outside.' },
-  electrical: { band: 'under-floor', note: 'Service lateral to the panel (or overhead to a weatherhead); route from outside.' },
-  hvac:       { band: 'ceiling',     note: 'Trunk from the air handler runs overhead to registers.' },
+/**
+ * Where each trade's distribution BEGINS, and the band it starts routing in.
+ *
+ * TWO OF THE THREE START OUTSIDE, AND ONE DOES NOT. Plumbing and electrical are
+ * services: they cross the property, cross the wall, and everything inside
+ * hangs off that entry point. Ductwork is not a service — it starts at the air
+ * handler, which stands INSIDE the building, and fans out from there. Only the
+ * line-set to the outdoor condenser, the gas line and the fresh-air intake
+ * cross the wall at all.
+ *
+ * Routing has to honour that difference or HVAC gets run backwards from a
+ * service entry that does not exist.
+ */
+export type ServiceOrigin =
+  /** Crosses the building envelope from the street/yard. */
+  | 'exterior'
+  /** Starts at equipment standing inside the building. */
+  | 'interior-plant'
+
+export const SERVICE_ENTRY: Record<
+  'plumbing' | 'electrical' | 'hvac',
+  { origin: ServiceOrigin; band: MountRule['band']; note: string }
+> = {
+  plumbing: {
+    origin: 'exterior',
+    band: 'under-floor',
+    note: 'Water main + sewer enter below grade / under the floor, from outside — where the city water meets the house water.',
+  },
+  electrical: {
+    origin: 'exterior',
+    band: 'under-floor',
+    note: 'Service lateral to the panel, or overhead to a weatherhead with a drip loop; route from outside.',
+  },
+  hvac: {
+    origin: 'interior-plant',
+    band: 'ceiling',
+    note: 'Trunk starts at the air handler INSIDE the building and runs overhead to registers. Only the condenser line-set, gas line and fresh-air intake cross the wall.',
+  },
+}
+
+/** True when this trade's distribution starts outside the building envelope. */
+export function startsOutside(trade: 'plumbing' | 'electrical' | 'hvac'): boolean {
+  return SERVICE_ENTRY[trade].origin === 'exterior'
 }
 
 // ─── Lookups (tolerant of catalog naming) ─────────────────────────────────────
