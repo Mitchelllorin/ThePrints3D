@@ -422,6 +422,43 @@
   .editHint { display: none; }
 }
 
+/* "Sheet 3 of 6" — which page of a multi-page set the model was built from,
+   and the arrows to say "not that one". Sits above Edit in the bottom-left
+   column, dim and container-less like the rest of the chrome: a statement of
+   fact you can read at a glance, not a panel demanding a decision. */
+.sheetNote {
+  position: absolute;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  left: 14px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--bp-text-dim, #94a3b8);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.sheetStep {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--bp-text-dim, #94a3b8);
+  cursor: pointer;
+}
+.sheetStep:hover:not(:disabled) { color: var(--bp-accent, #38bdf8); }
+.sheetStep:disabled { opacity: 0.3; cursor: default; }
+@media (max-width: 767px), (max-height: 600px) {
+  /* Clears the Edit button, which lifts to 46px on a phone. */
+  .sheetNote { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); left: 10px; }
+}
+
 .explodeBar {
   position: absolute;
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));

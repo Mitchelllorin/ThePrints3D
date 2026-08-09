@@ -426,6 +426,8 @@ export default function WorkspaceLayout() {
   // useAutoBuild()
 
   const drawings            = useAppStore((s) => s.drawings)
+  const selectedDrawingId   = useAppStore((s) => s.selectedDrawingId)
+  const reprocessDrawing    = useAppStore((s) => s.processDrawing)
   const addDrawings         = useAppStore((s) => s.addDrawings)
   const loadPresetDrawing   = useAppStore((s) => s.loadPresetDrawing)
   const presetMode          = useUISettingsStore((s) => s.presetMode)
@@ -807,6 +809,39 @@ export default function WorkspaceLayout() {
           <PresetPanel onLoad={handleLoadPreset} />
         </div>
       )}
+
+      {/* WHICH SHEET THIS CAME FROM. Say it out loud.
+          A multi-page PDF gets ONE of its sheets picked automatically, and
+          until now the app never mentioned which — you were shown a building
+          with no way of knowing it came from sheet 3 of 6, or that the pick
+          could be wrong. On an instructional brochure it once chose a section
+          drawing and looked simply broken.
+          Only appears when there was a choice to make. Ambient text on the
+          perimeter, not a card: a line you can read and ignore. */}
+      {(() => {
+        const d = drawings.find((x) => x.id === selectedDrawingId) ?? drawings[0]
+        if (!d || d.pageCount <= 1 || d.status === 'processing') return null
+        const go = (page: number) => {
+          if (page >= 1 && page <= d.pageCount) reprocessDrawing(d.id, page)
+        }
+        return (
+          <div className={styles.sheetNote}>
+            <button
+              className={styles.sheetStep}
+              onClick={() => go(d.currentPage - 1)}
+              disabled={d.currentPage <= 1}
+              aria-label="Previous sheet"
+            >‹</button>
+            <span>Sheet {d.currentPage} of {d.pageCount}</span>
+            <button
+              className={styles.sheetStep}
+              onClick={() => go(d.currentPage + 1)}
+              disabled={d.currentPage >= d.pageCount}
+              aria-label="Next sheet"
+            >›</button>
+          </div>
+        )
+      })()}
 
       {/* Edit toggle — bottom-left, only when a model is standing AND the
           workspace is IDLE (no trace/calibration/placement owning it). An action
