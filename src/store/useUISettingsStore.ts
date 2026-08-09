@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { WrbKind, WoodSheathing, CladdingKind, BoardKind } from '../services/constructionCode'
+import { DEFAULT_HEATING, type HeatingType } from '../services/tradeRules'
 
 export interface UISettings {
   // Panels / toolbars / menus
@@ -78,6 +79,12 @@ export interface UISettings {
    *  reason about (door orientation, seating openings, "Find the rest"), since
    *  practice legitimately empties parsedWalls. */
   presetMode: 'ready' | 'practice'
+  /** How the house is heated. Only forced air has ducts; electric baseboard is
+   *  an electrical job and in-floor hydronic a plumbing one, so this decides
+   *  which trade owns the work — and it must be set BEFORE devices are placed,
+   *  because a baseboard under a window displaces the receptacle that would
+   *  otherwise go there. See HEATING_SYSTEMS in tradeRules. */
+  heatingType: HeatingType
   /** Bumped when a DEFAULT changes in a way an existing install should follow.
    *  Settings persist whole, so a stored copy of the old default would outlive
    *  the change forever otherwise. See `load()`. */
@@ -140,6 +147,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   claddingVisible: true,
   dimensionsVisible: true,
   presetMode: 'practice',
+  heatingType: DEFAULT_HEATING,
   settingsRev: SETTINGS_REV,
   autoCarryShellUp: true,
   finishTiming: 'later',

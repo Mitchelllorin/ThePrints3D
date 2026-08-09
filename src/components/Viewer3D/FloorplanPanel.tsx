@@ -181,6 +181,10 @@ export default function FloorplanPanel() {
   const roofSize = useFloorplanLocalStore((s) => s.roofSize)
   const setRoof = useFloorplanLocalStore((s) => s.setRoof)
   const activeLevel = useFloorplanLocalStore((s) => s.activeLevel)
+  // The General's electrical pass, and the one line it says afterwards.
+  const autoPlaceElectrical = useAppStore((s) => s.autoPlaceElectrical)
+  const built = useAppStore((s) => !!s.buildResult)
+  const [generalNote, setGeneralNote] = useState<string | null>(null)
   const setActiveLevel = useFloorplanLocalStore((s) => s.setActiveLevel)
   const elecElement = useFloorplanLocalStore((s) => s.elecElement)
   const elecAmp = useFloorplanLocalStore((s) => s.elecAmp)
@@ -1945,6 +1949,31 @@ export default function FloorplanPanel() {
         >
           <span className={styles.stepLabel}>Layers</span>
           <LayersPanel />
+
+          {/* THE GENERAL'S FIRST PASS. Sits above the catalog on purpose: the
+              tray below is the box-by-box path and stays exactly as it was, so
+              this is an offer, not a replacement. Everything it places is an
+              ordinary object you can drag, retype or delete, and the whole pass
+              is one undo. */}
+          {built && (
+            <>
+              <span className={styles.stepLabel}>The General — place it for me</span>
+              <button
+                className={styles.action}
+                onClick={() => {
+                  const n = autoPlaceElectrical(activeLevel)
+                  setGeneralNote(
+                    n > 0
+                      ? `Placed ${n} receptacle${n === 1 ? '' : 's'} — drag, retype or delete any of them`
+                      : 'Nothing placed — this storey needs walls and a known scale',
+                  )
+                }}
+              >
+                ⚡ Auto-place receptacles
+              </button>
+              {generalNote && <p className={styles.stepHint}>{generalNote}</p>}
+            </>
+          )}
           {trayVisible && (
             <>
               <span className={styles.stepLabel}>Catalog — tap an item, then tap the plan</span>

@@ -17,6 +17,7 @@ import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/s
 import { getCatalogItem } from '../../data/objectCatalog'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { HEATING_SYSTEMS, type HeatingType } from '../../services/tradeRules'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useConfigStore, type ActiveUnit } from '../../store/useConfigStore'
 import styles from './WorkspaceLayout.module.css'
@@ -274,6 +275,25 @@ function SettingsContent() {
           val={ui.autoCarryShellUp}
           onChange={(v) => setUI({ autoCarryShellUp: v })}
         />
+      </CollapsibleSection>
+
+      {/* HEATING DECIDES WHICH TRADE OWNS THE WORK, so it belongs with the
+          build decisions and not buried in an HVAC panel. Only forced air has
+          ducts; baseboard is electrical, in-floor is plumbing. It also has to
+          be answered BEFORE devices are placed — a baseboard under a window
+          displaces the receptacle that would otherwise go there. */}
+      <CollapsibleSection id="heating" title="Heating" openId={openId} setOpenId={setOpenId}>
+        {(Object.keys(HEATING_SYSTEMS) as HeatingType[]).map((key) => (
+          <button
+            key={key}
+            className={`${styles.specBtn} ${ui.heatingType === key ? styles.specBtnOn : ''}`}
+            onClick={() => setUI({ heatingType: key })}
+            aria-pressed={ui.heatingType === key}
+          >
+            {HEATING_SYSTEMS[key].label}
+          </button>
+        ))}
+        <p className={styles.sectionNote}>{HEATING_SYSTEMS[ui.heatingType].note}</p>
       </CollapsibleSection>
 
       <CollapsibleSection id="wordmark" title="3D wordmark" openId={openId} setOpenId={setOpenId}>

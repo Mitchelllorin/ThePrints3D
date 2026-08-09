@@ -45,6 +45,8 @@ import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReduce
 import { suggestFlushEdge } from '../services/flushInference'
 import { suggestAllCornerTrims } from '../services/cornerInference'
 import { suggestLineSnap } from '../services/lineSnapInference'
+import { autoPlaceOutlets } from '../services/autoPlaceTrades'
+import { useUISettingsStore } from './useUISettingsStore'
 import { pitchToRatio } from '../data/traceLayers'
 
 /** A rectangle/segment in image pixels (opposite corners or endpoints). */
@@ -492,6 +494,9 @@ interface AppState {
   setPreviewMode: (on: boolean) => void
   setExplodeAmount: (amount: number) => void
   // Placed objects (furniture/fixtures)
+  /** Run the General's electrical pass on a storey. Returns how many devices
+   *  it placed, so the caller can say so. One undo step. */
+  autoPlaceElectrical: (level?: number) => number
   addPlacedObject: (obj: PlacedObject) => void
   removePlacedObject: (id: string) => void
   updatePlacedObject: (id: string, patch: Partial<PlacedObject>) => void
@@ -1843,6 +1848,82 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         s.explodeAmount = Math.max(0, Math.min(1, amount))
       })
+    },
+
+    /**
+     * THE GENERAL'S FIRST PASS — read the build, place the devices.
+     *
+     * Everything it drops is an ordinary PlacedObject, so the moment it lands
+     * the user can select, drag, retype or delete any of it exactly as if they
+     * had placed it by hand. That is the whole contract: the General does the
+     * tedious first pass, the user keeps absolute control of the result.
+     *
+     * It also goes through pushHistory as one step, so a pass you dislike is a
+     * single undo away rather than forty deletions.
+     */
+    autoPlaceElectrical: (level) => {
+      const s = get()
+      const overlay = s.floorplanOverlay
+      const drawing = s.drawings.find((d) => d.id === overlay.drawingId) ?? s.drawings[0]
+      if (!drawing) return 0
+
+      const storey = level ?? 0
+      const heating = useUISettingsStore.getState().heatingType
+
+      // Windows are where a baseboard emitter goes, and therefore where a
+      // receptacle may not. Only this storey's, in the drawing's pixel space.
+      const windows = s.placedObjects
+        .filter((o) => o.type === 'window' && (o.level ?? 0) === storey)
+        .filter((o) => o.pxX != null && o.pxY != null)
+        .map((o) => ({ pxX: o.pxX as number, pxY: o.pxY as number }))
+
+      const devices = autoPlaceOutlets({
+        walls: drawing.parsedWalls,
+        scaleMmPerPx: drawing.scaleMmPerPx,
+        level: storey,
+        heating,
+        windows,
+      })
+      if (devices.length === 0) return 0
+
+      // Same pixel→world mapping the overlay and every layer uses, so a device
+      // lands on the wall it was computed against rather than near it.
+      const imageWidth = drawing.rasterWidth ?? 1400
+      const imageHeight = drawing.rasterHeight ?? 900
+      const [overlayW, overlayD] = overlay.scale
+      const rot = (overlay.rotationDeg * Math.PI) / 180
+      const toWorld = (px: number, py: number) => {
+        const lx = (px / imageWidth - 0.5) * overlayW
+        const lz = (py / imageHeight - 0.5) * overlayD
+        const cos = Math.cos(rot)
+        const sin = Math.sin(rot)
+        return {
+          x: overlay.position[0] + (lx * cos + lz * sin),
+          z: overlay.position[1] + (-lx * sin + lz * cos),
+        }
+      }
+
+      pushHistory()
+      set((st) => {
+        for (const d of devices) {
+          const { x, z } = toWorld(d.pxX, d.pxY)
+          st.placedObjects.push({
+            id: genId(),
+            type: d.type,
+            x,
+            z,
+            rotationY: d.rotationY,
+            scaleX: 1,
+            scaleZ: 1,
+            scaleY: 1,
+            label: d.reason,
+            pxX: d.pxX,
+            pxY: d.pxY,
+            level: d.level,
+          })
+        }
+      })
+      return devices.length
     },
 
     // ─── Placed objects (furniture / fixtures) ────────────────────────

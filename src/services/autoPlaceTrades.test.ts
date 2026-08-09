@@ -68,19 +68,33 @@ describe('autoPlaceOutlets', () => {
     expect(devices.every((d) => d.mountM === expected)).toBe(true)
   })
 
-  it('lands every device ON its wall, not floating in the room', () => {
+  it('mounts on the interior FACE of a wall, not buried in its middle', () => {
+    // A wall is stored as its centreline. A device left on that line sits
+    // inside the studs, behind the board — invisible, and nowhere a box is ever
+    // mounted. It belongs half a wall-thickness out, on the room side.
     const walls = room()
     const devices = autoPlaceOutlets({ walls, scaleMmPerPx: MM_PER_PX })
+    const halfThickness = 14 / 2
     for (const d of devices) {
-      const onSomeWall = walls.some((w) => {
+      const onAFace = walls.some((w) => {
         const dx = w.x2 - w.x1
         const dy = w.y2 - w.y1
         const len = Math.hypot(dx, dy)
-        // Perpendicular distance from the device to the wall's line.
-        const dist = Math.abs((d.pxX - w.x1) * dy - (d.pxY - w.y1) * dx) / len
-        return dist < 0.001
+        const perp = Math.abs((d.pxX - w.x1) * dy - (d.pxY - w.y1) * dx) / len
+        return Math.abs(perp - halfThickness) < 0.001
       })
-      expect(onSomeWall).toBe(true)
+      expect(onAFace).toBe(true)
+    }
+  })
+
+  it('steps INTO the room, never out into the yard', () => {
+    const devices = autoPlaceOutlets({ walls: room(), scaleMmPerPx: MM_PER_PX })
+    // The 10x8m room spans 0..1000 x 0..800 px; every device must land inside it.
+    for (const d of devices) {
+      expect(d.pxX).toBeGreaterThanOrEqual(-0.001)
+      expect(d.pxX).toBeLessThanOrEqual(1000.001)
+      expect(d.pxY).toBeGreaterThanOrEqual(-0.001)
+      expect(d.pxY).toBeLessThanOrEqual(800.001)
     }
   })
 

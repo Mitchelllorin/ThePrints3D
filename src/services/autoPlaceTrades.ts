@@ -89,7 +89,7 @@ function centroid(walls: ParsedWall[]): { x: number; y: number } {
  * complicated footprint and right on the overwhelming majority of walls — and
  * being wrong only means a device faces the wrong way, which the user can spin.
  */
-function facingInward(w: ParsedWall, mid: { x: number; y: number }): number {
+function inwardNormal(w: ParsedWall, mid: { x: number; y: number }): { nx: number; ny: number } {
   const dx = w.x2 - w.x1
   const dy = w.y2 - w.y1
   const len = Math.hypot(dx, dy) || 1
@@ -99,10 +99,13 @@ function facingInward(w: ParsedWall, mid: { x: number; y: number }): number {
   const cx = (w.x1 + w.x2) / 2
   const cy = (w.y1 + w.y2) / 2
   const towardsMiddle = (mid.x - cx) * nx + (mid.y - cy) * ny
-  const sx = towardsMiddle >= 0 ? nx : -nx
-  const sy = towardsMiddle >= 0 ? ny : -ny
+  return towardsMiddle >= 0 ? { nx, ny } : { nx: -nx, ny: -ny }
+}
+
+function facingInward(w: ParsedWall, mid: { x: number; y: number }): number {
+  const { nx, ny } = inwardNormal(w, mid)
   // Image Y runs down; negate so the angle reads as a normal world heading.
-  return Math.atan2(sx, -sy)
+  return Math.atan2(nx, -ny)
 }
 
 /**
@@ -153,6 +156,14 @@ export function autoPlaceOutlets({
     const emittersAlongM = keepClearOfEmitters ? emitterOffsetsOnWall(w, windows, mPerPx) : []
 
     const rotationY = facingInward(w, mid)
+    // ONTO THE FACE, NOT INTO THE MIDDLE. A wall is stored as its centreline,
+    // so a device placed at that line ends up buried inside the studs — behind
+    // the board, invisible, and nowhere a box is ever mounted. Step out to the
+    // interior face along the inward normal. Half the wall's thickness, which
+    // the detector already carries per wall.
+    const { nx, ny } = inwardNormal(w, mid)
+    const faceOffsetPx = (w.thickness ?? 0) / 2
+
     for (const alongM of positions) {
       // A receptacle may not sit directly above a baseboard heater. Nudge it
       // clear rather than dropping it — the wall still needs covering, and a
@@ -165,8 +176,8 @@ export function autoPlaceOutlets({
       const t = placedM / lenM
       out.push({
         type: 'duplex-outlet',
-        pxX: w.x1 + (w.x2 - w.x1) * t,
-        pxY: w.y1 + (w.y2 - w.y1) * t,
+        pxX: w.x1 + (w.x2 - w.x1) * t + nx * faceOffsetPx,
+        pxY: w.y1 + (w.y2 - w.y1) * t + ny * faceOffsetPx,
         rotationY,
         mountM,
         level,

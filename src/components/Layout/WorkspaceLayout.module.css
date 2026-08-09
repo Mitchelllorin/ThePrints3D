@@ -318,6 +318,21 @@
   transition: background 0.15s;
 }
 .specBtn:hover { background: rgba(255, 255, 255, 0.14); }
+/* The chosen one in a set of mutually-exclusive spec buttons — accent colour and
+   an accent edge, no filled slab, so the list still reads as a list. */
+.specBtnOn {
+  color: var(--bp-accent, #38bdf8);
+  border-color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 14%, transparent);
+  font-weight: 700;
+}
+/* The one-line "why" under a choice — explains the consequence without a card. */
+.sectionNote {
+  margin: 4px 2px 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--bp-text-dim, #94a3b8);
+}
 
 .specSlider {
   width: 100%;
