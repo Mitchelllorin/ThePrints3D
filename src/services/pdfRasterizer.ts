@@ -15,6 +15,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 // nothing that ran regularly went through pdf.js at all.
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { RASTER_SCALE } from './constants'
+import { pickScaleNotation } from './scaleParser'
 import {
   rankPlanPages, scorePlanSheet, thumbnailScale, type PlanSheetScore,
 } from './planSheet'
@@ -58,27 +59,15 @@ export interface RasterTextToken {
   confidence: number
 }
 
-const SCALE_REGEX = /\b1\s*[:/]\s*(\d+)\b|\b(\d+)\s*[:/]\s*1\b/g
-const MIN_BUILDING_SCALE = 10
-const MAX_BUILDING_SCALE = 500
-
+/**
+ * The sheet's own stated scale, if it states one.
+ *
+ * Delegated to scaleParser, which knows that `1/4" = 1'-0"` is an equation
+ * between two lengths and not the ratio 1:4 — the misreading that made three
+ * of five real municipal drawing sets come out twelve times too small.
+ */
 function pickBestScaleNotation(fullText: string): string | null {
-  const candidates: Array<{ notation: string; ratio: number }> = []
-  for (const m of fullText.matchAll(SCALE_REGEX)) {
-    const left = m[1] ? 1 : parseInt(m[2], 10)
-    const right = m[1] ? parseInt(m[1], 10) : 1
-    if (!Number.isFinite(left) || !Number.isFinite(right) || left <= 0 || right <= 0) continue
-    const ratio = right / left
-    const notation = `${left}:${right}`
-    candidates.push({ notation, ratio })
-  }
-  if (candidates.length === 0) return null
-
-  // Prefer common building scales, fallback to first detected value.
-  const preferred = candidates.find(
-    (c) => c.ratio >= MIN_BUILDING_SCALE && c.ratio <= MAX_BUILDING_SCALE
-  )
-  return preferred?.notation ?? candidates[0].notation
+  return pickScaleNotation(fullText)
 }
 
 /** Render one page small, just to look at its shape. */
