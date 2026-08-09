@@ -946,7 +946,36 @@ export default function WorkspaceLayout() {
             onClick={() => setEditMode(!editMode)}
             aria-pressed={editMode}
           >
-            {editMode ? '✓ Done editing' : '✏️ Edit'}
+            {/* Drawn, not typed — same reason as the explode burst. A colour
+                emoji is a filled multi-colour blob sitting among thin grey
+                glyphs; an SVG on currentColor dims, highlights and re-themes
+                with everything else, including turning dark when this button
+                goes accent-filled in edit mode. */}
+            <svg
+              className={styles.editIcon}
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              {editMode ? (
+                /* A tick, for "done". */
+                <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+              ) : (
+                <>
+                  {/* Pencil: body, tip and the line it is drawing. */}
+                  <path d="M16.7 3.9a2.1 2.1 0 0 1 3 3L9.4 17.2l-4 1 1-4Z" />
+                  <path d="M15.2 5.4 18.2 8.4" />
+                  <path d="M4 21h16" />
+                </>
+              )}
+            </svg>
+            {editMode ? 'Done editing' : 'Edit'}
           </button>
           {editMode && <span className={styles.editHint}>Drag anything to move it</span>}
         </div>
@@ -959,7 +988,32 @@ export default function WorkspaceLayout() {
           sheet so it never overlaps. Hidden only during calibration. */}
       {hasDrawings && !calibrationMode && !traceMode && (
         <div className={`${styles.explodeBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
-          <span className={styles.explodeIcon} title="Explode" aria-hidden>⇕</span>
+          {/* A little bomb — but DRAWN, not an emoji. Every other icon in this
+              chrome is a thin monochrome glyph taking its colour from the theme;
+              a colour emoji is a filled multi-colour blob and stays one however
+              much you desaturate it. This inherits currentColor, so it dims,
+              highlights and re-themes exactly like the rail does. */}
+          <svg
+            className={styles.explodeIcon}
+            viewBox="0 0 24 24"
+            width="19"
+            height="19"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <title>Explode</title>
+            {/* Comic-book burst: eight spikes, alternating long and short radii
+                about the centre. Drawn rather than typed so it takes
+                currentColor like every other glyph in the chrome. */}
+            <path d="M23 12 18.3 14.6 19.8 19.8 14.6 18.3 12 23 9.4 18.3 4.2 19.8 5.7 14.6 1 12 5.7 9.4 4.2 4.2 9.4 5.7 12 1 14.6 5.7 19.8 4.2 18.3 9.4 Z" />
+            {/* The bomb inside it, with a stub of fuse. */}
+            <circle cx="11.4" cy="12.6" r="3.1" />
+            <path d="M13.6 10.4 15.2 8.8" />
+          </svg>
           <span className={styles.explodeLabel}>Explode</span>
           <input
             className={styles.explodeSlider}

@@ -120,6 +120,34 @@ export default function LayersPanel() {
     }
   }
 
+  const allRows = GROUPS.flatMap((g) => g.rows)
+  /** Is this the only thing currently showing? */
+  const isSolo = (row: Row) => isOn(row) && allRows.every((r) => r === row || !isOn(r))
+
+  /**
+   * SOLO — show this and nothing else.
+   *
+   * "Just the electrical" or "just the board" was thirteen taps away: turn
+   * everything off, then turn one thing back on. It is the single most useful
+   * thing a layer list does and it had no control at all.
+   *
+   * It lives on the COLOUR DOT, which until now was decoration. That costs the
+   * row no width and adds no third button to an already three-part row — and a
+   * dot that means "this layer" is a fair thing to press when you want only
+   * this layer. Pressing it again puts everything back, so it is a place you
+   * can always get out of.
+   */
+  const toggleSolo = (row: Row) => {
+    if (isSolo(row)) {
+      setAll(true)
+      return
+    }
+    for (const r of allRows) {
+      const want = r === row
+      if (isOn(r) !== want) toggle(r)
+    }
+  }
+
   return (
     <div className={styles.layerList}>
       <div className={styles.layerRow}>
@@ -136,11 +164,19 @@ export default function LayersPanel() {
           <p className={styles.layerGroup}>{g.title}</p>
           {g.rows.map((row) => {
             const on = isOn(row)
+            const solo = isSolo(row)
             const active = row.kind === 'trade' && activeTraceLayer === row.key
             const rowKey = row.kind === 'print' ? 'print' : row.key
             return (
               <div key={rowKey} className={`${styles.layerRow} ${active ? styles.layerRowActive : ''}`}>
-                <span className={styles.layerDot} style={{ background: row.color }} />
+                <button
+                  className={`${styles.layerDot} ${solo ? styles.layerDotSolo : ''}`}
+                  style={{ background: row.color }}
+                  onClick={() => toggleSolo(row)}
+                  title={solo ? 'Show everything again' : `Show only ${row.label}`}
+                  aria-label={solo ? 'Show everything again' : `Show only ${row.label}`}
+                  aria-pressed={solo}
+                />
                 {row.kind === 'trade' ? (
                   <button className={styles.layerName} onClick={() => setActiveTraceLayer(row.key)}>
                     {row.label}

@@ -373,12 +373,24 @@
 }
 .layerRowActive { border-color: var(--bp-accent, #38bdf8); }
 
+/* The colour dot is also the SOLO button — press it to see only that layer,
+   press it again to bring everything back. It was decoration; making it the
+   control costs the row no width and spares it a third button. */
 .layerDot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 0;
+  cursor: pointer;
+  transition: box-shadow 0.12s, transform 0.12s;
+}
+.layerDot:hover { transform: scale(1.25); }
+/* Soloed: an accent ring, so at a glance you can see WHY everything else is
+   off — otherwise a stripped-down model just looks broken. */
+.layerDotSolo {
+  box-shadow: 0 0 0 2px var(--bp-accent, #38bdf8), 0 0 8px var(--bp-accent, #38bdf8);
 }
 
 .layerName {
@@ -422,24 +434,34 @@
   gap: 10px;
   pointer-events: auto;
 }
+/* NO BOX. It was the last slab of chrome on the workspace — a filled, blurred,
+   bordered button sitting where everything else is a glyph floating on the
+   model. Same idiom as the rail now: icon over a tiny uppercase caption, dim
+   until you reach for it, accent COLOUR rather than a filled pill when it is
+   on. There is plenty of perimeter; none of it needs a container. */
 .editToggle {
-  height: 34px;
-  padding: 0 16px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--bp-text, #f1f5f9);
-  background: rgba(8, 12, 24, 0.9);
-  border: 1px solid var(--bp-border);
-  border-radius: 8px;
-  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: none;
+  border: none;
   cursor: pointer;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  opacity: 0.82;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  transition: opacity 0.12s, color 0.12s;
 }
-.editToggle:hover { border-color: var(--bp-accent, #38bdf8); }
-.editToggleOn {
-  color: #052e16;
-  background: #22d3ee;
-  border-color: #22d3ee;
-  box-shadow: 0 0 14px rgba(34, 211, 238, 0.5);
+.editToggle:hover { opacity: 1; color: var(--bp-text, #f1f5f9); }
+.editToggleOn { color: var(--bp-accent, #38bdf8); opacity: 1; }
+.editIcon {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
 }
 .editHint {
   font-size: 11px;
@@ -525,13 +547,22 @@
 /* An icon, in the rail's own idiom — dim glyph, no box, no permanent caption.
    The word was set sideways to keep the column narrow and simply could not be
    read at 8px on its side. */
+/* Same treatment as the left rail's glyphs (RailCascade .glyph/.icon): dim
+   theme colour, a drop-shadow to stay legible over the model, 0.82 opacity
+   lifting to full on hover. Because it is an SVG on currentColor rather than an
+   emoji, it actually TAKES the colour — which is the whole reason it is drawn
+   and not typed. */
 .explodeIcon {
-  font-size: 15px;
-  line-height: 1;
+  display: block;
   color: var(--bp-text-dim, #94a3b8);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  opacity: 0.82;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+  transition: opacity 0.12s, color 0.12s;
 }
-.explodeBar:hover .explodeIcon { color: var(--bp-text, #f1f5f9); }
+.explodeBar:hover .explodeIcon {
+  opacity: 1;
+  color: var(--bp-text, #f1f5f9);
+}
 /* The word, on hover only, and ABSOLUTE so it costs the column no width when
    it is not showing — it hangs off to the left, over the workspace, for the
    moment you are pointing at the control anyway. */
