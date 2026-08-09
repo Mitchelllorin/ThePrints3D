@@ -240,7 +240,12 @@ function SettingsContent() {
 
       <CollapsibleSection id="explode" title="Explode" openId={openId} setOpenId={setOpenId}>
         <Slider label="Speed" val={cfg.explodeSpeed} min={0.5} max={12} step={0.5} onChange={(v) => setCfg({ explodeSpeed: v })} />
-        <Slider label="Spread" val={cfg.explodeSpread} min={0} max={3} step={0.1} unit="×" onChange={(v) => setCfg({ explodeSpread: v })} />
+        {/* Ceiling raised 3× → 8×. The old top end was not enough separation to
+            read a wall assembly apart at full explode — layers still overlapped
+            at the point they were meant to be most legible. The default is
+            unchanged, so this only adds room at the far end for anyone who
+            wants it. */}
+        <Slider label="Spread" val={cfg.explodeSpread} min={0} max={8} step={0.1} unit="×" onChange={(v) => setCfg({ explodeSpread: v })} />
         {EXPLODE_SYSTEMS.map((sys) => (
           <Slider
             key={sys.key}
@@ -690,13 +695,22 @@ export default function WorkspaceLayout() {
       // the moment you MOVE to floor 2 — nobody has moved anywhere here, so a
       // showcase would otherwise be a two-storey house with an empty second
       // floor, which is the one thing it must not be.
-      const app = useAppStore.getState()
-      const ground = app.drawings.find((d) => (d.floorNumber ?? 0) === 0) ?? app.drawings[0]
-      if (ground) {
-        app.carryWallsUp(ground.id, 0)
-        app.carryFloorUp(0)
-      }
+      // NO CARRY-UP HERE, deliberately, having tried it.
+      //
+      // Carrying the shell up adds level-1 walls to the SAME drawing, but the
+      // storey list is computed from drawings — so the building never learns it
+      // has two floors. The shell then gets derived for one storey and the ROOF
+      // lands at level 0, underneath the second storey's walls. A house with
+      // its roof in the middle of it.
+      //
+      // Openings do not carry either, so the upper floor came out a windowless
+      // box. A correct one-storey house beats a broken two-storey one; proper
+      // multi-storey wants the storey list fixed first, which is its own job.
       useAppStore.getState().buildForMe()
+      // A house is not finished with the sky showing and holes where the doors
+      // go. buildForMe derives a roof and discards it (tracing one is meant to
+      // be an act), and the plan's openings punch holes that nothing fills.
+      useAppStore.getState().finishShell()
       closePanels()
     } catch (error) {
       console.error('Failed to load showcase model:', error)

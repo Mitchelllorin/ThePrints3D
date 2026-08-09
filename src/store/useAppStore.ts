@@ -494,6 +494,10 @@ interface AppState {
   setPreviewMode: (on: boolean) => void
   setExplodeAmount: (amount: number) => void
   // Placed objects (furniture/fixtures)
+  /** Add the roof + ceiling the build pass discards, and hang a real door or
+   *  window in every opening the plan draws. Returns how many openings it
+   *  filled. One undo step. */
+  finishShell: () => number
   /** Run the General's electrical pass on a storey. Returns how many devices
    *  it placed, so the caller can say so. One undo step. */
   autoPlaceElectrical: (level?: number) => number
@@ -1848,6 +1852,93 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         s.explodeAmount = Math.max(0, Math.min(1, amount))
       })
+    },
+
+    /**
+     * FINISH THE SHELL — the roof, and real doors and windows in the holes.
+     *
+     * `buildForMe` derives a roof and then deliberately throws it away
+     * (`s.roofAreas = userRoofs`), because tracing the roof is meant to be an
+     * act, not something that appears on its own. Right for a build. Wrong for
+     * anything meant to LOOK finished, which is why the showcase came out as
+     * walls under open sky.
+     *
+     * Openings have the same shape of problem from the other side: the plan's
+     * doors and windows are in `parsedOpenings`, so they punch holes in the
+     * framing — and nothing ever fills them. Holes, no doors. This places a
+     * real leaf and a real sash in each one.
+     *
+     * Separate from buildForMe on purpose. Building and finishing are different
+     * intentions, and rolling them together would take the roof decision away
+     * from the person tracing it.
+     */
+    finishShell: () => {
+      const s = get()
+      const walls = s.drawings.flatMap((d) => d.parsedWalls)
+      if (walls.length === 0) return 0
+
+      const levels = Math.max(1, s.model.floorLevels?.length ?? 1)
+      const shell = deriveBuildAreas(walls, {
+        levels,
+        makeId: (role, level) => `auto-${role}-${level}-${genId()}`,
+      })
+
+      // Every opening the plan draws, as an object that can be seen and moved.
+      // Anything already placed there is left alone so finishing twice does not
+      // hang a second door in the same hole.
+      const existing = new Set(
+        s.placedObjects
+          .filter((o) => o.type === 'door' || o.type === 'window')
+          .map((o) => `${Math.round(o.pxX ?? -1)}:${Math.round(o.pxY ?? -1)}`),
+      )
+
+      let added = 0
+      pushHistory()
+      set((st) => {
+        // Keep whatever the user traced; add the derived roof and ceiling that
+        // the build pass discards.
+        const userRoofs = st.roofAreas.filter((a) => !a.id.startsWith('auto-'))
+        st.roofAreas = [...userRoofs, ...shell.roofs]
+        // Add whatever the shell is MISSING, by role, rather than assuming the
+        // build pass left the slab behind. It only lays one if `buildAutoShell`
+        // is on, and a house that is supposed to look finished should not
+        // depend on a config toggle to have something to stand on — that is
+        // exactly how this one ended up as walls in mid-air.
+        const haveRole = (prefix: string) => st.floorsAreas.some((a) => a.id.startsWith(prefix))
+        const missing = shell.floors.filter((a) => {
+          const role = a.id.split('-').slice(0, 2).join('-')  // 'auto-slab', 'auto-deck', …
+          return !haveRole(role)
+        })
+        st.floorsAreas = [...st.floorsAreas, ...missing]
+
+        for (const d of st.drawings) {
+          for (const op of d.parsedOpenings) {
+            const key = `${Math.round(op.x)}:${Math.round(op.y)}`
+            if (existing.has(key)) continue
+            existing.add(key)
+            const item = getCatalogItem(op.type)
+            const widthM = (op.widthMm ?? 0) / 1000
+            st.placedObjects.push({
+              id: genId(),
+              type: op.type,
+              x: 0,
+              z: 0,
+              rotationY: op.orientation === 'vertical' ? Math.PI / 2 : 0,
+              // Fill the hole that was framed, rather than dropping a stock
+              // leaf into an opening cut for something else.
+              scaleX: widthM > 0 && item?.defaultW ? widthM / item.defaultW : 1,
+              scaleZ: 1,
+              scaleY: 1,
+              label: item?.label ?? op.type,
+              pxX: op.x,
+              pxY: op.y,
+              level: d.floorNumber ?? 0,
+            })
+            added++
+          }
+        }
+      })
+      return added
     },
 
     /**
