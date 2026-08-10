@@ -460,6 +460,10 @@ export default function WorkspaceLayout() {
   const showcaseCladding    = useUISettingsStore((s) => s.cladding)
   const hasHistory = useAppStore((s) => s.historyPast.length > 0)
   const selectionGranularity = useFloorplanLocalStore((s) => s.selectionGranularity)
+  const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+  const selectedMemberLabel = useFloorplanLocalStore((s) => s.selectedMemberLabel)
+  const isolatedMemberId = useFloorplanLocalStore((s) => s.isolatedMemberId)
+  const setIsolatedMember = useFloorplanLocalStore((s) => s.setIsolatedMember)
   const setSelectionGranularity = useFloorplanLocalStore((s) => s.setSelectionGranularity)
   const traceModeActive = useFloorplanLocalStore((s) => s.traceMode)
   const traceStartPt = useFloorplanLocalStore((s) => s.traceStart)
@@ -1082,6 +1086,24 @@ export default function WorkspaceLayout() {
             title="Tap picks the single stud, plate, joist or rafter under it"
             aria-pressed={selectionGranularity === 'member'}
           >Member</button>
+        </div>
+      )}
+
+      {/* A PICKED MEMBER, named, with the one verb that matters for it.
+          The generic edit rail below is built around assemblies — move, stretch,
+          rotate a wall — and none of that is what you want from a single stud.
+          What you want is to SEE it, so this offers exactly that and says which
+          stick you are holding. */}
+      {editMode && editSelected?.kind === 'member' && !traceMode && !calibrationMode && (
+        <div className={styles.memberRail}>
+          <span className={styles.editRailLabel}>{selectedMemberLabel ?? 'Member'}</span>
+          <button
+            className={`${styles.grainBtn} ${isolatedMemberId ? styles.grainBtnOn : ''}`}
+            onClick={() => setIsolatedMember(isolatedMemberId ? null : editSelected.id)}
+            aria-pressed={!!isolatedMemberId}
+          >
+            {isolatedMemberId ? 'Show all' : 'Isolate'}
+          </button>
         </div>
       )}
 

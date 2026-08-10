@@ -327,8 +327,20 @@ interface FloorplanLocalState {
   setSelectionGranularity: (g: SelectionGranularity) => void
   /** Pick one framing member (stud/plate/header/joist/rafter) by its id. */
   selectMember: (id: string, label: string) => void
+  /** Isolate a member (or null to bring the model back). */
+  setIsolatedMember: (id: string | null) => void
   /** Human label of the selected member, for the rail to name it. */
   selectedMemberLabel: string | null
+  /**
+   * ISOLATE — show this one member and nothing else.
+   *
+   * Explode alone cannot do this job. Push the model far enough apart to see a
+   * single stud clear of everything and the parts are off the screen; keep it
+   * close enough to stay in frame and the stud is still buried in the crowd.
+   * The two demands genuinely conflict, so seeing one component properly is not
+   * an explode setting — it is its own act: hide the crowd instead of moving it.
+   */
+  isolatedMemberId: string | null
   setEditHover: (h: EditTarget | null) => void
   setEditSelected: (h: EditTarget | null) => void
 }
@@ -391,6 +403,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   editMode: false,
   selectionGranularity: 'assembly',
   selectedMemberLabel: null,
+  isolatedMemberId: null,
   editHover: null,
   editSelected: null,
   activePanel: null,
@@ -568,6 +581,10 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
       }),
   setSelectionGranularity: (g) => set({
     selectionGranularity: g,
+    // Never strand the user in an isolated view they can no longer get out of:
+    // the button that restores the model lives on the member selection, and
+    // changing grain drops that selection.
+    isolatedMemberId: null,
     // Drop the current pick when the granularity changes. A wall selected as an
     // assembly is not the same thing as a stud selected as a member, and
     // carrying one over into the other mode leaves a selection whose verbs no
@@ -575,6 +592,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
     editHover: null,
     editSelected: null,
   }),
+  setIsolatedMember: (id) => set({ isolatedMemberId: id }),
   selectMember: (id, label) => {
     // Exclusive like every other pick: a member selection must clear the
     // assembly ones or two things end up highlighted with two different sets

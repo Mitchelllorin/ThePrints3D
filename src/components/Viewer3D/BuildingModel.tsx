@@ -818,6 +818,7 @@ export default function BuildingModel({ layers }: Props) {
   const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
   const selectMember = useFloorplanLocalStore((s) => s.selectMember)
+  const isolatedMemberId = useFloorplanLocalStore((s) => s.isolatedMemberId)
   const memberPicking = editMode && granularity === 'member'
 
   // Explode animation state that must persist across frames (not re-rendered).
@@ -1112,7 +1113,11 @@ export default function BuildingModel({ layers }: Props) {
           yaw: rot,
         }
       }
-      buildFramingGeometry(group, buildResult.components, framingLayer.opacity, align)
+      // Grain follows the SELECTION switch. Working on walls? The explode moves
+      // walls. Working on members? It fans the sticks out so you can get at one.
+      // One switch, one meaning, rather than a second control that can disagree
+      // with the first.
+      buildFramingGeometry(group, buildResult.components, framingLayer.opacity, align, granularity === 'assembly')
     }
 
     // Snapshot each mesh's assembled position + the model centre, so the explode
@@ -1138,7 +1143,48 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects, floorsAreas])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects, floorsAreas, granularity])
+
+  /**
+   * MEMBER ISOLATION — one stick, in the clear.
+   *
+   * Explode cannot do this job on its own: pushed far enough apart to see a
+   * single stud clear of everything, the model is off the screen; close enough
+   * to stay in frame, the stud is still in the crowd. So this hides the crowd
+   * rather than moving it — the chosen member stays exactly where it is, in the
+   * building, and everything else steps out of the way.
+   *
+   * Ghosted, not deleted: the rest of the model drops to a faint outline so the
+   * member is still read IN CONTEXT. A stud floating in a black void tells you
+   * nothing about where it sits.
+   */
+  useEffect(() => {
+    const group = groupRef.current
+    if (!group) return
+    group.traverse((node) => {
+      const mesh = node as THREE.Mesh
+      if (!mesh.isMesh || !mesh.material) return
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      const isTarget = mesh.userData.id === isolatedMemberId
+      for (const m of mats) {
+        const sm = m as THREE.MeshStandardMaterial
+        if (isolatedMemberId === null) {
+          if (sm.userData?.isoBase !== undefined) {
+            sm.opacity = sm.userData.isoBase as number
+            sm.transparent = sm.opacity < 1
+            delete sm.userData.isoBase
+            sm.needsUpdate = true
+          }
+          continue
+        }
+        if (sm.userData?.isoBase === undefined) sm.userData.isoBase = sm.opacity
+        sm.transparent = true
+        sm.opacity = isTarget ? 1 : 0.06
+        sm.depthWrite = isTarget
+        sm.needsUpdate = true
+      }
+    })
+  }, [isolatedMemberId, buildResult, granularity])
 
   // Apply floor isolation and ghost transparency whenever those states change.
   // Isolation hides all levels except the focused one. Ghost makes a level

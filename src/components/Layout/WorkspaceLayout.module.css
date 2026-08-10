@@ -665,6 +665,20 @@
   color: var(--bp-text-dim, #94a3b8);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
+/* The picked-member rail: what you are holding, and the verb for it. Sits just
+   under the grain switch on the right edge, same container-less language. */
+.memberRail {
+  position: absolute;
+  top: 66px;
+  right: 6px;
+  z-index: 56;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  pointer-events: auto;
+}
+
 .grainBtn {
   background: none;
   border: none;
