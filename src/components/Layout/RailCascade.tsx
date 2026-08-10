@@ -12,8 +12,26 @@
  */
 import { useState } from 'react'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import { useAppStore } from '../../store/useAppStore'
 import { trayItems } from '../../data/objectCatalog'
 import styles from './RailCascade.module.css'
+
+/** Wastebasket, drawn rather than typed — the rail's glyphs are thin monochrome
+ *  marks and an emoji bin would be the one colour blob among them. Takes
+ *  currentColor, so it dims and highlights with its neighbours. */
+function BinIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    >
+      <path d="M4 7h16" />
+      <path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7" />
+      <path d="M6.4 7l.9 12.1A1.9 1.9 0 0 0 9.2 21h5.6a1.9 1.9 0 0 0 1.9-1.9L17.6 7" />
+      <path d="M10.4 11v6M13.6 11v6" />
+    </svg>
+  )
+}
 
 type Section = 'build' | 'ask' | 'settings' | 'place'
 
@@ -33,6 +51,8 @@ export default function RailCascade() {
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const armPlaceExclusive = useFloorplanLocalStore((s) => s.armPlaceExclusive)
+  const clearWorkspace = useAppStore((s) => s.clearWorkspace)
+  const hasDrawings = useAppStore((s) => s.drawings.length > 0)
 
   // Place is a cascade column (not a store drawer), so its open state is local.
   const [placeOpen, setPlaceOpen] = useState(false)
@@ -96,6 +116,24 @@ export default function RailCascade() {
             <span className={styles.iconLabel}>{label}</span>
           </button>
         ))}
+
+        {/* CLEAR, at the bottom of the rail rather than up in the top icons.
+            It belongs with the things you reach for by name, and putting the
+            most destructive action furthest from Undo's neighbours means it is
+            never the button you hit by accident. Still one undo step, so there
+            is no confirm dialog standing in the workspace.
+            Dimmed to nothing when there is nothing to clear. */}
+        <button
+          className={styles.icon}
+          onClick={() => { if (hasDrawings) clearWorkspace() }}
+          title="Clear workspace"
+          aria-label="Clear workspace"
+          disabled={!hasDrawings}
+          style={hasDrawings ? undefined : { opacity: 0.28, cursor: 'default' }}
+        >
+          <span className={styles.glyph}><BinIcon /></span>
+          <span className={styles.iconLabel}>Clear</span>
+        </button>
       </nav>
 
       {placeOpen && (

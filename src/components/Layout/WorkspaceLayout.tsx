@@ -845,8 +845,6 @@ export default function WorkspaceLayout() {
       <TopIcons
         onUndo={smartUndo}
         canUndo={canUndo}
-        onClear={() => { useAppStore.getState().clearWorkspace(); closePanels() }}
-        canClear={hasDrawings}
       />
 
       {/* RIGHT drawer — Settings & view. Always mounted so its tab stays on the
