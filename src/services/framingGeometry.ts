@@ -490,8 +490,13 @@ export function openingPlies(headerSpanM: number): number {
 
 export function buildFloorJoists(opts: {
   lenX: number; lenZ: number; element: string; ocM: number; opacity?: number; holes?: FloorHole[]
+  /** Prefix for per-member ids, so a single joist can be picked and isolated
+   *  the same way a stud can. Without an id a member is just anonymous
+   *  geometry: you can see it and you cannot select it. */
+  idPrefix?: string
 }): THREE.Group {
-  const { lenX, lenZ, element, ocM, opacity = 1, holes = [] } = opts
+  const { lenX, lenZ, element, ocM, opacity = 1, holes = [], idPrefix = 'joist' } = opts
+  let memberNo = 0
   const g = new THREE.Group()
   if (lenX < 0.1 || lenZ < 0.1) return g
 
@@ -505,6 +510,8 @@ export function buildFloorJoists(opts: {
     slab.castShadow = true; slab.receiveShadow = true
     slab.userData.layer = 'floors'
     slab.userData.info = 'Concrete slab · 4"'
+    slab.userData.id = `${idPrefix}-slab`
+    slab.userData.label = 'Concrete slab'
     g.add(slab)
     return g
   }
@@ -523,6 +530,8 @@ export function buildFloorJoists(opts: {
     m.castShadow = true; m.receiveShadow = true
     m.userData.layer = 'floors'
     m.userData.info = info
+    m.userData.id = `${idPrefix}-${memberNo++}`
+    m.userData.label = info
     g.add(m)
   }
   // Joists span the shorter dimension; the row of them runs along the longer.
@@ -631,6 +640,8 @@ export function buildFloorJoists(opts: {
   const half = spanLen / 2
   const addHanger = (w: number, h: number, d: number, x: number, y: number, z: number) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hangerMat)
+    m.userData.id = `${idPrefix}-hanger-${memberNo++}`
+    m.userData.label = 'Joist hanger'
     m.position.set(x, y, z)
     m.castShadow = true
     m.userData.layer = 'floors'

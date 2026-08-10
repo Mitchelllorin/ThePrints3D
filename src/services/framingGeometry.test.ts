@@ -737,3 +737,33 @@ describe('housewrap gets taped', () => {
     expect(withInfo(g, /tape/i).length).toBe(0)
   })
 })
+
+describe('members are individually addressable', () => {
+  // Without an id a joist is anonymous geometry: you can see it and you can
+  // never select it. Studs already carry ids from the framing engine; the
+  // deck's members had none, which is why "select a member" worked on walls
+  // and nowhere else.
+  it('gives every joist its own id and label', () => {
+    const g = buildFloorJoists({ lenX: 6, lenZ: 4, element: '2x10', ocM: 0.4064 })
+    const ids = g.children.map((c) => c.userData.id).filter(Boolean)
+    expect(ids.length).toBeGreaterThan(3)
+    expect(new Set(ids).size).toBe(ids.length)      // unique
+    expect(g.children.every((c) => !c.userData.id || c.userData.label)).toBe(true)
+  })
+
+  it('keeps ids distinct between two decks', () => {
+    // Two floors in one scene must not hand out the same id, or isolating a
+    // joist on one storey would light up its twin on the other.
+    const a = buildFloorJoists({ lenX: 6, lenZ: 4, element: '2x10', ocM: 0.4064, idPrefix: 'deck0' })
+    const b = buildFloorJoists({ lenX: 6, lenZ: 4, element: '2x10', ocM: 0.4064, idPrefix: 'deck1' })
+    const idsA = new Set(a.children.map((c) => c.userData.id))
+    const overlap = b.children.filter((c) => idsA.has(c.userData.id))
+    expect(overlap).toHaveLength(0)
+  })
+
+  it('names the slab too', () => {
+    const g = buildFloorJoists({ lenX: 6, lenZ: 4, element: 'Concrete Slab', ocM: 0.4 })
+    const slab = g.children.find((c) => /slab/i.test(String(c.userData.id ?? '')))
+    expect(slab).toBeTruthy()
+  })
+})
