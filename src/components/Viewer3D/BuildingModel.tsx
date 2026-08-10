@@ -694,12 +694,47 @@ interface FramingAlign {
   yaw: number                // overlay rotation added to each component
 }
 
+/**
+ * @param byWall When true, every member is parented into a per-wall group so
+ *   the explode moves each WALL as one panel. When false they are added flat and
+ *   the explode fans out stick by stick. See `explodeGrain`.
+ */
 function buildFramingGeometry(
   group: THREE.Group,
   components: PlacedComponent[],
   opacity: number,
   align?: FramingAlign,
+  byWall = true,
 ) {
+  /**
+   * WHOLE WALLS OR LOOSE STICKS.
+   *
+   * The explode walks the top group's direct children and pushes each one out
+   * from the centre. Every framing member was a direct child, so a wall did not
+   * fly apart — it disintegrated, hundreds of sticks at once, which is
+   * spectacular and useless for seeing how a building goes together.
+   *
+   * Members carry `wallIndex`, so grouping by it is enough: one child per wall,
+   * and the explode moves the panel intact with its studs, plates and headers
+   * riding along inside. Flip to member grain and they go back to being loose,
+   * which is what you want when the stick IS the thing you are looking at.
+   */
+  const wallGroups = new Map<number, THREE.Group>()
+  const parentFor = (comp: PlacedComponent): THREE.Group => {
+    if (!byWall) return group
+    const idx = (comp as { wallIndex?: number }).wallIndex
+    if (idx == null) return group
+    let g = wallGroups.get(idx)
+    if (!g) {
+      g = new THREE.Group()
+      g.name = `wall-framing-${idx}`
+      g.userData.layer = 'framing'
+      g.userData.wallIndex = idx
+      group.add(g)
+      wallGroups.set(idx, g)
+    }
+    return g
+  }
   // Shared steel material — silvery, metallic — reused across all C-channels.
   const steelMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#9aa6b2'),
@@ -748,7 +783,7 @@ function buildFramingGeometry(
     obj.userData.id = comp.id
     obj.userData.componentType = comp.componentType
     obj.userData.label = comp.label
-    group.add(obj)
+    parentFor(comp).add(obj)
   }
 }
 

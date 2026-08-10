@@ -412,6 +412,9 @@ interface AppState {
   /** Tag a drawing as belonging to a storey (0 = ground), so the overlay can
    *  show the right plan per floor and the AI knows which floors have a plan. */
   assignDrawingToLevel: (id: string, floorNumber: number) => void
+  /** Put the whole workspace down — drawings, build, objects, areas, runs.
+   *  One undo step; drawings stay in the pool so it is fully reversible. */
+  clearWorkspace: () => void
   removeDrawing: (id: string) => void
   updateDrawing: (id: string, patch: Partial<Drawing>) => void
   setDrawingType: (id: string, type: DrawingType) => void
@@ -870,6 +873,40 @@ export const useAppStore = create<AppState>()(
         const d = s.drawings.find((dr) => dr.id === id)
         if (d) d.floorNumber = floorNumber
       }),
+
+    /**
+     * BACK TO AN EMPTY GRID.
+     *
+     * There was no way to put the workspace down. Removing drawings one at a
+     * time leaves the build, the placed objects, the slab, the roof and every
+     * traced run behind, so the only real reset was reloading the page — which
+     * is a fine trick for whoever wrote the app and invisible to everyone else.
+     *
+     * ONE undo step, and the drawings stay in the pool, so a clear you did not
+     * mean is a single tap back. That is what makes it safe to put a button on;
+     * an irreversible clear would need a confirm dialog, and a confirm dialog is
+     * a modal in the middle of the workspace.
+     */
+    clearWorkspace: () => {
+      pushHistory()
+      set((s) => {
+        for (const d of s.drawings) drawingPool.set(d.id, current(d) as Drawing)
+        s.drawings = []
+        s.selectedDrawingId = null
+        s.floorplanOverlay = { ...deepCopy(DEFAULT_FLOORPLAN_OVERLAY) }
+        s.placedObjects = []
+        s.floorsAreas = []
+        s.roofAreas = []
+        s.plumbingLines = []
+        s.electricalLines = []
+        s.hvacLines = []
+        s.circuits = []
+        s.buildResult = null
+        s.constructionDecisions = []
+        s.model = deepCopy(DEFAULT_MODEL)
+        s.explodeAmount = 0
+      })
+    },
 
     removeDrawing: (id) => {
       pushHistory()
