@@ -112,9 +112,11 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
   const holeKey = JSON.stringify(holes ?? [])
   const joists = useMemo(
-    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes }),
+    // Namespaced by the AREA id: two decks in one scene must not hand out the
+    // same member id, or isolating a joist downstairs lights up its twin above.
+    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes, idPrefix: area.id }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lenX, lenZ, area.elementType, area.size, holeKey],
+    [lenX, lenZ, area.elementType, area.size, holeKey, area.id],
   )
   const ref = useRef<THREE.Group>(null)
   // Deck top sits at this storey's elevation; the structure hangs below it.
@@ -203,6 +205,8 @@ export default function FloorJoistsLayer() {
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
+  const selectMember = useFloorplanLocalStore((s) => s.selectMember)
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
@@ -336,6 +340,24 @@ export default function FloorJoistsLayer() {
   // and it changes no geometry.
   const handlersFor = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => (traceMode || overlay.calibrationMode)
     ? {}
+    : editMode && granularity === 'member'
+    ? {
+        // Member grain: the tap picks the actual JOIST it landed on, not the
+        // whole deck. Same rule as walls — one switch, one meaning.
+        onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+          const ud = e.object.userData as { id?: string; label?: string }
+          if (!ud.id) return
+          e.stopPropagation()
+          selectMember(ud.id, ud.label ?? 'Joist')
+        },
+        onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+          const id = (e.object.userData as { id?: string }).id
+          if (!id) return
+          e.stopPropagation()
+          setEditHover({ kind: 'member', id })
+        },
+        onPointerOut: () => setEditHover(null),
+      }
     : editMode
     ? {
         onPointerDown: onAreaDown(area),
