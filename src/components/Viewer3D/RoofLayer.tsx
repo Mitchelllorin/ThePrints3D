@@ -107,8 +107,21 @@ function RoofAreaMesh({
         })
       : buildRoofByType(area.elementType, { lenX, lenZ, pitch: ridge.pitch, ocM: RAFTER_OC_M, overhangM })
     r.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
+    // IDENTITY, STAMPED AFTER THE FACT. A rafter with no id is anonymous
+    // geometry — visible, unselectable. There are four roof builders, each with
+    // its own little add-helper, so stamping them individually means one gets
+    // missed the next time somebody adds a fifth. Walking the finished group
+    // cannot miss anything, and the label each mesh already carries ("Rafter ·
+    // 6:12", "Hip rafter") is exactly the name to show.
+    let n = 0
+    r.traverse((node) => {
+      const mesh = node as THREE.Mesh
+      if (!mesh.isMesh || mesh.userData.id) return
+      mesh.userData.id = `${area.id}-r${n++}`
+      mesh.userData.label = mesh.userData.info ?? 'Roof member'
+    })
     return r
-  }, [lenX, lenZ, shaped, ridge.pitch, ridge.crossFrac, ridge.insetA, ridge.insetB, area.elementType, area.level, overhangM])
+  }, [lenX, lenZ, shaped, ridge.pitch, ridge.crossFrac, ridge.insetA, ridge.insetB, area.elementType, area.level, overhangM, area.id])
 
   // X-ray. A roof is the single most in-the-way thing in the model — it covers
   // everything you built underneath — so seeing through it has to be one tap.
@@ -304,6 +317,8 @@ export default function RoofLayer() {
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
+  const selectMember = useFloorplanLocalStore((s) => s.selectMember)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'roof')
@@ -367,10 +382,31 @@ export default function RoofLayer() {
     setGestureLock(false)
   }
 
-  const hoverHandlers = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => (editMode ? {
-    onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'roof', id: area.id }) },
-    onPointerOut: () => setEditHover(null),
-  } : {})
+  const hoverHandlers = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => {
+    if (!editMode) return {}
+    // Member grain picks the RAFTER you touched; whole grain picks the roof.
+    if (granularity === 'member') {
+      return {
+        onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+          const ud = e.object.userData as { id?: string; label?: string }
+          if (!ud.id) return
+          e.stopPropagation()
+          selectMember(ud.id, ud.label ?? 'Roof member')
+        },
+        onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+          const id = (e.object.userData as { id?: string }).id
+          if (!id) return
+          e.stopPropagation()
+          setEditHover({ kind: 'member', id })
+        },
+        onPointerOut: () => setEditHover(null),
+      }
+    }
+    return {
+      onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'roof', id: area.id }) },
+      onPointerOut: () => setEditHover(null),
+    }
+  }
 
   if (!visibleLayers.has('roof') || roofAreas.length === 0) return null
 
