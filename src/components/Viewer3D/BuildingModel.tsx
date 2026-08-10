@@ -1038,7 +1038,15 @@ export default function BuildingModel({ layers }: Props) {
           // are cut directly into the wall meshes (see buildRealWalls).
           case 'ceiling': {
             const ceilLayer = layerMap.get('ceiling')
-            const hasRCP = floorDrawings.some((d) => d.type === 'rcp') || sceneConfig.specialFeatures.length > 0
+            // AN RCP DRAWING, and nothing else. This used to also fire on
+            // `specialFeatures.length > 0` — and special features are things
+            // like a fire separation, a stair opening or a basement, which have
+            // nothing whatever to do with a reflected ceiling plan. The preset's
+            // own wizard text mentions all three, so every build got a
+            // full-footprint slab hanging at the top of the storey: the giant
+            // sheet over the model that survived two other fixes because I kept
+            // looking at the layers that were SUPPOSED to draw ceilings.
+            const hasRCP = floorDrawings.some((d) => d.type === 'rcp')
             if (ceilLayer?.visible && hasRCP) {
               buildCeiling(group, fp, elev, fh, ceilLayer.color, ceilLayer.opacity)
             }

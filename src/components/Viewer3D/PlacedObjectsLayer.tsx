@@ -98,6 +98,19 @@ export default function PlacedObjectsLayer() {
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  /**
+   * Plan symbols follow the PLAN.
+   *
+   * Jamb marks, swing arcs and window bars are drawn flat on the floor so an
+   * opening reads from straight overhead — which is exactly right while you are
+   * working over the print, and litter once a building is standing: a scatter of
+   * little blue and amber marks around the base of every door and window,
+   * visible from every angle except the one they were drawn for.
+   *
+   * They are annotations for the drawing, so they live and die with it. Turning
+   * the print off in the layer list takes them with it.
+   */
+  const planSymbolsOn = useAppStore((s) => s.floorplanOverlay.visible)
 
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
   // Same storey-to-storey rise the walls/decks use, so an object placed on an
@@ -306,7 +319,7 @@ export default function PlacedObjectsLayer() {
                 its quarter-circle arc, drawn FLAT on the floor so the door reads
                 from straight overhead (the vertical panel above is edge-on and
                 invisible top-down). Bold + opaque so it never looks "missing". */}
-            {isOverheadDoor && (() => {
+            {planSymbolsOn && isOverheadDoor && (() => {
               // Plan symbol for an overhead: the door across the opening, and
               // the two tracks running back INTO the garage — which is where it
               // actually goes. No arc, because nothing swings.
@@ -328,7 +341,7 @@ export default function PlacedObjectsLayer() {
               )
             })()}
 
-            {obj.type === 'door' && !isOverheadDoor && (() => {
+            {planSymbolsOn && obj.type === 'door' && !isOverheadDoor && (() => {
               const swing = obj.swing ?? 'left'
               const hinge = swing === 'left' ? -w / 2 : w / 2
               const sign = swing === 'left' ? 1 : -1
@@ -355,7 +368,7 @@ export default function PlacedObjectsLayer() {
             {/* Window plan symbol — a double bar across the opening between two
                 jambs, flat on the floor so a window reads top-down just like a
                 door (it has no swing to draw). */}
-            {obj.type === 'window' && (() => {
+            {planSymbolsOn && obj.type === 'window' && (() => {
               const y = 0.07
               const barA: [number, number, number][] = [[-w / 2, y, -0.05], [w / 2, y, -0.05]]
               const barB: [number, number, number][] = [[-w / 2, y, 0.05], [w / 2, y, 0.05]]
