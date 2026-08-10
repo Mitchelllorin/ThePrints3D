@@ -319,6 +319,38 @@ export default function PlacedObjectsLayer() {
                 its quarter-circle arc, drawn FLAT on the floor so the door reads
                 from straight overhead (the vertical panel above is edge-on and
                 invisible top-down). Bold + opaque so it never looks "missing". */}
+            {/* THE TRACKS, as real hardware rather than a plan annotation — so
+                they show whether or not the print is up. A sectional door does
+                not lift straight and it does not swing: it runs up the jamb,
+                round a radius bend at the head, and then back HORIZONTALLY
+                along the garage ceiling, which is where the door ends up
+                parked. Drawing the bend is what makes the mechanism legible;
+                two straight rails would just look like posts. */}
+            {isOverheadDoor && (() => {
+              const railX = w / 2 - 0.07
+              const R = 0.34                       // radius of the bend at the head
+              const back = Math.max(h * 0.95, 2.0) // horizontal run, about the door's own height
+              const pts: [number, number, number][] = []
+              // Up the jamb.
+              pts.push([0, 0.02, 0], [0, h - R, 0])
+              // Quarter turn from vertical to horizontal, centred at (h-R, R).
+              const N = 10
+              for (let i = 1; i <= N; i++) {
+                const t = (i / N) * (Math.PI / 2)
+                pts.push([0, h - R + R * Math.sin(t), R - R * Math.cos(t)])
+              }
+              // Back along the ceiling.
+              pts.push([0, h, back])
+              const shift = (xs: number): [number, number, number][] =>
+                pts.map(([, y, z]) => [xs, y, z] as [number, number, number])
+              return (
+                <>
+                  <Line points={shift(-railX)} color="#94a3b8" lineWidth={2.5} />
+                  <Line points={shift(railX)} color="#94a3b8" lineWidth={2.5} />
+                </>
+              )
+            })()}
+
             {planSymbolsOn && isOverheadDoor && (() => {
               // Plan symbol for an overhead: the door across the opening, and
               // the two tracks running back INTO the garage — which is where it
