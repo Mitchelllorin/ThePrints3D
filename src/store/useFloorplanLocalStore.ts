@@ -24,7 +24,30 @@ type TraceStyle = 'line' | 'freehand'
 type DragKind = 'move' | 'corner' | 'edge' | 'rotate' | 'wall' | 'wall-end'
 
 /** What kind of model element an edit-mode hover/select points at. */
-export type EditKind = 'floor' | 'roof' | 'wall' | 'object' | 'line'
+export type EditKind = 'floor' | 'roof' | 'wall' | 'object' | 'line' | 'member'
+
+/**
+ * HOW BIG A THING A TAP PICKS.
+ *
+ * Everything used to select as an ASSEMBLY: you tapped a stud and got the whole
+ * wall. That is right most of the time — you usually mean "this wall" — and
+ * useless the rest of it, because a wall is made of sticks and sometimes the
+ * stick is the thing you care about.
+ *
+ * So it is a stated mode rather than a guess. Guessing from tap duration or
+ * zoom level makes an already-sensitive editor unpredictable; a switch you can
+ * see means you always know what the next tap will do.
+ *
+ * It is deliberately ONE setting for the whole model rather than per-layer,
+ * because the distinction is identical everywhere: wall/stud, deck/joist,
+ * roof/rafter. Every one of those members already renders as its own mesh
+ * carrying its own id and label, so 'member' costs nothing extra to support.
+ */
+export type SelectionGranularity =
+  /** The wall, the deck, the roof plane — the thing as a whole. */
+  | 'assembly'
+  /** The individual stud, plate, header, joist or rafter that was tapped. */
+  | 'member'
 
 /**
  * Default stud size for a wall's structural ROLE.
@@ -196,6 +219,8 @@ interface FloorplanLocalState {
    *  trim (or on Escape) so a stray tap can never eat a wall. */
   wallTrimArmed: boolean
   editMode: boolean
+  /** Whether a tap picks a whole assembly or the single member under it. */
+  selectionGranularity: SelectionGranularity
   /** Element currently hovered while in edit mode (drives the hover highlight). */
   editHover: EditTarget | null
   /** Element selected in edit mode (persistent highlight + modify chip). Kept
@@ -299,6 +324,11 @@ interface FloorplanLocalState {
   setGestureLock: (v: boolean) => void
   setWallTrimArmed: (v: boolean) => void
   setEditMode: (v: boolean) => void
+  setSelectionGranularity: (g: SelectionGranularity) => void
+  /** Pick one framing member (stud/plate/header/joist/rafter) by its id. */
+  selectMember: (id: string, label: string) => void
+  /** Human label of the selected member, for the rail to name it. */
+  selectedMemberLabel: string | null
   setEditHover: (h: EditTarget | null) => void
   setEditSelected: (h: EditTarget | null) => void
 }
@@ -359,6 +389,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   gestureLock: false,
   wallTrimArmed: false,
   editMode: false,
+  selectionGranularity: 'assembly',
+  selectedMemberLabel: null,
   editHover: null,
   editSelected: null,
   activePanel: null,
@@ -534,6 +566,22 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
         editMode: false, editHover: null, editSelected: null, activePanel: null,
         selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null,
       }),
+  setSelectionGranularity: (g) => set({
+    selectionGranularity: g,
+    // Drop the current pick when the granularity changes. A wall selected as an
+    // assembly is not the same thing as a stud selected as a member, and
+    // carrying one over into the other mode leaves a selection whose verbs no
+    // longer match what is highlighted.
+    editHover: null,
+    editSelected: null,
+  }),
+  selectMember: (id, label) => {
+    // Exclusive like every other pick: a member selection must clear the
+    // assembly ones or two things end up highlighted with two different sets
+    // of verbs offered for them.
+    get().closeAllPanels()
+    set({ editSelected: { kind: 'member', id }, selectedMemberLabel: label })
+  },
   setEditHover: (h) => set({ editHover: h }),
   // Routed through the exclusive setters so the canonical fields and
   // editSelected can never disagree. Callers in the layers still just say

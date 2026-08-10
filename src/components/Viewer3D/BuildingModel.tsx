@@ -774,6 +774,16 @@ export default function BuildingModel({ layers }: Props) {
   const explodeMults = useConfigStore((s) => s.explodeSystemMultipliers)
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
+  // MEMBER PICKING. Every framing stick is already its own mesh carrying its id
+  // and label; what was missing was anyone listening. These handlers sit on the
+  // whole framing group rather than on each stick — there are thousands of
+  // sticks, and r3f events bubble, so one listener reads `e.object` and gets the
+  // exact member that was hit.
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
+  const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  const selectMember = useFloorplanLocalStore((s) => s.selectMember)
+  const memberPicking = editMode && granularity === 'member'
 
   // Explode animation state that must persist across frames (not re-rendered).
   const explodeCurrentRef = useRef(0)
@@ -1167,5 +1177,22 @@ export default function BuildingModel({ layers }: Props) {
     }
   })
 
-  return <group ref={groupRef} />
+  return (
+    <group
+      ref={groupRef}
+      onPointerOver={memberPicking ? (e) => {
+        const id = e.object.userData.id as string | undefined
+        if (!id) return
+        e.stopPropagation()
+        setEditHover({ kind: 'member', id })
+      } : undefined}
+      onPointerOut={memberPicking ? () => setEditHover(null) : undefined}
+      onPointerDown={memberPicking ? (e) => {
+        const ud = e.object.userData as { id?: string; label?: string; componentType?: string }
+        if (!ud.id) return
+        e.stopPropagation()
+        selectMember(ud.id, ud.label ?? ud.componentType ?? 'Member')
+      } : undefined}
+    />
+  )
 }

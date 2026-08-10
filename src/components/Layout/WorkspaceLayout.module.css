@@ -642,6 +642,45 @@
   border: none;
   pointer-events: auto;
 }
+/* "Select: Whole | Member" — the granularity switch, right edge above the edit
+   rail. Same container-less language as everything else: tiny caption, two word
+   buttons, accent COLOUR on the active one rather than a filled pill. It is a
+   statement of what the next tap does, so it is always legible and never a
+   surface sitting on the model. */
+.grainSwitch {
+  position: absolute;
+  top: 40px;
+  right: 6px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  pointer-events: auto;
+}
+.grainCaption {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--bp-text-dim, #94a3b8);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+}
+.grainBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--bp-text-dim, #94a3b8);
+  opacity: 0.8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  transition: color 0.12s, opacity 0.12s;
+}
+.grainBtn:hover { opacity: 1; color: var(--bp-text, #f1f5f9); }
+.grainBtnOn { color: var(--bp-accent, #38bdf8); opacity: 1; }
+
 /* Edit rail — VERTICAL, right edge, mirroring the Build/Ask/Settings/Place rail
    on the left so both sides read as one system. Container-less: glyphs and tiny
    uppercase captions floating on the workspace, no panel, no box. It sits in the

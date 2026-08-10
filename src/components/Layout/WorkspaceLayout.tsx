@@ -459,6 +459,8 @@ export default function WorkspaceLayout() {
   const setUI               = useUISettingsStore((s) => s.set)
   const showcaseCladding    = useUISettingsStore((s) => s.cladding)
   const hasHistory = useAppStore((s) => s.historyPast.length > 0)
+  const selectionGranularity = useFloorplanLocalStore((s) => s.selectionGranularity)
+  const setSelectionGranularity = useFloorplanLocalStore((s) => s.setSelectionGranularity)
   const traceModeActive = useFloorplanLocalStore((s) => s.traceMode)
   const traceStartPt = useFloorplanLocalStore((s) => s.traceStart)
   const pendingTrace = useFloorplanLocalStore((s) => s.pendingWalls)
@@ -1049,6 +1051,32 @@ export default function WorkspaceLayout() {
 
           Lives in the chrome on the right edge, mirroring the left rail, so it
           never sits on top of the thing you are editing. */}
+      {/* WHAT THE NEXT TAP WILL PICK.
+          Shown whenever edit mode is on, with or without a selection — the
+          whole value of a stated mode is knowing BEFORE you tap. Tapping a stud
+          and getting the whole wall is right most of the time and useless the
+          rest of it, and guessing from tap-length or zoom would make an already
+          sensitive editor unpredictable.
+          One switch for the entire model, because the distinction is the same
+          everywhere: wall/stud, deck/joist, roof/rafter. */}
+      {editMode && !traceMode && !calibrationMode && (
+        <div className={styles.grainSwitch}>
+          <span className={styles.grainCaption}>Select</span>
+          <button
+            className={`${styles.grainBtn} ${selectionGranularity === 'assembly' ? styles.grainBtnOn : ''}`}
+            onClick={() => setSelectionGranularity('assembly')}
+            title="Tap picks the whole wall, deck or roof"
+            aria-pressed={selectionGranularity === 'assembly'}
+          >Whole</button>
+          <button
+            className={`${styles.grainBtn} ${selectionGranularity === 'member' ? styles.grainBtnOn : ''}`}
+            onClick={() => setSelectionGranularity('member')}
+            title="Tap picks the single stud, plate, joist or rafter under it"
+            aria-pressed={selectionGranularity === 'member'}
+          >Member</button>
+        </div>
+      )}
+
       {editMode && selectionEdit && !traceMode && !calibrationMode && (
         <div className={styles.editRail}>
           <span className={styles.editRailLabel}>{selectionEdit.label}</span>
