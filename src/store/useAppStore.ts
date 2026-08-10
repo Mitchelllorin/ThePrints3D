@@ -1892,6 +1892,26 @@ export const useAppStore = create<AppState>()(
           .map((o) => `${Math.round(o.pxX ?? -1)}:${Math.round(o.pxY ?? -1)}`),
       )
 
+      // The same pixel→world mapping every layer uses. Without it the openings
+      // were pushed with x:0,z:0 — fifteen doors and windows stacked on the
+      // world origin instead of sitting in the holes they belong to.
+      const overlay = s.floorplanOverlay
+      const ref = s.drawings.find((d) => d.id === overlay.drawingId) ?? s.drawings[0]
+      const imageWidth = ref?.rasterWidth ?? 1400
+      const imageHeight = ref?.rasterHeight ?? 900
+      const [overlayW, overlayD] = overlay.scale
+      const rot = (overlay.rotationDeg * Math.PI) / 180
+      const cos = Math.cos(rot)
+      const sin = Math.sin(rot)
+      const toWorld = (px: number, py: number) => {
+        const lx = (px / imageWidth - 0.5) * overlayW
+        const lz = (py / imageHeight - 0.5) * overlayD
+        return {
+          x: overlay.position[0] + (lx * cos + lz * sin),
+          z: overlay.position[1] + (-lx * sin + lz * cos),
+        }
+      }
+
       let added = 0
       pushHistory()
       set((st) => {
@@ -1904,8 +1924,13 @@ export const useAppStore = create<AppState>()(
         // is on, and a house that is supposed to look finished should not
         // depend on a config toggle to have something to stand on — that is
         // exactly how this one ended up as walls in mid-air.
+        //
+        // NOT ceilings. buildForMe drops auto-ceilings deliberately and adding
+        // them back put a flat sheet through the gable — a lone plane hanging
+        // in the roof, which is exactly the thing that decision was avoiding.
         const haveRole = (prefix: string) => st.floorsAreas.some((a) => a.id.startsWith(prefix))
         const missing = shell.floors.filter((a) => {
+          if (a.id.startsWith('auto-ceiling')) return false
           const role = a.id.split('-').slice(0, 2).join('-')  // 'auto-slab', 'auto-deck', …
           return !haveRole(role)
         })
@@ -1918,11 +1943,12 @@ export const useAppStore = create<AppState>()(
             existing.add(key)
             const item = getCatalogItem(op.type)
             const widthM = (op.widthMm ?? 0) / 1000
+            const { x, z } = toWorld(op.x, op.y)
             st.placedObjects.push({
               id: genId(),
               type: op.type,
-              x: 0,
-              z: 0,
+              x,
+              z,
               rotationY: op.orientation === 'vertical' ? Math.PI / 2 : 0,
               // Fill the hole that was framed, rather than dropping a stock
               // leaf into an opening cut for something else.

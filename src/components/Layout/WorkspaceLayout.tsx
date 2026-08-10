@@ -708,10 +708,18 @@ export default function WorkspaceLayout() {
       // Openings do not carry either, so the upper floor came out a windowless
       // box. A correct one-storey house beats a broken two-storey one; proper
       // multi-storey wants the storey list fixed first, which is its own job.
+      // ORDER MATTERS, and getting it wrong is what put studs through the
+      // doorways. The framing engine reads its openings from PLACED OBJECTS —
+      // that is how it knows to skip studs and add king/jack/header. Build
+      // first and it frames a wall with no openings in it, and the doors that
+      // arrive afterwards are just holes with sticks across them.
+      //
+      // So: hang the doors and windows FIRST, then frame around them. Then run
+      // it once more for the roof, because buildForMe derives one and throws it
+      // away (tracing a roof is meant to be an act). The second pass cannot
+      // duplicate anything — openings dedupe on position.
+      useAppStore.getState().finishShell()
       useAppStore.getState().buildForMe()
-      // A house is not finished with the sky showing and holes where the doors
-      // go. buildForMe derives a roof and discards it (tracing one is meant to
-      // be an act), and the plan's openings punch holes that nothing fills.
       useAppStore.getState().finishShell()
       closePanels()
     } catch (error) {
@@ -899,7 +907,7 @@ export default function WorkspaceLayout() {
               you a job; this hands you the result, to turn over and pull
               apart before deciding whether the work is worth it. */}
           <button className={styles.showcaseChip} onClick={loadShowcaseModel}>
-            See a finished house
+            Practice model
           </button>
           <PresetPanel onLoad={handleLoadPreset} />
         </div>
