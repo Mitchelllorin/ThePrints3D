@@ -460,7 +460,6 @@ export default function WorkspaceLayout() {
   const showcaseCladding    = useUISettingsStore((s) => s.cladding)
   const hasHistory = useAppStore((s) => s.historyPast.length > 0)
   const selectionGranularity = useFloorplanLocalStore((s) => s.selectionGranularity)
-  const editSelected = useFloorplanLocalStore((s) => s.editSelected)
   const selectedMemberLabel = useFloorplanLocalStore((s) => s.selectedMemberLabel)
   const isolatedMemberId = useFloorplanLocalStore((s) => s.isolatedMemberId)
   const setIsolatedMember = useFloorplanLocalStore((s) => s.setIsolatedMember)
