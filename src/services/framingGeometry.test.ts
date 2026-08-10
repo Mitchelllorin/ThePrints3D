@@ -706,3 +706,34 @@ describe('masonry veneer stands on something', () => {
     expect(withInfo(out, /Brick ledge/)[0].position.z).toBeLessThan(0)
   })
 })
+
+describe('housewrap gets taped', () => {
+  const base = {
+    length: 6, height: 2.7, thickness: 0.14, outward: 1 as const,
+    sheathing: sheathingLayer('osb'),
+  }
+
+  it('tapes the course laps and every opening', () => {
+    // A wrap is not weathertight because it is stapled up — it is weathertight
+    // because the seams and penetrations are taped. If the model does not draw
+    // it, the model is showing a wall that would fail an inspection.
+    const g = buildWallEnvelope({
+      ...base,
+      wrb: wrbLayer('housewrap'),
+      openings: [{ centerM: 3, widthM: 1.2, type: 'window' }],
+    })
+    const tape = withInfo(g, /tape/i)
+    expect(tape.length).toBeGreaterThan(4)   // laps + head/sill/two jambs
+  })
+
+  it('does NOT tape a barrier that has no seams', () => {
+    // Fluid-applied is monolithic; taping it would be showing work nobody does.
+    const g = buildWallEnvelope({ ...base, wrb: wrbLayer('fluid') })
+    expect(withInfo(g, /tape/i).length).toBe(0)
+  })
+
+  it('does not tape when there is no barrier at all', () => {
+    const g = buildWallEnvelope({ ...base, wrb: null })
+    expect(withInfo(g, /tape/i).length).toBe(0)
+  })
+})

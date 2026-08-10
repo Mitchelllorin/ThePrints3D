@@ -1882,6 +1882,7 @@ export function buildWallEnvelope(opts: WallEnvelopeOpts): THREE.Group {
     // Split the wall into horizontal courses and drop the pieces that fall in an
     // opening — a cheap way to get "wrapped, with the windows cut out".
     const COURSE = 1.5   // ~5' roll width
+    const courseTops: number[] = []
     for (let y = 0; y < height - 0.01; y += COURSE) {
       const h = Math.min(COURSE, height - y)
       const spans: Array<[number, number]> = [[-half, half]]
@@ -1900,6 +1901,62 @@ export function buildWallEnvelope(opts: WallEnvelopeOpts): THREE.Group {
         m.userData.layer = 'sheathing'
         m.userData.info = info
         group.add(m)
+      }
+      courseTops.push(y + h)
+    }
+
+    /**
+     * TAPE. A housewrap is not weathertight because it is stapled up — it is
+     * weathertight because every seam and every penetration is taped. Untaped,
+     * water tracks straight in behind it at the first horizontal lap, which is
+     * why an inspector looks at the tape and not at the wrap.
+     *
+     * So the model draws it: a strip along each course lap, and a frame around
+     * every opening. Only for a housewrap — a fluid-applied barrier is
+     * monolithic and has no seams to tape, and an integrated sheathing carries
+     * its own, so taping those would be showing work nobody does.
+     */
+    if (/housewrap|tyvek/i.test(wrb.label)) {
+      const TAPE_W = 0.075                       // 3" sheathing tape
+      const tapeT = wrb.thicknessM * 1.4
+      const tapeZ = outward * (depth / 2 + sheathing.thicknessM + wrb.thicknessM + tapeT / 2)
+      const tapeMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#c0392b'),        // red sheathing tape
+        roughness: 0.55,
+        transparent: opacity < 1, opacity,
+      })
+      const tape = (w: number, hh: number, x: number, y: number) => {
+        if (w < 0.02 || hh < 0.005) return
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, hh, tapeT), tapeMat)
+        m.position.set(x, y, tapeZ)
+        m.userData.layer = 'sheathing'
+        m.userData.info = 'Sheathing tape — seams + penetrations'
+        group.add(m)
+      }
+
+      // Every horizontal lap between courses (not the very top edge).
+      for (const ct of courseTops) {
+        if (ct >= height - 0.01) continue
+        tape(length, TAPE_W, 0, ct)
+      }
+
+      // A frame round each opening — the penetrations, which is where it
+      // matters most.
+      for (const r of rects) {
+        const w = r.x1 - r.x0
+        const hh = r.y1 - r.y0
+        const cx = (r.x0 + r.x1) / 2
+        tape(w + TAPE_W * 2, TAPE_W, cx, r.y1)                       // head
+        if (r.y0 > 0.02) tape(w + TAPE_W * 2, TAPE_W, cx, r.y0)      // sill
+        const jamb = (x: number) => {
+          const m = new THREE.Mesh(new THREE.BoxGeometry(TAPE_W, hh, tapeT), tapeMat)
+          m.position.set(x, (r.y0 + r.y1) / 2, tapeZ)
+          m.userData.layer = 'sheathing'
+          m.userData.info = 'Sheathing tape — seams + penetrations'
+          group.add(m)
+        }
+        jamb(r.x0 - TAPE_W / 2)
+        jamb(r.x1 + TAPE_W / 2)
       }
     }
   }
