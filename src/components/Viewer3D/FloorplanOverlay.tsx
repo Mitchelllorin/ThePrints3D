@@ -1423,7 +1423,15 @@ export default function FloorplanOverlay() {
           can be run "in the ceiling" before a real ceiling exists. It tracks the
           active storey + the plan's orientation, the way a placed door orients to
           its wall; the ducts still render up at the ceiling band. */}
-      {drawing && drawing.status === 'ready' && activeTraceLayer === 'hvac' && (
+      {/* ONLY WHILE ACTUALLY TRACING. This used to appear whenever HVAC was the
+          selected discipline, which turned out to mean "most of the time": in
+          the layer list, tapping a trade's NAME makes it the active layer, so
+          anyone tapping HVAC to look at it got a full-footprint sheet hanging
+          over the whole model at ceiling height, with nothing to explain it.
+          The plane exists so ducts can be run before a real ceiling is built —
+          that is a TRACING need, and it has no business being there when you
+          are only looking. */}
+      {drawing && drawing.status === 'ready' && activeTraceLayer === 'hvac' && traceMode && (
         <group position={[overlay.position[0], activeLevel * storeyHeight + ceilingM, overlay.position[1]]} rotation={[0, rotationRad, 0]}>
           <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ noPick: true }}>
             <planeGeometry args={[width, depth]} />

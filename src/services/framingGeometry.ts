@@ -1509,16 +1509,33 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
   // An exterior wall is boarded on the INSIDE only. Its outside face takes
   // sheathing and the rest of the envelope; drywall out there would be nonsense.
   const zs = bothSides ? [faceZ, -faceZ] : [inward * faceZ]
-  for (let x = -half; x < half - 0.02; x += cellW + SHEET_GAP) {
-    const w = Math.min(cellW, half - x)
-    if (w < 0.05) continue
-    for (let y = 0; y < height - 0.02; y += cellH + SHEET_GAP) {
-      const h = Math.min(cellH, height - y)
-      if (h < 0.05) continue
-      if (overlapsOpening(x, x + w, y, y + h)) continue   // leave the opening open
+
+  // RUNNING BOND. Every course used to start at the same x, so all the vertical
+  // joints stacked into one continuous seam from floor to ceiling. Nobody
+  // boards a wall that way: a joint running the full height is the weakest line
+  // you can build and the first place a crack shows, which is exactly why the
+  // trade staggers them. It also looked wrong — a flat grid rather than a
+  // boarded wall.
+  //
+  // Rows are the outer loop now, because the offset is per ROW. Alternate rows
+  // start half a sheet over, so each vertical joint lands mid-sheet on the
+  // course above and below it.
+  let row = 0
+  for (let y = 0; y < height - 0.02; y += cellH + SHEET_GAP) {
+    const h = Math.min(cellH, height - y)
+    if (h < 0.05) { row++; continue }
+    const stagger = row % 2 === 1 ? -(cellW + SHEET_GAP) / 2 : 0
+    for (let x = -half + stagger; x < half - 0.02; x += cellW + SHEET_GAP) {
+      // Clamp the leftmost sheet of an offset row — it starts off the end of
+      // the wall and arrives as a narrow cut piece, which is what really
+      // happens on site.
+      const x0 = Math.max(x, -half)
+      const w = Math.min(x + cellW, half) - x0
+      if (w < 0.05) continue
+      if (overlapsOpening(x0, x0 + w, y, y + h)) continue   // leave the opening open
       for (const z of zs) {
         const m = new THREE.Mesh(new THREE.BoxGeometry(w - SHEET_GAP, h - SHEET_GAP, boardT), mat)
-        m.position.set(x + w / 2, y + h / 2, z)
+        m.position.set(x0 + w / 2, y + h / 2, z)
         m.castShadow = true
         m.receiveShadow = true
         m.userData.layer = 'drywall'
@@ -1526,6 +1543,7 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
         group.add(m)
       }
     }
+    row++
   }
   return group
 }
@@ -1697,13 +1715,54 @@ export function buildWallCladding(opts: {
   }
 
   if (spec.exposureM) {
-    // Coursed. Each course covers its exposure; the lap behind it is implied.
+    /**
+     * Coursed siding, as boards rather than as a striped skin.
+     *
+     * It used to draw one flat box per course across the whole wall, 4% shorter
+     * than its exposure for a hairline reveal. From any distance that is a
+     * painted surface with faint lines on it: no butt joints, and no shadow,
+     * because every course sat at exactly the same depth.
+     *
+     * Two things make siding look like siding:
+     *
+     *   BUTT JOINTS. A plank is a finite length — 12ft is the common one — so a
+     *   long wall has vertical joints, and they are staggered course to course
+     *   for the same reason drywall joints are.
+     *
+     *   THE LAP SHADOW. Each course laps over the one beneath, so its butt edge
+     *   stands slightly proud and throws a line of shadow across the course
+     *   below. That shadow IS the texture of a sided wall. Tilting each board a
+     *   couple of degrees gets it honestly, from the light, rather than by
+     *   painting a dark stripe on a flat face.
+     */
+    const PLANK_M = 12 * 0.3048          // 12ft board, the common stock length
+    const BUTT_GAP = 0.004               // the joint itself
+    const LAP_TILT = 0.045               // ~2.6°, enough to catch the light
     let courses = 0
     for (let y = 0; y < height - 0.005; y += spec.exposureM) {
       const h = Math.min(spec.exposureM, height - y)
       if (h < 0.01) break
+      // Half-plank offset on alternate courses so joints never stack.
+      const stagger = courses % 2 === 1 ? PLANK_M / 2 : 0
       for (const [a, b] of spansAt(y, y + h)) {
-        add(b - a, h * 0.96, (a + b) / 2, y + h / 2)   // small reveal between courses
+        // Cut this run into planks, starting from a staggered origin.
+        let x = a - ((a + stagger) % PLANK_M + PLANK_M) % PLANK_M
+        while (x < b - 0.01) {
+          const x0 = Math.max(x, a)
+          const x1 = Math.min(x + PLANK_M, b)
+          const w = x1 - x0 - BUTT_GAP
+          x += PLANK_M
+          if (w < 0.03) continue
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w, h * 0.98, spec.thicknessM), mat)
+          m.position.set((x0 + x1) / 2, y + h / 2, z)
+          // Tip the board so its lower (butt) edge stands proud of the one
+          // below and casts a real shadow line.
+          m.rotation.x = outward > 0 ? LAP_TILT : -LAP_TILT
+          m.castShadow = true; m.receiveShadow = true
+          m.userData.layer = 'cladding'
+          m.userData.info = info
+          g.add(m)
+        }
       }
       courses++
     }
