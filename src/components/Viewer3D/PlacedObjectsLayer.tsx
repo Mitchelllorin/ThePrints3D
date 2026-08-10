@@ -191,6 +191,21 @@ export default function PlacedObjectsLayer() {
         // BuildingModel. Here they show only as a thin translucent opening
         // marker that stays selectable/draggable to reposition the cut.
         const isOpening = obj.type === 'door' || obj.type === 'window'
+        /**
+         * A GARAGE DOOR IS NOT A BIG DOOR.
+         *
+         * It is a sectional overhead: horizontal panels on rollers in a track,
+         * lifted by a motor and parked flat against the garage ceiling. It has
+         * no hinge, no leaf, and no arc — so drawing a quarter-circle swing on
+         * a nine-foot opening is not a stylised symbol, it is the wrong thing.
+         *
+         * Detected by WIDTH rather than a separate catalog type, because width
+         * is what actually decides it: no hinged residential door is 7ft wide,
+         * and every vehicle opening is. That also means existing plans and any
+         * door the user widens become overheads on their own, with no new type
+         * to pick and nothing to migrate.
+         */
+        const isOverheadDoor = obj.type === 'door' && w >= 2.1
         const boxD = isOpening ? 0.06 : d
         // Windows sit at their sill height; electrical devices mount on the
         // wall/ceiling at a standard height; everything else sits on the floor.
@@ -232,24 +247,49 @@ export default function PlacedObjectsLayer() {
                   <DetailExplode amount={obj.id === detailExplodeId ? 0.7 : 0}>{model}</DetailExplode>
                 </XRay>
               ) : (
-                <mesh castShadow={!isOpening} receiveShadow={!isOpening}>
-                  <boxGeometry args={[w, h, boxD]} />
-                  <meshStandardMaterial
-                    color={color}
-                    roughness={0.6}
-                    metalness={0.05}
-                    transparent={isOpening || !!obj.transparent}
-                    opacity={obj.transparent ? 0.18 : isOpening ? 0.8 : 1}
-                    // Openings MUST write depth or a wall wins every depth test and
-                    // hides the door/window from all but a straight-down view (the
-                    // "disappears through a wall" bug). Only X-ray'd objects skip it.
-                    depthWrite={!obj.transparent}
-                  />
-                  {/* An opening is a thin panel — edge-on from the top-down plan
-                      view it collapses to a line, so a bold outline keeps it reading
-                      from any angle even when the face is edge-on. */}
-                  {isOpening && !obj.transparent && <Edges color={color} lineWidth={2.5} />}
-                </mesh>
+                <group>
+                  {/* Sectional overhead: four panels with a reveal between them,
+                      which is what makes it read as a garage door from outside
+                      rather than a slab in a big hole. */}
+                  {isOverheadDoor ? (
+                    Array.from({ length: 4 }, (_, i) => {
+                      const ph = h / 4
+                      return (
+                        <mesh key={i} position={[0, -h / 2 + ph * (i + 0.5), 0]}>
+                          <boxGeometry args={[w, ph * 0.94, boxD]} />
+                          <meshStandardMaterial
+                            color={color}
+                            roughness={0.55}
+                            metalness={0.08}
+                            transparent={!!obj.transparent}
+                            opacity={obj.transparent ? 0.18 : 0.92}
+                            depthWrite={!obj.transparent}
+                          />
+                          {!obj.transparent && <Edges color={color} lineWidth={1.5} />}
+                        </mesh>
+                      )
+                    })
+                  ) : (
+                    <mesh castShadow={!isOpening} receiveShadow={!isOpening}>
+                      <boxGeometry args={[w, h, boxD]} />
+                      <meshStandardMaterial
+                        color={color}
+                        roughness={0.6}
+                        metalness={0.05}
+                        transparent={isOpening || !!obj.transparent}
+                        opacity={obj.transparent ? 0.18 : isOpening ? 0.8 : 1}
+                        // Openings MUST write depth or a wall wins every depth test and
+                        // hides the door/window from all but a straight-down view (the
+                        // "disappears through a wall" bug). Only X-ray'd objects skip it.
+                        depthWrite={!obj.transparent}
+                      />
+                      {/* An opening is a thin panel — edge-on from the top-down plan
+                          view it collapses to a line, so a bold outline keeps it reading
+                          from any angle even when the face is edge-on. */}
+                      {isOpening && !obj.transparent && <Edges color={color} lineWidth={2.5} />}
+                    </mesh>
+                  )}
+                </group>
               )}
               {/* Selection outline — an invisible bounding box carrying the edges.
                   Amber when selected; cyan when hovered in edit mode. */}
@@ -266,7 +306,29 @@ export default function PlacedObjectsLayer() {
                 its quarter-circle arc, drawn FLAT on the floor so the door reads
                 from straight overhead (the vertical panel above is edge-on and
                 invisible top-down). Bold + opaque so it never looks "missing". */}
-            {obj.type === 'door' && (() => {
+            {isOverheadDoor && (() => {
+              // Plan symbol for an overhead: the door across the opening, and
+              // the two tracks running back INTO the garage — which is where it
+              // actually goes. No arc, because nothing swings.
+              const y = 0.07
+              const reach = Math.min(w, 2.4)   // roughly its own height back
+              const bar: [number, number, number][] = [[-w / 2, y, 0], [w / 2, y, 0]]
+              const jambL: [number, number, number][] = [[-w / 2, y, -0.12], [-w / 2, y, 0.12]]
+              const jambR: [number, number, number][] = [[w / 2, y, -0.12], [w / 2, y, 0.12]]
+              const trackL: [number, number, number][] = [[-w / 2 + 0.06, y, 0], [-w / 2 + 0.06, y, reach]]
+              const trackR: [number, number, number][] = [[w / 2 - 0.06, y, 0], [w / 2 - 0.06, y, reach]]
+              return (
+                <>
+                  <Line points={jambL} color={color} lineWidth={4} />
+                  <Line points={jambR} color={color} lineWidth={4} />
+                  <Line points={bar} color={color} lineWidth={5} />
+                  <Line points={trackL} color={color} lineWidth={2} dashed dashSize={0.12} gapSize={0.09} />
+                  <Line points={trackR} color={color} lineWidth={2} dashed dashSize={0.12} gapSize={0.09} />
+                </>
+              )
+            })()}
+
+            {obj.type === 'door' && !isOverheadDoor && (() => {
               const swing = obj.swing ?? 'left'
               const hinge = swing === 'left' ? -w / 2 : w / 2
               const sign = swing === 'left' ? 1 : -1

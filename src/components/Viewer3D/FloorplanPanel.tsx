@@ -1683,7 +1683,12 @@ export default function FloorplanPanel() {
               </div>
             )
           })()}
-          {selectedObject.type === 'door' && (
+          {/* No hinge on an overhead door, so no hand to choose. Offering LH/RH
+              on a sectional garage door is a control that cannot do anything —
+              worse than missing, because it implies the model is wrong. Same
+              width test the 3D uses. */}
+          {selectedObject.type === 'door'
+            && ((selectedObject.scaleX ?? 1) * (getCatalogItem('door')?.defaultW ?? 0.9)) < 2.1 && (
             <div className={styles.propRow}>
               <span className={styles.propLabel}>Swing</span>
               <div className={styles.btnRow}>
