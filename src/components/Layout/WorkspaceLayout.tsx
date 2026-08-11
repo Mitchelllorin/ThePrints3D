@@ -535,6 +535,10 @@ export default function WorkspaceLayout() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+  const wallDetailExplode = useFloorplanLocalStore((s) => s.wallDetailExplode)
+  const setWallDetailExplode = useFloorplanLocalStore((s) => s.setWallDetailExplode)
+  const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
+  const setDetailExplodeId = useFloorplanLocalStore((s) => s.setDetailExplodeId)
   const activePanel = useFloorplanLocalStore((s) => s.activePanel)
   const openSelectionPanel = useFloorplanLocalStore((s) => s.openSelectionPanel)
   const stairEdit = useMemo(() => {
@@ -1131,6 +1135,39 @@ export default function WorkspaceLayout() {
               >◐</button>
             </div>
           )}
+
+          {/* EXPLODE PARTS — the second explode, which edit mode had locked out.
+              There have always been two: the slider, which lifts the whole model
+              apart by layer, and this one, which blows a SINGLE thing into its
+              pieces — the studs out of a wall, the parts out of a fixture. But
+              its only buttons lived inside the wall panel and the object panel,
+              and selecting something in edit mode deliberately suppresses those
+              panels (`activePanel: s.editMode ? null : 'wall'`). So the mode was
+              still there and had no door: you could not reach it the new way of
+              working at all.
+              Same remedy as X-ray directly above — one mark, one word, same
+              place, for everything that can express it. */}
+          {(editSelected?.kind === 'wall' || editSelected?.kind === 'object') && (() => {
+            const isWall = editSelected.kind === 'wall'
+            const on = isWall ? wallDetailExplode : detailExplodeId === editSelected.id
+            return (
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Explode</span>
+                <button
+                  className={`${styles.editRailBtn} ${on ? styles.editRailBtnOn : ''}`}
+                  aria-pressed={on}
+                  aria-label={`Explode this ${selectionEdit.label.toLowerCase()} into its parts`}
+                  title={on
+                    ? 'Collapse back together'
+                    : `Explode this ${selectionEdit.label.toLowerCase()} into its parts`}
+                  onClick={() => {
+                    if (isWall) setWallDetailExplode(!wallDetailExplode)
+                    else setDetailExplodeId(on ? null : editSelected.id)
+                  }}
+                >✳</button>
+              </div>
+            )
+          })()}
 
           {/* DELETE. The one verb every selection has, and it was the one the
               rail could not do — each type's delete lived in its own panel, so
