@@ -44,6 +44,10 @@
   transition: opacity 0.12s, color 0.12s;
 }
 .icon:hover { opacity: 1; }
+/* Pinned to the foot of the rail with real space above it. Clear used to sit
+   one 6px gap under PLACE, and a thumb aiming for PLACE would wipe the
+   workspace. Distance is the cheapest safety there is. */
+.railFoot { margin-top: auto; padding-top: 18px; }
 .icon:active { transform: translateY(1px); }
 .active { color: var(--bp-accent, #38bdf8); opacity: 1; }
 

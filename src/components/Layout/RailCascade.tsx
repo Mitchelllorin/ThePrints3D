@@ -56,6 +56,8 @@ export default function RailCascade() {
 
   // Place is a cascade column (not a store drawer), so its open state is local.
   const [placeOpen, setPlaceOpen] = useState(false)
+  // First tap arms Clear, second does it. See the button for why.
+  const [clearArmed, setClearArmed] = useState(false)
 
   const active: Record<Section, boolean> = {
     build: buildOpen,
@@ -117,22 +119,36 @@ export default function RailCascade() {
           </button>
         ))}
 
-        {/* CLEAR, at the bottom of the rail rather than up in the top icons.
-            It belongs with the things you reach for by name, and putting the
-            most destructive action furthest from Undo's neighbours means it is
-            never the button you hit by accident. Still one undo step, so there
-            is no confirm dialog standing in the workspace.
-            Dimmed to nothing when there is nothing to clear. */}
+        {/* CLEAR — pushed to the FOOT of the rail, and it asks first.
+            It was sitting six pixels under PLACE, in the middle of the
+            navigation column: tap PLACE a little low on a phone and the whole
+            workspace went, dropping you back to the Browse/Scan screen with no
+            idea why. Moving it off the top icons was right and not enough — the
+            danger was never Undo's neighbours, it was being adjacent to the
+            button people press most.
+            So: margin-auto pins it to the bottom, well clear of the four menu
+            items, and the first tap only ARMS it. The confirm lives on the
+            button itself rather than in a dialog, because a modal in the middle
+            of the workspace is the thing this app does not do. It disarms on
+            its own after a few seconds so it cannot sit there loaded. */}
         <button
-          className={styles.icon}
-          onClick={() => { if (hasDrawings) clearWorkspace() }}
-          title="Clear workspace"
-          aria-label="Clear workspace"
+          className={`${styles.icon} ${styles.railFoot}`}
+          onClick={() => {
+            if (!hasDrawings) return
+            if (!clearArmed) { setClearArmed(true); return }
+            setClearArmed(false)
+            clearWorkspace()
+          }}
+          onBlur={() => setClearArmed(false)}
+          title={clearArmed ? 'Tap again to clear everything' : 'Clear workspace'}
+          aria-label={clearArmed ? 'Tap again to clear everything' : 'Clear workspace'}
           disabled={!hasDrawings}
-          style={hasDrawings ? undefined : { opacity: 0.28, cursor: 'default' }}
+          style={hasDrawings ? undefined : { opacity: 0.22, cursor: 'default' }}
         >
-          <span className={styles.glyph}><BinIcon /></span>
-          <span className={styles.iconLabel}>Clear</span>
+          <span className={styles.glyph} style={clearArmed ? { color: '#f87171' } : undefined}><BinIcon /></span>
+          <span className={styles.iconLabel} style={clearArmed ? { color: '#f87171' } : undefined}>
+            {clearArmed ? 'Sure?' : 'Clear'}
+          </span>
         </button>
       </nav>
 
