@@ -804,6 +804,59 @@ export function buildCeiling(opts: { lenX: number; lenZ: number; ocM: number; op
   return g
 }
 
+// ── Per-edge parameters ──────────────────────────────────────────────────────
+
+/**
+ * A quantity that may differ around the building, with a default every edge
+ * falls back to.
+ *
+ * Every "the app cannot do that house" so far traces to the same shape: the
+ * parameters were scalars on the BUILDING. One pitch, one overhang, symmetric
+ * by construction — so 36" on the north and 12" on the south could not be said
+ * at all. Not an oversight; there was nowhere to put it.
+ *
+ * Hanging the value on the EDGE fixes that without making the ordinary case
+ * worse, because the default is inherited:
+ *
+ *     16                          — a normal roof, one number
+ *     { default: 16, eaveA: 36 }  — the odd one, one override
+ *
+ * Which also means an unknown is just an edge with no value, so the intake
+ * questions in `buildIntake` can ask about one edge the same way they ask about
+ * anything else. Asymmetry stops being a special case.
+ */
+export interface EdgeOverhang {
+  /** Metres. Any edge not named falls back to this. */
+  default: number
+  /** True eaves — the two low sides parallel to the ridge. A = positive side. */
+  eaveA?: number
+  eaveB?: number
+  /** Gable rakes — the two sloped ends. A = positive side. */
+  rakeA?: number
+  rakeB?: number
+}
+
+/** Either one number for the whole roof, or per-edge with a default. */
+export type OverhangSpec = number | EdgeOverhang
+
+export type RoofEdge = 'eaveA' | 'eaveB' | 'rakeA' | 'rakeB'
+
+/** The overhang for one edge, in metres. Never negative. */
+export function resolveOverhang(spec: OverhangSpec | undefined, edge: RoofEdge): number {
+  if (spec === undefined) return 0
+  if (typeof spec === 'number') return Math.max(0, spec)
+  const v = spec[edge]
+  return Math.max(0, typeof v === 'number' ? v : spec.default)
+}
+
+/** True when the edges disagree — worth saying out loud in the UI. */
+export function overhangIsAsymmetric(spec: OverhangSpec | undefined): boolean {
+  if (spec === undefined || typeof spec === 'number') return false
+  const edges: RoofEdge[] = ['eaveA', 'eaveB', 'rakeA', 'rakeB']
+  const first = resolveOverhang(spec, edges[0])
+  return edges.some((e) => resolveOverhang(spec, e) !== first)
+}
+
 // ── Gable roof (common rafters + ridge) ──────────────────────────────────────
 
 /**
@@ -817,6 +870,8 @@ export function buildCeiling(opts: { lenX: number; lenZ: number; ocM: number; op
  */
 export function buildGableRoof(opts: {
   lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+  /** Per-edge eave overhang. The tails, deck and shingles run out over it. */
+  overhangM?: OverhangSpec
 }): THREE.Group {
   const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
   const g = new THREE.Group()
@@ -832,8 +887,39 @@ export function buildGableRoof(opts: {
   const runLen = spanAlongX ? lenZ : lenX
   const half = span / 2
   const rise = Math.max(0.1, half * pitch)
-  const rafterLen = Math.hypot(half, rise)
   const angle = Math.atan2(rise, half)
+  /** Actual gradient of the built slope — `rise` is clamped, so `pitch` can lie. */
+  const slope = rise / half
+
+  /**
+   * THE TAIL IS PART OF THE ROOF.
+   *
+   * The sloped assembly used to stop dead at the wall, and a separate boxed
+   * soffit was hung outside it at a flat height just under the eave line. So
+   * the model had an overhang, and then more overhang: three feet of bare
+   * soffit projecting past the last course of shingles, with nothing over it.
+   *
+   * On a real roof there is one edge, not two. The rafter TAILS continue past
+   * the plate, the deck runs out over them, the shingles lap the drip edge, and
+   * the fascia closes the tail ends — which sit `overhang × slope` BELOW the
+   * wall top, because the tail is still descending. The soffit then runs level
+   * from the wall back to the bottom of that fascia.
+   *
+   * Each eave resolves its own overhang, so the two sides need not match.
+   */
+  const eaveEdge = (sign: 1 | -1): RoofEdge => (sign > 0 ? 'eaveA' : 'eaveB')
+  /** Geometry of one slope, ridge to tail end, for the eave on that side. */
+  const slopeOf = (sign: 1 | -1) => {
+    const ovh = resolveOverhang(opts.overhangM, eaveEdge(sign))
+    const run = half + ovh                       // horizontal, ridge to tail
+    return {
+      ovh,
+      len: run * Math.hypot(1, slope),           // along the slope (collinear)
+      midAcross: sign * (run / 2),               // midpoint across
+      midY: (rise - ovh * slope) / 2,            // midpoint height
+      tailY: -ovh * slope,                       // deck line at the tail end
+    }
+  }
 
   const rafterInfo = `Rafter · ${Math.round(pitch * 12)}:12`
   const addBox = (w: number, h: number, d: number, x: number, y: number, z: number, rx: number, ry: number, rz: number, info: string) => {
@@ -851,16 +937,20 @@ export function buildGableRoof(opts: {
   const ps: number[] = [-halfRun + RW / 2, halfRun - RW / 2]
   for (let p = -halfRun + RW / 2 + Math.max(0.3, ocM); p < halfRun - RW / 2; p += Math.max(0.3, ocM)) ps.push(p)
 
+  // Each slope carries its own length and midpoint now, because the two eaves
+  // may overhang by different amounts.
+  const slopeNeg = slopeOf(-1)
+  const slopePos = slopeOf(1)
   if (spanAlongX) {
     for (const p of ps) {
-      addBox(rafterLen, RT, RW, -half / 2, rise / 2, p, 0, 0, angle, rafterInfo)   // left slope
-      addBox(rafterLen, RT, RW, half / 2, rise / 2, p, 0, 0, -angle, rafterInfo)   // right slope
+      addBox(slopeNeg.len, RT, RW, slopeNeg.midAcross, slopeNeg.midY, p, 0, 0, angle, rafterInfo)
+      addBox(slopePos.len, RT, RW, slopePos.midAcross, slopePos.midY, p, 0, 0, -angle, rafterInfo)
     }
     addBox(RW, RT, runLen, 0, rise, 0, 0, 0, 0, 'Ridge board')                     // ridge board
   } else {
     for (const p of ps) {
-      addBox(RW, RT, rafterLen, p, rise / 2, -half / 2, -angle, 0, 0, rafterInfo)
-      addBox(RW, RT, rafterLen, p, rise / 2, half / 2, angle, 0, 0, rafterInfo)
+      addBox(RW, RT, slopeNeg.len, p, slopeNeg.midY, slopeNeg.midAcross, -angle, 0, 0, rafterInfo)
+      addBox(RW, RT, slopePos.len, p, slopePos.midY, slopePos.midAcross, angle, 0, 0, rafterInfo)
     }
     addBox(runLen, RT, RW, 0, rise, 0, 0, 0, 0, 'Ridge board')
   }
@@ -901,7 +991,11 @@ export function buildGableRoof(opts: {
     const a = -sign * angle
     // Straight up out of the rafter's own plane.
     const nx = -Math.sin(a), ny = Math.cos(a)
-    const cx = sign * (half / 2), cy = rise / 2
+    // Follow THIS slope's own tail, so the deck reaches the fascia on an eave
+    // that overhangs further than its opposite number.
+    const sl = sign > 0 ? slopePos : slopeNeg
+    const rafterLen = sl.len
+    const cx = sl.midAcross, cy = sl.midY
     const put = (mat: THREE.Material, t: number, off: number, alongOff: number, info: string) => {
       const px = cx + nx * off + Math.cos(a) * alongOff
       const py = cy + ny * off + Math.sin(a) * alongOff
@@ -1419,9 +1513,13 @@ function buildEaveOverhang(
     ridgeAxis?: 'x' | 'z'
     /** Roof pitch (rise/run) — needed to slope the rake to match the ridge. */
     pitch?: number
+    /** Per-edge overhang, so the two eaves need not match. */
+    spec?: OverhangSpec
+    /** The roof builder ran its own tails out, so the fascia drops to meet them. */
+    coversOwnEaves?: boolean
   },
 ): void {
-  const { lenX, lenZ, overhang, opacity, ridgeAxis, pitch = 0.5 } = opts
+  const { lenX, lenZ, overhang, opacity, ridgeAxis, pitch = 0.5, spec, coversOwnEaves } = opts
   if (overhang <= 0 || lenX < 0.2 || lenZ < 0.2) return
   const wood = roofMat(opacity)
   const soffitMat = new THREE.MeshStandardMaterial({
@@ -1438,6 +1536,7 @@ function buildEaveOverhang(
     buildGableEaveAndRake(g, wood, soffitMat, {
       lenX, lenZ, overhang, ridgeAxis, pitch,
       FAS, FW, SOF, LOOK, hx, hz, soffitY, fasciaY,
+      spec, coversOwnEaves: !!coversOwnEaves,
     })
     return
   }
@@ -1490,13 +1589,34 @@ function buildGableEaveAndRake(
     lenX: number; lenZ: number; overhang: number; ridgeAxis: 'x' | 'z'; pitch: number
     FAS: number; FW: number; SOF: number; LOOK: number
     hx: number; hz: number; soffitY: number; fasciaY: number
+    spec?: OverhangSpec
+    coversOwnEaves: boolean
   },
 ): void {
-  const { lenX, lenZ, overhang, ridgeAxis, pitch, FAS, FW, SOF, LOOK, hx, hz, soffitY, fasciaY } = o
+  const { lenX, lenZ, overhang, ridgeAxis, pitch, FAS, FW, SOF, LOOK, hx, hz, soffitY, fasciaY, spec, coversOwnEaves } = o
   const rakeOnZ = ridgeAxis === 'z'   // ridge along Z → gable ends at ±z, eaves at ±x
   const OC = 0.6096
   const tie = 0.3
-  const lkLen = overhang + tie
+
+  /**
+   * THE FASCIA BELONGS AT THE TAIL, NOT AT THE WALL.
+   *
+   * This used to hang the soffit and fascia at a flat height just under the
+   * eave line, `overhang` out from the footprint — while the roof itself
+   * stopped at the wall. Two edges, disagreeing: bare soffit projecting past
+   * the last shingle with open sky above it.
+   *
+   * The rafter tail keeps descending past the plate, so its end — and the
+   * fascia closing it — sits `overhang × slope` BELOW the wall top. The soffit
+   * then runs level from the wall back to the bottom of that fascia, which is
+   * what a boxed (level) soffit is.
+   *
+   * Each eave takes its own overhang and therefore its own drop, so a house
+   * with 36" one side and 12" the other comes out right on both.
+   */
+  const eaveOvh = (positiveSide: boolean) =>
+    resolveOverhang(spec ?? overhang, positiveSide ? 'eaveA' : 'eaveB')
+  const dropFor = (positiveSide: boolean) => (coversOwnEaves ? eaveOvh(positiveSide) * pitch : 0)
 
   // ── True eaves (the two low sides parallel to the ridge) ──
   // Span the eave members the FULL outer length so they tuck under the rake and
@@ -1504,25 +1624,27 @@ function buildGableEaveAndRake(
   if (rakeOnZ) {
     const zSpan = lenZ + 2 * overhang
     for (const sx of [1, -1]) {
-      addRoofBox(g, soffitMat, overhang, SOF, zSpan, sx * (hx + overhang / 2), soffitY, 0, 0, 0, 0, 'Soffit')
-      addRoofBox(g, wood, FW, FAS, zSpan, sx * (hx + overhang), fasciaY, 0, 0, 0, 0, 'Fascia')
-      addRoofBox(g, wood, FW, FAS, lenZ, sx * hx, fasciaY, 0, 0, 0, 0, 'Frieze')
-    }
-    for (let z = -hz + 0.2; z <= hz; z += OC) {
-      for (const sx of [1, -1]) {
-        addRoofBox(g, wood, lkLen, LOOK, FW, sx * (hx - tie / 2 + overhang / 2), -LOOK / 2, z, 0, 0, 0, 'Lookout')
+      const ovh = eaveOvh(sx > 0)
+      const drop = dropFor(sx > 0)
+      const lkLen = ovh + tie
+      addRoofBox(g, soffitMat, ovh, SOF, zSpan, sx * (hx + ovh / 2), soffitY - drop, 0, 0, 0, 0, 'Soffit')
+      addRoofBox(g, wood, FW, FAS, zSpan, sx * (hx + ovh), fasciaY - drop, 0, 0, 0, 0, 'Fascia')
+      addRoofBox(g, wood, FW, FAS, lenZ, sx * hx, fasciaY - drop, 0, 0, 0, 0, 'Frieze')
+      for (let z = -hz + 0.2; z <= hz; z += OC) {
+        addRoofBox(g, wood, lkLen, LOOK, FW, sx * (hx - tie / 2 + ovh / 2), -LOOK / 2 - drop, z, 0, 0, 0, 'Lookout')
       }
     }
   } else {
     const xSpan = lenX + 2 * overhang
     for (const sz of [1, -1]) {
-      addRoofBox(g, soffitMat, xSpan, SOF, overhang, 0, soffitY, sz * (hz + overhang / 2), 0, 0, 0, 'Soffit')
-      addRoofBox(g, wood, xSpan, FAS, FW, 0, fasciaY, sz * (hz + overhang), 0, 0, 0, 'Fascia')
-      addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY, sz * hz, 0, 0, 0, 'Frieze')
-    }
-    for (let x = -hx + 0.2; x <= hx; x += OC) {
-      for (const sz of [1, -1]) {
-        addRoofBox(g, wood, FW, LOOK, lkLen, x, -LOOK / 2, sz * (hz - tie / 2 + overhang / 2), 0, 0, 0, 'Lookout')
+      const ovh = eaveOvh(sz > 0)
+      const drop = dropFor(sz > 0)
+      const lkLen = ovh + tie
+      addRoofBox(g, soffitMat, xSpan, SOF, ovh, 0, soffitY - drop, sz * (hz + ovh / 2), 0, 0, 0, 'Soffit')
+      addRoofBox(g, wood, xSpan, FAS, FW, 0, fasciaY - drop, sz * (hz + ovh), 0, 0, 0, 'Fascia')
+      addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY - drop, sz * hz, 0, 0, 0, 'Frieze')
+      for (let x = -hx + 0.2; x <= hx; x += OC) {
+        addRoofBox(g, wood, FW, LOOK, lkLen, x, -LOOK / 2 - drop, sz * (hz - tie / 2 + ovh / 2), 0, 0, 0, 'Lookout')
       }
     }
   }
@@ -1530,13 +1652,19 @@ function buildGableEaveAndRake(
   // ── Gable-end rakes (barge board + sloped rake soffit, flying past the wall) ──
   const half = rakeOnZ ? hx : hz              // across-slope half-span (peak at centre)
   const rise = Math.max(0.1, half * pitch)
-  const slopeLen = Math.hypot(half, rise)
   const angle = Math.atan2(rise, half)
+  const grade = rise / half                   // the built gradient (rise is clamped)
   const out = (rakeOnZ ? hz : hx) + overhang  // outboard plane of the barge
-  const slopeY = rise / 2                     // midpoint of the slope line
   for (const end of [1, -1]) {                // each gable end
     for (const side of [1, -1]) {             // each slope (left / right of ridge)
-      const mid = side * (half / 2)           // along-slope midpoint
+      // The barge caps the roof EDGE, so when that slope's tail runs out past
+      // the wall the rake has to run out with it — otherwise the deck it is
+      // supposed to be capping carries on past the end of the board.
+      const ovh = coversOwnEaves ? eaveOvh(side > 0) : 0
+      const run = half + ovh
+      const slopeLen = run * Math.hypot(1, grade)
+      const mid = side * (run / 2)            // along-slope midpoint
+      const slopeY = (rise - ovh * grade) / 2 // midpoint of the slope line
       if (rakeOnZ) {
         // Board runs along X, thin in Z; tilt about Z to follow the slope.
         addRoofBox(g, wood, slopeLen, FAS, FW, mid, slopeY + fasciaY, end * out, 0, 0, -side * angle, 'Rake fascia')
@@ -1554,9 +1682,15 @@ function buildGableEaveAndRake(
  *  the boxed-eave overhang (soffit/fascia/lookouts) as an axis-aligned sibling. */
 export function buildRoofByType(
   type: string,
-  opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number; overhangM?: number },
+  opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number; overhangM?: OverhangSpec },
 ): THREE.Group {
   const t = (type || '').trim().toLowerCase()
+  // Only the gable builder runs its rafter tails, deck and shingles out over
+  // the overhang. Every other profile still stops at the wall, so their boxed
+  // eave must stay where it is — dropping it to a tail that is not there would
+  // hang the soffit in mid-air. They get the same treatment when they are
+  // converted; this is the first one.
+  let coversOwnEaves = false
   const roof = (() => {
     switch (t) {
       case 'truss':
@@ -1569,10 +1703,14 @@ export function buildRoofByType(
       case 'mono':
       case 'mono-pitch': return buildShedRoof(opts)
       case 'flat': return buildFlatRoof(opts)
-      default: return buildGableRoof(opts)
+      default: coversOwnEaves = true; return buildGableRoof(opts)
     }
   })()
-  const overhangM = opts.overhangM ?? 0.4 // ~16" boxed eave
+  const spec: OverhangSpec = opts.overhangM ?? 0.4 // ~16" boxed eave
+  const overhangM = Math.max(
+    resolveOverhang(spec, 'eaveA'), resolveOverhang(spec, 'eaveB'),
+    resolveOverhang(spec, 'rakeA'), resolveOverhang(spec, 'rakeB'),
+  )
   if (overhangM > 0) {
     const wrapper = new THREE.Group()
     wrapper.add(roof)
@@ -1584,7 +1722,7 @@ export function buildRoofByType(
     const ridgeAxis = ridged ? (opts.lenX <= opts.lenZ ? 'z' : 'x') : undefined
     buildEaveOverhang(eave, {
       lenX: opts.lenX, lenZ: opts.lenZ, overhang: overhangM, opacity: opts.opacity ?? 1,
-      ridgeAxis, pitch: opts.pitch,
+      ridgeAxis, pitch: opts.pitch, spec, coversOwnEaves,
     })
     wrapper.add(eave)
     return wrapper
