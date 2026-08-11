@@ -916,11 +916,19 @@ export function buildGableRoof(opts: {
     }
     put(deckMat, DECK_T, RT / 2 + DECK_T / 2, 0, 'Roof sheathing · 1/2" OSB')
 
-    // Courses, from eave to ridge.
+    /**
+     * Courses, starting AT THE EAVE and working up — the way they are nailed.
+     *
+     * They used to start at the ridge and step down a whole number of
+     * exposures, which left the remainder bare at the eave: the one edge on a
+     * roof that must never be short, since that is where the water leaves. The
+     * last course now laps over the ridge instead, which is what actually
+     * happens on site before the cap goes on.
+     */
     const base = RT / 2 + DECK_T + SHINGLE_T / 2
-    const n = Math.max(1, Math.floor(rafterLen / SHINGLE_EXP))
+    const n = Math.max(1, Math.ceil(rafterLen / SHINGLE_EXP))
     for (let i = 0; i < n; i++) {
-      const alongOff = -rafterLen / 2 + (i + 0.5) * SHINGLE_EXP
+      const alongOff = rafterLen / 2 - (i + 0.5) * SHINGLE_EXP
       const m = spanAlongX
         ? new THREE.Mesh(new THREE.BoxGeometry(SHINGLE_EXP * 1.06, SHINGLE_T, runLen), shingleMat)
         : new THREE.Mesh(new THREE.BoxGeometry(runLen, SHINGLE_T, SHINGLE_EXP * 1.06), shingleMat)
