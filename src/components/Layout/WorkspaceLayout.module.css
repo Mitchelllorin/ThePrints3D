@@ -636,7 +636,7 @@
 .floorBarLifted { bottom: auto; }
 .floorBar {
   position: absolute;
-  top: 70px;
+  top: 92px;
   right: 6px;
   z-index: 56;
   display: flex;
@@ -663,6 +663,13 @@
   align-items: center;
   gap: 5px;
   pointer-events: auto;
+  /* ONE LINE. "Select / Whole / Member" was wrapping to two on a phone, which
+     doubled the row to 44px tall and pushed it straight through the edit rail
+     beginning below it — the selection's own name printed on top of the
+     switch. It is three short words; it should never have been allowed to
+     stack. Pinned by `right`, so keeping it on one line grows it leftward
+     along the edge instead of downward into the rail. */
+  white-space: nowrap;
 }
 .grainCaption {
   font-size: 8px;
@@ -709,7 +716,7 @@
    you are editing cover the very thing you are looking at. */
 .editRail {
   position: absolute;
-  top: 70px;
+  top: 92px;
   right: 6px;
   z-index: 56;
   display: flex;
@@ -726,9 +733,31 @@
      place. A card is a second surface competing for the same edge and standing
      on the model. One scrolling rail is the same idea done once — no matter how
      many verbs a selection has, they are all in the one place, on the perimeter.
-     Bounded so it never reaches the explode column along the bottom: that is
-     70 (top) + ~126 (explode) + 14 (its offset) + 20 (gap). */
-  max-height: calc(100dvh - 230px);
+     Bounded so it never reaches the explode column along the bottom. The old
+     sum assumed the explode column was ~126px tall; measured, it is 167 (a
+     110px slider plus its icon and padding) sitting 14 off the bottom, so the
+     reservation was ~40px short and the two overlapped by 35px on a phone.
+     Real sum: 92 (top) + 167 (explode) + 14 (its offset) + 20 (gap).
+     Top is 92 rather than 70 because the Select switch above it is 44px tall —
+     its buttons are full touch targets — so it runs to y=84 and the rail's own
+     label was printing over it. */
+  max-height: calc(100dvh - 293px);
+  /* WRAPS INTO A SECOND COLUMN rather than scrolling its verbs out of reach.
+     A full selection is label + step + pad + rotate + stretch + specs + x-ray +
+     explode + delete — about 310px of controls with nowhere near that much
+     edge to stand in once the explode column has its share. Scrolling "solved"
+     it by hiding half the verbs below the fold, which for a toolbar means they
+     may as well not exist: you cannot scroll for something you do not know is
+     there. Wrapping keeps every verb on screen and spends width instead, which
+     this edge has. The element is pinned by `right`, so extra columns grow
+     leftward across the workspace edge rather than off the screen. */
+  flex-wrap: wrap;
+  align-content: flex-end;
+  /* TWO COLUMNS AT MOST. Left to itself it wrapped to three and stood 240px
+     into a 562px workspace — 43% of the width, which is the centre of the model
+     and the one place chrome may not go. Two is enough for every selection we
+     have and still reads as an edge. */
+  max-width: 184px;
   overflow-y: auto;
   overflow-x: hidden;
   /* No visible scrollbar — a track and thumb is exactly the boxed chrome this
@@ -746,7 +775,11 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  /* Same reason as the captions below: no surface behind it, so the shadow is
+     doing all the separating when the rail floats over pale siding or a print. */
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.98),
+    0 0 6px rgba(0, 0, 0, 0.85);
 }
 
 .editRailGroup {
@@ -755,13 +788,20 @@
   align-items: center;
   gap: 2px;
 }
+/* Bright enough to read off a WHITE model, not just off the dark grid. The rail
+   has no surface behind it by design, so the only thing separating the text
+   from what it floats over is its own contrast — and dim grey on pale siding or
+   a scanned print is invisible. Full-strength text plus a heavier shadow keeps
+   it legible on both without giving it a box. */
 .editRailCaption {
-  color: var(--bp-text-dim, #94a3b8);
+  color: var(--bp-text, #f1f5f9);
   font-size: 8px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.98),
+    0 0 6px rgba(0, 0, 0, 0.85);
 }
 
 .editRailBtn {
@@ -791,12 +831,25 @@
     '.    up    .'
     'left .     right'
     '.    down  .';
-  grid-template-columns: repeat(3, 26px);
-  grid-template-rows: repeat(3, 22px);
+  grid-template-columns: repeat(3, 20px);
+  grid-template-rows: repeat(3, 17px);
   place-items: center;
 }
 
 .editRailPair { display: flex; gap: 2px; }
+
+/* The CLUSTERS shrink; the single verbs do not.
+   Move, rotate and stretch are four, two and two marks each — at full size the
+   rail ran long enough to crowd the explode slider it shares this edge with.
+   They also read as one control rather than several, so they carry being small
+   in a way a lone glyph does not. Specs, X-ray, Explode and Delete keep their
+   full target: each is the only thing you can tap for that job. */
+.editRailPad .editRailBtn,
+.editRailPair .editRailBtn {
+  width: 20px;
+  height: 20px;
+  font-size: 13px;
+}
 
 /* Selected option in a rail group. Accent COLOUR, never a filled box — the rail
    is marks on the workspace, not buttons in a container. */
@@ -870,16 +923,20 @@
 
 @media (max-width: 767px), (max-height: 600px) {
   /* Now that it is a narrow column it no longer needs a row of its own: the
-     Place tab (centre) and Edit (left) are horizontal neighbours, not vertical
-     ones. It drops into the same clear band as Edit, off the gesture bar. */
-  .explodeBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); right: 4px; }
+     Place tab sits centre and the verbs live in the left rail, so nothing is a
+     vertical neighbour here. Dropped from 46 to 30 to give the edit rail above
+     it back the room the two were fighting over — the safe-area inset is added
+     on top, so this still clears a gesture bar. */
+  .explodeBar { bottom: calc(30px + env(safe-area-inset-bottom, 0px)); right: 4px; }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { height: 96px; }
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
      the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
   .floorBar { top: 62px; right: 2px; }
-  /* Same sum as desktop, phone numbers: 62 (top) + ~112 (shorter explode) + 46
-     (its offset) + 20 (gap). */
-  .editRail { top: 62px; right: 2px; gap: 8px; max-height: calc(100dvh - 240px); }
+  /* Same sum as desktop, phone numbers — and measured this time rather than
+     estimated. The old comment guessed the shorter (96px slider) explode column
+     at ~112px; it is 167 including icon and padding, which is why the rail ran
+     35px into it. Real sum: 62 (top) + 167 (explode) + 30 (its offset) + 16. */
+  .editRail { top: 92px; right: 2px; gap: 8px; max-height: calc(100dvh - 305px); }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }
