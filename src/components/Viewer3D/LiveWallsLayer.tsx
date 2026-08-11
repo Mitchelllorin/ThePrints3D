@@ -159,6 +159,7 @@ export default function LiveWallsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const visibleLayers = useAppStore((s) => s.visibleLayers)
   const framingMaterial = useConfigStore((s) => s.framingMaterial)
   const steelGauge = useConfigStore((s) => s.steelGauge)
   const steelTrackTop = useConfigStore((s) => s.steelTrackTop)
@@ -291,6 +292,12 @@ export default function LiveWallsLayer() {
   const built = buildResult !== null || model.status === 'ready' || model.status === 'building'
 
   if (userWalls.length === 0) return null
+  // The Framing switch in the Layers panel was wired to nothing — no renderer
+  // has ever read `visibleLayers.has('framing')`, so turning it off left every
+  // stud standing. Honouring it here also gives the obvious X-ray for free:
+  // drop the framing and the drywall, sheathing and cladding stay up, because
+  // each of those is its own layer with its own toggle.
+  if (!visibleLayers.has('framing')) return null
 
   return (
     <group name="live-walls" ref={groupRef}>

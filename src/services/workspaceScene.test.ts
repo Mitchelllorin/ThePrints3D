@@ -9,6 +9,8 @@ const blank: WorkspaceWizardInputs = {
   set2Clarifications: '',
   set3FinishingDetails: '',
   set3Clarifications: '',
+  completedGroup: 'group1',
+  completedAt: 0,
 }
 const withText = (over: Partial<WorkspaceWizardInputs>): WorkspaceWizardInputs => ({ ...blank, ...over })
 
