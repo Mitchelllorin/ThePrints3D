@@ -966,6 +966,64 @@ export function buildGableRoof(opts: {
       else addBox(TW2, hAt, TW2, gp, hAt / 2, s, 0, 0, 0, 'Gable stud')
     }
   }
+
+  /**
+   * SKIN THE GABLE ENDS.
+   *
+   * The wall cladding stops dead at the top plate, because a wall is a wall and
+   * knows nothing about the roof above it. That left the triangle at each end
+   * as bare studs with rake trim round it — from the street, a finished house
+   * with two holes punched in the ends of it.
+   *
+   * A gable end is just wall carried on up: studs, sheathing, siding, same as
+   * below. It is built HERE rather than in the envelope layer because this is
+   * the only place that knows where the triangle is — the roof owns the pitch,
+   * the span and the rake, and handing all three to the wall builder to
+   * reconstruct would be three chances to disagree.
+   *
+   * Tagged 'sheathing' and 'cladding' so the pieces sort with their own kind
+   * for X-ray, explode and the layer toggles rather than reading as roof.
+   */
+  const GABLE_SHEATH_T = 0.011           // 7/16" OSB
+  const GABLE_SIDING_T = 0.019           // lap siding, nominal
+  const gableTri = new THREE.Shape()
+  gableTri.moveTo(-half, 0)
+  gableTri.lineTo(half, 0)
+  gableTri.lineTo(0, rise)
+  gableTri.closePath()
+  const gableSkins = [
+    { t: GABLE_SHEATH_T, layer: 'sheathing', info: 'Gable sheathing · 7/16" OSB',
+      mat: new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#c9a273'), roughness: 0.9, metalness: 0,
+        transparent: opacity < 1, opacity, side: THREE.DoubleSide,
+      }) },
+    { t: GABLE_SIDING_T, layer: 'cladding', info: 'Gable siding',
+      mat: new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#dcd6c8'), roughness: 0.85, metalness: 0,
+        transparent: opacity < 1, opacity, side: THREE.DoubleSide,
+      }) },
+  ]
+  for (const gp of [-halfRun + RW / 2, halfRun - RW / 2]) {
+    const outward = gp >= 0 ? 1 : -1
+    let off = TW2 / 2                    // start at the outer face of the studs
+    for (const skin of gableSkins) {
+      const geo = new THREE.ExtrudeGeometry(gableTri, { depth: skin.t, bevelEnabled: false })
+      geo.translate(0, 0, -skin.t / 2)   // centre it so the plane maths is the panel's middle
+      const m = new THREE.Mesh(geo, skin.mat)
+      const plane = gp + outward * (off + skin.t / 2)
+      // The shape is drawn in XY with x ACROSS the gable. When the ridge runs
+      // along X the across-axis is already world X; otherwise turn it to face
+      // down Z. The triangle is symmetric, so which way it turns does not
+      // matter — only that the extrusion ends up on the gable's own axis.
+      if (spanAlongX) m.position.set(0, 0, plane)
+      else { m.rotation.y = Math.PI / 2; m.position.set(plane, 0, 0) }
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = skin.layer
+      m.userData.info = skin.info
+      g.add(m)
+      off += skin.t
+    }
+  }
   return g
 }
 
