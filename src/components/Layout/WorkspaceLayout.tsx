@@ -504,23 +504,6 @@ export default function WorkspaceLayout() {
   useEffect(() => {
     if (editMode && actionActive) setEditMode(false)
   }, [editMode, actionActive, setEditMode])
-  const buildResult = useAppStore((s) => s.buildResult)
-  const modelStatus = useAppStore((s) => s.model.status)
-  const floorCount = useAppStore((s) => s.floorsAreas.length)
-  const roofCount = useAppStore((s) => s.roofAreas.length)
-  const objectCount = useAppStore((s) => s.placedObjects.length)
-  // Traced WALLS and trade runs count as something to edit too. They didn't, and
-  // walls are the main thing you trace — so a plan with walls on it and nothing
-  // else offered no Edit button at all, even though the edit rail handles walls
-  // and runs fully. Worse since the model reflects tracing live: there is no
-  // build step left to flip buildResult, so on a walls-only plan NOTHING here was
-  // ever true and Edit simply never appeared.
-  const wallCount = useAppStore((s) => {
-    let n = 0
-    for (const d of s.drawings) for (const w of d.parsedWalls) if (w.source === 'user') n++
-    return n
-  })
-  const runCount = useAppStore((s) => s.plumbingLines.length + s.electricalLines.length + s.hvacLines.length)
   // Floors the user actually HAS, from what they've traced/placed — not from
   // model.floorLevels, which only exists after a build. The floor bar (fade +
   // isolate) was gated on the built model, so on an unbuilt plan it never
@@ -542,12 +525,6 @@ export default function WorkspaceLayout() {
     () => (floorKey ? floorKey.split(',').map(Number) : []),
     [floorKey],
   )
-  // Reachable once there's ANYTHING to grab — a built model, or any traced wall,
-  // floor, roof, run or placed object. If you can select it, you can edit it, so
-  // the same things that make a selection possible make Edit reachable.
-  const built = buildResult !== null || modelStatus === 'ready'
-    || floorCount > 0 || roofCount > 0 || objectCount > 0
-    || wallCount > 0 || runCount > 0
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
   // What the selection can be told to do. Buttons, not handles — see selectionEdit.
@@ -949,50 +926,9 @@ export default function WorkspaceLayout() {
         )
       })()}
 
-      {/* Edit toggle — bottom-left, only when a model is standing AND the
-          workspace is IDLE (no trace/calibration/placement owning it). An action
-          locks the workspace, so edit is only offered between actions. */}
-      {hasDrawings && built && !actionActive && (
-        <div className={styles.editBar}>
-          <button
-            className={`${styles.editToggle} ${editMode ? styles.editToggleOn : ''}`}
-            onClick={() => setEditMode(!editMode)}
-            aria-pressed={editMode}
-          >
-            {/* Drawn, not typed — same reason as the explode burst. A colour
-                emoji is a filled multi-colour blob sitting among thin grey
-                glyphs; an SVG on currentColor dims, highlights and re-themes
-                with everything else, including turning dark when this button
-                goes accent-filled in edit mode. */}
-            <svg
-              className={styles.editIcon}
-              viewBox="0 0 24 24"
-              width="15"
-              height="15"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              {editMode ? (
-                /* A tick, for "done". */
-                <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
-              ) : (
-                <>
-                  {/* Pencil: body, tip and the line it is drawing. */}
-                  <path d="M16.7 3.9a2.1 2.1 0 0 1 3 3L9.4 17.2l-4 1 1-4Z" />
-                  <path d="M15.2 5.4 18.2 8.4" />
-                  <path d="M4 21h16" />
-                </>
-              )}
-            </svg>
-            {editMode ? 'Done editing' : 'Edit'}
-          </button>
-          {editMode && <span className={styles.editHint}>Drag anything to move it</span>}
-        </div>
-      )}
+      {/* Edit lives in the RAIL now (RailCascade), with the other verbs.
+          It floated here at bottom-left, which sat it right beside CLEAR —
+          the adjacency Clear was pushed to the rail foot to avoid. */}
 
       {/* Persistent Explode slider — a narrow VERTICAL column on the right edge,
           pulled up rather than dragged sideways, so it takes a strip of chrome

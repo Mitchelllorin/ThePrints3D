@@ -33,6 +33,27 @@ function BinIcon() {
   )
 }
 
+/** Pencil, or a tick once you're in edit mode. Drawn for the same reason as the
+ *  bin: the rail is thin monochrome marks and an emoji would be the odd one out. */
+function EditIcon({ done }: { done: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    >
+      {done ? (
+        <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />
+      ) : (
+        <>
+          <path d="M16.7 3.9a2.1 2.1 0 0 1 3 3L9.4 17.2l-4 1 1-4Z" />
+          <path d="M15.2 5.4 18.2 8.4" />
+          <path d="M4 21h16" />
+        </>
+      )}
+    </svg>
+  )
+}
+
 type Section = 'build' | 'ask' | 'settings' | 'place'
 
 const RAIL: { id: Section; icon: string; label: string }[] = [
@@ -53,6 +74,26 @@ export default function RailCascade() {
   const armPlaceExclusive = useFloorplanLocalStore((s) => s.armPlaceExclusive)
   const clearWorkspace = useAppStore((s) => s.clearWorkspace)
   const hasDrawings = useAppStore((s) => s.drawings.length > 0)
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
+  // Reachable once there's ANYTHING to grab — a built model, or any traced
+  // wall, floor, roof or placed object. If you can select it you can edit it,
+  // so the same things that make a selection possible make Edit reachable.
+  // (Gating on the built model alone hid Edit on a plan you had traced but not
+  // yet built, which is exactly when you most want to nudge a wall.) Returns a
+  // boolean from one selector so an unrelated store write cannot re-render the
+  // whole rail.
+  const hasSomethingToEdit = useAppStore((s) =>
+    s.buildResult !== null
+    || s.model.status === 'ready'
+    || s.floorsAreas.length > 0
+    || s.roofAreas.length > 0
+    || s.placedObjects.length > 0
+    || s.plumbingLines.length > 0
+    || s.electricalLines.length > 0
+    || s.hvacLines.length > 0
+    || s.drawings.some((d) => d.parsedWalls.some((w) => w.source === 'user')),
+  )
 
   // Place is a cascade column (not a store drawer), so its open state is local.
   const [placeOpen, setPlaceOpen] = useState(false)
@@ -118,6 +159,27 @@ export default function RailCascade() {
             <span className={styles.iconLabel}>{label}</span>
           </button>
         ))}
+
+        {/* EDIT — a verb, so it belongs with the other verbs.
+            It used to float on its own at bottom-left, which put it directly
+            beside CLEAR: the exact adjacency Clear was moved to the foot to
+            escape. Sitting the button people press most next to the one that
+            wipes the workspace is the hazard, whichever of the two moved there
+            last. In the rail it is discoverable, stays on the perimeter, and
+            leaves Clear alone at the bottom with the whole gap between them.
+            A toggle rather than a section, so it lights up instead of
+            cascading a column. */}
+        {hasDrawings && hasSomethingToEdit && !traceMode && (
+          <button
+            className={`${styles.icon} ${editMode ? styles.active : ''}`}
+            onClick={() => setEditMode(!editMode)}
+            aria-pressed={editMode}
+            title={editMode ? 'Done editing' : 'Edit anything — drag to move it'}
+          >
+            <span className={styles.glyph}><EditIcon done={editMode} /></span>
+            <span className={styles.iconLabel}>{editMode ? 'Done' : 'Edit'}</span>
+          </button>
+        )}
 
         {/* CLEAR — pushed to the FOOT of the rail, and it asks first.
             It was sitting six pixels under PLACE, in the middle of the

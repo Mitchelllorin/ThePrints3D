@@ -424,10 +424,15 @@
 
 /* ── Persistent Explode slider — bottom-right, own SOLID surface (never fades
    with UI opacity), slim to match the rest of the chrome. ──────────────────── */
+/* Sits BESIDE the rail, not under it. The rail is a 44px full-height column
+   whose Clear button is pinned to its foot with margin-top:auto — which is the
+   same bottom-left corner this bar was claiming, so EDIT and CLEAR printed on
+   top of each other. Clearing the rail's width keeps both on the perimeter and
+   still leaves the middle of the workspace empty. */
 .editBar {
   position: absolute;
   bottom: 14px;
-  left: 14px;
+  left: 58px;
   z-index: 56;
   display: flex;
   align-items: center;
@@ -475,9 +480,11 @@
 @media (max-width: 767px), (max-height: 600px) {
   /* Lift Edit off the bottom edge into the same visible band as the Place tab —
      the phone's gesture bar (and the emulator's window chrome) clip anything
-     within ~40px of the bottom. Left column, so no conflict with Place (centre)
-     or Explode (right, lifted higher still). */
-  .editBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); left: 10px; }
+     within ~40px of the bottom. Clear of Place (centre) and Explode (right,
+     lifted higher still) — and now clear of CLEAR, which this rule had missed:
+     the rail's foot button sits in this same left column, so at left:10px the
+     two captions printed on top of each other. */
+  .editBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); left: 58px; }
   .editHint { display: none; }
 }
 
