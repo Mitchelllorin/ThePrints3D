@@ -710,7 +710,7 @@ describe('masonry veneer stands on something', () => {
 describe('housewrap gets taped', () => {
   const base = {
     length: 6, height: 2.7, thickness: 0.14, outward: 1 as const,
-    sheathing: sheathingLayer('osb'),
+    sheathing: sheathingLayer('wood', 'osb'),
   }
 
   it('tapes the course laps and every opening', () => {
