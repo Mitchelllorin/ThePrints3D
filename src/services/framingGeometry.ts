@@ -865,6 +865,69 @@ export function buildGableRoof(opts: {
     addBox(runLen, RT, RW, 0, rise, 0, 0, 0, 0, 'Ridge board')
   }
 
+  /**
+   * SHEATHE AND SHINGLE IT.
+   *
+   * A pitched roof was rafters, a ridge and ties — correct framing and, to
+   * anyone who is not a framer, an unfinished building. A house reads as
+   * finished from its roof before anything else, so bare sticks up there undo
+   * every other finish on the model.
+   *
+   * Deck first, then courses of shingles stepping up the slope, each course
+   * standing slightly proud of the one below so it throws a shadow line —
+   * exactly the trick the lap siding uses, and for the same reason: the shadow
+   * is what the eye reads as texture.
+   */
+  const DECK_T = 0.012
+  const SHINGLE_EXP = 0.143            // 5-5/8" exposure, standard 3-tab
+  const SHINGLE_T = 0.006
+  const deckMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#8d8f93'), roughness: 0.95, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const shingleMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#4b4f55'), roughness: 0.92, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  /** Lay a deck + its shingles on one slope. `sign` is which side of the ridge. */
+  const clad = (sign: 1 | -1) => {
+    const a = sign * angle
+    // Straight up out of the rafter's own plane.
+    const nx = -Math.sin(a), ny = Math.cos(a)
+    const cx = sign * (half / 2), cy = rise / 2
+    const put = (mat: THREE.Material, t: number, off: number, alongOff: number, info: string) => {
+      const px = cx + nx * off + Math.cos(a) * alongOff
+      const py = cy + ny * off + Math.sin(a) * alongOff
+      const m = spanAlongX
+        ? new THREE.Mesh(new THREE.BoxGeometry(rafterLen, t, runLen), mat)
+        : new THREE.Mesh(new THREE.BoxGeometry(runLen, t, rafterLen), mat)
+      if (spanAlongX) { m.position.set(px, py, 0); m.rotation.set(0, 0, a) }
+      else { m.position.set(0, py, px); m.rotation.set(-a, 0, 0) }
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = 'roof'; m.userData.info = info
+      g.add(m)
+    }
+    put(deckMat, DECK_T, RT / 2 + DECK_T / 2, 0, 'Roof sheathing · 1/2" OSB')
+
+    // Courses, from eave to ridge.
+    const base = RT / 2 + DECK_T + SHINGLE_T / 2
+    const n = Math.max(1, Math.floor(rafterLen / SHINGLE_EXP))
+    for (let i = 0; i < n; i++) {
+      const alongOff = -rafterLen / 2 + (i + 0.5) * SHINGLE_EXP
+      const m = spanAlongX
+        ? new THREE.Mesh(new THREE.BoxGeometry(SHINGLE_EXP * 1.06, SHINGLE_T, runLen), shingleMat)
+        : new THREE.Mesh(new THREE.BoxGeometry(runLen, SHINGLE_T, SHINGLE_EXP * 1.06), shingleMat)
+      const px = cx + nx * base + Math.cos(a) * alongOff
+      const py = cy + ny * base + Math.sin(a) * alongOff
+      if (spanAlongX) { m.position.set(px, py, 0); m.rotation.set(0, 0, a) }
+      else { m.position.set(0, py, px); m.rotation.set(-a, 0, 0) }
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = 'roof'; m.userData.info = 'Asphalt shingles'
+      g.add(m)
+    }
+  }
+  clad(1); clad(-1)
+
   // ── Complete the framing: ties + gable-end studs (not rafters alone) ──
   // Spec: rafter ties ≤24" OC in the lower third; collar ties ≤48" OC in the
   // upper third; gable studs 16" OC (see research notes).
@@ -1794,6 +1857,50 @@ export function buildWallCladding(opts: {
       if (height - r.y1 > 0.02) add(w, height - r.y1, cx, (height + r.y1) / 2)  // above
     }
   }
+
+  /**
+   * CASING AND CORNER BOARDS — the difference between clad and finished.
+   *
+   * Siding stopped dead at every opening and at every corner, leaving raw cut
+   * edges: a wall that has been covered rather than trimmed. On a real house
+   * the casing goes on first and the siding butts INTO it, which is why an
+   * untrimmed opening reads as unfinished from across the street even when
+   * every other layer is right.
+   *
+   * Cheap in geometry and worth more than almost anything else on the exterior:
+   * four boards round each opening, one at each end of the wall.
+   */
+  const TRIM_W = 0.089                     // 1x4 casing
+  const trimT = spec.thicknessM * 1.35     // stands proud of the siding
+  const trimZ = outward * (standoff + trimT / 2)
+  const trimMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f2f0ea'),     // painted trim, lighter than the field
+    roughness: 0.7, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const board = (w: number, h: number, x: number, y: number, info: string) => {
+    if (w < 0.02 || h < 0.02) return
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, trimT), trimMat)
+    m.position.set(x, y, trimZ)
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'cladding'
+    m.userData.info = info
+    g.add(m)
+  }
+  for (const r of rects) {
+    const w = r.x1 - r.x0
+    const cx = (r.x0 + r.x1) / 2
+    const cy = (r.y0 + r.y1) / 2
+    const hh = r.y1 - r.y0
+    board(w + TRIM_W * 2, TRIM_W, cx, r.y1 + TRIM_W / 2, 'Head casing · 1x4')
+    if (r.y0 > 0.02) board(w + TRIM_W * 2, TRIM_W, cx, r.y0 - TRIM_W / 2, 'Sill / apron · 1x4')
+    board(TRIM_W, hh, r.x0 - TRIM_W / 2, cy, 'Side casing · 1x4')
+    board(TRIM_W, hh, r.x1 + TRIM_W / 2, cy, 'Side casing · 1x4')
+  }
+  // Corner boards, where the siding would otherwise show its cut end.
+  board(TRIM_W, height, -half + TRIM_W / 2, height / 2, 'Corner board · 1x4')
+  board(TRIM_W, height, half - TRIM_W / 2, height / 2, 'Corner board · 1x4')
+
   return g
 }
 
