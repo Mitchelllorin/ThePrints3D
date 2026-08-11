@@ -924,10 +924,15 @@
 @media (max-width: 767px), (max-height: 600px) {
   /* Now that it is a narrow column it no longer needs a row of its own: the
      Place tab sits centre and the verbs live in the left rail, so nothing is a
-     vertical neighbour here. Dropped from 46 to 30 to give the edit rail above
-     it back the room the two were fighting over — the safe-area inset is added
-     on top, so this still clears a gesture bar. */
-  .explodeBar { bottom: calc(30px + env(safe-area-inset-bottom, 0px)); right: 4px; }
+     vertical neighbour here. Stays at 46: that number came from watching a real
+     phone clip anything within ~40px of the bottom, and env(safe-area-inset-
+     bottom) is frequently 0 in Chrome Android because the browser's own UI
+     already occupies that band — so this 46 is doing the work by itself, not
+     padding a safe area. It was briefly dropped to 30 to buy the edit rail
+     vertical room, which was measuring a 468px-tall desktop window and calling
+     it a phone: a real portrait handset has ~915px and the rail has room to
+     spare. Nothing was bought, and a control was moved into the gesture bar. */
+  .explodeBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); right: 4px; }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { height: 96px; }
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
@@ -936,7 +941,11 @@
   /* Same sum as desktop, phone numbers — and measured this time rather than
      estimated. The old comment guessed the shorter (96px slider) explode column
      at ~112px; it is 167 including icon and padding, which is why the rail ran
-     35px into it. Real sum: 62 (top) + 167 (explode) + 30 (its offset) + 16. */
-  .editRail { top: 92px; right: 2px; gap: 8px; max-height: calc(100dvh - 305px); }
+     35px into it. Real sum: 92 (top) + 167 (explode) + 46 (its offset) + 16.
+     On a portrait handset (~915dvh) that still leaves ~590px against ~310px of
+     controls, so the rail stays ONE column there and the wrap never fires —
+     flex-wrap only breaks when the content actually exceeds the cap. The second
+     column is for short landscape windows, which is where it was seen. */
+  .editRail { top: 92px; right: 2px; gap: 8px; max-height: calc(100dvh - 321px); }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }
