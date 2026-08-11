@@ -1949,6 +1949,40 @@ export const useAppStore = create<AppState>()(
         }
       }
 
+      /**
+       * WHICH WAY IS INSIDE.
+       *
+       * An opening was rotated from its wall's orientation alone — horizontal
+       * or vertical — which fixes the plane it lies in and says nothing about
+       * which face is the room. So half of them ended up back to front, and
+       * everything that hangs off a door's facing went with them: swing arcs
+       * opening into the yard, and a garage door whose tracks ran out to the
+       * driveway instead of back into the garage.
+       *
+       * The wall plane gives two candidate rotations, half a turn apart. The
+       * building's own centre picks between them: the one whose local +Z points
+       * back towards the middle of the plan is the one facing indoors.
+       */
+      const wallsAll = s.drawings.flatMap((d) => d.parsedWalls)
+      let cx = 0
+      let cy = 0
+      for (const w of wallsAll) { cx += (w.x1 + w.x2) / 2; cy += (w.y1 + w.y2) / 2 }
+      cx /= Math.max(1, wallsAll.length)
+      cy /= Math.max(1, wallsAll.length)
+
+      const facingInto = (op: { x: number; y: number; orientation: string }): number => {
+        const base = op.orientation === 'vertical' ? Math.PI / 2 : 0
+        // Image Y runs down; world Z runs with it, so the plan-space vector to
+        // the centre is the world one.
+        const toCx = cx - op.x
+        const toCy = cy - op.y
+        for (const theta of [base, base + Math.PI]) {
+          // Local +Z under a Y-rotation lands on (sin θ, cos θ) in plan.
+          if (Math.sin(theta) * toCx + Math.cos(theta) * toCy > 0) return theta
+        }
+        return base
+      }
+
       let added = 0
       pushHistory()
       set((st) => {
@@ -1986,7 +2020,7 @@ export const useAppStore = create<AppState>()(
               type: op.type,
               x,
               z,
-              rotationY: op.orientation === 'vertical' ? Math.PI / 2 : 0,
+              rotationY: facingInto(op),
               // Fill the hole that was framed, rather than dropping a stock
               // leaf into an opening cut for something else.
               scaleX: widthM > 0 && item?.defaultW ? widthM / item.defaultW : 1,
