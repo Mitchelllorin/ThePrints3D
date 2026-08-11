@@ -891,7 +891,14 @@ export function buildGableRoof(opts: {
   })
   /** Lay a deck + its shingles on one slope. `sign` is which side of the ridge. */
   const clad = (sign: 1 | -1) => {
-    const a = sign * angle
+    // The rafters on the far side sit at MINUS the pitch: a slope centred at
+    // +half/2 descends as it runs out to the eave. Taking `sign * angle` here
+    // tilted every clad surface the opposite way to the sticks beneath it, so
+    // the roof climbed to the eaves and dipped at the ridge — a butterfly, with
+    // the courses running downhill. One sign governs all three things that must
+    // agree: the panel's tilt, the direction the courses step, and which way the
+    // offset normal lifts them clear of the rafter.
+    const a = -sign * angle
     // Straight up out of the rafter's own plane.
     const nx = -Math.sin(a), ny = Math.cos(a)
     const cx = sign * (half / 2), cy = rise / 2
