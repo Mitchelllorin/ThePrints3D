@@ -98,8 +98,45 @@ function parseSpecialFeatures(text: string): string[] {
   )
 }
 
-export function deriveWorkspaceSceneConfig(inputs: WorkspaceWizardInputs | null): WorkspaceSceneConfig {
-  if (!inputs) return DEFAULT_WORKSPACE_SCENE_CONFIG
+/**
+ * A finished residential ceiling is eight foot. Not 3.2 m — that is ten foot
+ * six, which is a lobby.
+ *
+ * The generic default below was written for the commercial shell the wizard was
+ * originally aimed at, and every house built since has framed a foot and a half
+ * too tall because nobody typed "wall height 2.4m" into a textarea for the
+ * regex to find.
+ */
+const RESIDENTIAL_CEILING_M = 2.44
+
+/** Answers we hold as VALUES rather than scraping back out of prose. */
+export interface WorkspaceSceneOverrides {
+  /** Stated ceiling height in metres. Beats anything parsed from the text. */
+  ceilingM?: number | null
+  /** e.g. 'residential-single' — picks the default when nobody has said. */
+  buildType?: string | null
+}
+
+/** The height to frame at when the drawing and the user have both said nothing. */
+function defaultCeilingM(buildType?: string | null): number {
+  if (!buildType || buildType.startsWith('residential')) return RESIDENTIAL_CEILING_M
+  return DEFAULT_WORKSPACE_SCENE_CONFIG.wallHeightM
+}
+
+export function deriveWorkspaceSceneConfig(
+  inputs: WorkspaceWizardInputs | null,
+  overrides?: WorkspaceSceneOverrides,
+): WorkspaceSceneConfig {
+  // A stated height is a fact and outranks everything, including having no
+  // wizard text at all — which is the common case now that the questions are
+  // asked directly rather than typed into a notes field.
+  const stated = overrides?.ceilingM ?? null
+  if (!inputs) {
+    return {
+      ...DEFAULT_WORKSPACE_SCENE_CONFIG,
+      wallHeightM: stated ?? defaultCeilingM(overrides?.buildType),
+    }
+  }
 
   const allText = [
     inputs.set1BuildingBasics,
@@ -111,7 +148,7 @@ export function deriveWorkspaceSceneConfig(inputs: WorkspaceWizardInputs | null)
   ].join(' ')
 
   const dims = parseDimension(`${inputs.set1BuildingBasics} ${inputs.set1Clarifications}`)
-  const wallHeightM = parseWallHeight(allText) ?? DEFAULT_WORKSPACE_SCENE_CONFIG.wallHeightM
+  const wallHeightM = stated ?? parseWallHeight(allText) ?? defaultCeilingM(overrides?.buildType)
   const floorCount = parseFloorCount(inputs.set1BuildingBasics) ?? DEFAULT_WORKSPACE_SCENE_CONFIG.floorCount
   const foundationType = parseFoundationType(inputs.set1BuildingBasics) ?? DEFAULT_WORKSPACE_SCENE_CONFIG.foundationType
   const defaultWallThicknessM = parseThickness(inputs.set3FinishingDetails) ?? DEFAULT_WORKSPACE_SCENE_CONFIG.defaultWallThicknessM
