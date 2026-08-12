@@ -1800,8 +1800,19 @@ function buildGableEaveAndRake(
   // ── True eaves (the two low sides parallel to the ridge) ──
   // Span the eave members the FULL outer length so they tuck under the rake and
   // cover the corners.
+  /**
+   * THE EAVE FASCIA RUNS PAST THE RAKE AND IS CUT PLUMB.
+   *
+   * It used to stop flush with the rake plane, so the two boards met edge to
+   * edge and the corner had nothing terminating it — the exposed end the user
+   * circled. On site the eave board carries past the rake and its plumb end is
+   * what closes that corner. Far enough to clear the rake board's own face,
+   * plus a little, because it is meant to read as running past rather than
+   * dying into it.
+   */
+  const RUN_PAST_RAKE = FW / 2 + 0.03
   if (rakeOnZ) {
-    const zSpan = lenZ + 2 * overhang
+    const zSpan = lenZ + 2 * overhang + 2 * RUN_PAST_RAKE
     for (const sx of [1, -1]) {
       const ovh = eaveOvh(sx > 0)
       const drop = dropFor(sx > 0)
@@ -1814,7 +1825,7 @@ function buildGableEaveAndRake(
       }
     }
   } else {
-    const xSpan = lenX + 2 * overhang
+    const xSpan = lenX + 2 * overhang + 2 * RUN_PAST_RAKE
     for (const sz of [1, -1]) {
       const ovh = eaveOvh(sz > 0)
       const drop = dropFor(sz > 0)
@@ -1828,7 +1839,49 @@ function buildGableEaveAndRake(
     }
   }
 
+  /**
+   * PORK CHOP — closing the open end of the boxed eave at the gable.
+   *
+   * The boxed eave is a long box: soffit underneath, fascia on the face, and
+   * NOTHING on its ends. Where it runs out at the gable the whole section was
+   * left open — you could see straight into the eave and out the end of the
+   * rafter tails. That is the exposed end the user circled.
+   *
+   * The trade name is a pork chop (also eave return, cornice return): "the
+   * result of connecting the geometry of a flat soffit on the side eave with
+   * the angle of the gable end… a triangular piece that covers up the end of
+   * the rafters and merges with the soffit below." Widely disliked to look at,
+   * and exactly right for what this roof is — a FLAT soffit meeting a gable has
+   * to resolve somewhere, and this is where. (The way to avoid one is to angle
+   * the soffit up the rafters instead, which is a different eave and worth
+   * offering as a choice later.)
+   */
+  const chopThick = FW
+  for (const endSign of [1, -1]) {
+    for (const eaveSign of [1, -1]) {
+      const ovh = eaveOvh(eaveSign > 0)
+      const drop = dropFor(eaveSign > 0)
+      const chopY = fasciaY - drop + FAS / 2 - FAS / 2   // face centre, as the fascia
+      if (rakeOnZ) {
+        // Eaves run along Z at ±x; the open ends face ±z.
+        addRoofBox(g, wood, ovh, FAS, chopThick,
+          eaveSign * (hx + ovh / 2), chopY, endSign * (hz + overhang),
+          0, 0, 0, 'Eave return · pork chop')
+      } else {
+        // Eaves run along X at ±z; the open ends face ±x.
+        addRoofBox(g, wood, chopThick, FAS, ovh,
+          endSign * (hx + overhang), chopY, eaveSign * (hz + ovh / 2),
+          0, 0, 0, 'Eave return · pork chop')
+      }
+    }
+  }
+
   // ── Gable-end rakes (barge board + sloped rake soffit, flying past the wall) ──
+  // RAKE BOARD, not fascia. They are different members and the trade keeps them
+  // apart: the fascia is the trim on the face of the EAVE and it is what the
+  // eavestrough hangs on; the rake board is the trim on the face of the gable
+  // and carries no gutter. Calling both "fascia" hid that the two sides of this
+  // roof do different jobs.
   const half = rakeOnZ ? hx : hz              // across-slope half-span (peak at centre)
   const rise = Math.max(0.1, half * pitch)
   const angle = Math.atan2(rise, half)
@@ -1912,7 +1965,7 @@ function buildGableEaveAndRake(
         rake.position.set(end * out, 0, 0)
       }
       rake.castShadow = true; rake.receiveShadow = true
-      rake.userData.layer = 'roof'; rake.userData.info = 'Rake fascia · mitred at the peak'
+      rake.userData.layer = 'roof'; rake.userData.info = 'Rake board · mitred at the peak'
       g.add(rake)
 
       const acrossMid = run / 2
