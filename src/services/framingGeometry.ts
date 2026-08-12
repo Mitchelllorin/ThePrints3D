@@ -872,6 +872,8 @@ export function buildGableRoof(opts: {
   lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
   /** Per-edge eave overhang. The tails, deck and shingles run out over it. */
   overhangM?: OverhangSpec
+  /** The wall cladding, so the gable ends match the walls below them. */
+  cladding?: CladdingSpec | null
 }): THREE.Group {
   const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
   const g = new THREE.Group()
@@ -1158,7 +1160,18 @@ export function buildGableRoof(opts: {
    * for X-ray, explode and the layer toggles rather than reading as roof.
    */
   const GABLE_SHEATH_T = 0.011           // 7/16" OSB
-  const GABLE_SIDING_T = 0.019           // lap siding, nominal
+  /**
+   * THE GABLE MATCHES THE WALLS. It is the same wall, carried up.
+   *
+   * The skin used to hard-code a cream colour and a 7" lap, so a house clad in
+   * brick or stucco still got clapboard above the plate — two different
+   * buildings meeting at the top plate. It now takes the same CladdingSpec the
+   * walls are built from: same material, same colour, same exposure. Where the
+   * cladding has no exposure at all (stucco, rainscreen panel) there are no
+   * courses to draw, which is also correct — stucco has no shadow lines.
+   */
+  const gableClad = opts.cladding ?? null
+  const GABLE_SIDING_T = gableClad?.thicknessM ?? 0.019
   /**
    * The triangle is bounded by the plate below and the UNDERSIDE OF THE DECK
    * above — not by the rafter centre line.
@@ -1185,9 +1198,9 @@ export function buildGableRoof(opts: {
         color: new THREE.Color('#c9a273'), roughness: 0.9, metalness: 0,
         transparent: opacity < 1, opacity, side: THREE.DoubleSide,
       }) },
-    { t: GABLE_SIDING_T, layer: 'cladding', info: 'Gable siding',
+    { t: GABLE_SIDING_T, layer: 'cladding', info: `Gable ${(gableClad?.label ?? 'siding').toLowerCase()}`,
       mat: new THREE.MeshStandardMaterial({
-        color: new THREE.Color('#dcd6c8'), roughness: 0.85, metalness: 0,
+        color: new THREE.Color(gableClad?.color ?? '#dcd6c8'), roughness: 0.85, metalness: 0,
         transparent: opacity < 1, opacity, side: THREE.DoubleSide,
       }) },
   ]
@@ -1207,10 +1220,10 @@ export function buildGableRoof(opts: {
    * shadow beneath.
    */
   const gableSidingMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#dcd6c8'), roughness: 0.85, metalness: 0,
+    color: new THREE.Color(gableClad?.color ?? '#dcd6c8'), roughness: 0.85, metalness: 0,
     transparent: opacity < 1, opacity, side: THREE.DoubleSide,
   })
-  const LAP_EXPOSURE = 0.178             // 7", standard lap
+  const LAP_EXPOSURE = gableClad?.exposureM ?? 0.178
   const apexY = rise + deckLift
   for (const gp of [-halfRun + RW / 2, halfRun - RW / 2]) {
     const outward = gp >= 0 ? 1 : -1
@@ -1233,13 +1246,18 @@ export function buildGableRoof(opts: {
       off += skin.t
     }
 
-    // Lap courses over the sheathing.
+    // Lap courses over the sheathing — only for cladding that HAS courses.
+    if (gableClad && gableClad.exposureM == null) continue
     const courses = Math.max(1, Math.ceil(apexY / LAP_EXPOSURE))
     for (let i = 0; i < courses; i++) {
       const y0 = i * LAP_EXPOSURE
       const y1 = Math.min(apexY, y0 + LAP_EXPOSURE)
-      const yMid = (y0 + y1) / 2
-      const w = 2 * triHalf * (1 - yMid / apexY)
+      // Width AT THE STRIP'S OWN HEIGHT. Taking it at the course mid-height and
+      // then standing the strip at the course TOP made every one of them too
+      // wide for where it sat, so each poked past the rake on both sides — a
+      // row of dashes down each gable end, which is what the siding course
+      // lines had turned into.
+      const w = 2 * triHalf * (1 - y1 / apexY)
       if (w < 0.05) continue
       // A STRIP, not a panel. Sizing whole courses to the triangle left the
       // sheathing showing through in notches at the rake — 47 of 481 rays on a
@@ -1259,7 +1277,7 @@ export function buildGableRoof(opts: {
       else c.position.set(plane, yLine, 0)
       c.castShadow = true; c.receiveShadow = true
       c.userData.layer = 'cladding'
-      c.userData.info = 'Gable siding · 7" lap'
+      c.userData.info = `Gable ${(gableClad?.label ?? 'siding').toLowerCase()} · course`
       g.add(c)
     }
   }
@@ -1831,7 +1849,12 @@ function buildGableEaveAndRake(
  *  the boxed-eave overhang (soffit/fascia/lookouts) as an axis-aligned sibling. */
 export function buildRoofByType(
   type: string,
-  opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number; overhangM?: OverhangSpec },
+  opts: {
+    lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+    overhangM?: OverhangSpec
+    /** Wall cladding, so gable ends match the walls (gable builder only). */
+    cladding?: CladdingSpec | null
+  },
 ): THREE.Group {
   const t = (type || '').trim().toLowerCase()
   // Only the gable builder runs its rafter tails, deck and shingles out over

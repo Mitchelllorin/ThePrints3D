@@ -21,6 +21,8 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { claddingSpec } from '../../services/constructionCode'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildRoofByType, buildRidgeRoof, ridgeIsShaped, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -99,13 +101,21 @@ function RoofAreaMesh({
   const isGable = GABLE_FAMILY.has((area.elementType || '').trim().toLowerCase())
   const shaped = isGable && ridgeIsShaped(ridge)
 
+  // The gable ends are wall carried up, so they take the SAME cladding the
+  // walls do — otherwise a brick house grows clapboard above the top plate.
+  const claddingKind = useUISettingsStore((st) => st.cladding)
+  const claddingVisible = useUISettingsStore((st) => st.claddingVisible)
+  const gableCladding = useMemo(
+    () => (claddingVisible ? claddingSpec(claddingKind) : null),
+    [claddingKind, claddingVisible],
+  )
   const roof = useMemo(() => {
     const r = shaped
       ? buildRidgeRoof({
           lenX, lenZ, pitch: ridge.pitch, ocM: RAFTER_OC_M, overhangM,
           crossFrac: ridge.crossFrac, insetA: ridge.insetA, insetB: ridge.insetB,
         })
-      : buildRoofByType(area.elementType, { lenX, lenZ, pitch: ridge.pitch, ocM: RAFTER_OC_M, overhangM })
+      : buildRoofByType(area.elementType, { lenX, lenZ, pitch: ridge.pitch, ocM: RAFTER_OC_M, overhangM, cladding: gableCladding })
     r.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
     // IDENTITY, STAMPED AFTER THE FACT. A rafter with no id is anonymous
     // geometry — visible, unselectable. There are four roof builders, each with
@@ -121,7 +131,7 @@ function RoofAreaMesh({
       mesh.userData.label = mesh.userData.info ?? 'Roof member'
     })
     return r
-  }, [lenX, lenZ, shaped, ridge.pitch, ridge.crossFrac, ridge.insetA, ridge.insetB, area.elementType, area.level, overhangM, area.id])
+  }, [lenX, lenZ, shaped, ridge.pitch, ridge.crossFrac, ridge.insetA, ridge.insetB, area.elementType, area.level, overhangM, area.id, gableCladding])
 
   // X-ray. A roof is the single most in-the-way thing in the model — it covers
   // everything you built underneath — so seeing through it has to be one tap.
