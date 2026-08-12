@@ -849,6 +849,30 @@ export function resolveOverhang(spec: OverhangSpec | undefined, edge: RoofEdge):
   return Math.max(0, typeof v === 'number' ? v : spec.default)
 }
 
+/**
+ * A gable RAKE cannot fly as far as an eave, and the limit is structural.
+ *
+ * The rake is carried by outlookers cantilevered over the gable wall, and they
+ * are good for 24" (12" for the ladder-framed version). Past that it wants
+ * engineered support — it is not a preference. An EAVE is a different member
+ * entirely: the rafter tail itself cantilevers, limited by span rather than by
+ * this number, so eaves are left alone.
+ *
+ * A 36" rake was being drawn without a word, which is the app quietly building
+ * something that would not pass. Clamping is the honest default; the UI should
+ * say so when it bites, rather than the number silently changing under you.
+ */
+export const RAKE_OUTLOOKER_MAX_M = 0.6096   // 24"
+
+/** The rake overhang actually buildable on this edge, and whether it was cut. */
+export function limitedRakeOverhang(spec: OverhangSpec | undefined, edge: 'rakeA' | 'rakeB'): {
+  m: number; requested: number; clamped: boolean
+} {
+  const requested = resolveOverhang(spec, edge)
+  const m = Math.min(requested, RAKE_OUTLOOKER_MAX_M)
+  return { m, requested, clamped: m < requested - 1e-6 }
+}
+
 /** True when the edges disagree — worth saying out loud in the UI. */
 export function overhangIsAsymmetric(spec: OverhangSpec | undefined): boolean {
   if (spec === undefined || typeof spec === 'number') return false
@@ -926,8 +950,8 @@ export function buildGableRoof(opts: {
    * rake overhang, so the run is the footprint plus both, shifted toward
    * whichever end projects further.
    */
-  const rakeA = resolveOverhang(opts.overhangM, 'rakeA')
-  const rakeB = resolveOverhang(opts.overhangM, 'rakeB')
+  const rakeA = limitedRakeOverhang(opts.overhangM, 'rakeA').m
+  const rakeB = limitedRakeOverhang(opts.overhangM, 'rakeB').m
   const deckRun = runLen + rakeA + rakeB
   const deckShift = (rakeA - rakeB) / 2
 
@@ -1919,12 +1943,16 @@ function buildGableEaveAndRake(
   // A board cut to the pitch shows a taller face than the same board level.
   const rakeTop = BUILDUP_ABOVE / Math.cos(angle)
   const rakeBottom = BUILDUP_BELOW / Math.cos(angle) + BELOW_MARGIN
-  const out = (rakeOnZ ? hz : hx) + overhang  // outboard plane of the barge
+  // Outboard plane of the barge, per END, clamped to what an outlooker can
+  // actually carry — so the trim lands on the deck rather than out past it.
+  const rakeOut = (end: number) =>
+    (rakeOnZ ? hz : hx) + limitedRakeOverhang(spec ?? overhang, end > 0 ? 'rakeA' : 'rakeB').m
   for (const end of [1, -1]) {                // each gable end
     for (const side of [1, -1]) {             // each slope (left / right of ridge)
       // The barge caps the roof EDGE, so when that slope's tail runs out past
       // the wall the rake has to run out with it — otherwise the deck it is
       // supposed to be capping carries on past the end of the board.
+      const out = rakeOut(end)
       const ovh = coversOwnEaves ? eaveOvh(side > 0) : 0
       const run = half + ovh
       /**

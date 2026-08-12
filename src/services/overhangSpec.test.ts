@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import {
-  resolveOverhang, overhangIsAsymmetric, buildRoofByType,
+  resolveOverhang, overhangIsAsymmetric, buildRoofByType, limitedRakeOverhang,
+  RAKE_OUTLOOKER_MAX_M,
   type OverhangSpec, type RoofEdge,
 } from './framingGeometry'
 
@@ -85,7 +86,7 @@ describe('the roof covers its own overhang', () => {
 
   it('runs the shingles out past the wall, not just the soffit', () => {
     const roof = buildRoofByType('gable', { ...base, overhangM: 0.9 })
-    const shingles = axisRange(roof, /shingle/i, 'x')
+    const shingles = axisRange(roof, /^Asphalt shingles/, 'x')
     // Wall line is at ±4; the shingles must reach beyond it, not stop on it.
     expect(shingles.max).toBeGreaterThan(4.5)
     expect(shingles.min).toBeLessThan(-4.5)
@@ -116,7 +117,7 @@ describe('asymmetry — the thing the old scalar could not say', () => {
     const roof = buildRoofByType('gable', {
       ...base, overhangM: { default: 0.3, eaveA: 1.2 },
     })
-    const shingles = axisRange(roof, /shingle/i, 'x')
+    const shingles = axisRange(roof, /^Asphalt shingles/, 'x')
     // eaveA is the +x side: it should reach ~5.2 while -x stops near -4.3.
     expect(shingles.max).toBeGreaterThan(5.0)
     expect(Math.abs(shingles.min)).toBeLessThan(4.6)
@@ -144,7 +145,47 @@ describe('asymmetry — the thing the old scalar could not say', () => {
 
   it('still builds symmetrically when given a single number', () => {
     const roof = buildRoofByType('gable', { ...base, overhangM: 0.6 })
-    const shingles = axisRange(roof, /shingle/i, 'x')
+    const shingles = axisRange(roof, /^Asphalt shingles/, 'x')
     expect(shingles.max).toBeCloseTo(Math.abs(shingles.min), 1)
+  })
+})
+
+
+describe('a rake cannot fly as far as an eave', () => {
+  it('clamps a rake to what an outlooker carries, and says it did', () => {
+    const r = limitedRakeOverhang(0.914, 'rakeA')   // 36"
+    expect(r.requested).toBeCloseTo(0.914, 6)
+    expect(r.m).toBeCloseTo(RAKE_OUTLOOKER_MAX_M, 6)  // 24"
+    expect(r.clamped).toBe(true)
+  })
+
+  it('leaves a legal rake alone', () => {
+    const r = limitedRakeOverhang(0.4, 'rakeA')
+    expect(r.m).toBeCloseTo(0.4, 6)
+    expect(r.clamped).toBe(false)
+  })
+
+  it('does NOT clamp eaves — a rafter tail is a different member', () => {
+    // Limited by cantilever/span, not by the outlooker rule.
+    expect(resolveOverhang(0.914, 'eaveA')).toBeCloseTo(0.914, 6)
+  })
+
+  it('the built roof honours the clamp', () => {
+    const wide = buildRoofByType('gable', { lenX: 8, lenZ: 12, pitch: 0.5, ocM: 0.4064, overhangM: 0.914 })
+    let maxAlongRidge = -Infinity
+    wide.updateMatrixWorld(true)
+    wide.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh || !/^Asphalt shingles/.test(String(m.userData?.info ?? ''))) return
+      const g = m.geometry
+      if (!g.boundingBox) g.computeBoundingBox()
+      const bb = g.boundingBox!.clone().applyMatrix4(m.matrixWorld)
+      maxAlongRidge = Math.max(maxAlongRidge, bb.max.z)
+    })
+    // spanAlongX is true here (lenX <= lenZ), so ACROSS is X and the ridge runs
+    // along Z — the rake is therefore the Z extent: half the 12 m run = 6, plus
+    // at most a clamped 0.61 rake. 36" was asked for; 24" is what can be built.
+    expect(maxAlongRidge).toBeLessThan(6 + RAKE_OUTLOOKER_MAX_M + 0.1)
+    expect(maxAlongRidge).toBeGreaterThan(6)
   })
 })
