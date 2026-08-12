@@ -14,6 +14,7 @@ import { useState } from 'react'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useAppStore } from '../../store/useAppStore'
 import { trayItems } from '../../data/objectCatalog'
+import LayersPanel from './LayersPanel'
 import styles from './RailCascade.module.css'
 
 /** Wastebasket, drawn rather than typed — the rail's glyphs are thin monochrome
@@ -54,13 +55,20 @@ function EditIcon({ done }: { done: boolean }) {
   )
 }
 
-type Section = 'build' | 'ask' | 'settings' | 'place'
+type Section = 'build' | 'ask' | 'settings' | 'place' | 'layers'
 
 const RAIL: { id: Section; icon: string; label: string }[] = [
   { id: 'build', icon: '✏', label: 'Build' },
   { id: 'ask', icon: '💬', label: 'Ask' },
   { id: 'settings', icon: '⚙', label: 'Settings' },
   { id: 'place', icon: '▦', label: 'Place' },
+  // LAYERS — what the model is made of, and what you want to see of it.
+  // The list itself already existed and was already registry-shaped (Structure /
+  // Envelope / Trades / View, bridging both stores). It was just mounted deep
+  // inside FloorplanPanel, so the only way to reach the trade toggles was
+  // through another drawer. A thing you reach for constantly does not live two
+  // levels down.
+  { id: 'layers', icon: '◫', label: 'Layers' },
 ]
 
 export default function RailCascade() {
@@ -97,6 +105,7 @@ export default function RailCascade() {
 
   // Place is a cascade column (not a store drawer), so its open state is local.
   const [placeOpen, setPlaceOpen] = useState(false)
+  const [layersOpen, setLayersOpen] = useState(false)
   // First tap arms Clear, second does it. See the button for why.
   const [clearArmed, setClearArmed] = useState(false)
 
@@ -105,6 +114,7 @@ export default function RailCascade() {
     ask: askOpen,
     settings: settingsOpen,
     place: placeOpen,
+    layers: layersOpen,
   }
 
   const closeDrawers = () => {
@@ -117,15 +127,19 @@ export default function RailCascade() {
     if (active[id]) {
       // Tapping the open section closes it.
       if (id === 'place') { setPlaceOpen(false); setPlaceObjectType(null) }
+      else if (id === 'layers') setLayersOpen(false)
       else setDrawerOpen(id, false)
       return
     }
-    // Open exclusively.
+    // Open exclusively — one surface at a time, so the workspace stays clear.
     if (id === 'place') {
-      closeDrawers()
+      closeDrawers(); setLayersOpen(false)
       setPlaceOpen(true)
+    } else if (id === 'layers') {
+      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null)
+      setLayersOpen(true)
     } else {
-      setPlaceOpen(false)
+      setPlaceOpen(false); setLayersOpen(false)
       setDrawerOpen(id, true) // the store closes the other drawers
     }
   }
@@ -213,6 +227,12 @@ export default function RailCascade() {
           </span>
         </button>
       </nav>
+
+      {layersOpen && (
+        <div className={styles.col} style={{ minWidth: 168, maxHeight: '100%' }}>
+          <LayersPanel />
+        </div>
+      )}
 
       {placeOpen && (
         <div className={styles.col}>

@@ -25,7 +25,6 @@ import {
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import styles from './AmbientGuide.module.css'
 import EdgeDrawer from '../Layout/EdgeDrawer'
-import LayersPanel from '../Layout/LayersPanel'
 import FinishesPanel from '../Layout/FinishesPanel'
 
 // ── Discipline layer tabs (Framing/Plumbing/Electrical wired; HVAC placeholder)
@@ -1952,8 +1951,10 @@ export default function FloorplanPanel() {
           open={placeDrawerOpen && !tracingActive}
           onToggle={() => setDrawerOpen('place', !placeDrawerOpen)}
         >
-          <span className={styles.stepLabel}>Layers</span>
-          <LayersPanel />
+          {/* Layers moved to its OWN rail section (RailCascade). It lived down
+              here inside the Place drawer, which meant the trade toggles — a
+              thing you reach for constantly — were two levels down behind
+              another menu. Mounting it in both places rendered the list twice. */}
 
           {/* THE GENERAL'S FIRST PASS. Sits above the catalog on purpose: the
               tray below is the box-by-box path and stays exactly as it was, so
