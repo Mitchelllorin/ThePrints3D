@@ -1817,7 +1817,12 @@ function buildGableEaveAndRake(
       const ovh = eaveOvh(sx > 0)
       const drop = dropFor(sx > 0)
       const lkLen = ovh + tie
-      addRoofBox(g, soffitMat, ovh, SOF, zSpan, sx * (hx + ovh / 2), soffitY - drop, 0, 0, 0, 0, 'Soffit')
+      // THE SOFFIT STOPS AT THE WALL. The roof keeps going past it — that is
+      // the whole point of a projection — but the flat soffit underneath dies
+      // at the perpendicular wall line, which is where its end has to be
+      // closed. It used to run the full outer length, straight out under the
+      // rake, which is not how a flat soffit resolves at a gable.
+      addRoofBox(g, soffitMat, ovh, SOF, lenZ, sx * (hx + ovh / 2), soffitY - drop, 0, 0, 0, 0, 'Soffit')
       addRoofBox(g, wood, FW, FAS, zSpan, sx * (hx + ovh), fasciaY - drop, 0, 0, 0, 0, 'Fascia')
       addRoofBox(g, wood, FW, FAS, lenZ, sx * hx, fasciaY - drop, 0, 0, 0, 0, 'Frieze')
       for (let z = -hz + 0.2; z <= hz; z += OC) {
@@ -1830,7 +1835,8 @@ function buildGableEaveAndRake(
       const ovh = eaveOvh(sz > 0)
       const drop = dropFor(sz > 0)
       const lkLen = ovh + tie
-      addRoofBox(g, soffitMat, xSpan, SOF, ovh, 0, soffitY - drop, sz * (hz + ovh / 2), 0, 0, 0, 'Soffit')
+      // The soffit stops at the wall; the roof carries on past it. See above.
+      addRoofBox(g, soffitMat, lenX, SOF, ovh, 0, soffitY - drop, sz * (hz + ovh / 2), 0, 0, 0, 'Soffit')
       addRoofBox(g, wood, xSpan, FAS, FW, 0, fasciaY - drop, sz * (hz + ovh), 0, 0, 0, 'Fascia')
       addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY - drop, sz * hz, 0, 0, 0, 'Frieze')
       for (let x = -hx + 0.2; x <= hx; x += OC) {
@@ -1846,6 +1852,9 @@ function buildGableEaveAndRake(
    * NOTHING on its ends. Where it runs out at the gable the whole section was
    * left open — you could see straight into the eave and out the end of the
    * rafter tails. That is the exposed end the user circled.
+   *
+   * It closes at the WALL LINE, because that is where the flat soffit dies —
+   * the roof itself carries on past, which is what a projection is.
    *
    * The trade name is a pork chop (also eave return, cornice return): "the
    * result of connecting the geometry of a flat soffit on the side eave with
@@ -1865,12 +1874,12 @@ function buildGableEaveAndRake(
       if (rakeOnZ) {
         // Eaves run along Z at ±x; the open ends face ±z.
         addRoofBox(g, wood, ovh, FAS, chopThick,
-          eaveSign * (hx + ovh / 2), chopY, endSign * (hz + overhang),
+          eaveSign * (hx + ovh / 2), chopY, endSign * hz,
           0, 0, 0, 'Eave return · pork chop')
       } else {
         // Eaves run along X at ±z; the open ends face ±x.
         addRoofBox(g, wood, chopThick, FAS, ovh,
-          endSign * (hx + overhang), chopY, eaveSign * (hz + ovh / 2),
+          endSign * hx, chopY, eaveSign * (hz + ovh / 2),
           0, 0, 0, 'Eave return · pork chop')
       }
     }
