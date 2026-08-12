@@ -907,6 +907,24 @@ export function buildGableRoof(opts: {
    *
    * Each eave resolves its own overhang, so the two sides need not match.
    */
+  /**
+   * THE DECK RUNS PAST THE GABLE TOO.
+   *
+   * The eave fix ran the tails out ACROSS the slope, and left the other axis
+   * exactly as broken: the deck and shingles still spanned the footprint, while
+   * the rake flew 0.92 m past each gable end with open sky over it. Measured —
+   * deck to x ±5.50, rake fascia to ±6.42. Same defect, turned ninety degrees.
+   *
+   * On a real roof the sheathing overhangs the gable wall and the barge board
+   * caps its edge; that projection is what the rake IS. Each end takes its own
+   * rake overhang, so the run is the footprint plus both, shifted toward
+   * whichever end projects further.
+   */
+  const rakeA = resolveOverhang(opts.overhangM, 'rakeA')
+  const rakeB = resolveOverhang(opts.overhangM, 'rakeB')
+  const deckRun = runLen + rakeA + rakeB
+  const deckShift = (rakeA - rakeB) / 2
+
   const eaveEdge = (sign: 1 | -1): RoofEdge => (sign > 0 ? 'eaveA' : 'eaveB')
   /** Geometry of one slope, ridge to tail end, for the eave on that side. */
   const slopeOf = (sign: 1 | -1) => {
@@ -1000,10 +1018,10 @@ export function buildGableRoof(opts: {
       const px = cx + nx * off + Math.cos(a) * alongOff
       const py = cy + ny * off + Math.sin(a) * alongOff
       const m = spanAlongX
-        ? new THREE.Mesh(new THREE.BoxGeometry(rafterLen, t, runLen), mat)
-        : new THREE.Mesh(new THREE.BoxGeometry(runLen, t, rafterLen), mat)
-      if (spanAlongX) { m.position.set(px, py, 0); m.rotation.set(0, 0, a) }
-      else { m.position.set(0, py, px); m.rotation.set(-a, 0, 0) }
+        ? new THREE.Mesh(new THREE.BoxGeometry(rafterLen, t, deckRun), mat)
+        : new THREE.Mesh(new THREE.BoxGeometry(deckRun, t, rafterLen), mat)
+      if (spanAlongX) { m.position.set(px, py, deckShift); m.rotation.set(0, 0, a) }
+      else { m.position.set(deckShift, py, px); m.rotation.set(-a, 0, 0) }
       m.castShadow = true; m.receiveShadow = true
       m.userData.layer = 'roof'; m.userData.info = info
       g.add(m)
@@ -1024,12 +1042,12 @@ export function buildGableRoof(opts: {
     for (let i = 0; i < n; i++) {
       const alongOff = rafterLen / 2 - (i + 0.5) * SHINGLE_EXP
       const m = spanAlongX
-        ? new THREE.Mesh(new THREE.BoxGeometry(SHINGLE_EXP * 1.06, SHINGLE_T, runLen), shingleMat)
-        : new THREE.Mesh(new THREE.BoxGeometry(runLen, SHINGLE_T, SHINGLE_EXP * 1.06), shingleMat)
+        ? new THREE.Mesh(new THREE.BoxGeometry(SHINGLE_EXP * 1.06, SHINGLE_T, deckRun), shingleMat)
+        : new THREE.Mesh(new THREE.BoxGeometry(deckRun, SHINGLE_T, SHINGLE_EXP * 1.06), shingleMat)
       const px = cx + nx * base + Math.cos(a) * alongOff
       const py = cy + ny * base + Math.sin(a) * alongOff
-      if (spanAlongX) { m.position.set(px, py, 0); m.rotation.set(0, 0, a) }
-      else { m.position.set(0, py, px); m.rotation.set(-a, 0, 0) }
+      if (spanAlongX) { m.position.set(px, py, deckShift); m.rotation.set(0, 0, a) }
+      else { m.position.set(deckShift, py, px); m.rotation.set(-a, 0, 0) }
       m.castShadow = true; m.receiveShadow = true
       m.userData.layer = 'roof'; m.userData.info = 'Asphalt shingles'
       g.add(m)
@@ -1080,10 +1098,25 @@ export function buildGableRoof(opts: {
    */
   const GABLE_SHEATH_T = 0.011           // 7/16" OSB
   const GABLE_SIDING_T = 0.019           // lap siding, nominal
+  /**
+   * The triangle is bounded by the plate below and the UNDERSIDE OF THE DECK
+   * above — not by the rafter centre line.
+   *
+   * Cutting it to the centre line left a wedge of open air along both slopes,
+   * widest at the ridge, so the peak read as unsided from outside. The deck
+   * underside is that same line lifted by half a rafter depth, measured
+   * VERTICALLY (hence /cos): a perpendicular offset is not a vertical one on a
+   * slope. Lifting the apex by that much and letting the sloped edges run out
+   * to where they now meet the plate puts the sheathing tight under the deck
+   * the whole way up. The few extra centimetres past the wall line are buried
+   * in the eave.
+   */
+  const deckLift = (RT / 2) / Math.cos(angle)
+  const triHalf = half + deckLift / Math.max(0.05, slope)
   const gableTri = new THREE.Shape()
-  gableTri.moveTo(-half, 0)
-  gableTri.lineTo(half, 0)
-  gableTri.lineTo(0, rise)
+  gableTri.moveTo(-triHalf, 0)
+  gableTri.lineTo(triHalf, 0)
+  gableTri.lineTo(0, rise + deckLift)
   gableTri.closePath()
   const gableSkins = [
     { t: GABLE_SHEATH_T, layer: 'sheathing', info: 'Gable sheathing · 7/16" OSB',
