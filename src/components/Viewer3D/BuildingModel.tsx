@@ -8,6 +8,7 @@ import type { Drawing, FloorLevel, FloorplanOverlayState, Layer, ParsedRoom, Par
 import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { modelWalls } from '../../services/modelWalls'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 import { blockMaterial, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -938,12 +939,27 @@ export default function BuildingModel({ layers }: Props) {
       (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0,
     )
 
-    // When the user has traced walls, the live wall layer persists them as the
-    // built walls (ghost → solid) with full detail — steel channel/knockouts,
-    // block courses, framed openings. So the engine wall/framing rendering is
-    // skipped to avoid a duplicate, lower-detail version. Auto-only plans (no
-    // traced walls) still build through the engine path below.
-    const hasUserWalls = drawings.some((d) => d.parsedWalls.some((w) => w.source === 'user'))
+    /**
+     * STAND DOWN WHENEVER THE LIVE LAYER IS BUILDING WALLS — which is whenever
+     * there are any, traced OR detected.
+     *
+     * This used to check for USER-traced walls only, on the reasoning that
+     * auto-only plans still needed the engine path. That stopped being true
+     * when `modelWalls()` started returning detected walls as well: the live
+     * layer frames every real wall now, so on an auto-detected plan BOTH ran
+     * and the model carried two sets of walls on top of each other — proper
+     * framing from one, a painted two-faced box from the other.
+     *
+     * Which is why the layer switches looked broken on an uploaded print.
+     * Hiding Framing took away the studs and left the boxes standing (measured:
+     * 1031 visible → 535), so the toggle read as half-working, and the envelope
+     * toggles did nothing at all to the boxes because a painted face is not a
+     * layer you can hide.
+     *
+     * It also means "upload a print" and "trace it yourself" no longer produce
+     * different qualities of model. Same walls, same framing, same envelope.
+     */
+    const hasUserWalls = modelWalls(drawings).length > 0
 
     // User-placed doors/windows become real openings cut into the wall meshes.
     const openingSpecs: OpeningSpec[] = placedObjects
