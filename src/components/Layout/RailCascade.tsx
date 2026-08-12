@@ -15,6 +15,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useAppStore } from '../../store/useAppStore'
 import { trayItems } from '../../data/objectCatalog'
 import LayersPanel from './LayersPanel'
+import { planViewCamera } from '../../services/builtScene'
 import styles from './RailCascade.module.css'
 
 /** Wastebasket, drawn rather than typed — the rail's glyphs are thin monochrome
@@ -214,19 +215,7 @@ export default function RailCascade() {
             onClick={() => {
               const next = !planView
               setPlanView(next)
-              if (next) {
-                // Straight down, framed to THIS drawing rather than a fixed
-                // height — a guessed 42 m left a small sheet stranded in the
-                // corner of the screen, which is useless for judging a line.
-                // The overlay knows its own size and where it sits.
-                const ov = useAppStore.getState().floorplanOverlay
-                const [w, d] = ov.scale
-                const [px, pz] = ov.position
-                const h = Math.max(6, Math.max(w, d) * 1.15)
-                // A hair off dead-centre: looking exactly down the Y axis gives
-                // OrbitControls a degenerate up-vector and it flips.
-                setCameraPreset({ position: [px, h, pz + 0.001], target: [px, 0, pz] })
-              }
+              if (next) setCameraPreset(planViewCamera(useAppStore.getState().floorplanOverlay))
             }}
             aria-pressed={planView}
             title={planView ? 'Back to 3D' : 'Plan view — look straight down at the drawing'}

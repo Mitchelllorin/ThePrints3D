@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
 import ProjectLibrary from '../Projects/ProjectLibrary'
+import { planViewCamera } from '../../services/builtScene'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -565,6 +566,41 @@ export default function WorkspaceLayout() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+
+  /**
+   * A NEW DRAWING LANDS IN PLAN VIEW — it does not stand walls up unasked.
+   *
+   * Detection finishes and the model used to appear immediately, in
+   * perspective, built on whatever the detector guessed and whatever the
+   * defaults happened to be. That is the wrong order: you cannot judge a
+   * detected line against the drawing from a perspective view, and you have
+   * not been asked anything yet. 2D is where the decisions get made — tune the
+   * detector, confirm the walls, answer the questions — and 3D is where you
+   * check them.
+   *
+   * Once per drawing, and only if the user has not already gone to 3D for it,
+   * so this never fights someone who deliberately switched.
+   */
+  const setPlanView = useFloorplanLocalStore((s) => s.setPlanView)
+  const setCameraPreset = useAppStore((s) => s.setCameraPreset)
+  const plannedFor = useRef<string | null>(null)
+  const readyDrawingId = useAppStore((s) => {
+    const d = s.drawings.find((x) => x.status === 'ready')
+    return d ? d.id : null
+  })
+  // The overlay's real size arrives AFTER the drawing reports ready, so keying
+  // only on the id framed the camera against a placeholder and left the view in
+  // the default three-quarter. Keyed on the size too, this re-frames once when
+  // the sheet settles — and then not again, so it never fights the user.
+  const overlaySizeKey = useAppStore((s) => s.floorplanOverlay.scale.join('x'))
+  useEffect(() => {
+    if (!readyDrawingId) return
+    const key = `${readyDrawingId}@${overlaySizeKey}`
+    if (plannedFor.current === key) return
+    plannedFor.current = key
+    setPlanView(true)
+    setCameraPreset(planViewCamera(useAppStore.getState().floorplanOverlay))
+  }, [readyDrawingId, overlaySizeKey, setPlanView, setCameraPreset])
   const wallDetailExplode = useFloorplanLocalStore((s) => s.wallDetailExplode)
   const setWallDetailExplode = useFloorplanLocalStore((s) => s.setWallDetailExplode)
   const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)

@@ -33,6 +33,7 @@ import DrywallLayer from './DrywallLayer'
 import EnvelopeLayer from './EnvelopeLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
+import { builtScene, planViewCamera, type CountNode } from '../../services/builtScene'
 import styles from './ModelViewer.module.css'
 
 /**
@@ -50,7 +51,52 @@ function DevSceneHandle() {
   const { scene } = useThree()
   useEffect(() => {
     ;(window as unknown as Record<string, unknown>).__scene = scene
+    // NOT dev-only: the takeoff counts the built model, so it needs the real
+    // tree in production too. Same bridge idea as `cameraControls` — the panel
+    // lives in the DOM, outside the Canvas, and cannot use useThree.
+    builtScene.current = scene as unknown as CountNode
+    return () => { if (builtScene.current === (scene as unknown as CountNode)) builtScene.current = null }
   }, [scene])
+  return null
+}
+
+/**
+ * PLAN VIEW OWNS THE CAMERA while it is on.
+ *
+ * Posting a cameraPreset from outside the Canvas raced whatever else sets the
+ * view on load — the preset was written, something reset the camera after it,
+ * and the plan opened in the default three-quarter with the model hidden: the
+ * worst of both. Acting from inside, on the frame planView turns on, there is
+ * nothing left to race.
+ */
+function PlanViewCamera({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
+  const { camera } = useThree()
+  const planView = useFloorplanLocalStore((s) => s.planView)
+  const overlay = useAppStore((s) => s.floorplanOverlay)
+  // HOLD IT FOR A FEW FRAMES. Setting the camera once in an effect lost to
+  // whatever initialises the view after it — OrbitControls settling, the rig,
+  // the tether — and the plan opened in the default three-quarter with the
+  // model hidden, the worst of both. Re-asserting for a short burst wins that
+  // race without pinning the camera, so panning and zooming stay free once the
+  // view has landed.
+  const hold = useRef(0)
+  useEffect(() => { hold.current = planView ? 12 : 0 }, [planView, overlay])
+  useFrame(() => {
+    if (hold.current <= 0) return
+    hold.current--
+    const { position, target } = planViewCamera(overlay)
+    camera.position.set(position[0], position[1], position[2])
+    const c = controlsRef.current
+    if (c) {
+      c.target.set(target[0], target[1], target[2])
+      const damped = c.enableDamping
+      c.enableDamping = false
+      c.update()
+      c.enableDamping = damped
+    } else {
+      camera.lookAt(target[0], target[1], target[2])
+    }
+  })
   return null
 }
 
@@ -993,6 +1039,7 @@ export default function ModelViewer() {
         />
         <OrbitEnabledGuard controlsRef={controlsRef} enabled={orbitEnabled} />
         <CameraPresetApplier controlsRef={controlsRef} />
+        <PlanViewCamera controlsRef={controlsRef} />
         <CameraTether controlsRef={controlsRef} />
         {/* Only spin when the workspace is genuinely idle: orbit is on, nothing
             is being traced or calibrated or placed, and nothing is selected for
