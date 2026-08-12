@@ -864,7 +864,7 @@ export function resolveOverhang(spec: OverhangSpec | undefined, edge: RoofEdge):
  */
 export const RAKE_OUTLOOKER_MAX_M = 0.6096   // 24"
 
-/** The rake overhang actually buildable on this edge, and whether it was cut. */
+/** The rake overhang actually workable on this edge, and whether it was cut. */
 export function limitedRakeOverhang(spec: OverhangSpec | undefined, edge: 'rakeA' | 'rakeB'): {
   m: number; requested: number; clamped: boolean
 } {
