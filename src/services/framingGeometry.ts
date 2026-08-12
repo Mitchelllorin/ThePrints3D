@@ -1086,19 +1086,31 @@ export function buildGableRoof(opts: {
      * piece per slope that overshoots the apex, so the two overlap and close
      * the seam from both sides.
      */
-    const CAP_LEN = SHINGLE_EXP * 1.6
+    // A LINE OF CAP SHINGLES, not one long piece. The ridge is capped with
+    // individual shingles bent over the peak at their own exposure; drawing it
+    // as a single extrusion gave a smooth bar with none of the joints that make
+    // a ridge read as shingled. It also stands properly off the field now —
+    // one shingle thickness barely proud read as nothing, so the two planes
+    // still looked simply butted.
+    const CAP_LEN = SHINGLE_EXP * 2.1
+    const CAP_T = SHINGLE_T * 2.4
     const capAlong = -rafterLen / 2            // STRADDLE the apex, half either side
-    const capOff = base + SHINGLE_T            // proud of the field
-    const cap = spanAlongX
-      ? new THREE.Mesh(new THREE.BoxGeometry(CAP_LEN, SHINGLE_T, deckRun), shingleMat)
-      : new THREE.Mesh(new THREE.BoxGeometry(deckRun, SHINGLE_T, CAP_LEN), shingleMat)
+    const capOff = base + SHINGLE_T * 1.6      // stands off the field
     const capX = cx + nx * capOff + Math.cos(a) * capAlong
     const capY = cy + ny * capOff + Math.sin(a) * capAlong
-    if (spanAlongX) { cap.position.set(capX, capY, deckShift); cap.rotation.set(0, 0, a) }
-    else { cap.position.set(deckShift, capY, capX); cap.rotation.set(-a, 0, 0) }
-    cap.castShadow = true; cap.receiveShadow = true
-    cap.userData.layer = 'roof'; cap.userData.info = 'Ridge cap'
-    g.add(cap)
+    const capCount = Math.max(1, Math.round(deckRun / SHINGLE_EXP))
+    const capPitch = deckRun / capCount
+    for (let i = 0; i < capCount; i++) {
+      const alongRidge = deckShift - deckRun / 2 + (i + 0.5) * capPitch
+      const piece = spanAlongX
+        ? new THREE.Mesh(new THREE.BoxGeometry(CAP_LEN, CAP_T, capPitch * 0.9), shingleMat)
+        : new THREE.Mesh(new THREE.BoxGeometry(capPitch * 0.9, CAP_T, CAP_LEN), shingleMat)
+      if (spanAlongX) { piece.position.set(capX, capY, alongRidge); piece.rotation.set(0, 0, a) }
+      else { piece.position.set(alongRidge, capY, capX); piece.rotation.set(-a, 0, 0) }
+      piece.castShadow = true; piece.receiveShadow = true
+      piece.userData.layer = 'roof'; piece.userData.info = 'Ridge cap shingle'
+      g.add(piece)
+    }
   }
   clad(1); clad(-1)
 
@@ -1827,8 +1839,6 @@ function buildGableEaveAndRake(
   // A board cut to the pitch shows a taller face than the same board level.
   const rakeTop = BUILDUP_ABOVE / Math.cos(angle)
   const rakeBottom = BUILDUP_BELOW / Math.cos(angle) + BELOW_MARGIN
-  const rakeFace = rakeTop + rakeBottom
-  const rakeMid = (rakeTop - rakeBottom) / 2  // centre, relative to the rafter line
   const out = (rakeOnZ ? hz : hx) + overhang  // outboard plane of the barge
   for (const end of [1, -1]) {                // each gable end
     for (const side of [1, -1]) {             // each slope (left / right of ridge)
@@ -1867,18 +1877,51 @@ function buildGableEaveAndRake(
    * shingles), converted to vertical, with a margin below to land over the
    * siding rather than stopping level with it.
    */
-  const CROSS = FAS                       // how far past the apex to run
-      const acrossMid = (run - CROSS) / 2
-      const slopeLen = (run + CROSS) * Math.hypot(1, grade)
-      const mid = side * acrossMid            // along-slope midpoint
-      const slopeY = rise - acrossMid * grade // height at that midpoint
+      /**
+       * A REAL MITRE, not two boxes crossing.
+       *
+       * Crossing them shut the notch but each board kept climbing on its OWN
+       * slope past the centreline, so it horned up above the opposite plane —
+       * a spike on the peak. On site the pair are mitre cut and butt in one
+       * plumb line, leaving a smooth inverted V, and a box cannot hold a mitre.
+       *
+       * So the board is built as its own PROFILE instead: a quadrilateral in
+       * the vertical plane the rake lives in — top edge on the roof surface,
+       * bottom edge below it, and both ends cut PLUMB — then extruded by the
+       * board thickness. The plumb cut at the centreline is the mitre; the two
+       * meet on it exactly, with nothing above the roof line.
+       */
+      const yc = (a: number) => rise - a * grade          // rafter line at across a
+      const prof = new THREE.Shape()
+      prof.moveTo(0, yc(0) + rakeTop)                     // apex, top — the mitre
+      prof.lineTo(run, yc(run) + rakeTop)                 // tail, top
+      prof.lineTo(run, yc(run) - rakeBottom)              // tail, bottom
+      prof.lineTo(0, yc(0) - rakeBottom)                  // apex, bottom
+      prof.closePath()
+      const rakeGeo = new THREE.ExtrudeGeometry(prof, { depth: FW, bevelEnabled: false })
+      rakeGeo.translate(0, 0, -FW / 2)
+      const rake = new THREE.Mesh(rakeGeo, wood)
+      // The profile is drawn with x = across and y = height. Mirror it for the
+      // far slope, then stand it in the rake plane.
       if (rakeOnZ) {
-        // Board runs along X, thin in Z; tilt about Z to follow the slope.
-        addRoofBox(g, wood, slopeLen, rakeFace, FW, mid, slopeY + rakeMid, end * out, 0, 0, -side * angle, 'Rake fascia')
+        rake.scale.x = side
+        rake.position.set(0, 0, end * out)
+      } else {
+        rake.rotation.y = -Math.PI / 2                    // profile x → world z
+        rake.scale.x = side
+        rake.position.set(end * out, 0, 0)
+      }
+      rake.castShadow = true; rake.receiveShadow = true
+      rake.userData.layer = 'roof'; rake.userData.info = 'Rake fascia · mitred at the peak'
+      g.add(rake)
+
+      const acrossMid = run / 2
+      const slopeLen = run * Math.hypot(1, grade)
+      const mid = side * acrossMid
+      const slopeY = rise - acrossMid * grade
+      if (rakeOnZ) {
         addRoofBox(g, soffitMat, slopeLen, SOF, overhang, mid, slopeY + soffitY, end * (out - overhang / 2), 0, 0, -side * angle, 'Rake soffit')
       } else {
-        // Board runs along Z, thin in X; tilt about X to follow the slope.
-        addRoofBox(g, wood, FW, rakeFace, slopeLen, end * out, slopeY + rakeMid, mid, side * angle, 0, 0, 'Rake fascia')
         addRoofBox(g, soffitMat, overhang, SOF, slopeLen, end * (out - overhang / 2), slopeY + soffitY, mid, side * angle, 0, 0, 'Rake soffit')
       }
     }
