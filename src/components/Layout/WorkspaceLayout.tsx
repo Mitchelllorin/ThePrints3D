@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
+import ProjectLibrary from '../Projects/ProjectLibrary'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -236,6 +237,15 @@ function SettingsContent() {
           had no door. Inline here rather than as its own modal: it is a tool
           you use WHILE looking at the plan it tunes, and a centred dialog
           covers the very thing you are judging. */}
+      {/* PROJECTS — saving a job, which was not possible at all. projectStorage
+          persists the drawings INCLUDING the raw file blobs to IndexedDB, and
+          ProjectLibrary is a complete save/list/load UI for it — imported by
+          nothing, so an uploaded print died on reload. On a job site that is not
+          a missing feature, it is losing your work. */}
+      <CollapsibleSection id="projects" title="Projects" openId={openId} setOpenId={setOpenId}>
+        <ProjectLibrary inline />
+      </CollapsibleSection>
+
       <CollapsibleSection id="detect" title="Wall detection" openId={openId} setOpenId={setOpenId}>
         <WallCalibrationPanel inline />
       </CollapsibleSection>

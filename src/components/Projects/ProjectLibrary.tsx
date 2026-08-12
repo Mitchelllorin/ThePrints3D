@@ -13,7 +13,14 @@ import { useAppStore } from '../../store/useAppStore'
 import styles from './ProjectLibrary.module.css'
 
 /** Modal-ish overlay showing saved projects + save-current button. */
-export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
+/**
+ * `inline` drops the modal shell so the library can live in a drawer section.
+ * Saving a job is not a thing you do in the middle of the workspace with the
+ * model hidden behind a dialog — and until now it was not a thing you could do
+ * at all, because this component was never imported anywhere. An uploaded print
+ * died on reload.
+ */
+export default function ProjectLibrary({ onClose, inline }: { onClose?: () => void; inline?: boolean }) {
   const [projects, setProjects] = useState<SavedProject[]>([])
   const [busy, setBusy] = useState(false)
   const drawings = useAppStore((s) => s.drawings)
@@ -89,7 +96,8 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
         view: restored.length > 0 ? 'model' : 'upload',
       })
       setView(restored.length > 0 ? 'model' : 'upload')
-      onClose()
+      // Inline there is no dialog to dismiss — the drawer stays where it is.
+      onClose?.()
     } finally {
       setBusy(false)
     }
@@ -102,9 +110,9 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
+    <div className={inline ? styles.inlineWrap : styles.overlay} onClick={inline ? undefined : onClose}>
+      <div className={inline ? styles.inlineBody : styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.header} style={inline ? { display: 'none' } : undefined}>
           <h2 className={styles.title}>📁 My Projects</h2>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
         </div>
