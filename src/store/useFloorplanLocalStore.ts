@@ -324,6 +324,14 @@ interface FloorplanLocalState {
   setGestureLock: (v: boolean) => void
   setWallTrimArmed: (v: boolean) => void
   setEditMode: (v: boolean) => void
+  /** PLAN VIEW — looking straight down at the drawing, 3D hidden.
+   *  2D is where decisions get made (tune the detector, confirm the walls,
+   *  answer the intake questions); 3D is where you check them. Judging a line
+   *  against a print in a perspective view is fighting the camera — you cannot
+   *  tell whether a wall is ON the line or beside it. A mode, not a build step:
+   *  switchable both ways at any time. */
+  planView: boolean
+  setPlanView: (v: boolean) => void
   setSelectionGranularity: (g: SelectionGranularity) => void
   /** Pick one framing member (stud/plate/header/joist/rafter) by its id. */
   selectMember: (id: string, label: string) => void
@@ -401,6 +409,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   gestureLock: false,
   wallTrimArmed: false,
   editMode: false,
+  planView: false,
   selectionGranularity: 'assembly',
   selectedMemberLabel: null,
   isolatedMemberId: null,
@@ -570,6 +579,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
   setGestureLock: (v) => set({ gestureLock: v }),
   setWallTrimArmed: (v) => set({ wallTrimArmed: v }),
+  setPlanView: (v) => set({ planView: v }),
   setEditMode: (v) => set(v
     // Entering: start clean — drop any open card/selection so edit mode owns it.
     ? { editMode: true, editHover: null, editSelected: null, activePanel: null, selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null }

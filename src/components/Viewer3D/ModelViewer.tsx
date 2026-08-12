@@ -535,6 +535,7 @@ export default function ModelViewer() {
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const gestureLock    = useFloorplanLocalStore((s) => s.gestureLock)
   const editMode       = useFloorplanLocalStore((s) => s.editMode)
+  const planView       = useFloorplanLocalStore((s) => s.planView)
   const editSelected   = useFloorplanLocalStore((s) => s.editSelected)
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
@@ -946,15 +947,22 @@ export default function ModelViewer() {
 
         <FloorplanOverlay />
         <ExplodeDriver />
-        <LiveWallsLayer />
-        <FloorJoistsLayer />
-        <CeilingLayer />
-        <RoofLayer />
-        <HoverNameplate />
-        <DrywallLayer />
-        <EnvelopeLayer />
-        <PlacedObjectsLayer />
-        <TradeLayersRenderer />
+        {/* THE BUILT MODEL, hidden in plan view.
+            FloorplanOverlay stays outside this group on purpose — the print and
+            the lines you have traced on it ARE the 2D view, and they are what
+            you are there to judge. An invisible group is also skipped by the
+            raycaster, so nothing hidden can be picked by accident. */}
+        <group visible={!planView}>
+          <LiveWallsLayer />
+          <FloorJoistsLayer />
+          <CeilingLayer />
+          <RoofLayer />
+          <HoverNameplate />
+          <DrywallLayer />
+          <EnvelopeLayer />
+          <PlacedObjectsLayer />
+          <TradeLayersRenderer />
+        </group>
 
         {model.status === 'building' && <BuildingProgress />}
         {(model.status === 'building' || model.status === 'ready') && (
@@ -970,6 +978,9 @@ export default function ModelViewer() {
           ref={(r) => { controlsRef.current = r; cameraControls.current = r }}
           makeDefault
           enabled={orbitEnabled}
+          /* Straight down and STAYS down. Orbiting a plan view is how you end
+             up unsure whether a line sits on the drawing or above it. */
+          enableRotate={!planView}
           enableDamping
           dampingFactor={0.12}
           rotateSpeed={0.6}

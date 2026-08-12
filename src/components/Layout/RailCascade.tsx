@@ -34,6 +34,30 @@ function BinIcon() {
   )
 }
 
+/** Plan view: a sheet seen square on, versus a box seen in perspective. */
+function PlanIcon({ flat }: { flat: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    >
+      {flat ? (
+        <>
+          {/* In 2D the button offers 3D: draw the box. */}
+          <path d="M12 3.2 20 7.6v8.8L12 20.8 4 16.4V7.6Z" />
+          <path d="M4 7.6 12 12l8-4.4M12 12v8.8" />
+        </>
+      ) : (
+        <>
+          {/* In 3D the button offers the plan: draw the sheet. */}
+          <rect x="4" y="4" width="16" height="16" rx="1.4" />
+          <path d="M4 9.5h16M9.5 9.5V20" />
+        </>
+      )}
+    </svg>
+  )
+}
+
 /** Pencil, or a tick once you're in edit mode. Drawn for the same reason as the
  *  bin: the rail is thin monochrome marks and an emoji would be the odd one out. */
 function EditIcon({ done }: { done: boolean }) {
@@ -83,6 +107,9 @@ export default function RailCascade() {
   const clearWorkspace = useAppStore((s) => s.clearWorkspace)
   const hasDrawings = useAppStore((s) => s.drawings.length > 0)
   const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const planView = useFloorplanLocalStore((s) => s.planView)
+  const setPlanView = useFloorplanLocalStore((s) => s.setPlanView)
+  const setCameraPreset = useAppStore((s) => s.setCameraPreset)
   const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
   // Reachable once there's ANYTHING to grab — a built model, or any traced
   // wall, floor, roof or placed object. If you can select it you can edit it,
@@ -173,6 +200,41 @@ export default function RailCascade() {
             <span className={styles.iconLabel}>{label}</span>
           </button>
         ))}
+
+        {/* PLAN / 3D — a MODE, switchable both ways at any time.
+            Not the old one-way "Build 3D" button: 2D is where you make
+            decisions (tune the detector, confirm the walls, answer the
+            questions) and 3D is where you check them, so you need to move
+            between them freely. Entering plan view snaps the camera straight
+            overhead and locks rotation; leaving it hands the view back
+            untouched, since the 3D camera is wherever you last left it. */}
+        {hasDrawings && (
+          <button
+            className={`${styles.icon} ${planView ? styles.active : ''}`}
+            onClick={() => {
+              const next = !planView
+              setPlanView(next)
+              if (next) {
+                // Straight down, framed to THIS drawing rather than a fixed
+                // height — a guessed 42 m left a small sheet stranded in the
+                // corner of the screen, which is useless for judging a line.
+                // The overlay knows its own size and where it sits.
+                const ov = useAppStore.getState().floorplanOverlay
+                const [w, d] = ov.scale
+                const [px, pz] = ov.position
+                const h = Math.max(6, Math.max(w, d) * 1.15)
+                // A hair off dead-centre: looking exactly down the Y axis gives
+                // OrbitControls a degenerate up-vector and it flips.
+                setCameraPreset({ position: [px, h, pz + 0.001], target: [px, 0, pz] })
+              }
+            }}
+            aria-pressed={planView}
+            title={planView ? 'Back to 3D' : 'Plan view — look straight down at the drawing'}
+          >
+            <span className={styles.glyph}><PlanIcon flat={planView} /></span>
+            <span className={styles.iconLabel}>{planView ? '3D' : 'Plan'}</span>
+          </button>
+        )}
 
         {/* EDIT — a verb, so it belongs with the other verbs.
             It used to float on its own at bottom-left, which put it directly
