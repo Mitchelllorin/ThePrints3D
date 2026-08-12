@@ -872,8 +872,12 @@ export function buildGableRoof(opts: {
   lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
   /** Per-edge eave overhang. The tails, deck and shingles run out over it. */
   overhangM?: OverhangSpec
-  /** The wall cladding, so the gable ends match the walls below them. */
+  /** The wall cladding, so the gable ends match the walls below them.
+   *  Null means cladding is switched OFF — draw none, rather than falling back
+   *  to a default colour and leaving two triangles up when the layer is hidden. */
   cladding?: CladdingSpec | null
+  /** Envelope sheathing visibility, so the gable sheathing hides with the rest. */
+  sheathingVisible?: boolean
 }): THREE.Group {
   const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
   const g = new THREE.Group()
@@ -1204,6 +1208,14 @@ export function buildGableRoof(opts: {
   gableTri.lineTo(triHalf, 0)
   gableTri.lineTo(0, rise + deckLift)
   gableTri.closePath()
+  /**
+   * The gable skins are part of the ENVELOPE, so they hide with it. They are
+   * built here because only the roof knows where the triangle is, but that is
+   * an implementation detail — to the user they are sheathing and siding, and
+   * turning sheathing off while two triangles of it stay up at the gables is
+   * the switch lying. Measured: cladding 303 → 28 and sheathing 78 → 2, the
+   * survivors being exactly these.
+   */
   const gableSkins = [
     { t: GABLE_SHEATH_T, layer: 'sheathing', info: 'Gable sheathing · 7/16" OSB',
       mat: new THREE.MeshStandardMaterial({
@@ -1237,10 +1249,14 @@ export function buildGableRoof(opts: {
   })
   const LAP_EXPOSURE = gableClad?.exposureM ?? 0.178
   const apexY = rise + deckLift
+  const showSheath = opts.sheathingVisible !== false
+  const showClad = !!gableClad
+  const activeSkins = gableSkins.filter((k) =>
+    k.layer === 'sheathing' ? showSheath : showClad)
   for (const gp of [-halfRun + RW / 2, halfRun - RW / 2]) {
     const outward = gp >= 0 ? 1 : -1
     let off = TW2 / 2                    // start at the outer face of the studs
-    for (const skin of gableSkins) {
+    for (const skin of activeSkins) {
       const geo = new THREE.ExtrudeGeometry(gableTri, { depth: skin.t, bevelEnabled: false })
       geo.translate(0, 0, -skin.t / 2)   // centre it so the plane maths is the panel's middle
       const m = new THREE.Mesh(geo, skin.mat)
@@ -1258,7 +1274,9 @@ export function buildGableRoof(opts: {
       off += skin.t
     }
 
-    // Lap courses over the sheathing — only for cladding that HAS courses.
+    // Lap courses over the sheathing — only when cladding is shown at all, and
+    // only for cladding that HAS courses.
+    if (!showClad) continue
     if (gableClad && gableClad.exposureM == null) continue
     const courses = Math.max(1, Math.ceil(apexY / LAP_EXPOSURE))
     for (let i = 0; i < courses; i++) {
@@ -1999,6 +2017,8 @@ export function buildRoofByType(
     overhangM?: OverhangSpec
     /** Wall cladding, so gable ends match the walls (gable builder only). */
     cladding?: CladdingSpec | null
+    /** Envelope sheathing visibility (gable builder only). */
+    sheathingVisible?: boolean
   },
 ): THREE.Group {
   const t = (type || '').trim().toLowerCase()

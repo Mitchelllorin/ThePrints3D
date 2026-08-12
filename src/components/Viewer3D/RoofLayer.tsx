@@ -105,6 +105,7 @@ function RoofAreaMesh({
   // walls do — otherwise a brick house grows clapboard above the top plate.
   const claddingKind = useUISettingsStore((st) => st.cladding)
   const claddingVisible = useUISettingsStore((st) => st.claddingVisible)
+  const sheathingVisible = useUISettingsStore((st) => st.sheathingVisible)
   const gableCladding = useMemo(
     () => (claddingVisible ? claddingSpec(claddingKind) : null),
     [claddingKind, claddingVisible],
@@ -115,7 +116,7 @@ function RoofAreaMesh({
           lenX, lenZ, pitch: ridge.pitch, ocM: RAFTER_OC_M, overhangM,
           crossFrac: ridge.crossFrac, insetA: ridge.insetA, insetB: ridge.insetB,
         })
-      : buildRoofByType(area.elementType, { lenX, lenZ, pitch: ridge.pitch, ocM: RAFTER_OC_M, overhangM, cladding: gableCladding })
+      : buildRoofByType(area.elementType, { lenX, lenZ, pitch: ridge.pitch, ocM: RAFTER_OC_M, overhangM, cladding: gableCladding, sheathingVisible })
     r.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
     // IDENTITY, STAMPED AFTER THE FACT. A rafter with no id is anonymous
     // geometry — visible, unselectable. There are four roof builders, each with
@@ -131,7 +132,7 @@ function RoofAreaMesh({
       mesh.userData.label = mesh.userData.info ?? 'Roof member'
     })
     return r
-  }, [lenX, lenZ, shaped, ridge.pitch, ridge.crossFrac, ridge.insetA, ridge.insetB, area.elementType, area.level, overhangM, area.id, gableCladding])
+  }, [lenX, lenZ, shaped, ridge.pitch, ridge.crossFrac, ridge.insetA, ridge.insetB, area.elementType, area.level, overhangM, area.id, gableCladding, sheathingVisible])
 
   // X-ray. A roof is the single most in-the-way thing in the model — it covers
   // everything you built underneath — so seeing through it has to be one tap.

@@ -2373,9 +2373,34 @@ export const useAppStore = create<AppState>()(
     toggleTradeLayerVisible: (layer) => {
       set((s) => {
         const next = new Set(s.visibleLayers)
-        if (next.has(layer)) next.delete(layer)
-        else next.add(layer)
+        const nowVisible = !next.has(layer)
+        if (nowVisible) next.add(layer); else next.delete(layer)
         s.visibleLayers = next
+
+        /**
+         * ONE TOGGLE, BOTH WORLDS — the other direction.
+         *
+         * There are two visibility systems. The newer per-system layers read
+         * this `visibleLayers` Set; BuildingModel is handed the `layers` ARRAY
+         * and reads `layer.visible` on it. The Layers panel only ever drove the
+         * Set, so a toggle hid the traced geometry and left everything
+         * BuildingModel had drawn standing — measured, Framing went 1031 → 535
+         * and looked like the switch half-worked. `toggleLayer` already mirrors
+         * the other way and says so in its own comment; this direction was
+         * simply never done.
+         *
+         * Mapped by hand because the two vocabularies disagree: the trade key
+         * is 'hvac', the layer id is 'mechanical'.
+         */
+        const layerId: Partial<Record<TraceLayer, string>> = {
+          floors: 'floors', framing: 'framing', roof: 'structure',
+          electrical: 'electrical', plumbing: 'plumbing', hvac: 'mechanical',
+        }
+        const id = layerId[layer]
+        if (id) {
+          const l = s.layers.find((x) => x.id === id)
+          if (l) l.visible = nowVisible
+        }
       })
     },
 

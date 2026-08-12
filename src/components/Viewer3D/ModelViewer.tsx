@@ -999,7 +999,12 @@ export default function ModelViewer() {
             editing. Anything that owns the view owns the camera too. */}
         <IdleSpin
           controlsRef={controlsRef}
-          allowed={orbitEnabled && !traceMode && !placeObjectType && !calibratingNow && !editSelected}
+          /* NOT IN PLAN VIEW. The idle spin quietly orbited the camera off
+             straight-down, so a plan you left alone for a moment drifted back
+             into perspective on its own — the view promoting itself to 3D
+             while you were only hovering. Anything that owns the view owns the
+             camera, and plan view owns it. */
+          allowed={orbitEnabled && !planView && !traceMode && !placeObjectType && !calibratingNow && !editSelected}
         />
 
 
