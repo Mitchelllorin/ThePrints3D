@@ -39,18 +39,20 @@ function SliderRow({ label, hint, value, min, max, step, onChange, onReset }: Sl
   )
 }
 
-export default function WallCalibrationPanel({ onClose }: { onClose: () => void }) {
+/**
+ * `inline` renders the sliders alone, with no overlay and no header, so the
+ * panel can sit inside a drawer section instead of a centred modal. The modal
+ * form obscures the middle of the workspace, which is the one place chrome may
+ * not go — and this is a tool you use WHILE looking at the plan it is tuning,
+ * so covering the plan with it is self-defeating.
+ */
+export default function WallCalibrationPanel({ onClose, inline }: { onClose?: () => void; inline?: boolean }) {
   const config = useAppStore((s) => s.wallDetectionConfig)
   const setConfig = useAppStore((s) => s.setWallDetectionConfig)
   const D = DEFAULT_WALL_DETECTION_CONFIG
 
-  return (
-    <div className={styles.overlay}>
-      <div className={styles.panel}>
-        <div className={styles.header}>
-          <h3 className={styles.title}>&#127917; Wall Detection Calibration</h3>
-          <button className={styles.closeBtn} onClick={onClose}>&#x2715;</button>
-        </div>
+  const body = (
+    <>
         <p className={styles.subtitle}>
           Tune how the AI and heuristic detector interpret your drawings. Changes apply on the next analysis run.
         </p>
@@ -60,9 +62,22 @@ export default function WallCalibrationPanel({ onClose }: { onClose: () => void 
         <SliderRow label="Min Wall Thickness (px)" hint="Lines thinner than this are ignored. Raise to skip hairlines." value={config.minWallThicknessPx} min={1} max={20} step={1} onChange={(v) => setConfig({ minWallThicknessPx: v })} onReset={() => setConfig({ minWallThicknessPx: D.minWallThicknessPx })} />
         <SliderRow label="Max Wall Thickness (px)" hint="Lines thicker than this won't be treated as walls. Raise for thick structural walls." value={config.maxWallThicknessPx} min={20} max={300} step={5} onChange={(v) => setConfig({ maxWallThicknessPx: v })} onReset={() => setConfig({ maxWallThicknessPx: D.maxWallThicknessPx })} />
         <SliderRow label="Merge Gap (px)" hint="Gaps smaller than this between segments get auto-joined. Raise if walls are being split up." value={config.mergeGapPx} min={0} max={30} step={1} onChange={(v) => setConfig({ mergeGapPx: v })} onReset={() => setConfig({ mergeGapPx: D.mergeGapPx })} />
-        <div className={styles.footer}>
-          <button className={styles.resetAllBtn} onClick={() => setConfig({ ...D })}>&#8635; Reset All to Defaults</button>
+      <div className={styles.footer}>
+        <button className={styles.resetAllBtn} onClick={() => setConfig({ ...D })}>&#8635; Reset All to Defaults</button>
+      </div>
+    </>
+  )
+
+  if (inline) return <div className={styles.inline}>{body}</div>
+
+  return (
+    <div className={styles.overlay}>
+      <div className={styles.panel}>
+        <div className={styles.header}>
+          <h3 className={styles.title}>&#127917; Wall Detection Calibration</h3>
+          <button className={styles.closeBtn} onClick={onClose}>&#x2715;</button>
         </div>
+        {body}
       </div>
     </div>
   )

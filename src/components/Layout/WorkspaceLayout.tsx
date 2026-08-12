@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import CameraCapture from '../Upload/CameraCapture'
+import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -226,6 +227,17 @@ function SettingsContent() {
         <Select label="Top track" val={cfg.steelTrackTop} options={STEEL_TRACK_OPTIONS} onChange={(v) => setCfg({ steelTrackTop: v as typeof cfg.steelTrackTop })} />
         <Select label="Bottom track" val={cfg.steelTrackBottom} options={STEEL_TRACK_OPTIONS} onChange={(v) => setCfg({ steelTrackBottom: v as typeof cfg.steelTrackBottom })} />
         <Slider label="Deflection gap" val={cfg.steelDeflectionGapMm} min={0} max={40} step={1} unit="mm" onChange={(v) => setCfg({ steelDeflectionGapMm: v })} />
+      </CollapsibleSection>
+
+      {/* WALL DETECTION — the dial for "it is picking up everything, not just
+          walls". The panel was written, wired to the store, given six sliders
+          with real hints and reset buttons — and imported by nothing, so the
+          one control that answers the commonest complaint about the detector
+          had no door. Inline here rather than as its own modal: it is a tool
+          you use WHILE looking at the plan it tunes, and a centred dialog
+          covers the very thing you are judging. */}
+      <CollapsibleSection id="detect" title="Wall detection" openId={openId} setOpenId={setOpenId}>
+        <WallCalibrationPanel inline />
       </CollapsibleSection>
 
       <CollapsibleSection id="build" title="Build output" openId={openId} setOpenId={setOpenId}>
