@@ -1820,7 +1820,15 @@ function buildGableEaveAndRake(
   const half = rakeOnZ ? hx : hz              // across-slope half-span (peak at centre)
   const rise = Math.max(0.1, half * pitch)
   const angle = Math.atan2(rise, half)
+  const BUILDUP_ABOVE = 0.112             // rafter half + deck + felt + shingles
+  const BUILDUP_BELOW = 0.092             // rafter half
+  const BELOW_MARGIN = 0.05               // laps down over the siding
   const grade = rise / half                   // the built gradient (rise is clamped)
+  // A board cut to the pitch shows a taller face than the same board level.
+  const rakeTop = BUILDUP_ABOVE / Math.cos(angle)
+  const rakeBottom = BUILDUP_BELOW / Math.cos(angle) + BELOW_MARGIN
+  const rakeFace = rakeTop + rakeBottom
+  const rakeMid = (rakeTop - rakeBottom) / 2  // centre, relative to the rafter line
   const out = (rakeOnZ ? hz : hx) + overhang  // outboard plane of the barge
   for (const end of [1, -1]) {                // each gable end
     for (const side of [1, -1]) {             // each slope (left / right of ridge)
@@ -1829,16 +1837,48 @@ function buildGableEaveAndRake(
       // supposed to be capping carries on past the end of the board.
       const ovh = coversOwnEaves ? eaveOvh(side > 0) : 0
       const run = half + ovh
-      const slopeLen = run * Math.hypot(1, grade)
-      const mid = side * (run / 2)            // along-slope midpoint
-      const slopeY = (rise - ovh * grade) / 2 // midpoint of the slope line
+      /**
+       * THE TWO RAKE BOARDS MEET IN A PLUMB JOINT AT THE PEAK.
+       *
+       * Each board used to stop dead on the centreline, and a box's end face is
+       * cut square to its OWN slope — so two of them arriving at a point left a
+       * V-notch at the apex that you could see daylight through. On site the
+       * pair are cut to the half-angle and butt in one straight plumb line.
+       *
+       * A box cannot hold a mitre, so each board runs PAST the centreline
+       * instead and the two overlap through it. Same result to look at: solid
+       * to the peak, with the joint on the centreline where it belongs.
+       */
+      /**
+   * THE BOARD COVERS THE LAYERS. That is what it is for.
+   *
+   * It was centred half its own depth below the rafter line, which put its TOP
+   * EDGE on the rafter's centreline — so the upper half of the rafter, the
+   * deck, the felt and the shingles were all left showing as a layered edge.
+   * A fascia exists precisely to hide that; you should see one board, not a
+   * sandwich.
+   *
+   * Two consequences, both from the trade:
+   *   · its top must reach the ROOF SURFACE, not the rafter centre;
+   *   · on a rake it must be TALLER than the same board at an eave, because a
+   *     board cut to the pitch presents a taller face — divide by cos(pitch).
+   *
+   * So the face is sized from the real build-up (rafter + deck + felt +
+   * shingles), converted to vertical, with a margin below to land over the
+   * siding rather than stopping level with it.
+   */
+  const CROSS = FAS                       // how far past the apex to run
+      const acrossMid = (run - CROSS) / 2
+      const slopeLen = (run + CROSS) * Math.hypot(1, grade)
+      const mid = side * acrossMid            // along-slope midpoint
+      const slopeY = rise - acrossMid * grade // height at that midpoint
       if (rakeOnZ) {
         // Board runs along X, thin in Z; tilt about Z to follow the slope.
-        addRoofBox(g, wood, slopeLen, FAS, FW, mid, slopeY + fasciaY, end * out, 0, 0, -side * angle, 'Rake fascia')
+        addRoofBox(g, wood, slopeLen, rakeFace, FW, mid, slopeY + rakeMid, end * out, 0, 0, -side * angle, 'Rake fascia')
         addRoofBox(g, soffitMat, slopeLen, SOF, overhang, mid, slopeY + soffitY, end * (out - overhang / 2), 0, 0, -side * angle, 'Rake soffit')
       } else {
         // Board runs along Z, thin in X; tilt about X to follow the slope.
-        addRoofBox(g, wood, FW, FAS, slopeLen, end * out, slopeY + fasciaY, mid, side * angle, 0, 0, 'Rake fascia')
+        addRoofBox(g, wood, FW, rakeFace, slopeLen, end * out, slopeY + rakeMid, mid, side * angle, 0, 0, 'Rake fascia')
         addRoofBox(g, soffitMat, overhang, SOF, slopeLen, end * (out - overhang / 2), slopeY + soffitY, mid, side * angle, 0, 0, 'Rake soffit')
       }
     }
