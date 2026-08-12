@@ -53,7 +53,7 @@ function CeilingMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, ov
       <primitive object={ceiling} position={[centre.x, y, centre.z]} rotation={[0, rotRad, 0]} />
       {dimensionsVisible && (
         <Billboard position={[centre.x, y + 0.45, centre.z]}>
-          <Text {...labelText(0.26 * labelScale, labelColor)}>
+          <Text {...labelText(0.34 * labelScale, labelColor)}>
             Ceiling
           </Text>
         </Billboard>

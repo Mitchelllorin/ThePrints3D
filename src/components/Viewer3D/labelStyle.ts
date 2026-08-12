@@ -21,10 +21,14 @@
  * blob at small sizes and a hairline at large ones.
  */
 
-/** Halo thickness, as a fraction of font size. */
-export const LABEL_OUTLINE_RATIO = 0.11
-/** Faux-bold thickness, as a fraction of font size. */
-export const LABEL_STROKE_RATIO = 0.055
+/** Halo thickness, as a fraction of font size.
+ *  Raised from 0.11: white text on pale plywood, bright stud faces or the print
+ *  itself was the real legibility problem, and the colour cannot go any
+ *  brighter than white — so the separation has to come from the halo. */
+export const LABEL_OUTLINE_RATIO = 0.15
+/** Faux-bold thickness, as a fraction of font size. Heavier for the same
+ *  reason — weight reads as brightness at a glance on a phone in daylight. */
+export const LABEL_STROKE_RATIO = 0.075
 /** The halo colour — the workspace's darkest tone, so it reads as a shadow. */
 export const LABEL_OUTLINE_COLOR = '#0b1120'
 

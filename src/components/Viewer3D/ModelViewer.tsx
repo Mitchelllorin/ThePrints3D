@@ -80,7 +80,43 @@ function PlanViewCamera({ controlsRef }: { controlsRef: React.MutableRefObject<O
   // race without pinning the camera, so panning and zooming stay free once the
   // view has landed.
   const hold = useRef(0)
-  useEffect(() => { hold.current = planView ? 12 : 0 }, [planView, overlay])
+  /**
+   * PUT THE 3D VIEW BACK WHERE IT WAS.
+   *
+   * Entering plan moves the camera to frame the sheet. Leaving it used to just
+   * stop holding, so you came back to 3D at the plan's height and angle — the
+   * model appeared to resize every time you flipped the switch, when nothing
+   * about the model had changed at all. Stash the 3D camera on the way in and
+   * restore it on the way out, so the toggle is a view change and not a
+   * relocation.
+   */
+  const saved3D = useRef<{ pos: [number, number, number]; target: [number, number, number] } | null>(null)
+  useEffect(() => {
+    if (planView) {
+      const c = controlsRef.current
+      saved3D.current = {
+        pos: [camera.position.x, camera.position.y, camera.position.z],
+        target: c ? [c.target.x, c.target.y, c.target.z] : [0, 0, 0],
+      }
+      hold.current = 12
+      return
+    }
+    hold.current = 0
+    const back = saved3D.current
+    if (!back) return
+    saved3D.current = null
+    camera.position.set(back.pos[0], back.pos[1], back.pos[2])
+    const c = controlsRef.current
+    if (c) {
+      c.target.set(back.target[0], back.target[1], back.target[2])
+      const damped = c.enableDamping
+      c.enableDamping = false
+      c.update()
+      c.enableDamping = damped
+    }
+  }, [planView, camera, controlsRef])
+  // Re-frame if the sheet itself changes size while plan view is open.
+  useEffect(() => { if (planView) hold.current = 12 }, [overlay, planView])
   useFrame(() => {
     if (hold.current <= 0) return
     hold.current--

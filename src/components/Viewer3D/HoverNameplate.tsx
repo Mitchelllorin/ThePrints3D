@@ -124,7 +124,7 @@ export default function HoverNameplate() {
         <meshBasicMaterial color="#22d3ee" transparent opacity={0.22} depthWrite={false} depthTest={false} />
       </mesh>
       <Billboard position={plate.pos}>
-        <Text {...labelText(0.24 * labelScale, labelColor)}>
+        <Text {...labelText(0.32 * labelScale, labelColor)}>
           {plate.text}
         </Text>
       </Billboard>
