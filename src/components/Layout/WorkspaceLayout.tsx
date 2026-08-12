@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import CameraCapture from '../Upload/CameraCapture'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -444,6 +445,13 @@ function ConverterPanel() {
 // ── Layout ───────────────────────────────────────────────────────────────────
 export default function WorkspaceLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // SCAN means the camera. It called the same file picker as Browse, so the two
+  // chips were the same button wearing different words — and the one thing a
+  // tradesperson actually does on site, photograph the print on the tailgate,
+  // took as many taps as digging through the gallery. CameraCapture already
+  // existed and was already wired into DrawingUploader; the workspace chip just
+  // never reached it.
+  const [scanOpen, setScanOpen] = useState(false)
 
   // Auto-build DISABLED — the user builds by tracing (this "model builds itself"
   // behaviour was deliberately reverted; re-enabling it auto-laid slabs coplanar
@@ -812,6 +820,17 @@ export default function WorkspaceLayout() {
       <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
         multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
+      {scanOpen && (
+        <CameraCapture
+          onCapture={(file) => { setScanOpen(false); addDrawings([file]) }}
+          onClose={() => setScanOpen(false)}
+          /* getUserMedia needs a secure context; over plain LAN http on a phone
+             it is blocked, so fall back to the input, which still opens the
+             rear camera on mobile. */
+          onFallback={() => { setScanOpen(false); fileInputRef.current?.click() }}
+        />
+      )}
+
       {/* 3D Viewport — fills the whole screen at all times. */}
       <div className={styles.viewport}>
         <ModelViewer />
@@ -884,7 +903,7 @@ export default function WorkspaceLayout() {
           <p className={styles.uploadHintSub}>Drop a plan on the grid, or start from a preset</p>
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Browse</button>
-            <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Scan</button>
+            <button className={styles.uploadHintChip} onClick={() => setScanOpen(true)}>Scan</button>
             <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Tour</button>
           </div>
           {/* The only door into a FINISHED house. Everything else here hands
