@@ -997,6 +997,11 @@ export function buildGableRoof(opts: {
     color: new THREE.Color('#4b4f55'), roughness: 0.92, metalness: 0,
     transparent: opacity < 1, opacity,
   })
+  const FELT_T = 0.002
+  const feltMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#23262b'), roughness: 1, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
   /** Lay a deck + its shingles on one slope. `sign` is which side of the ridge. */
   const clad = (sign: 1 | -1) => {
     // The rafters on the far side sit at MINUS the pitch: a slope centred at
@@ -1027,6 +1032,19 @@ export function buildGableRoof(opts: {
       g.add(m)
     }
     put(deckMat, DECK_T, RT / 2 + DECK_T / 2, 0, 'Roof sheathing · 1/2" OSB')
+    /**
+     * FELT, BETWEEN THE DECK AND THE SHINGLES.
+     *
+     * Nothing is ever nailed straight to bare deck. The underlayment goes down
+     * first, and it is the layer that actually keeps water out when a shingle
+     * lifts — the shingles are the wear course over it. Leaving it out made the
+     * assembly wrong in the same way an untaped housewrap is wrong: covered,
+     * not detailed.
+     *
+     * Its own layer tag, so it toggles and X-rays with the rest of the roof
+     * build-up rather than being invisible inside the deck.
+     */
+    put(feltMat, FELT_T, RT / 2 + DECK_T + FELT_T / 2, 0, 'Underlayment · #15 felt')
 
     /**
      * Courses, starting AT THE EAVE and working up — the way they are nailed.
@@ -1037,7 +1055,7 @@ export function buildGableRoof(opts: {
      * last course now laps over the ridge instead, which is what actually
      * happens on site before the cap goes on.
      */
-    const base = RT / 2 + DECK_T + SHINGLE_T / 2
+    const base = RT / 2 + DECK_T + FELT_T + SHINGLE_T / 2
     const n = Math.max(1, Math.ceil(rafterLen / SHINGLE_EXP))
     for (let i = 0; i < n; i++) {
       const alongOff = rafterLen / 2 - (i + 0.5) * SHINGLE_EXP
@@ -1052,6 +1070,33 @@ export function buildGableRoof(opts: {
       m.userData.layer = 'roof'; m.userData.info = 'Asphalt shingles'
       g.add(m)
     }
+
+    /**
+     * RIDGE CAP — the course that folds over the peak.
+     *
+     * Two flat planes meeting at an apex leave a V-shaped notch along the top,
+     * and you could see the ridge board down it: a thin orange line running the
+     * length of the roof, which is not something you ever see on a finished
+     * house. Forty-four of 3,600 downward rays were landing on the ridge board
+     * through that seam.
+     *
+     * On site the cap is a shingle bent over the peak. Here it is one short
+     * piece per slope that overshoots the apex, so the two overlap and close
+     * the seam from both sides.
+     */
+    const CAP_LEN = SHINGLE_EXP * 1.6
+    const capAlong = -rafterLen / 2            // STRADDLE the apex, half either side
+    const capOff = base + SHINGLE_T            // proud of the field
+    const cap = spanAlongX
+      ? new THREE.Mesh(new THREE.BoxGeometry(CAP_LEN, SHINGLE_T, deckRun), shingleMat)
+      : new THREE.Mesh(new THREE.BoxGeometry(deckRun, SHINGLE_T, CAP_LEN), shingleMat)
+    const capX = cx + nx * capOff + Math.cos(a) * capAlong
+    const capY = cy + ny * capOff + Math.sin(a) * capAlong
+    if (spanAlongX) { cap.position.set(capX, capY, deckShift); cap.rotation.set(0, 0, a) }
+    else { cap.position.set(deckShift, capY, capX); cap.rotation.set(-a, 0, 0) }
+    cap.castShadow = true; cap.receiveShadow = true
+    cap.userData.layer = 'roof'; cap.userData.info = 'Ridge cap'
+    g.add(cap)
   }
   clad(1); clad(-1)
 
@@ -1059,7 +1104,23 @@ export function buildGableRoof(opts: {
   // Spec: rafter ties ≤24" OC in the lower third; collar ties ≤48" OC in the
   // upper third; gable studs 16" OC (see research notes).
   const TT = 0.089, TW2 = 0.038
-  const tieY = Math.min(rise * 0.2, 0.3)        // ceiling/rafter ties above the plate
+  /**
+   * THE TIE SITS ON THE PLATE. It was floating above it.
+   *
+   * `min(rise * 0.2, 0.3)` put the tie up to 300mm above the eave line while it
+   * still spanned wall to wall. But the roof is at its LOWEST out there — the
+   * rafter is about 103mm deep at the plate — so the last stretch of every tie
+   * came out through the roof surface. Forty-two of 3,600 downward rays landed
+   * on a tie instead of a shingle: two combs of sticks lying on the shingles,
+   * parallel to the ridge, which is exactly what it looked like.
+   *
+   * A member spanning wall to wall IS a ceiling joist, and a ceiling joist
+   * bears on the top plate. Sitting it there puts its top at 89mm, under the
+   * rafter's 103mm, so the roof passes over it the whole way. (A rafter tie
+   * carried higher up is a different member and a SHORTER one — it lands on the
+   * rafters rather than the plates, the way the collar ties below already do.)
+   */
+  const tieY = TT / 2                           // bearing on the top plate
   const collarY = rise * 0.66                    // collar ties in the upper third
   const collarHalf = half * (1 - collarY / rise) // rafter half-width at collar height
   const studOC = 0.4064                          // 16"
@@ -1130,6 +1191,27 @@ export function buildGableRoof(opts: {
         transparent: opacity < 1, opacity, side: THREE.DoubleSide,
       }) },
   ]
+  /**
+   * The siding goes on in COURSES, not as one panel.
+   *
+   * A single flat triangle is technically clad and reads, from the street, as
+   * bare board — which is why the peak still looked unsided even once the
+   * geometry was there and measurably the outermost surface. Siding is only
+   * legible as siding because of the shadow line under every course. The wall
+   * builder below already lays lap courses for exactly this reason; the gable
+   * was the one face still being painted on in one stroke.
+   *
+   * Each course is sized at its own mid-height, so it sits within the triangle
+   * to within half a course at the rake — where the barge board covers it — and
+   * a small reveal is left between courses for the sheathing to read as the
+   * shadow beneath.
+   */
+  const gableSidingMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#dcd6c8'), roughness: 0.85, metalness: 0,
+    transparent: opacity < 1, opacity, side: THREE.DoubleSide,
+  })
+  const LAP_EXPOSURE = 0.178             // 7", standard lap
+  const apexY = rise + deckLift
   for (const gp of [-halfRun + RW / 2, halfRun - RW / 2]) {
     const outward = gp >= 0 ? 1 : -1
     let off = TW2 / 2                    // start at the outer face of the studs
@@ -1149,6 +1231,36 @@ export function buildGableRoof(opts: {
       m.userData.info = skin.info
       g.add(m)
       off += skin.t
+    }
+
+    // Lap courses over the sheathing.
+    const courses = Math.max(1, Math.ceil(apexY / LAP_EXPOSURE))
+    for (let i = 0; i < courses; i++) {
+      const y0 = i * LAP_EXPOSURE
+      const y1 = Math.min(apexY, y0 + LAP_EXPOSURE)
+      const yMid = (y0 + y1) / 2
+      const w = 2 * triHalf * (1 - yMid / apexY)
+      if (w < 0.05) continue
+      // A STRIP, not a panel. Sizing whole courses to the triangle left the
+      // sheathing showing through in notches at the rake — 47 of 481 rays on a
+      // gable face — because a rectangle cannot fill a tapering course. The
+      // solid triangle beneath does the covering; these are only the butt edges
+      // that throw the shadow, which is the whole reason siding reads as siding.
+      const h = 0.018
+      const plane = gp + outward * (off + GABLE_SIDING_T / 2)
+      const c = new THREE.Mesh(
+        spanAlongX
+          ? new THREE.BoxGeometry(w, h, GABLE_SIDING_T)
+          : new THREE.BoxGeometry(GABLE_SIDING_T, h, w),
+        gableSidingMat,
+      )
+      const yLine = y1                    // the butt edge of the course
+      if (spanAlongX) c.position.set(0, yLine, plane)
+      else c.position.set(plane, yLine, 0)
+      c.castShadow = true; c.receiveShadow = true
+      c.userData.layer = 'cladding'
+      c.userData.info = 'Gable siding · 7" lap'
+      g.add(c)
     }
   }
   return g
@@ -1464,9 +1576,13 @@ export function buildRidgeRoof(opts: {
   // Ridge board.
   addRoofBox(g, mat, ridgeLen, ROOF_RT, ROOF_RW, (xA + xB) / 2, rise, c, 0, 0, 0, 'Ridge board')
 
-  // Ceiling / rafter ties across the span at each common rafter.
-  const tieY = Math.min(rise * 0.2, 0.3)
-  for (const p of ps) addRoofBox(g, mat, ROOF_RW, 0.089, W, p, tieY, 0, 0, 0, 0, 'Ceiling/rafter tie')
+  // Ceiling / rafter ties across the span at each common rafter. Bearing on the
+  // top plate, not floating above it — see buildGableRoof for why: a tie that
+  // spans wall to wall while sitting 300mm up comes out through the roof at the
+  // eaves, where the rafter is only ~103mm deep.
+  const TIE_T = 0.089
+  const tieY = TIE_T / 2
+  for (const p of ps) addRoofBox(g, mat, ROOF_RW, TIE_T, W, p, tieY, 0, 0, 0, 0, 'Ceiling/rafter tie')
 
   // Hip rafters for any inset (hipped) end: the two eave corners up to the ridge
   // end, plus a couple of jack rafters landing on each hip.
