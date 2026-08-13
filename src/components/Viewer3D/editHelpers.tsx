@@ -79,24 +79,45 @@ export function EditDragCatcher({
 }
 
 /**
- * Flat translucent highlight box for an area-style element (floor/roof). Drawn at
- * the element's footprint so a hover/selection reads instantly. `hovered` is a
- * brighter cyan; otherwise a soft amber "selected" wash.
+ * Highlight box for an area-style element (floor/roof) — hovered or selected.
+ *
+ * SELECTED HAS TO SHOUT LOUDER THAN HOVERED, and it was the other way round:
+ * hover drew cyan at 0.32 while selection drew amber at 0.20, so the thing you
+ * had committed to was FAINTER than the thing you were merely pointing at. On a
+ * model this busy that reads as nothing being selected at all.
+ *
+ * Hovering is a maybe, so it stays a soft wash. Selection is a statement, so it
+ * gets a stronger fill AND a hard edge — the outline is what actually makes it
+ * legible, because a translucent wash over pale decking or bright framing is
+ * almost invisible while a drawn boundary survives any background. Same reason
+ * the labels needed a halo rather than a brighter colour.
  */
 export function AreaHighlight({
   lenX, lenZ, position, rotRad, hovered,
 }: {
   lenX: number; lenZ: number; position: [number, number, number]; rotRad: number; hovered: boolean
 }) {
+  const w = lenX + 0.08
+  const d = lenZ + 0.08
   return (
-    <mesh position={position} rotation={[0, rotRad, 0]} renderOrder={998}>
-      <boxGeometry args={[lenX + 0.08, 0.08, lenZ + 0.08]} />
-      <meshBasicMaterial
-        color={hovered ? '#22d3ee' : '#facc15'}
-        transparent
-        opacity={hovered ? 0.32 : 0.2}
-        depthWrite={false}
-      />
-    </mesh>
+    <group position={position} rotation={[0, rotRad, 0]} renderOrder={998}>
+      <mesh renderOrder={998}>
+        <boxGeometry args={[w, 0.08, d]} />
+        <meshBasicMaterial
+          color={hovered ? '#22d3ee' : '#fbbf24'}
+          transparent
+          opacity={hovered ? 0.22 : 0.42}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* The edge. Drawn through everything (depthTest off) so a selection is
+          never lost behind the thing it is selecting. */}
+      {!hovered && (
+        <lineSegments renderOrder={999}>
+          <edgesGeometry args={[new THREE.BoxGeometry(w, 0.09, d)]} />
+          <lineBasicMaterial color="#fde68a" transparent opacity={0.95} depthTest={false} />
+        </lineSegments>
+      )}
+    </group>
   )
 }

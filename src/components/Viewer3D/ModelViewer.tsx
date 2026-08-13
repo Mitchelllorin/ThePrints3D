@@ -33,7 +33,6 @@ import DrywallLayer from './DrywallLayer'
 import EnvelopeLayer from './EnvelopeLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
-import { builtScene, planViewCamera, type CountNode } from '../../services/builtScene'
 import styles from './ModelViewer.module.css'
 
 /**
@@ -51,88 +50,7 @@ function DevSceneHandle() {
   const { scene } = useThree()
   useEffect(() => {
     ;(window as unknown as Record<string, unknown>).__scene = scene
-    // NOT dev-only: the takeoff counts the built model, so it needs the real
-    // tree in production too. Same bridge idea as `cameraControls` — the panel
-    // lives in the DOM, outside the Canvas, and cannot use useThree.
-    builtScene.current = scene as unknown as CountNode
-    return () => { if (builtScene.current === (scene as unknown as CountNode)) builtScene.current = null }
   }, [scene])
-  return null
-}
-
-/**
- * PLAN VIEW OWNS THE CAMERA while it is on.
- *
- * Posting a cameraPreset from outside the Canvas raced whatever else sets the
- * view on load — the preset was written, something reset the camera after it,
- * and the plan opened in the default three-quarter with the model hidden: the
- * worst of both. Acting from inside, on the frame planView turns on, there is
- * nothing left to race.
- */
-function PlanViewCamera({ controlsRef }: { controlsRef: React.MutableRefObject<OrbitControlsImpl | null> }) {
-  const { camera } = useThree()
-  const planView = useFloorplanLocalStore((s) => s.planView)
-  const overlay = useAppStore((s) => s.floorplanOverlay)
-  // HOLD IT FOR A FEW FRAMES. Setting the camera once in an effect lost to
-  // whatever initialises the view after it — OrbitControls settling, the rig,
-  // the tether — and the plan opened in the default three-quarter with the
-  // model hidden, the worst of both. Re-asserting for a short burst wins that
-  // race without pinning the camera, so panning and zooming stay free once the
-  // view has landed.
-  const hold = useRef(0)
-  /**
-   * PUT THE 3D VIEW BACK WHERE IT WAS.
-   *
-   * Entering plan moves the camera to frame the sheet. Leaving it used to just
-   * stop holding, so you came back to 3D at the plan's height and angle — the
-   * model appeared to resize every time you flipped the switch, when nothing
-   * about the model had changed at all. Stash the 3D camera on the way in and
-   * restore it on the way out, so the toggle is a view change and not a
-   * relocation.
-   */
-  const saved3D = useRef<{ pos: [number, number, number]; target: [number, number, number] } | null>(null)
-  useEffect(() => {
-    if (planView) {
-      const c = controlsRef.current
-      saved3D.current = {
-        pos: [camera.position.x, camera.position.y, camera.position.z],
-        target: c ? [c.target.x, c.target.y, c.target.z] : [0, 0, 0],
-      }
-      hold.current = 12
-      return
-    }
-    hold.current = 0
-    const back = saved3D.current
-    if (!back) return
-    saved3D.current = null
-    camera.position.set(back.pos[0], back.pos[1], back.pos[2])
-    const c = controlsRef.current
-    if (c) {
-      c.target.set(back.target[0], back.target[1], back.target[2])
-      const damped = c.enableDamping
-      c.enableDamping = false
-      c.update()
-      c.enableDamping = damped
-    }
-  }, [planView, camera, controlsRef])
-  // Re-frame if the sheet itself changes size while plan view is open.
-  useEffect(() => { if (planView) hold.current = 12 }, [overlay, planView])
-  useFrame(() => {
-    if (hold.current <= 0) return
-    hold.current--
-    const { position, target } = planViewCamera(overlay)
-    camera.position.set(position[0], position[1], position[2])
-    const c = controlsRef.current
-    if (c) {
-      c.target.set(target[0], target[1], target[2])
-      const damped = c.enableDamping
-      c.enableDamping = false
-      c.update()
-      c.enableDamping = damped
-    } else {
-      camera.lookAt(target[0], target[1], target[2])
-    }
-  })
   return null
 }
 
@@ -384,12 +302,28 @@ function PrintAutoFrame() {
     // above, not the framing; that guard stays and does the real work. If the
     // plan is genuinely off screen the answer is a camera preset the user asks
     // for, not one taken from them mid-action.
-    const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}`
+    /**
+     * THE CANVAS ASPECT BELONGS IN THE KEY.
+     *
+     * The framing this computes bakes in size.width / size.height, but the key
+     * only carried the drawing and the SHEET size — so after a window resize
+     * the key was unchanged, the early return fired, and the camera kept a
+     * framing worked out for the old aspect. On a wide, short window that puts
+     * the building off screen and the viewport is simply BLACK, with nothing
+     * apparently wrong: the model is built, every mesh is visible, and one
+     * synthetic resize event brings it all back. Almost certainly the same
+     * fault behind "it froze after trying to resize".
+     *
+     * Rounded to two places so ordinary jitter does not re-frame the view while
+     * someone is dragging a window edge — only a real change in shape does.
+     */
+    const aspect = size.width / size.height
+    const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}:${aspect.toFixed(2)}`
     lastFramedForTrace.current = traceMode
     if (lastKey.current === key) return
     lastKey.current = key
     const mobile = typeof window !== 'undefined' && window.innerWidth < 768
-    setCameraPreset(framePrintPreset(w, d, position, size.width / size.height, 55, mobile))
+    setCameraPreset(framePrintPreset(w, d, position, aspect, 55, mobile))
   }, [drawingId, scale, position, size.width, size.height, traceMode, setCameraPreset])
 
   return null
@@ -1075,19 +1009,13 @@ export default function ModelViewer() {
         />
         <OrbitEnabledGuard controlsRef={controlsRef} enabled={orbitEnabled} />
         <CameraPresetApplier controlsRef={controlsRef} />
-        <PlanViewCamera controlsRef={controlsRef} />
         <CameraTether controlsRef={controlsRef} />
         {/* Only spin when the workspace is genuinely idle: orbit is on, nothing
             is being traced or calibrated or placed, and nothing is selected for
             editing. Anything that owns the view owns the camera too. */}
         <IdleSpin
           controlsRef={controlsRef}
-          /* NOT IN PLAN VIEW. The idle spin quietly orbited the camera off
-             straight-down, so a plan you left alone for a moment drifted back
-             into perspective on its own — the view promoting itself to 3D
-             while you were only hovering. Anything that owns the view owns the
-             camera, and plan view owns it. */
-          allowed={orbitEnabled && !planView && !traceMode && !placeObjectType && !calibratingNow && !editSelected}
+          allowed={orbitEnabled && !traceMode && !placeObjectType && !calibratingNow && !editSelected}
         />
 
 
