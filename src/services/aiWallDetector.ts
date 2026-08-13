@@ -61,6 +61,29 @@ async function getSession() {
   if (_sessionPromise) return _sessionPromise
   _sessionPromise = (async () => {
     const ort = await import('onnxruntime-web')
+    /**
+     * RUN THE MODEL OFF THE MAIN THREAD.
+     *
+     * By default onnxruntime-web initialises WASM and runs inference on
+     * whatever thread called it — which here is the one that has to paint. This
+     * is the FIRST thing the processor does with a drawing, before the
+     * heuristic detector is even reached, and it is where the time was going: a
+     * print sat past sixty seconds with the tab locked solid, and moving the
+     * heuristic passes into a worker barely moved the number because they were
+     * not the bottleneck.
+     *
+     * `wasm.proxy` makes onnxruntime host its own worker and marshal calls to
+     * it, so session creation, WASM init and inference all happen off-thread.
+     * Threads are capped rather than maximised: this runs on phones, where
+     * spawning one worker per core costs more in memory and start-up than it
+     * returns.
+     *
+     * Both settings must be applied BEFORE the first session is created —
+     * afterwards they are ignored, which is a quiet way to think you have fixed
+     * this and not have.
+     */
+    ort.env.wasm.proxy = true
+    ort.env.wasm.numThreads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency ?? 4) - 1))
     return ort.InferenceSession.create(MODEL_URL, {
       executionProviders: pickProviders(),
       graphOptimizationLevel: 'all',
