@@ -18,6 +18,14 @@ if (import.meta.env.DEV) {
   // what is worth measuring only exists once finishes are on, so verifying it
   // meant hand-driving the Settings drawer first. Now it does not.
   ;(window as unknown as Record<string, unknown>).__uiSettingsStore = useUISettingsStore
+  // A ruler for the detector. Run `__scorePrints()` in the console to put all
+  // four real drawing sets through the whole pipeline and print the numbers —
+  // so a change to detection can be measured instead of squinted at. Loaded
+  // lazily so the corpus code never reaches a production bundle.
+  ;(window as unknown as Record<string, unknown>).__scorePrints = async (only?: string[]) => {
+    const { scorePrints } = await import('./dev/scorePrints')
+    return scorePrints(only)
+  }
 }
 
 // Dev self-heal: the production build ships a PWA service worker that precaches
