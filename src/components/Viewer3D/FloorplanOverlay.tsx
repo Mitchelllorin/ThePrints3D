@@ -237,6 +237,7 @@ export default function FloorplanOverlay() {
   const circuits = useAppStore((s) => s.circuits)
   const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
+  const planView = useFloorplanLocalStore((s) => s.planView)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
 
@@ -1583,23 +1584,37 @@ export default function FloorplanOverlay() {
         calibrationMode={overlay.calibrationMode}
       />
 
-      {/* Committed floor areas — outlines at each area's storey elevation. */}
+      {/* Committed floor and roof areas — outlines at each area's storey
+          elevation.
+
+          KNOCKED BACK IN PLAN VIEW. Seen from above these are big bright
+          rectangles laid straight over the drawing — the roof one especially,
+          since it rings everything at the overhang line. While you are tracing
+          in 3D that is the point: it is the thing you just drew. In plan you
+          are reading the PRINT, judging whether a detected line sits on a wall,
+          and a hot pink ring over the top of it is competing with the only
+          thing you are actually looking at. They stay visible, because the gap
+          between the two IS the eave and is worth seeing — just quiet enough to
+          be context rather than the subject. */}
       {visibleLayers.has('floors') && floorsAreas.map((a) => (
         <Line
           key={`floor-${a.id}`}
           points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, CEILING_TYPES.has(a.elementType)))}
           color={LAYER_COLORS.floors}
-          lineWidth={2.5}
+          lineWidth={planView ? 1.2 : 2.5}
+          transparent={planView}
+          opacity={planView ? 0.42 : 1}
         />
       ))}
 
-      {/* Committed roof areas — outlines at each area's storey elevation. */}
       {visibleLayers.has('roof') && roofAreas.map((a) => (
         <Line
           key={`roof-${a.id}`}
           points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, true))}
           color={LAYER_COLORS.roof}
-          lineWidth={2.5}
+          lineWidth={planView ? 1.2 : 2.5}
+          transparent={planView}
+          opacity={planView ? 0.42 : 1}
         />
       ))}
 
