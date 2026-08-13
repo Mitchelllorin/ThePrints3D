@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
 import ProjectLibrary from '../Projects/ProjectLibrary'
+import AssistantBubble from './AssistantBubble'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -1349,8 +1350,15 @@ export default function WorkspaceLayout() {
       {/* Ambient inference nudge — gentle "snap flush?" prompt, bottom-centre. */}
       <InferencePrompt />
 
-      {/* (Removed: the proactive "next-step" coach cards — redundant with Ask,
-          they floated over other menus and their suggestion order was off.) */}
+      {/* THE NEXT-STEP COACH, back — because with it gone there was no guidance
+          at all. It was pulled for two fair reasons: it floated over other
+          menus, and its suggestion order was wrong. Both are fixed rather than
+          waved away — assistant.ts now requires real walls before it declares
+          the model finished (floor → walls → build → done, in step), and the
+          bubble goes silent whenever a drawer is open, on the same principle as
+          its existing busy gate: if the user is doing something, say nothing.
+          One line at a time, dismissible, with a button that does the step. */}
+      <AssistantBubble />
 
       {/* The guided "build a whole house" walkthrough (its own persistent card). */}
       <TutorialCoach />
