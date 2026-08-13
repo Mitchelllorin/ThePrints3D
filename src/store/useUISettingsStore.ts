@@ -157,7 +157,12 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   dirIntensity: 1.0,
   ambientIntensity: 0.6,
   accentColor: '#2f80ff',
-  labelColor: '#ffffff',
+  // NOT WHITE. White is the same value as the pale timber, the sheet goods and
+  // the print the labels sit on, so it has nothing to contrast with and washes
+  // straight into them. A light cyan reads as annotation rather than material —
+  // nothing in a building is this colour — and it holds against both the dark
+  // grid and a bright deck. Changeable in Settings → Model labels.
+  labelColor: '#7dd3fc',
   labelScale: 1,
 }
 
