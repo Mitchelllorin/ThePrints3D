@@ -143,7 +143,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
           and hideable outright when a storey full of them stops helping. */}
       {!built && dimensionsVisible && (
         <Billboard position={[cx, baseY + wallHeight + 0.28, cz]}>
-          <Text {...labelText(0.40 * labelScale, labelColor)}>
+          <Text {...labelText(0.46 * labelScale, labelColor)}>
             {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
           </Text>
         </Billboard>

@@ -25,10 +25,10 @@
  *  Raised from 0.11: white text on pale plywood, bright stud faces or the print
  *  itself was the real legibility problem, and the colour cannot go any
  *  brighter than white — so the separation has to come from the halo. */
-export const LABEL_OUTLINE_RATIO = 0.15
+export const LABEL_OUTLINE_RATIO = 0.20
 /** Faux-bold thickness, as a fraction of font size. Heavier for the same
  *  reason — weight reads as brightness at a glance on a phone in daylight. */
-export const LABEL_STROKE_RATIO = 0.075
+export const LABEL_STROKE_RATIO = 0.115
 /** The halo colour — the workspace's darkest tone, so it reads as a shadow. */
 export const LABEL_OUTLINE_COLOR = '#0b1120'
 
@@ -43,6 +43,13 @@ export function labelText(fontSize: number, color: string) {
   return {
     fontSize,
     color,
+    /* A LITTLE EXTRA WEIGHT IN THE FONT ITSELF, on top of the faux-bold stroke.
+       These labels are read at arm's length, outdoors, over a model that is
+       mostly pale timber and bright sheet goods — the failure is never that the
+       text is too small in isolation, it is that it disappears into what is
+       behind it. Weight is the cheapest legibility there is. */
+    fontWeight: 'bold' as const,
+    letterSpacing: 0.01,
     anchorX: 'center' as const,
     anchorY: 'middle' as const,
     outlineWidth: fontSize * LABEL_OUTLINE_RATIO,

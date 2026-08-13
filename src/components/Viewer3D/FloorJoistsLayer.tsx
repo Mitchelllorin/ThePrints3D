@@ -181,7 +181,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
       />
       {sheetCount > 0 && dimensionsVisible && (
         <Billboard position={[centre.x, 0.5, centre.z]}>
-          <Text {...labelText(0.34 * labelScale, labelColor)}>
+          <Text {...labelText(0.40 * labelScale, labelColor)}>
             {`${sheetCount} sheets · 4×8`}
           </Text>
         </Billboard>
