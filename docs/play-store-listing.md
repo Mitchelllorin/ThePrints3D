@@ -102,6 +102,42 @@ pitch deck, website:
 
 ---
 
+## Pricing — decided 2026-08-13
+
+**Free. Not "free for now" — Free, set deliberately.**
+
+| Play Console field | Value |
+|---|---|
+| Pricing | Free |
+| Contains ads | No |
+| In-app purchases | No |
+
+**Free → Paid is impossible on Play.** You can move a paid app to free; you can
+never move a free app to paid. The only route to charging later is a new
+package name, which means starting again at zero installs and zero reviews.
+So Free is both the positioning and the reversible direction.
+
+Charging later is still fully open: **a free app can add subscriptions or IAP
+at any time.** The Free flag describes the download, not the business model.
+
+### Why this fits the revenue plan
+
+Revenue is branded product placement — real materials, real SKUs, direct brand
+partnerships. **Google Play billing applies to digital goods only; physical
+goods are exempt.** Affiliate links out to a supplier for lumber, sheathing or
+fixtures owe Google nothing and need not route through Play billing.
+
+The line to watch: anything *digital* sold inside the app — a pro tier, an
+export unlock, a template pack — is Play billing territory and does take the
+15–30% cut. Physical materials are not.
+
+### Closed testing
+
+No monetization surface at all. Testers are there to tell us whether it reads
+their prints; anything in front of that is noise.
+
+---
+
 ## Claims the app must actually honour
 
 The listing promises these. Keep them true:
