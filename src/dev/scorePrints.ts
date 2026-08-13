@@ -53,6 +53,10 @@ export interface PrintScore {
   rooms: number
   'w/room': number
   scale: string
+  /** Rasterising the PDF — render + sheet pick. */
+  rasterMs: number
+  /** Everything after: wall detection, rooms, openings, symbols. */
+  detectMs: number
   ms: number
   error?: string
 }
@@ -103,7 +107,22 @@ export async function scorePrints(only?: string[]): Promise<PrintScore[]> {
   for (const name of names) {
     const started = performance.now()
     try {
-      const patch = await processDrawing(stubDrawing(await fileFor(name)), () => {})
+      /**
+       * WHERE DOES THE TIME GO? A print that takes ninety seconds is not a
+       * print anyone waits for, and the fix is completely different depending
+       * on which half is slow: rasterising too big a canvas is a scale
+       * decision, while detection crawling over ten megapixels is an algorithm
+       * one. Guessing between them risks changing RASTER_SCALE, which would
+       * shift every pixel-based threshold in the detector underneath us.
+       *
+       * processDrawing spends its first 80% of reported progress on the raster,
+       * so the crossing point splits the two without touching the pipeline.
+       */
+      let rasterDone = 0
+      const patch = await processDrawing(stubDrawing(await fileFor(name)), (pct) => {
+        if (!rasterDone && pct >= 80) rasterDone = performance.now()
+      })
+      const rasterMs = Math.round((rasterDone || performance.now()) - started)
       const walls = patch.parsedWalls ?? []
       const stubs = walls.filter(
         (w) => Math.hypot(w.x2 - w.x1, w.y2 - w.y1) < MIN_AUTO_WALL_PX,
@@ -117,12 +136,15 @@ export async function scorePrints(only?: string[]): Promise<PrintScore[]> {
         rooms,
         'w/room': rooms ? +(walls.length / rooms).toFixed(1) : 0,
         scale: patch.scaleNotation ?? (patch.scaleMmPerPx ? 'derived' : '—'),
+        rasterMs,
+        detectMs: Math.round(performance.now() - started) - rasterMs,
         ms: Math.round(performance.now() - started),
       })
     } catch (err) {
       rows.push({
         print: name.replace(/\.pdf$/, ''),
         walls: 0, stubs: 0, 'stub%': 0, rooms: 0, 'w/room': 0, scale: '—',
+        rasterMs: 0, detectMs: 0,
         ms: Math.round(performance.now() - started),
         error: String(err).slice(0, 80),
       })
