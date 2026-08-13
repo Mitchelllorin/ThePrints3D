@@ -1,5 +1,5 @@
 import { rasterizeFile } from './pdfRasterizer'
-import { detectWalls } from './wallDetector'
+import { detectWallsOffThread } from './detectOffThread'
 import { inferFloorNumber } from './sheetParser'
 import { deriveScaleFromNotation } from './scaleParser'
 import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
@@ -77,44 +77,55 @@ export async function processDrawing(
       }
     }
 
-    // 3. Detect walls (runs in main thread — acceptable for most drawing sizes)
+    /**
+     * 3. Detect walls — OFF THE MAIN THREAD.
+     *
+     * This used to run inline, with a comment saying that was "acceptable for
+     * most drawing sizes". It is not, for a real sheet: ten megapixels, and up
+     * to THREE full passes over it when the strict one finds nothing. Measured,
+     * the smallest print in the corpus had not finished after ninety-five
+     * seconds and the tab was locked solid.
+     *
+     * The whole ladder now goes to a worker in one message — the fallbacks only
+     * fire when the previous pass came up empty, so sending them separately
+     * would mean up to three round trips and three copies of the image. Falls
+     * back to running inline wherever workers are unavailable, so behaviour is
+     * unchanged, just no longer on the thread that has to paint.
+     */
     setProgress(82)
     const isRasterPhoto = drawing.file.type.startsWith('image/')
     let result = await detectWallsWithAI(raster.imageData)
     if (!result) {
-      result = detectWalls(raster.imageData, {
-        // Stricter defaults reduce annotation noise (text/dimension lines)
-        edgeThreshold: isRasterPhoto ? 30 : 34,
-        minWallLengthPx: isRasterPhoto ? 55 : 70,
-        minWallThicknessPx: 3,
-        maxWallThicknessPx: 60,
-        requirePairedEdges: true,
-        mergeGapPx: 4,
-      })
-    }
-    if (result.walls.length === 0) {
-      // Stricter defaults reduce annotation noise (text/dimension lines)
-      // Fallback pass for noisy scans/photos where strict pairing can miss walls.
-      result = detectWalls(raster.imageData, {
-        edgeThreshold: isRasterPhoto ? 26 : 30,
-        minWallLengthPx: isRasterPhoto ? 40 : 55,
-        minWallThicknessPx: 2,
-        maxWallThicknessPx: 72,
-        requirePairedEdges: false,
-        mergeGapPx: 6,
-      })
-    }
-    if (result.walls.length === 0) {
-      // Third pass: very lenient — targets heavily degraded scans, low-contrast
-      // prints, and hand-drawn sketches where normal edge magnitudes are low.
-      result = detectWalls(raster.imageData, {
-        edgeThreshold: isRasterPhoto ? 16 : 20,
-        minWallLengthPx: isRasterPhoto ? 28 : 38,
-        minWallThicknessPx: 2,
-        maxWallThicknessPx: 120,
-        requirePairedEdges: false,
-        mergeGapPx: 8,
-      })
+      const { result: detected } = await detectWallsOffThread(raster.imageData, [
+        // Strict: reduces annotation noise (text, dimension lines).
+        {
+          edgeThreshold: isRasterPhoto ? 30 : 34,
+          minWallLengthPx: isRasterPhoto ? 55 : 70,
+          minWallThicknessPx: 3,
+          maxWallThicknessPx: 60,
+          requirePairedEdges: true,
+          mergeGapPx: 4,
+        },
+        // Looser: noisy scans and photos, where strict pairing can miss walls.
+        {
+          edgeThreshold: isRasterPhoto ? 26 : 30,
+          minWallLengthPx: isRasterPhoto ? 40 : 55,
+          minWallThicknessPx: 2,
+          maxWallThicknessPx: 72,
+          requirePairedEdges: false,
+          mergeGapPx: 6,
+        },
+        // Very lenient: degraded scans, low-contrast prints, hand drawings.
+        {
+          edgeThreshold: isRasterPhoto ? 16 : 20,
+          minWallLengthPx: isRasterPhoto ? 28 : 38,
+          minWallThicknessPx: 2,
+          maxWallThicknessPx: 120,
+          requirePairedEdges: false,
+          mergeGapPx: 8,
+        },
+      ])
+      result = detected
     }
     const filtered = filterWallsForNoisyPrint({
       walls: result.walls,
