@@ -707,15 +707,26 @@ export default function WorkspaceLayout() {
       // a single storey that merely SHIPS a second-floor sheet, so it loads as
       // one level with an empty floor above and shows none of the stacking.
       loadPresetDrawing('hard', false)
+      /**
+       * THE SHOWCASE MUST NOT REWRITE YOUR SETTINGS.
+       *
+       * Turning the finish layers on is right HERE — the whole point of this
+       * model is to be looked at, and a dried-in shell is not that. But these
+       * writes persist, so pressing Practice model once switched sheathing and
+       * board on for every project afterwards, including a real print uploaded
+       * later. The user found exactly that: walls popping out with sheathing
+       * and board on despite both being off by default.
+       *
+       * Sheathing and board stay OFF. They are interior/structural layers you
+       * turn on to inspect, and a showcase does not need them to look finished
+       * — what makes it read as a house is the cladding and the wrap, which is
+       * all this now enables. Anyone who wants to see the sheathing has a
+       * toggle for it, and it is no longer decided for them behind their back.
+       */
       setUI({
-        // The finish layers wait for an explicit "apply" during a build, which
-        // is right while you are still framing and wrong for something whose
-        // whole purpose is to be looked at.
         finishesApplied: true,
-        sheathingVisible: true,
         wrapVisible: true,
         claddingVisible: true,
-        drywallVisible: true,
         // Default cladding is 'none' — a dried-in shell. A showcase should be
         // clad, or the exterior reads as unfinished.
         cladding: showcaseCladding === 'none' ? 'fiber-cement-lap' : showcaseCladding,
