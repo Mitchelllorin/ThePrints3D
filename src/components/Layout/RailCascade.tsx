@@ -215,7 +215,12 @@ export default function RailCascade() {
             onClick={() => {
               const next = !planView
               setPlanView(next)
-              if (next) setCameraPreset(planViewCamera(useAppStore.getState().floorplanOverlay))
+              if (next) {
+                // Frame against the REAL viewport shape — a tall phone needs the
+                // camera much further back than a square one for the same sheet.
+                const aspect = window.innerWidth / Math.max(1, window.innerHeight)
+                setCameraPreset(planViewCamera(useAppStore.getState().floorplanOverlay, aspect))
+              }
             }}
             aria-pressed={planView}
             title={planView ? 'Back to 3D' : 'Plan view — look straight down at the drawing'}

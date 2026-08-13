@@ -99,11 +99,33 @@ export function groupBuiltMembers(members: BuiltMember[]): { layer: string; item
  * Nudged a hair off dead-centre because looking exactly down the Y axis gives
  * OrbitControls a degenerate up-vector and it flips.
  */
-export function planViewCamera(overlay: { scale: [number, number]; position: [number, number] }): {
-  position: [number, number, number]; target: [number, number, number]
-} {
+export function planViewCamera(
+  overlay: { scale: [number, number]; position: [number, number] },
+  /** Viewport aspect (w/h). A tall phone is well under 1. */
+  aspect = 1,
+  /** Vertical field of view in degrees — the Canvas uses 55. */
+  fovDeg = 55,
+): { position: [number, number, number]; target: [number, number, number] } {
   const [w, d] = overlay.scale
   const [px, pz] = overlay.position
-  const h = Math.max(6, Math.max(w, d) * 1.15)
+
+  /**
+   * BOTH DIMENSIONS HAVE TO FIT, and only one of them was being checked.
+   *
+   * Height came from the sheet's longest side alone, which quietly assumes a
+   * square viewport. A perspective camera sees a vertical slice set by the FOV
+   * and a horizontal one that is that slice times the ASPECT — so on a tall
+   * phone (aspect well under 1) the view is far narrower than it is deep, and a
+   * sheet that fits top-to-bottom still runs off both sides. You end up sitting
+   * inside the drawing.
+   *
+   * Work the distance each dimension needs and take the larger, then leave a
+   * margin so the sheet is framed rather than jammed against the edges.
+   */
+  const halfFov = (fovDeg * Math.PI) / 180 / 2
+  const t = Math.tan(halfFov)
+  const forDepth = d / (2 * t)
+  const forWidth = w / (2 * t * Math.max(0.2, aspect))
+  const h = Math.max(6, Math.max(forDepth, forWidth) * 1.18)
   return { position: [px, h, pz + 0.001], target: [px, 0, pz] }
 }
