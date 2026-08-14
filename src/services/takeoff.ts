@@ -186,3 +186,35 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
 
   return sections
 }
+
+/**
+ * The takeoff as a spreadsheet — the form a supplier, an estimator or an
+ * accountant can actually use. Both halves go in: the quantities derived from
+ * what was drawn, and the members counted off the standing model, kept as
+ * separate sections because they answer different questions and disagree on
+ * purpose (see the note in TakeoffPanel).
+ *
+ * Quoting every field, because material labels legitimately contain commas —
+ * `2×6 wood stud, 8'` would otherwise split into two columns and quietly
+ * corrupt the row.
+ */
+export function takeoffToCsv(
+  sections: TakeoffSection[],
+  built: { layer: string; items: { label: string; count: number }[] }[] = [],
+): string {
+  const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+  const rows: string[] = ['Section,Item,Quantity,Unit']
+
+  for (const sec of sections) {
+    for (const it of sec.items) {
+      rows.push([q(sec.title), q(it.label), q(it.quantity), q(it.unit)].join(','))
+    }
+  }
+  for (const group of built) {
+    for (const m of group.items) {
+      rows.push([q(`Counted from the model — ${group.layer}`), q(m.label), q(m.count), q('ea')].join(','))
+    }
+  }
+
+  return `${rows.join('\n')}\n`
+}

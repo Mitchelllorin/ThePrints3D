@@ -10,7 +10,12 @@ import {
   type SavedProject,
 } from '../../services/projectStorage'
 import { useAppStore } from '../../store/useAppStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import styles from './ProjectLibrary.module.css'
+
+/** How many saved jobs the free tier keeps. One is enough to show that the app
+ *  remembers your work; the second is what Pro is for. */
+const FREE_PROJECT_LIMIT = 1
 
 /** Modal-ish overlay showing saved projects + save-current button. */
 /**
@@ -28,6 +33,8 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
   const measurements = useAppStore((s) => s.measurements)
   const model = useAppStore((s) => s.model)
   const setView = useAppStore((s) => s.setView)
+  const isPro = useAppStore((s) => s.isPro)
+  const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
 
   const refresh = async () => {
     setProjects(await listProjects())
@@ -46,6 +53,14 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
   const saveCurrent = async () => {
     if (drawings.length === 0) {
       alert('Upload at least one drawing before saving the project.')
+      return
+    }
+    // Free keeps one job on the shelf — enough to prove the app remembers your
+    // work, which is the thing that has to be believed before anyone pays. The
+    // second job is the upgrade. Overwriting the existing one still works, so
+    // nobody is stuck: this blocks a NEW save, not saving.
+    if (!isPro && projects.length >= FREE_PROJECT_LIMIT) {
+      openUpgrade('Saving more than one project')
       return
     }
     const name = prompt('Project name?', `Job ${new Date().toLocaleDateString()}`)

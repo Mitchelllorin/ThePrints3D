@@ -17,6 +17,9 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
+import UpgradeSheet from '../Pro/UpgradeSheet'
+import ProSection from '../Pro/ProSection'
+import { watermarkedPng } from '../../services/watermark'
 import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/stairs'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { useAppStore } from '../../store/useAppStore'
@@ -175,6 +178,7 @@ function SettingsContent() {
   const resetCfg = useConfigStore((x) => x.reset)
   const previewMode = useAppStore((x) => x.previewMode)
   const setPreviewMode = useAppStore((x) => x.setPreviewMode)
+  const isPro = useAppStore((x) => x.isPro)   // titles the Pro section
 
   // Single-open accordion, matching the panel tab strip's toggle behaviour.
   const [openId, setOpenId] = useState<string | null>('appearance')
@@ -245,6 +249,14 @@ function SettingsContent() {
           a missing feature, it is losing your work. */}
       <CollapsibleSection id="projects" title="Projects" openId={openId} setOpenId={setOpenId}>
         <ProjectLibrary inline />
+      </CollapsibleSection>
+
+      {/* PRO — the state of the unlock, and the way back to it after a reinstall
+          or a new phone. Restore has to be findable without buying anything to
+          find it, which is why it sits here rather than only inside the upgrade
+          sheet: someone who has already paid should never be shown a price. */}
+      <CollapsibleSection id="pro" title={isPro ? 'Pro — unlocked' : 'Pro'} openId={openId} setOpenId={setOpenId}>
+        <ProSection />
       </CollapsibleSection>
 
       <CollapsibleSection id="detect" title="Wall detection" openId={openId} setOpenId={setOpenId}>
@@ -524,6 +536,8 @@ export default function WorkspaceLayout() {
   // once there's a standing model to grab.
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
+  /** The one-time unlock — decides the export watermark and the gated verbs. */
+  const isPro = useAppStore((s) => s.isPro)
   // Happy-place invariant: no drawer over the workspace while tracing.
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
@@ -640,12 +654,15 @@ export default function WorkspaceLayout() {
     closePanels()
   }
 
+  // Free exports carry a corner mark; Pro exports the canvas untouched. The
+  // export itself is never blocked — a share is how other trades find the app,
+  // so the free tier keeps it and simply signs it.
   const sharePng = () => {
     const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
     if (!canvas) return
     try {
       const a = document.createElement('a')
-      a.href = canvas.toDataURL('image/png')
+      a.href = isPro ? canvas.toDataURL('image/png') : watermarkedPng(canvas)
       a.download = `theprints3d-${Date.now()}.png`
       a.click()
     } catch (e) {
@@ -1373,6 +1390,10 @@ export default function WorkspaceLayout() {
 
       {/* The guided "build a whole house" walkthrough (its own persistent card). */}
       <TutorialCoach />
+
+      {/* Shown only when a locked feature was reached for — it names what, and
+          renders nothing at all until then. */}
+      <UpgradeSheet />
     </div>
   )
 }

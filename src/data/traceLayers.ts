@@ -10,6 +10,17 @@ export type TraceLayer = 'floors' | 'framing' | 'roof' | 'plumbing' | 'electrica
 // the MEP rough-ins.
 export const TRACE_LAYER_ORDER: TraceLayer[] = ['floors', 'framing', 'roof', 'plumbing', 'electrical', 'hvac']
 
+/**
+ * The layers behind the Pro unlock — the MEP trades.
+ *
+ * Structure (floors, framing, roof) is deliberately absent: that is the free
+ * model, the thing that has to be given away for anyone to believe the app.
+ * Defined here rather than in either panel because there are TWO ways to arm a
+ * layer — the Layers panel and the trade tabs in the Build drawer — and a
+ * paywall with a second door is not a paywall.
+ */
+export const PRO_TRACE_LAYERS = new Set<TraceLayer>(['plumbing', 'electrical', 'hvac'])
+
 /** Line colour per layer (rubber-band + committed lines + 3D geometry). */
 export const LAYER_COLORS: Record<TraceLayer, string> = {
   framing: '#ffffff',

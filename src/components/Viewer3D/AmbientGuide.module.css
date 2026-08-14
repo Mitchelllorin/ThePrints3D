@@ -218,6 +218,17 @@
 
 .layerTab:hover { background: rgba(30, 41, 59, 0.6); color: #e2e8f0; }
 
+/* Marks a trade tab as locked before it is tapped. Same quiet treatment as the
+   Layers panel — the label is still the thing you read first. */
+.layerTabPro {
+  margin-left: 5px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bp-accent, #38bdf8);
+  vertical-align: 1px;
+}
+
 .layerTabActive {
   background: rgba(30, 41, 59, 0.8);
   border-color: var(--bp-accent, #38bdf8);

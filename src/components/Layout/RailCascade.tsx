@@ -16,6 +16,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { trayItems } from '../../data/objectCatalog'
 import LayersPanel from './LayersPanel'
 import { planViewCamera } from '../../services/builtScene'
+import { requirePro } from '../Pro/usePro'
 import styles from './RailCascade.module.css'
 
 /** Wastebasket, drawn rather than typed — the rail's glyphs are thin monochrome
@@ -242,7 +243,9 @@ export default function RailCascade() {
         {hasDrawings && hasSomethingToEdit && !traceMode && (
           <button
             className={`${styles.icon} ${editMode ? styles.active : ''}`}
-            onClick={() => setEditMode(!editMode)}
+            // Only ENTERING is gated. Leaving edit mode must always work, or a
+            // lapsed state could strand someone inside a mode they cannot exit.
+            onClick={() => (editMode ? setEditMode(false) : requirePro('Editing the model', () => setEditMode(true)))}
             aria-pressed={editMode}
             title={editMode ? 'Done editing' : 'Edit anything — drag to move it'}
           >

@@ -48,3 +48,15 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// The one-time Pro unlock, reconciled with the Play Store once the app is up.
+// Deliberately after render and deliberately unawaited: the store already opened
+// with the cached answer, so this can only ever improve what we know, and a slow
+// or missing network must never hold up the workspace. refreshEntitlement()
+// returns null when it could not ask — on the web build, or offline — and null
+// leaves the cached entitlement exactly where it was.
+void (async () => {
+  const { refreshEntitlement } = await import('./services/billing')
+  const isPro = await refreshEntitlement()
+  if (isPro !== null) useAppStore.getState().setPro(isPro)
+})()

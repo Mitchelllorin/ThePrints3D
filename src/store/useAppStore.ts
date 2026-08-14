@@ -112,6 +112,7 @@ function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): Infe
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
+import { readCachedPro } from '../services/billing'
 import { useConfigStore } from './useConfigStore'
 import { useFloorplanLocalStore } from './useFloorplanLocalStore'
 import {
@@ -461,6 +462,11 @@ interface AppState {
   completeWizardGroup: (groupId: ProjectContextWizardState['currentGroup']) => void
   resetWizard: () => void
   loadPresetDrawing: (difficulty: PresetDifficulty, practiceMode: boolean) => void
+  /** Whether this device owns the one-time Pro unlock. See services/billing.ts.
+   *  Seeded from the local cache so an offline launch does not lock out someone
+   *  who has already paid, then reconciled with the store when it can be asked. */
+  isPro: boolean
+  setPro: (isPro: boolean) => void
   // Measurements
   setMeasureMode: (active: boolean) => void
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
@@ -765,6 +771,9 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
+    // Trust the cache first. The store is asked on launch, but a basement with
+    // no signal must not read as "never bought it".
+    isPro: readCachedPro(),
     annotations: loadPersistedAnnotations(),
     selectedAnnotationId: null,
     annotateMode: false,
@@ -1522,6 +1531,13 @@ export const useAppStore = create<AppState>()(
         if (!next) return
         s.historyPast.push(captureSnapshot(s))
         applySnapshot(s, next)
+      }),
+
+    /** Only the billing service should call this — it is the one place that
+     *  knows whether the store actually said yes. */
+    setPro: (isPro) =>
+      set((s) => {
+        s.isPro = isPro
       }),
 
     setMeasureMode: (active) =>

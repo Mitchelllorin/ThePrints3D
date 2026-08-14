@@ -21,7 +21,8 @@
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { LAYER_COLORS } from '../../data/traceLayers'
+import { requirePro } from '../Pro/usePro'
+import { LAYER_COLORS, PRO_TRACE_LAYERS } from '../../data/traceLayers'
 import type { TraceLayer } from '../../data/traceLayers'
 import styles from './WorkspaceLayout.module.css'
 
@@ -89,6 +90,7 @@ const GROUPS: Group[] = [
 ]
 
 export default function LayersPanel() {
+  const isPro = useAppStore((s) => s.isPro)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const toggleTradeLayerVisible = useAppStore((s) => s.toggleTradeLayerVisible)
   const overlayVisible = useAppStore((s) => s.floorplanOverlay.visible)
@@ -178,8 +180,20 @@ export default function LayersPanel() {
                   aria-pressed={solo}
                 />
                 {row.kind === 'trade' ? (
-                  <button className={styles.layerName} onClick={() => setActiveTraceLayer(row.key)}>
+                  <button
+                    className={styles.layerName}
+                    // Picking a layer here is what arms tracing on it. The MEP
+                    // three are Pro; structure stays free, because floors,
+                    // framing and roof ARE the free model — gating them would
+                    // gate the thing that sells the app.
+                    onClick={() => (
+                      PRO_TRACE_LAYERS.has(row.key)
+                        ? requirePro(`${row.label} layers`, () => setActiveTraceLayer(row.key))
+                        : setActiveTraceLayer(row.key)
+                    )}
+                  >
                     {row.label}
+                    {PRO_TRACE_LAYERS.has(row.key) && !isPro && <span className={styles.layerProTag}>PRO</span>}
                   </button>
                 ) : (
                   <span className={styles.layerName}>{row.label}</span>

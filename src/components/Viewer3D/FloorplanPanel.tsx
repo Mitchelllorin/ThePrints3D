@@ -13,9 +13,10 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import {
-  TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS, LAYER_TRACE_HINT,
+  TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS, LAYER_TRACE_HINT, PRO_TRACE_LAYERS,
   PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER, FLOORS_PICKER, ROOF_PICKER, LEVEL_OPTIONS,
 } from '../../data/traceLayers'
+import { requirePro } from '../Pro/usePro'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
 import { suggestWetWalls } from '../../services/wetWalls'
 import {
@@ -72,6 +73,7 @@ const framingShort = (key: string) => FRAMING_TYPES.find((t) => t.key === key)?.
 const roleShort = (key: string) => WALL_ROLES.find((r) => r.key === key)?.short ?? key
 
 export default function FloorplanPanel() {
+  const isPro           = useAppStore((s) => s.isPro)
   const drawings        = useAppStore((s) => s.drawings)
   const overlay         = useAppStore((s) => s.floorplanOverlay)
   const addDrawings     = useAppStore((s) => s.addDrawings)
@@ -948,9 +950,17 @@ export default function FloorplanPanel() {
                 key={l.key}
                 className={activeTraceLayer === l.key ? styles.layerTabActive : styles.layerTab}
                 style={activeTraceLayer === l.key ? { borderColor: l.color, color: l.color } : undefined}
-                onClick={() => { setActiveTraceLayer(l.key); closeAllPanels() }}
+                // The SAME gate as the Layers panel — this is the other way to
+                // arm a trade layer, and a paywall with a second door is not a
+                // paywall. Structure stays free here too.
+                onClick={() => (
+                  PRO_TRACE_LAYERS.has(l.key)
+                    ? requirePro(`${l.label} layers`, () => { setActiveTraceLayer(l.key); closeAllPanels() })
+                    : (() => { setActiveTraceLayer(l.key); closeAllPanels() })()
+                )}
               >
                 {l.label}
+                {PRO_TRACE_LAYERS.has(l.key) && !isPro && <span className={styles.layerTabPro}>PRO</span>}
               </button>
             ))}
           </div>

@@ -1,0 +1,127 @@
+/* The upgrade sheet — bottom edge, slim, and never over the model.
+   Same visual language as the rest of the chrome: a faint frosted surface
+   rather than a panel, one accent, text that reads off a white model or a dark
+   grid without a box behind it. */
+
+.sheet {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  z-index: 70;                       /* above the drawers — it is the answer to a tap */
+  width: min(420px, calc(100vw - 24px));
+  max-height: 46dvh;                 /* the model keeps the rest */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 14px;
+  border-radius: 14px;
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.86);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
+  animation: rise 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes rise {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+/* Names the thing they just tapped, so the sheet answers a question they asked. */
+.reason {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bp-text, #f1f5f9);
+  line-height: 1.3;
+}
+.close {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  background: none;
+  border: none;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 13px;
+  cursor: pointer;
+}
+.close:hover { color: var(--bp-text, #f1f5f9); }
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.item {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--bp-text-dim, #94a3b8);
+  padding-left: 14px;
+  position: relative;
+}
+.item::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--bp-accent, #38bdf8);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+.buy {
+  flex: 1 1 auto;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bp-accent, #38bdf8);
+  color: #06121f;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.buy:disabled { opacity: 0.5; cursor: default; }
+.restore {
+  flex: 0 0 auto;
+  padding: 10px 8px;
+  background: none;
+  border: none;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.restore:hover:not(:disabled) { color: var(--bp-text, #f1f5f9); }
+.restore:disabled { opacity: 0.5; cursor: default; }
+
+/* The one-payment promise, stated plainly. It is the reason people buy. */
+.terms {
+  margin: 0;
+  font-size: 10px;
+  color: var(--bp-text-dim, #94a3b8);
+  opacity: 0.85;
+}
+.note {
+  margin: 0;
+  font-size: 11px;
+  color: #f87171;
+}
+
+/* Landscape phones: shallow and wide, same as every other surface here. */
+@media (max-height: 600px) {
+  .sheet { max-height: 76dvh; width: min(460px, calc(100vw - 120px)); }
+}

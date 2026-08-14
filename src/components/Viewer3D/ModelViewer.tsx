@@ -33,6 +33,7 @@ import DrywallLayer from './DrywallLayer'
 import EnvelopeLayer from './EnvelopeLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
+import { requirePro } from '../Pro/usePro'
 import styles from './ModelViewer.module.css'
 
 /**
@@ -666,7 +667,8 @@ export default function ModelViewer() {
           </button>
           <button
             className={`${styles.toolBtn} ${measureMode ? styles.toolBtnActive : ''}`}
-            onClick={() => setMeasureMode(!measureMode)}
+            // Gated on the way IN only — see the Edit button in RailCascade.
+            onClick={() => (measureMode ? setMeasureMode(false) : requirePro('The measuring tape', () => setMeasureMode(true)))}
             title="Measure distances (click two points)"
           >
             {measureMode ? 'Measuring…' : 'Measure'}

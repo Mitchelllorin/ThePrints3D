@@ -244,6 +244,11 @@ interface FloorplanLocalState {
   settingsDrawerOpen: boolean
   placeDrawerOpen: boolean
   askDrawerOpen: boolean
+  /** Which locked feature the user just reached for, or null when the upgrade
+   *  sheet is closed. It is the REASON rather than a bare open/closed flag so
+   *  the sheet can answer the question actually asked — "editing walls is part
+   *  of Pro" — instead of opening a generic pitch and making them work out why. */
+  upgradeReason: string | null
 
   // ─── guided tutorial (the "build a whole house" walkthrough) ──────
   /** Tutorial running — the coach card is shown and tracks the current step. */
@@ -316,6 +321,9 @@ interface FloorplanLocalState {
   /** Open/close an edge drawer. On compact (phone / landscape-short) screens,
    *  opening one retracts the others so they never stack over the workspace. */
   setDrawerOpen: (which: 'build' | 'settings' | 'place' | 'ask', open: boolean) => void
+  /** Show the upgrade sheet, naming the feature that sent them there. */
+  openUpgrade: (reason: string) => void
+  closeUpgrade: () => void
   startTutorial: () => void
   exitTutorial: () => void
   setTutorialStep: (n: number) => void
@@ -430,6 +438,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   tutorialStep: 0,
   placeDrawerOpen: false,
   askDrawerOpen: false,
+  upgradeReason: null,
 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
@@ -574,6 +583,17 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
       : 'askDrawerOpen'
     return { ...base, [key]: open } as Partial<FloorplanLocalState>
   }),
+  // Opening it retracts the drawers, same rule as everything else that appears
+  // over the workspace: one surface at a time.
+  openUpgrade: (reason) => set({
+    upgradeReason: reason,
+    buildDrawerOpen: false,
+    settingsDrawerOpen: false,
+    placeDrawerOpen: false,
+    askDrawerOpen: false,
+  }),
+  closeUpgrade: () => set({ upgradeReason: null }),
+
   startTutorial: () => set({ tutorialActive: true, tutorialStep: 0 }),
   exitTutorial: () => set({ tutorialActive: false }),
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),

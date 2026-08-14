@@ -405,6 +405,19 @@
   padding: 0;
 }
 
+/* Says a row is locked before it is tapped. Small and quiet — the row is still
+   readable as a layer name first; nobody needs a badge shouting at them from
+   inside their own drawing. */
+.layerProTag {
+  margin-left: 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bp-accent, #38bdf8);
+  opacity: 0.9;
+  vertical-align: 1px;
+}
+
 .layerToggle {
   min-width: 34px;
   min-height: 20px;
