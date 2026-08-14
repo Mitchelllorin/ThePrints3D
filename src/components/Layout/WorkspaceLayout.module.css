@@ -495,7 +495,13 @@
 .sheetNote {
   position: absolute;
   bottom: calc(56px + env(safe-area-inset-bottom, 0px));
-  left: 14px;
+  /* BESIDE the rail, not in it. At left:14px this line runs straight through the
+     rail's left column: in landscape it printed across PLAN, in the gap between
+     PLACE and EDIT, and at every size it landed on CLEAR's caption — the arrows
+     are a 44px touch target on a phone, so the note's box is taller than the one
+     line of text suggests. The rail is 44px wide; 58px clears it with the same
+     inset the rest of this corner already uses. */
+  left: 58px;
   z-index: 56;
   display: flex;
   align-items: center;
@@ -521,8 +527,9 @@
 .sheetStep:hover:not(:disabled) { color: var(--bp-accent, #38bdf8); }
 .sheetStep:disabled { opacity: 0.3; cursor: default; }
 @media (max-width: 767px), (max-height: 600px) {
-  /* Clears the Edit button, which lifts to 46px on a phone. */
-  .sheetNote { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); left: 10px; }
+  /* Lifted off the bottom edge, where a phone's gesture bar clips it. The left
+     inset is the base 58px at every size now — see .sheetNote. */
+  .sheetNote { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 }
 
 .explodeBar {

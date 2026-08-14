@@ -102,6 +102,37 @@
 .row:hover { opacity: 1; }
 .rowActive { color: var(--bp-accent, #38bdf8); opacity: 1; }
 
+/* ── Landscape / short viewports ─────────────────────────────────────────────
+   The 56px top and 58px bottom insets were measured in portrait, where they
+   clear the logo and the old Place tab. Turn a phone sideways and they eat a
+   third of the available height: on an 854×390 screen the rail gets 276px for
+   369px of buttons, so EDIT is sliced in half and CLEAR — pinned to the foot —
+   is off the bottom entirely, with the scrollbar hidden so nothing says so.
+   Nothing else occupies the left column at these heights (the logo is centred,
+   the top icons are right-aligned, and the in-rail Place sheet hides fully when
+   closed), so take the band back. Same breakpoint and the same 8px top that
+   EdgeDrawer already gives the side drawers. The tighter gap and padding are
+   what keep all eight items visible on a 360px-tall landscape phone; the glyphs
+   themselves are untouched, so the tap targets stay full size. */
+@media (max-height: 600px) {
+  .wrap {
+    top: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  .rail { gap: 4px; }
+  .icon { padding: 2px 0; }
+  .railFoot { padding-top: 10px; }
+
+  /* mobile.css holds every button to a 44px minimum below 768px wide, and it
+     deliberately outranks a single module class. That is right in portrait, but
+     a 667×375 landscape phone is BOTH narrow and short: eight 44px items plus
+     their gaps want 390px of a 359px rail, so CLEAR drops off the foot again
+     even after the insets are reclaimed. Three classes beat that rule's (0,2,1),
+     and only here — the button stays a full 44px wide and keeps its glyph and
+     label, it just gives back the vertical padding it cannot afford sideways. */
+  .wrap .rail .icon { min-height: 36px; }
+}
+
 .rowGlyph {
   flex: 0 0 auto;
   font-size: 15px;
