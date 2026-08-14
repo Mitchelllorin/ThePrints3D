@@ -531,6 +531,11 @@
      inset is the base 58px at every size now — see .sheetNote. */
   .sheetNote { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
 }
+/* Below 340px tall the rail wraps into two 44px columns (RailCascade), so the
+   58px that used to clear it now lands inside the strip. Clear the wider rail. */
+@media (max-height: 340px) {
+  .sheetNote { left: 110px; }
+}
 
 .explodeBar {
   position: absolute;

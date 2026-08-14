@@ -133,6 +133,38 @@
   .wrap .rail .icon { min-height: 36px; }
 }
 
+/* ── Very short landscape: a second column ───────────────────────────────────
+   An older phone turned sideways is about 320px tall, and even compacted the
+   eight items want ~326px of the 304px that leaves. One column cannot hold
+   them, so CLEAR scrolls out of sight again — but on a 568px-wide screen the
+   scarce axis is height and the spare one is width. Wrap into a second 44px
+   column rather than overflow: everything stays on screen, at full size, and
+   the rail still reads as a thin strip on the perimeter.
+   CLEAR keeps its margin-top:auto, which in a wrapping column drops it to the
+   FOOT of whichever column it lands in — so it stays the furthest point in the
+   rail from PLACE, which is the whole reason it was moved down there. If even
+   two columns are not enough the strip scrolls sideways instead of hiding a
+   button; overflow-y must be hidden or the wrap has no height to work against. */
+@media (max-height: 340px) {
+  .rail {
+    /* Two 44px columns + the 4px gap between them + the 2px side padding either
+       side = 96px, stated outright. Left to width:auto the flex box settled
+       narrower than its own content, and the cascade column — the next child of
+       the flex row — opened on top of the rail's right edge; at 92px the second
+       column overhung the content box by the width of the gap and CLEAR sat
+       half outside the scroll port. */
+    width: 96px;
+    flex: 0 0 auto;               /* never let the cascade column squeeze it */
+    flex-wrap: wrap;
+    align-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  /* Fixed width so the two columns line up; without it each column sizes to its
+     own longest label and the icons sit on a ragged edge. */
+  .wrap .rail .icon { width: 44px; }
+}
+
 .rowGlyph {
   flex: 0 0 auto;
   font-size: 15px;
