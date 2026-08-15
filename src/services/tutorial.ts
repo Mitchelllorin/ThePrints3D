@@ -49,76 +49,91 @@ export interface TutorialStep {
   title: string
   /** One or two friendly sentences teaching the step. */
   body: string
-  /** Where to look / what to tap. */
-  hint: string
+  /** Where to look / what to tap. OPTIONAL: when the spotlight already says it,
+   *  a line of prose repeating "that's the thing that's glowing" is noise. */
+  hint?: string
   /** Goal reached → the coach ticks it and auto-advances. */
   done: (c: TutorialContext) => boolean
   /** Drive the UI to the right tool the moment the step opens (optional). */
   enter?: TutorialEnter
   /** `data-tour` value of the control to spotlight (optional). */
   target?: string
+  /** Run a looping demonstration of the gesture over the plan. Words alone do
+   *  not teach a gesture — "tap two opposite corners" only means something once
+   *  you have watched it happen. Stops the moment the user starts. */
+  demo?: 'twoCorners' | 'wallRun'
+  /** Move on by itself after this long, for a step with nothing to detect.
+   *  Every other step advances when the user DOES the thing; a step that only
+   *  says something has no such signal, and sits there until Next is found —
+   *  which is a dead end for anyone who doesn't realise Next is the way out.
+   *  It reads out loud in about four seconds, so seven is unhurried. */
+  autoAdvanceMs?: number
 }
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
+  // ── ONE step of talking, then straight to work ─────────────────────────────
+  // This opened with four: what the app does, here is your plan, here is the
+  // rail, here is how tracing works — four screens of prose before the user
+  // touched anything, which is three too many. Nobody learns a gesture by
+  // reading four descriptions of it. So: one line to say what we are doing,
+  // with the rail lit up behind it, and then we lay a floor — where the ghost
+  // demonstrates the move on the real print while the step is live.
+  //
+  // Scale went too. It was a step that said "nothing to do here", which is not
+  // a step. Presets already carry their scale, and calibration is taught the
+  // moment it matters — on a real upload.
   {
-    id: 'plan',
-    title: 'Start from a plan',
-    body: "Every build starts from a floor plan. I've dropped one on the grid for you — this is the print we'll raise a real 3D house on.",
-    hint: 'The grey floor plan in the workspace is your print.',
-    done: (c) => c.hasPlan,
-  },
-  {
-    id: 'scale',
-    title: 'Lock the scale',
-    body: 'Scale makes every measurement real. Presets already know theirs, so you’re set. On your own uploads you’d tap two points a known distance apart.',
-    hint: 'Nothing to do here on a preset — the scale is already locked.',
-    done: (c) => c.calibrationCleared,
+    id: 'welcome',
+    title: 'Let’s build a house.',
+    body: 'You trace over the plan; it stands up in 3D, framed. Everything you need is down the left edge.',
+    // NO spotlight here. Ringing BUILD on the opening line left a pulsing
+    // highlight sitting on the rail with nothing being asked of it — and once
+    // the eye has been told that glow means "tap this", a glow that means
+    // nothing is worse than no glow at all.
+    autoAdvanceMs: 7000,
+    done: () => false,
   },
   {
     id: 'floor',
     title: 'Lay the floor first',
-    body: "Foundation before framing: the floor goes down first and the walls frame on top of it. I've opened Floors for you — tap two opposite corners to box in the footprint.",
-    hint: 'Tap one corner, then the opposite corner, to drop the floor.',
+    body: 'A floor is a deck on joists, and it goes down before the walls. Tap two opposite corners of the building.',
     enter: 'floors',
+    demo: 'twoCorners',
     done: (c) => c.hasFloor,
   },
   {
     id: 'wall',
     title: 'Trace your first wall',
-    body: "Now the walls. I've switched you to Framing — tap one corner, then the next, to lay a wall over the print. It squares up automatically; double-tap or \"End run\" to finish.",
-    hint: 'Tap two corners on the plan to lay a wall.',
+    body: 'Now a wall: tap one corner, then the next. It squares up on its own.',
     enter: 'framing',
+    demo: 'wallRun',
     done: (c) => c.userWallCount >= 1,
   },
   {
     id: 'findRest',
     title: 'Find the rest',
-    body: 'Here’s the magic: you traced one, now let the detector find the matching walls across the whole plan.',
-    hint: 'Tap the highlighted "✨ Find the rest" button.',
+    body: 'You traced one — now let it find the rest of them.',
     target: 'find-rest',
     done: (c) => c.totalWallCount > c.userWallCount,
   },
   {
     id: 'build',
     title: 'Build it in 3D',
-    body: 'Now stand it up. "Build 3D" frames every wall — studs, plates, headers — and raises the model so you can orbit it.',
-    hint: 'Tap the highlighted "Build 3D →" button.',
+    body: 'Stand it up. Every wall gets studs, plates and headers.',
     target: 'build-3d',
     done: (c) => c.built,
   },
   {
     id: 'roof',
     title: 'Put a roof on',
-    body: "Roof's open. Choose a pitch, then tap two opposite corners over the footprint — gable ends get a sloped rake automatically, no flat boxes.",
-    hint: 'Tap one corner, then the opposite corner, over the footprint.',
+    body: 'Same two corners again, over the footprint. Gable ends get their rake automatically.',
     enter: 'roof',
     done: (c) => c.hasRoof,
   },
   {
     id: 'openings',
     title: 'Doors & windows',
-    body: "I've opened Place. Pick a door or window and tap it onto a wall — it frames right in with king studs, jacks and a header.",
-    hint: 'Pick a door or window, then tap it onto a wall.',
+    body: 'Pick a door or window, then tap it onto a wall. It frames itself in.',
     enter: 'place',
     target: 'place-tab',
     done: (c) => c.openingCount >= 1,
@@ -126,24 +141,21 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'plumbing',
     title: 'Run the plumbing',
-    body: "Plumbing's open. Choose supply or waste and trace the runs — in-wall runs follow the studs so the pipe routes inside the wall.",
-    hint: 'Trace a pipe run across the plan.',
+    body: 'Trace a pipe run. In-wall runs route inside the studs.',
     enter: 'plumbing',
     done: (c) => c.plumbingCount >= 1,
   },
   {
     id: 'electrical',
     title: 'Wire it up',
-    body: "Last system — Electrical's open. Run a circuit the same trace-and-go way as plumbing.",
-    hint: 'Trace a circuit across the plan.',
+    body: 'Same again for a circuit.',
     enter: 'electrical',
     done: (c) => c.electricalCount >= 1,
   },
   {
     id: 'takeoff',
     title: 'Read the takeoff',
-    body: "That's a whole house. I've opened Settings — scroll to Material Takeoff for the live bill of materials: wall feet, studs, board, pipe, wire and fixtures.",
-    hint: 'Find "Material takeoff" in the Settings drawer.',
+    body: "That's a whole house. Material takeoff has your bill of materials.",
     enter: 'settings',
     target: 'settings-tab',
     // Terminal step — finishing is manual (there’s nothing left to "do").

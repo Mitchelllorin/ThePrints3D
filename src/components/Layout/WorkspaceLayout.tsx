@@ -19,6 +19,7 @@ import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import UpgradeSheet from '../Pro/UpgradeSheet'
 import ProSection from '../Pro/ProSection'
+import { hasToured, markToured } from '../../onboarding/firstRun'
 import { watermarkedPng } from '../../services/watermark'
 import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/stairs'
 import { getCatalogItem } from '../../data/objectCatalog'
@@ -786,11 +787,18 @@ export default function WorkspaceLayout() {
   // first if the workspace is empty so step 1 (the plan) is already satisfied.
   const startGuidedTour = () => {
     if (drawings.length === 0) handleLoadPreset('easy')
+    // Marked on START, not on finish — see onboarding/firstRun.ts. Someone who
+    // bails three steps in has answered the question.
+    markToured()
+    setFirstRun(false)
     startTutorial()
   }
   const hasDrawings = drawings.length > 0
   // Onboarding card persists until a plan is actually loaded — no dismiss.
   const showUploadHint = !hasDrawings
+  /** Never been shown around. Read once into state so the invitation cannot
+   *  flicker away mid-render when the flag is written. */
+  const [firstRun, setFirstRun] = useState(() => !hasToured())
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -894,7 +902,12 @@ export default function WorkspaceLayout() {
         />
       )}
 
-      {/* 3D Viewport — fills the whole screen at all times. */}
+      {/* 3D Viewport — fills the whole screen at all times.
+          It briefly shrank while the tour was running, to hand the coach its
+          own band. That was the wrong trade: the print ended up small and shoved
+          to the top of the screen, which is a bigger insult to the drawing than
+          a line of text near its bottom edge ever was. The answer was to make
+          the coach small, not to make the workspace smaller. */}
       <div className={styles.viewport}>
         <ModelViewer />
       </div>
@@ -963,11 +976,29 @@ export default function WorkspaceLayout() {
           grid itself is the drop target, so this is just a whisper + a few chips. */}
       {showUploadHint && (
         <div className={styles.uploadHint}>
-          <p className={styles.uploadHintSub}>Drop a plan on the grid, or start from a preset</p>
+          {/* FIRST LAUNCH LEADS WITH THE TOUR.
+              Everything below this was already here, and that was the problem:
+              a person who has never seen the app was handed seven equal chips —
+              Browse, Scan, Tour, Practice, and three presets — with no way to
+              rank them. Someone who knows the trade but not this app has no
+              reason to read "Tour" as "start here". So on a first run it stops
+              being a sibling and becomes the offer, in a sentence that says what
+              they get; the other doors stay open, one line down, for anyone who
+              would rather dig in. Second launch onward, this collapses back to
+              the row it always was. */}
+          {firstRun ? (
+            <>
+              <p className={styles.uploadHintLead}>New here? I’ll build a whole house with you — floor, walls, roof, pipes and wire — one tap at a time.</p>
+              <button className={styles.uploadHintPrimary} onClick={startGuidedTour}>🎓 Show me how</button>
+              <p className={styles.uploadHintSub}>or start on your own</p>
+            </>
+          ) : (
+            <p className={styles.uploadHintSub}>Drop a plan on the grid, or start from a preset</p>
+          )}
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Browse</button>
             <button className={styles.uploadHintChip} onClick={() => setScanOpen(true)}>Scan</button>
-            <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Tour</button>
+            {!firstRun && <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Tour</button>}
           </div>
           {/* The only door into a FINISHED house. Everything else here hands
               you a job; this hands you the result, to turn over and pull

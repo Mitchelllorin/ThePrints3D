@@ -33,6 +33,8 @@ import DrywallLayer from './DrywallLayer'
 import EnvelopeLayer from './EnvelopeLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
+import TourGhost from './TourGhost'
+import TourUnderReveal from './TourUnderReveal'
 import { requirePro } from '../Pro/usePro'
 import styles from './ModelViewer.module.css'
 
@@ -48,10 +50,15 @@ import styles from './ModelViewer.module.css'
  * production builds.
  */
 function DevSceneHandle() {
-  const { scene } = useThree()
+  const { scene, camera } = useThree()
   useEffect(() => {
     ;(window as unknown as Record<string, unknown>).__scene = scene
-  }, [scene])
+    // The camera is NOT in the scene graph, so `scene` alone cannot answer
+    // "where are we looking from" — which is exactly the question when a camera
+    // move is meant to have happened and you cannot tell whether it did, or
+    // whether you simply looked a second too late.
+    ;(window as unknown as Record<string, unknown>).__camera = camera
+  }, [scene, camera])
   return null
 }
 
@@ -964,6 +971,10 @@ export default function ModelViewer() {
         )}
 
         <FloorplanOverlay />
+        {/* The tour's worked example, drawn ON the print so it orbits with it. */}
+        <TourGhost />
+        {/* …and the one-shot duck underneath when the real floor lands. */}
+        <TourUnderReveal />
         <ExplodeDriver />
         {/* THE BUILT MODEL, hidden in plan view.
             FloorplanOverlay stays outside this group on purpose — the print and

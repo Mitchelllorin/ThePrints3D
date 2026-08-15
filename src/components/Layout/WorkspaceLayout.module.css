@@ -43,6 +43,34 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
+/* First launch only: the sentence that says what they're being offered, and the
+   one button that takes it. Bigger than the chips below because it IS the
+   instruction — but still text on the grid, not a card: no panel, no border, no
+   slab in the middle of the workspace. */
+.uploadHintLead {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--bp-text, #f1f5f9);
+  text-align: center;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+}
+
+.uploadHintPrimary {
+  background: var(--bp-accent, #38bdf8);
+  color: #06121f;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 22px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  transition: filter 0.12s;
+}
+.uploadHintPrimary:hover { filter: brightness(1.08); }
+
 .uploadHintActions {
   display: flex;
   flex-direction: row;

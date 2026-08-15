@@ -122,6 +122,16 @@ export default function LayersPanel() {
     }
   }
 
+  /** The envelope, as one thing. Order matters only for readability. */
+  const SKIN_KEYS = ['sheathingVisible', 'wrapVisible', 'claddingVisible', 'drywallVisible'] as const
+  /** On when ANY of it is showing, so the button always offers the move that
+   *  changes something rather than sitting there saying "Off" over a visible
+   *  wall because one of the four is still on. */
+  const skinOn = SKIN_KEYS.some((k) => ui[k])
+  const setSkin = (on: boolean) => setUI(
+    Object.fromEntries(SKIN_KEYS.map((k) => [k, on])) as Partial<typeof ui>,
+  )
+
   const allRows = GROUPS.flatMap((g) => g.rows)
   /** Is this the only thing currently showing? */
   const isSolo = (row: Row) => isOn(row) && allRows.every((r) => r === row || !isOn(r))
@@ -157,6 +167,23 @@ export default function LayersPanel() {
         <span className={styles.layerName} style={{ opacity: 0.7 }}>All layers</span>
         <button className={styles.layerToggle} onClick={() => setAll(true)}>On</button>
         <button className={styles.layerToggle} onClick={() => setAll(false)}>Off</button>
+      </div>
+
+      {/* SKIN — the four envelope layers as ONE switch, at the top where it can
+          be found. Closing the building up and opening it back up is the most
+          repeated move there is: you put the skin on to see the house, and take
+          it off to see the framing you actually drew. Doing that four rows at a
+          time, two groups down the list, made a constant action feel like a
+          settings change. The rows below still work individually for anyone who
+          wants just the board or just the wrap. */}
+      <div className={styles.layerRow}>
+        <span className={styles.layerDot} style={{ background: '#c9a273' }} />
+        <span className={styles.layerName}>Skin (sheathing, wrap, cladding, board)</span>
+        <button
+          className={`${styles.layerToggle} ${skinOn ? styles.layerToggleOn : ''}`}
+          onClick={() => setSkin(!skinOn)}
+          aria-pressed={skinOn}
+        >{skinOn ? 'On' : 'Off'}</button>
       </div>
 
       {GROUPS.map((g) => (

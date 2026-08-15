@@ -114,7 +114,7 @@ export interface UISettings {
 }
 
 /** rev 2 — presets go back to PRACTICE by default. */
-const SETTINGS_REV = 2
+const SETTINGS_REV = 3
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
   // Menus/panels/toolbars default to ALMOST transparent so the workspace stays
@@ -140,11 +140,11 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   drywallOrientation: 'vertical',
   boardKind: 'gypsum-half',
   sheathingVisible: false,
-  wrapVisible: true,
+  wrapVisible: false,
   wrbKind: 'housewrap',
   woodSheathing: 'osb',
   cladding: 'none',
-  claddingVisible: true,
+  claddingVisible: false,
   dimensionsVisible: true,
   presetMode: 'practice',
   heatingType: DEFAULT_HEATING,
@@ -183,6 +183,21 @@ function load(): UISettings {
       // check is trying to detect the absence of.
       if ((saved.settingsRev ?? 0) < 2) {
         stored.presetMode = 'practice'
+      }
+      // rev 3: the skin starts OFF. Sheathing and board have defaulted to false
+      // for a while, but a stored copy from before that kept them on and no
+      // amount of changing the default reaches an install that already saved
+      // one — which is exactly what this rev mechanism is for. The framing is
+      // the thing people build this app to look at; the skin hides it, so it is
+      // opt-in. Cladding and wrap come off with them: leaving those two on
+      // while sheathing goes off just puts siding on bare studs.
+      if ((saved.settingsRev ?? 0) < 3) {
+        stored.sheathingVisible = false
+        stored.drywallVisible = false
+        stored.claddingVisible = false
+        stored.wrapVisible = false
+      }
+      if ((saved.settingsRev ?? 0) < SETTINGS_REV) {
         stored.settingsRev = SETTINGS_REV
       }
       return stored

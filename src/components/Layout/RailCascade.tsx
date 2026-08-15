@@ -197,6 +197,10 @@ export default function RailCascade() {
             onClick={() => selectSection(id)}
             title={label}
             aria-pressed={active[id]}
+            // So the tutorial can spotlight the real control instead of
+            // describing where it is and hoping. Until now only two elements in
+            // the whole app could be pointed at.
+            data-tour={`rail-${id}`}
           >
             <span className={styles.glyph}>{icon}</span>
             <span className={styles.iconLabel}>{label}</span>
