@@ -1,8 +1,9 @@
 /**
  * The guided tutorial — a single ordered walkthrough that builds a whole house
- * (plan → scale → walls → floor → 3D → roof → doors → plumbing → electrical →
- * takeoff). Pure data + predicates so it's trivially testable and so the UI
- * (TutorialCoach) just reads a context snapshot and shows the current step.
+ * (floor → walls → find the rest → 3D → roof → doors → plumbing → electrical →
+ * takeoff), in build order: the floor platform goes down and the walls are
+ * framed on top of it. Pure data + predicates so it's trivially testable and so
+ * the UI (TutorialCoach) just reads a context snapshot and shows the step.
  *
  * Each step has a `done(ctx)` goal. When it flips true the coach auto-advances
  * (and the user can always step Next/Back manually). The script doubles as the
@@ -119,7 +120,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'build',
     title: 'Build it in 3D',
-    body: 'Stand it up. Every wall gets studs, plates and headers.',
+    body: 'Stand it up. Every wall gets its studs and plates, and a header over each opening.',
     target: 'build-3d',
     done: (c) => c.built,
   },
@@ -141,7 +142,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'plumbing',
     title: 'Run the plumbing',
-    body: 'Trace a pipe run. In-wall runs route inside the studs.',
+    body: 'Trace a pipe run. In-wall runs route through the stud bays, inside the wall.',
     enter: 'plumbing',
     done: (c) => c.plumbingCount >= 1,
   },
