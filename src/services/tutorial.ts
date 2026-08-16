@@ -63,6 +63,11 @@ export interface TutorialStep {
    *  not teach a gesture — "tap two opposite corners" only means something once
    *  you have watched it happen. Stops the moment the user starts. */
   demo?: 'twoCorners' | 'wallRun' | 'calibrate'
+  /** The tour DOES this step itself, for real, while narrating it — the result
+   *  stays on the model and the tour carries on with it. Used where watching is
+   *  the lesson and there is nothing to be gained by making someone repeat a
+   *  gesture they have just been shown. */
+  perform?: 'floor'
   /** Move on by itself after this long, for a step with nothing to detect.
    *  Every other step advances when the user DOES the thing; a step that only
    *  says something has no such signal, and sits there until Next is found —
@@ -115,11 +120,24 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: 'floor',
-    title: 'Lay the floor first',
-    body: 'A floor is a deck on joists, and it goes down before the walls. Tap two opposite corners of the building.',
-    enter: 'floors',
+    // The user's words. Note what is NOT explained: what a floor is. He was
+    // explicit — everybody knows what a floor is, and a tutorial that defines
+    // the obvious insults the person reading it. Foundations and excavation
+    // come later, when the app can actually build them.
+    title: 'We start with a floor',
+    body: 'Starting at one corner of the print we tap to place a mark, then pull the floor diagonally across the plan to the opposite corner. Joists and sheeting, screws and nails, all together — and when we drop that second mark, a floor has been created, as you can see.',
+    // Performed, not asked for. No `enter`: nothing opens, trace mode stays off,
+    // so the print keeps turning through the whole demonstration and the floor
+    // it just built turns with it.
     demo: 'twoCorners',
-    done: (c) => c.hasFloor,
+    perform: 'floor',
+    // Timed to the copy plus the dip underneath: build lands around 5.5s, the
+    // camera goes under and comes back by ~8s, and the line is still being read.
+    autoAdvanceMs: 16000,
+    // Deliberately NOT `hasFloor` — the tour lays this floor itself, so a goal
+    // watching for one would fire the instant the demo committed it and cut the
+    // step off mid-sentence, reveal and all.
+    done: () => false,
   },
   {
     id: 'wall',

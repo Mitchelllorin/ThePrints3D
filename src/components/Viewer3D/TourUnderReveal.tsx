@@ -20,7 +20,7 @@
  * while the floor step is live. It is a reveal, not a camera mode.
  */
 import { useEffect, useRef } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -41,9 +41,19 @@ export default function TourUnderReveal() {
 
   const fired = useRef(false)
   const hadFloor = useRef(floors.length > 0)
-  const timer = useRef<number | null>(null)
+  /** Where to put the camera back, and how long we have been under. */
+  const pendingHome = useRef<{ position: [number, number, number]; target: [number, number, number] } | null>(null)
+  const underFor = useRef(0)
 
   const onFloorStep = active && TUTORIAL_STEPS[clampStep(rawStep)]?.id === 'floor'
+
+  // Dev-only: hand out the camera so a camera move can be MEASURED rather than
+  // squinted at in a screenshot that lands whenever it lands. Verifying this
+  // reveal by eye was how a 1.5s dip went unnoticed at six seconds long.
+  useEffect(() => {
+    if (!import.meta.env.DEV) return
+    ;(window as unknown as Record<string, unknown>).__tourCamera = camera
+  }, [camera])
 
   useEffect(() => {
     const has = floors.length > 0
@@ -69,17 +79,38 @@ export default function TourUnderReveal() {
       target: [cx, 0, cz],
     })
 
-    timer.current = window.setTimeout(() => setCameraPreset(home), UNDER_MS)
+    // Held in a ref and counted down in useFrame rather than left to a
+    // setTimeout: a timeout is lost to a hot reload or an unmount, and the
+    // failure mode is the worst one available — the user is left under their
+    // own building with no way back. The frame loop cannot lose it.
+    pendingHome.current = home
+    underFor.current = 0
   }, [floors.length, onFloorStep, camera, controls, overlay.position, overlay.scale, setCameraPreset])
 
-  // Reset between tours so a second run reveals again; never leave a pending
-  // "come home" behind when the tour is closed mid-dip.
+  useFrame((_, delta) => {
+    const home = pendingHome.current
+    if (!home) return
+    underFor.current += delta * 1000
+    // Come back when the beat is up — or at once if the tour has moved on and
+    // the view is no longer the point of the step being read.
+    if (underFor.current >= UNDER_MS || !onFloorStep) {
+      pendingHome.current = null
+      setCameraPreset(home)
+    }
+  })
+
+  // Reset between tours so a second run reveals again. If the tour is closed
+  // mid-dip, put the camera back on the way out rather than leaving someone
+  // stranded underneath.
   useEffect(() => {
-    if (!active) fired.current = false
-  }, [active])
-  useEffect(() => () => {
-    if (timer.current !== null) window.clearTimeout(timer.current)
-  }, [])
+    if (active) return
+    fired.current = false
+    const home = pendingHome.current
+    if (home) {
+      pendingHome.current = null
+      setCameraPreset(home)
+    }
+  }, [active, setCameraPreset])
 
   return null
 }

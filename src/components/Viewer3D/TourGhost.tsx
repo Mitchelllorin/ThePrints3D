@@ -52,15 +52,59 @@ export default function TourGhost() {
   const traceStroke = useFloorplanLocalStore((s) => s.traceStroke)
   const overlay = useAppStore((s) => s.floorplanOverlay)
 
+  const floorsAreas = useAppStore((s) => s.floorsAreas)
+  const drawings = useAppStore((s) => s.drawings)
+  const addFloorsAreas = useAppStore((s) => s.addFloorsAreas)
+  const floorsElement = useFloorplanLocalStore((s) => s.floorsElement)
+  const floorsSize = useFloorplanLocalStore((s) => s.floorsSize)
+
   const [t, setT] = useState(0)
   const elapsed = useRef(0)
-  useFrame((_, delta) => {
-    elapsed.current = (elapsed.current + delta) % LOOP
-    setT(elapsed.current / LOOP)
-  })
+  const performed = useRef(false)
 
   const step = TUTORIAL_STEPS[clampStep(rawStep)]
   const kind = step?.demo
+
+  useFrame((_, delta) => {
+    elapsed.current = (elapsed.current + delta) % LOOP
+    setT(elapsed.current / LOOP)
+
+    /**
+     * COMMIT THE FLOOR FOR REAL, once, at the moment the demonstration finishes
+     * drawing it. The step narrates "and a floor, joists, sheeting — all built.
+     * Now we have our floor", and a ghost that fades out afterwards makes that
+     * sentence a lie. So the tour lays an actual floor, in the same place it
+     * just demonstrated, and everything downstream — the dip underneath, the
+     * takeoff, the model that keeps turning — is operating on a real one.
+     *
+     * The fractions match the ghost's own inset so the built floor lands
+     * exactly where the pull was shown, and they are fractions of the RASTER
+     * because that is the space floor areas are stored in (see pixelToWorld in
+     * FloorJoistsLayer).
+     */
+    if (performed.current) return
+    if (step?.perform !== 'floor' || !active) return
+    if (elapsed.current / LOOP < 0.74) return       // the pull has to land first
+    if (floorsAreas.length > 0) { performed.current = true; return }
+
+    const d = drawings[0]
+    if (!d) return
+    const w = d.rasterWidth ?? 1400
+    const h = d.rasterHeight ?? 900
+    performed.current = true
+    // Built with the SAME settings the Floors picker is holding, so what the
+    // tour lays is what the user would have laid — I-joists at 16" o.c. here,
+    // and whatever they change it to later.
+    addFloorsAreas([{
+      id: `tour-floor-${w}x${h}`,
+      x1: w * 0.10, y1: h * 0.14,
+      x2: w * 0.90, y2: h * 0.86,
+      elementType: floorsElement,
+      size: floorsSize,
+      material: 'wood',
+      level: 0,
+    }])
+  })
 
   /**
    * The two points, in world space, taken from the sheet the user is actually
@@ -97,6 +141,9 @@ export default function TourGhost() {
   // started for real — in every case, get out of the way.
   if (!active || !kind || !pts || !overlay.visible) return null
   if (traceStart || (traceStroke && traceStroke.length > 0)) return null
+  // The real thing now exists (this step performed it, or the user did) — the
+  // ghost has nothing left to say and would only draw over the actual floor.
+  if (step?.perform === 'floor' && floorsAreas.length > 0) return null
 
   const ph = phaseAt(t)
   /**

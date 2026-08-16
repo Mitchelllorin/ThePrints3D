@@ -38,9 +38,12 @@ describe('tutorial script', () => {
   })
 
   it('keeps the copy short enough to read standing over a phone', () => {
-    // Long paragraphs get skipped whole. This is a ceiling, not a target.
+    // A ceiling, not a target. Raised from 180 once the user started writing
+    // the copy himself — his narration steps carry a whole demonstration and
+    // run longer than a one-line instruction, and a limit set by Claude is not
+    // a reason to cut the words of the person who knows the trade.
     for (const s of TUTORIAL_STEPS) {
-      expect(s.body.length).toBeLessThanOrEqual(180)
+      expect(s.body.length, `${s.id} is getting long`).toBeLessThanOrEqual(320)
     }
   })
 
@@ -51,12 +54,13 @@ describe('tutorial script', () => {
   })
 
   it('auto-advances a step once its goal is met', () => {
-    // The floor step: not done with no floor, done + advances once one is laid.
-    // Found by id rather than index so re-ordering the script does not break a
-    // test about auto-advance.
-    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'floor')
+    // The wall step: not done with no traced wall, done + advances once the
+    // user lays one. Found by id rather than index so re-ordering the script
+    // does not break a test about auto-advance. (Not the floor step — the tour
+    // performs that one itself, so it has no goal to watch.)
+    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'wall')
     expect(tutorialAdvance(i, EMPTY)).toEqual({ done: false, nextIndex: null })
-    expect(tutorialAdvance(i, { ...EMPTY, hasFloor: true })).toEqual({ done: true, nextIndex: i + 1 })
+    expect(tutorialAdvance(i, { ...EMPTY, userWallCount: 1 })).toEqual({ done: true, nextIndex: i + 1 })
   })
 
   it('a step with nothing to detect carries its own timer out', () => {
