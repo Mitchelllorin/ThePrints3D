@@ -1,23 +1,28 @@
 /**
- * TourUnderReveal — duck under the floor the moment it is laid, then come back.
+ * TourUnderReveal — the hand takes hold of the workspace and turns it over.
  *
- * The tour says a floor is a deck on joists. The user taps two corners, a grey
- * slab appears from above, and that proves nothing: from up there a floor and a
- * rectangle look identical. So the camera drops below the deck for a beat — the
- * joists are right there overhead — and then it returns to exactly the view it
- * started from. One move, under two seconds, and the claim is demonstrated
- * rather than asserted.
+ * The floor step says joists and sheeting, screws and nails. From above, a
+ * finished floor and a grey rectangle are the same picture, so the claim has to
+ * be shown from underneath. The same invisible hand that drops the marks and
+ * pulls the floor grabs the print here and rolls it over: under the deck, in
+ * close on a joist hanger so the metal saddle at the joist-to-rim connection is
+ * actually legible, back out, and over again to where it started — then it
+ * carries on turning with its new floor on it.
  *
- * It goes through setCameraPreset rather than moving the camera itself. A first
- * attempt lerped camera.position inside useFrame and nothing happened at all:
- * OrbitEnabledGuard re-asserts `enabled` every frame, and OrbitControls then
- * rewrites the camera from its own spherical coordinates, so the move was
- * overwritten before it could ever be seen. CameraPresetApplier is the one path
- * that hands the controls a new pose properly — target included, damping zeroed
- * for a frame so nothing drifts.
+ * SLOWLY. The first version cut straight under and back in a second and a half,
+ * which is fine for a machine reading a state change and useless for a person:
+ * you cannot see a thing you were not given time to look at. Eleven seconds of
+ * continuous movement, every phase eased, nothing cut.
  *
- * Fires ONCE per tour, on the transition from no floor to a floor, and only
- * while the floor step is live. It is a reveal, not a camera mode.
+ * It drives the camera through setCameraPreset every frame rather than writing
+ * camera.position directly. Writing the camera does nothing: OrbitEnabledGuard
+ * re-asserts `enabled` each frame and OrbitControls then rewrites the camera
+ * from its own spherical coordinates, so the move is overwritten before it can
+ * be seen. CameraPresetApplier is the one path that sets position AND target
+ * and re-syncs the controls, so it is the one that survives.
+ *
+ * Fires ONCE per tour, on the transition from no floor to a floor, while the
+ * floor step is live. It is a reveal, not a camera mode.
  */
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -26,8 +31,31 @@ import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { TUTORIAL_STEPS, clampStep } from '../../services/tutorial'
 
-/** How long we stay under before coming home. */
-const UNDER_MS = 1500
+type Pose = { position: [number, number, number]; target: [number, number, number] }
+
+/**
+ * The whole move, in seconds per phase. Read these as camera directions:
+ * roll it under · come in on a hanger · let it be looked at · draw back ·
+ * roll it home.
+ */
+const PHASES = [
+  { name: 'under', secs: 3.0 },
+  { name: 'zoom', secs: 2.2 },
+  { name: 'hold', secs: 1.4 },
+  { name: 'back', secs: 2.0 },
+  { name: 'home', secs: 3.0 },
+] as const
+
+const TOTAL = PHASES.reduce((n, p) => n + p.secs, 0)
+
+/** Slow at both ends, so nothing snaps into or out of motion. */
+const ease = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+
+function lerpPose(a: Pose, b: Pose, k: number): Pose {
+  const m = (i: 0 | 1 | 2) => a.position[i] + (b.position[i] - a.position[i]) * k
+  const t = (i: 0 | 1 | 2) => a.target[i] + (b.target[i] - a.target[i]) * k
+  return { position: [m(0), m(1), m(2)], target: [t(0), t(1), t(2)] }
+}
 
 type Ctl = { target?: THREE.Vector3 }
 
@@ -41,15 +69,12 @@ export default function TourUnderReveal() {
 
   const fired = useRef(false)
   const hadFloor = useRef(floors.length > 0)
-  /** Where to put the camera back, and how long we have been under. */
-  const pendingHome = useRef<{ position: [number, number, number]; target: [number, number, number] } | null>(null)
-  const underFor = useRef(0)
+  const run = useRef<{ t: number; home: Pose; under: Pose; hanger: Pose } | null>(null)
 
   const onFloorStep = active && TUTORIAL_STEPS[clampStep(rawStep)]?.id === 'floor'
 
   // Dev-only: hand out the camera so a camera move can be MEASURED rather than
-  // squinted at in a screenshot that lands whenever it lands. Verifying this
-  // reveal by eye was how a 1.5s dip went unnoticed at six seconds long.
+  // squinted at in a screenshot that lands whenever it lands.
   useEffect(() => {
     if (!import.meta.env.DEV) return
     ;(window as unknown as Record<string, unknown>).__tourCamera = camera
@@ -64,51 +89,72 @@ export default function TourUnderReveal() {
 
     const ctl = controls as unknown as Ctl | null
     const [cx, cz] = overlay.position
-    const spread = Math.max(overlay.scale[0], overlay.scale[1]) || 8
+    const [ow, od] = overlay.scale
+    const spread = Math.max(ow, od) || 8
 
-    // Where we are now, so we can put it back exactly.
-    const home: { position: [number, number, number]; target: [number, number, number] } = {
+    const home: Pose = {
       position: [camera.position.x, camera.position.y, camera.position.z],
       target: ctl?.target ? [ctl.target.x, ctl.target.y, ctl.target.z] : [cx, 0, cz],
     }
 
-    // Below the deck and off to one side, so the joists run away from the eye
+    // Under the deck and off to one side, so the joists run away from the eye
     // rather than being seen edge-on.
-    setCameraPreset({
-      position: [cx + spread * 0.16, -spread * 0.26, cz + spread * 0.16],
+    const under: Pose = {
+      position: [cx + spread * 0.16, -spread * 0.30, cz + spread * 0.20],
       target: [cx, 0, cz],
-    })
+    }
 
-    // Held in a ref and counted down in useFrame rather than left to a
-    // setTimeout: a timeout is lost to a hot reload or an unmount, and the
-    // failure mode is the worst one available — the user is left under their
-    // own building with no way back. The frame loop cannot lose it.
-    pendingHome.current = home
-    underFor.current = 0
-  }, [floors.length, onFloorStep, camera, controls, overlay.position, overlay.scale, setCameraPreset])
+    // A joist-to-rim connection on the near edge — where the hangers are (see
+    // framingGeometry: a galvanised saddle at each joist end). Close enough that
+    // the saddle is a saddle and not a grey speck.
+    const hx = cx + ow * 0.36
+    const hz = cz + od * 0.20
+    const hanger: Pose = {
+      position: [hx + 1.5, -1.15, hz + 1.5],
+      target: [hx, -0.28, hz],
+    }
+
+    run.current = { t: 0, home, under, hanger }
+  }, [floors.length, onFloorStep, camera, controls, overlay.position, overlay.scale])
 
   useFrame((_, delta) => {
-    const home = pendingHome.current
-    if (!home) return
-    underFor.current += delta * 1000
-    // Come back when the beat is up — or at once if the tour has moved on and
-    // the view is no longer the point of the step being read.
-    if (underFor.current >= UNDER_MS || !onFloorStep) {
-      pendingHome.current = null
-      setCameraPreset(home)
+    const r = run.current
+    if (!r) return
+    r.t += delta
+
+    // Cut the move short if the tour has moved on — the reveal belongs to the
+    // sentence being read, and holding the camera hostage past it is worse than
+    // not showing it at all. Always finish AT home.
+    if (!onFloorStep || r.t >= TOTAL) {
+      run.current = null
+      setCameraPreset(r.home)
+      return
     }
+
+    let t = r.t
+    let pose: Pose = r.home
+    for (const phase of PHASES) {
+      if (t > phase.secs) { t -= phase.secs; continue }
+      const k = ease(t / phase.secs)
+      pose = phase.name === 'under' ? lerpPose(r.home, r.under, k)
+        : phase.name === 'zoom' ? lerpPose(r.under, r.hanger, k)
+        : phase.name === 'hold' ? r.hanger
+        : phase.name === 'back' ? lerpPose(r.hanger, r.under, k)
+        : lerpPose(r.under, r.home, k)
+      break
+    }
+    setCameraPreset(pose)
   })
 
   // Reset between tours so a second run reveals again. If the tour is closed
-  // mid-dip, put the camera back on the way out rather than leaving someone
-  // stranded underneath.
+  // mid-move, put the camera back rather than leaving someone underneath.
   useEffect(() => {
     if (active) return
     fired.current = false
-    const home = pendingHome.current
-    if (home) {
-      pendingHome.current = null
-      setCameraPreset(home)
+    const r = run.current
+    if (r) {
+      run.current = null
+      setCameraPreset(r.home)
     }
   }, [active, setCameraPreset])
 

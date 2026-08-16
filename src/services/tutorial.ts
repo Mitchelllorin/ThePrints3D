@@ -131,9 +131,11 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     // it just built turns with it.
     demo: 'twoCorners',
     perform: 'floor',
-    // Timed to the copy plus the dip underneath: build lands around 5.5s, the
-    // camera goes under and comes back by ~8s, and the line is still being read.
-    autoAdvanceMs: 16000,
+    // Timed to the whole performance, at the speed a person can actually watch
+    // it: the pull lands around 8s, then eleven seconds of camera work — under,
+    // in on a hanger, held, drawn back, rolled home — and a beat before we move
+    // on. Rushing any of it defeats the point of showing it at all.
+    autoAdvanceMs: 25000,
     // Deliberately NOT `hasFloor` — the tour lays this floor itself, so a goal
     // watching for one would fire the instant the demo committed it and cut the
     // step off mid-sentence, reveal and all.

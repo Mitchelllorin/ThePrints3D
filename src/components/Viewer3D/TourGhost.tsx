@@ -25,9 +25,13 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { TUTORIAL_STEPS, clampStep } from '../../services/tutorial'
 import { LAYER_COLORS } from '../../data/traceLayers'
 
-/** Seconds for one full demonstration. Long enough that the finished assembly
- *  is held up for a good couple of seconds — the flash was the complaint. */
-const LOOP = 7.5
+/** Seconds for one full demonstration.
+ *
+ *  These are human eyes. At 7.5s the hand crossed the plan faster than anyone
+ *  could follow what it was doing, which reads as a flicker rather than as a
+ *  gesture being shown. Eleven gives the pull time to be watched and the result
+ *  time to be looked at, and it is still short enough to sit through twice. */
+const LOOP = 11.0
 /** Just above the print so the ghost never z-fights with the sheet. */
 const LIFT = 0.06
 
