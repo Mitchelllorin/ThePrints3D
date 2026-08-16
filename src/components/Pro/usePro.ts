@@ -8,12 +8,26 @@
  * from turning into the subject of the code around it.
  */
 import { useCallback } from 'react'
+import { billingAvailable } from '../../services/billing'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 
-/** Does this device own the unlock? Subscribes, so gated UI re-renders on buy. */
+/**
+ * NO STORE, NO PAYWALL.
+ *
+ * A gate is only fair while there is something to buy. Until the RevenueCat key
+ * is configured, `billingAvailable()` is false everywhere — so a locked feature
+ * shows an upgrade sheet with a dead button and no way through. That is not a
+ * paywall, it is a broken feature, and it would have shipped that way in the
+ * first build whose entire purpose is letting people learn the app.
+ *
+ * So the gates arm themselves the moment the store is reachable, and stay open
+ * until then. Nothing to remember at release time; setting the key turns the
+ * paywall on by itself.
+ */
 export function useIsPro(): boolean {
-  return useAppStore((s) => s.isPro)
+  const owned = useAppStore((s) => s.isPro)
+  return owned || !billingAvailable()
 }
 
 export function useRequirePro(): (reason: string, action: () => void) => void {
@@ -33,6 +47,6 @@ export function useRequirePro(): (reason: string, action: () => void) => void {
  * once, a service. Reads the stores directly rather than through hooks.
  */
 export function requirePro(reason: string, action: () => void): void {
-  if (useAppStore.getState().isPro) action()
+  if (useAppStore.getState().isPro || !billingAvailable()) action()
   else useFloorplanLocalStore.getState().openUpgrade(reason)
 }
