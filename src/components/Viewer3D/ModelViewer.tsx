@@ -361,6 +361,8 @@ function DrawerRecenter() {
   const buildOpen = useFloorplanLocalStore((s) => s.buildDrawerOpen)
   const settingsOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
   const placeOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
+  /** Screen the tutorial coach is standing on at the bottom, 0 when off. */
+  const coachBand = useFloorplanLocalStore((s) => s.coachBand)
   // While TRACING or CALIBRATING, never apply a view-offset: shifting the
   // rendered plan under the pointer makes taps feel like the cursor is "pulled
   // away" and can drop a point at the wrong spot (a stray wall). Taps must map
@@ -400,11 +402,16 @@ function DrawerRecenter() {
     // Build and Settings both open from the LEFT now (beside the rail), so both
     // shift the plan RIGHT into the visible sliver.
     const offsetX = (buildOpen || settingsOpen ? -drawerW / 2 : 0) - RAIL_CLEAR_PX / 2
-    const offsetY = placeOpen ? h * 0.2 : 0
+    // The tutorial coach's band counts exactly like an open drawer: shift the
+    // framing up by half of it and the print sits centred in the space that is
+    // actually left, instead of centred behind the words. Half, not all — the
+    // whole band would overshoot and push it off the top, which is the same
+    // mistake in the other direction.
+    const offsetY = (placeOpen ? h * 0.2 : 0) + coachBand / 2
     if (offsetX === 0 && offsetY === 0) cam.clearViewOffset()
     else cam.setViewOffset(w, h, offsetX, offsetY, w, h)
     cam.updateProjectionMatrix()
-  }, [camera, size.width, size.height, buildOpen, settingsOpen, placeOpen, traceMode, calibrationMode, placeObjectType])
+  }, [camera, size.width, size.height, buildOpen, settingsOpen, placeOpen, coachBand, traceMode, calibrationMode, placeObjectType])
   return null
 }
 

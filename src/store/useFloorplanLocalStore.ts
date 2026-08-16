@@ -249,6 +249,11 @@ interface FloorplanLocalState {
    *  the sheet can answer the question actually asked — "editing walls is part
    *  of Pro" — instead of opening a generic pitch and making them work out why. */
   upgradeReason: string | null
+  /** Height in CSS px of the band the tutorial coach is standing on at the
+   *  bottom of the screen, 0 when the tour is off. The 3D framing is shifted up
+   *  by half of it so the print sits centred in the space that is actually
+   *  LEFT, rather than centred in a window whose bottom strip is spoken for. */
+  coachBand: number
 
   // ─── guided tutorial (the "build a whole house" walkthrough) ──────
   /** Tutorial running — the coach card is shown and tracks the current step. */
@@ -324,6 +329,7 @@ interface FloorplanLocalState {
   /** Show the upgrade sheet, naming the feature that sent them there. */
   openUpgrade: (reason: string) => void
   closeUpgrade: () => void
+  setCoachBand: (px: number) => void
   startTutorial: () => void
   exitTutorial: () => void
   setTutorialStep: (n: number) => void
@@ -439,6 +445,7 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   placeDrawerOpen: false,
   askDrawerOpen: false,
   upgradeReason: null,
+  coachBand: 0,
 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
@@ -593,6 +600,10 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
     askDrawerOpen: false,
   }),
   closeUpgrade: () => set({ upgradeReason: null }),
+
+  // Same-value writes dropped: the coach re-measures on a poll and an identical
+  // number would re-shift the camera framing every tick.
+  setCoachBand: (px) => set((s) => (Math.abs(s.coachBand - px) < 2 ? {} : { coachBand: px })),
 
   // Start CLEAN. Leaving a previous run's trace mode on meant the opening line
   // played over a workspace the app still considered busy — which, among other

@@ -122,6 +122,45 @@ export default function TutorialCoach() {
     return () => { window.clearInterval(id); window.removeEventListener('resize', update) }
   }, [active, target, step])
 
+  /**
+   * TELL THE 3D HOW MUCH ROOM IT ACTUALLY HAS.
+   *
+   * The text is not a panel, but it still occupies screen: on a phone the last
+   * line was sitting right on the bottom edge, and the print was framed to the
+   * whole window as though the words were not there. So the coach measures the
+   * band it fills and hands the number over; the framing shifts up by half of
+   * it, which lands the print centred in what is LEFT rather than centred in a
+   * window whose bottom strip is spoken for.
+   *
+   * Shifting the FRAMING, not the canvas — an earlier attempt shrank the canvas
+   * and the print came out small and shoved to the top, which was worse than
+   * the problem. This is the same view-offset the app already uses to recentre
+   * beside an open drawer.
+   */
+  const bandRef = useRef<HTMLDivElement | null>(null)
+  const setCoachBand = useFloorplanLocalStore((s) => s.setCoachBand)
+  useEffect(() => {
+    if (!active) { setCoachBand(0); return }
+    const measure = () => {
+      const el = bandRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const vh = window.innerHeight
+      // Only a band it is actually SITTING ON counts — text docked to the top
+      // or beside a spotlight costs the print nothing at the bottom.
+      const fromBottom = vh - r.bottom
+      setCoachBand(fromBottom < vh * 0.25 ? Math.round(vh - r.top) : 0)
+    }
+    measure()
+    const id = window.setInterval(measure, 300)
+    window.addEventListener('resize', measure)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('resize', measure)
+      setCoachBand(0)
+    }
+  }, [active, step, setCoachBand])
+
   if (!active) return null
 
   const total = TUTORIAL_STEPS.length
@@ -168,7 +207,7 @@ export default function TutorialCoach() {
       return {
         left: leftEdge,
         right: '5%',
-        bottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+        bottom: 'calc(30px + env(safe-area-inset-bottom, 0px))',
         maxWidth: 'min(52ch, calc(100vw - 340px))',
       }
     }
@@ -194,7 +233,7 @@ export default function TutorialCoach() {
     // interest if it makes the words harder to read.
     return {
       left: 'max(58px, 6%)',
-      bottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
+      bottom: 'calc(30px + env(safe-area-inset-bottom, 0px))',
       maxWidth: 'min(56ch, calc(100vw - 90px))',
     }
   }
@@ -239,6 +278,7 @@ export default function TutorialCoach() {
           target sits along the left rail or the top-right, and the copy must
           never land on the thing it is telling you to tap. */}
       <div
+        ref={bandRef}
         style={{
           position: 'fixed',
           ...place(),
