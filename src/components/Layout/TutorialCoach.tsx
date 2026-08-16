@@ -107,6 +107,27 @@ export default function TutorialCoach() {
     return () => clearTimeout(t)
   }, [active, step, setStep])
 
+  /**
+   * FIND THE REST — lit first, then pressed.
+   *
+   * The step names the control while the spotlight is on it, and a beat later
+   * the tour presses it for real: you see WHERE it lives and WHAT it does in
+   * one movement, instead of being told about a button and left to find it.
+   * The pause is the point — pressing it the instant the step opens would look
+   * like the walls simply appeared on their own.
+   */
+  const processWithSeeds = useAppStore((s) => s.processWithSeeds)
+  const pressedFindRest = useRef(false)
+  useEffect(() => {
+    if (!active) { pressedFindRest.current = false; return }
+    if (TUTORIAL_STEPS[step].perform !== 'findRest' || pressedFindRest.current) return
+    const d = drawings[0]
+    if (!d) return
+    pressedFindRest.current = true
+    const t = setTimeout(() => { void processWithSeeds(d.id) }, 2600)
+    return () => clearTimeout(t)
+  }, [active, step, drawings, processWithSeeds])
+
   // ── Track the spotlight target's on-screen rect (drawers animate, so poll) ───
   const target = current.target
   const [rect, setRect] = useState<DOMRect | null>(null)

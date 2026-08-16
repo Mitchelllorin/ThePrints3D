@@ -22,7 +22,7 @@ describe('tutorial script', () => {
       // three too many, and "lock the scale" told presets to do nothing.
       'welcome', 'calibrate',
       'floor', 'wall', 'findRest',
-      'build', 'roof', 'openings', 'plumbing', 'electrical', 'takeoff',
+      'roof', 'openings', 'plumbing', 'electrical', 'takeoff',
     ])
   })
 
@@ -43,7 +43,7 @@ describe('tutorial script', () => {
     // run longer than a one-line instruction, and a limit set by Claude is not
     // a reason to cut the words of the person who knows the trade.
     for (const s of TUTORIAL_STEPS) {
-      expect(s.body.length, `${s.id} is getting long`).toBeLessThanOrEqual(320)
+      expect(s.body.length, `${s.id} is getting long`).toBeLessThanOrEqual(420)
     }
   })
 
@@ -54,13 +54,13 @@ describe('tutorial script', () => {
   })
 
   it('auto-advances a step once its goal is met', () => {
-    // The wall step: not done with no traced wall, done + advances once the
-    // user lays one. Found by id rather than index so re-ordering the script
-    // does not break a test about auto-advance. (Not the floor step — the tour
-    // performs that one itself, so it has no goal to watch.)
-    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'wall')
+    // The roof step: not done with no roof, done + advances once one is pulled.
+    // Found by id rather than index so re-ordering does not break a test about
+    // auto-advance. (Not floor or wall — the tour performs those itself, so
+    // they have no goal to watch.)
+    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'roof')
     expect(tutorialAdvance(i, EMPTY)).toEqual({ done: false, nextIndex: null })
-    expect(tutorialAdvance(i, { ...EMPTY, userWallCount: 1 })).toEqual({ done: true, nextIndex: i + 1 })
+    expect(tutorialAdvance(i, { ...EMPTY, hasRoof: true })).toEqual({ done: true, nextIndex: i + 1 })
   })
 
   it('a step with nothing to detect carries its own timer out', () => {
@@ -80,10 +80,19 @@ describe('tutorial script', () => {
     }
   })
 
-  it('find-the-rest completes only when auto walls exceed the traced one', () => {
-    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'findRest')
-    expect(tutorialAdvance(i, { ...EMPTY, userWallCount: 1, totalWallCount: 1 }).done).toBe(false)
-    expect(tutorialAdvance(i, { ...EMPTY, userWallCount: 1, totalWallCount: 6 }).done).toBe(true)
+  it('the performed steps hold their own time rather than watching for a goal', () => {
+    // floor, wall and find-the-rest are all done BY the tour now, so none of
+    // them has a goal to detect — they run their demonstration and move on on
+    // their own clock. A goal here would fire the moment the tour committed the
+    // thing itself and cut the step off mid-sentence.
+    for (const id of ['floor', 'wall', 'findRest']) {
+      const s = TUTORIAL_STEPS.find((x) => x.id === id)!
+      expect(s.perform, `${id} should perform itself`).toBeTruthy()
+      expect(s.autoAdvanceMs, `${id} needs its own timer`).toBeGreaterThan(0)
+      expect(tutorialAdvance(TUTORIAL_STEPS.indexOf(s), {
+        ...EMPTY, hasFloor: true, userWallCount: 1, totalWallCount: 9,
+      }).done).toBe(false)
+    }
   })
 
   it('the terminal takeoff step never auto-advances', () => {

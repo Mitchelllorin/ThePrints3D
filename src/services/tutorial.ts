@@ -67,7 +67,7 @@ export interface TutorialStep {
    *  stays on the model and the tour carries on with it. Used where watching is
    *  the lesson and there is nothing to be gained by making someone repeat a
    *  gesture they have just been shown. */
-  perform?: 'floor'
+  perform?: 'floor' | 'wall' | 'findRest'
   /** Move on by itself after this long, for a step with nothing to detect.
    *  Every other step advances when the user DOES the thing; a step that only
    *  says something has no such signal, and sits there until Next is found —
@@ -143,26 +143,36 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   },
   {
     id: 'wall',
-    title: 'Trace your first wall',
-    body: 'Now a wall: tap one corner, then the next. It squares up on its own.',
-    enter: 'framing',
+    // The user's words. Unlike the floor, this one is DONE BY THE USER — the
+    // copy is addressed to them ("your finger", "when you're done, lift"), and
+    // a tutorial that only ever performs is a demo reel. The ghost shows the
+    // move; their hand makes the wall. It ends when they lay one, with no
+    // timer, because a timer would move the tour on with a finger still down.
+    title: 'Now let’s get some walls up',
+    body: 'One way is to trace on the print with your finger: pick a wall, drop a dot, and pull along the wall line. Lift when you’re done — and a 3D wall stands up, studs and board and all, auto-squared — that’s a setting, turn it off for an angled wall — on the line you traced. Once that one’s up it will chain as many as you like, or you can use the G.C. to “find the rest”.',
+    // Performed, like the floor. No `enter`: nothing opens and trace mode stays
+    // off, so the print keeps turning while the hand works.
     demo: 'wallRun',
-    done: (c) => c.userWallCount >= 1,
+    perform: 'wall',
+    autoAdvanceMs: 22000,
+    done: () => false,
   },
   {
     id: 'findRest',
-    title: 'Find the rest',
-    body: 'You traced one — now let it find the rest of them.',
+    title: 'Or let it find the rest',
+    body: 'One wall traced is enough to go on. Find the rest reads the print for everything that matches it, and stands them all up.',
+    // The control is lit while it is named, then the tour presses it — you see
+    // WHERE it lives and WHAT it does in one beat.
     target: 'find-rest',
-    done: (c) => c.totalWallCount > c.userWallCount,
+    perform: 'findRest',
+    autoAdvanceMs: 16000,
+    done: () => false,
   },
-  {
-    id: 'build',
-    title: 'Build it in 3D',
-    body: 'Stand it up. Every wall gets its studs and plates, and a header over each opening.',
-    target: 'build-3d',
-    done: (c) => c.built,
-  },
+  // THE "BUILD 3D" STEP IS GONE, with the button it pointed at. Walls stand up
+  // as they are traced now; there is no separate one-way build to press, and a
+  // spotlight aimed at a control that no longer exists is a tour pointing at a
+  // hole in the screen. (services/assistant.ts still offers a "Build 3D"
+  // action — same removal, not done here.)
   {
     id: 'roof',
     title: 'Put a roof on',

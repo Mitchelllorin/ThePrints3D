@@ -59,6 +59,7 @@ export default function TourGhost() {
   const floorsAreas = useAppStore((s) => s.floorsAreas)
   const drawings = useAppStore((s) => s.drawings)
   const addFloorsAreas = useAppStore((s) => s.addFloorsAreas)
+  const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
   const floorsElement = useFloorplanLocalStore((s) => s.floorsElement)
   const floorsSize = useFloorplanLocalStore((s) => s.floorsSize)
 
@@ -87,14 +88,31 @@ export default function TourGhost() {
      * FloorJoistsLayer).
      */
     if (performed.current) return
-    if (step?.perform !== 'floor' || !active) return
+    if (!active || !step?.perform) return
     if (elapsed.current / LOOP < 0.74) return       // the pull has to land first
-    if (floorsAreas.length > 0) { performed.current = true; return }
 
     const d = drawings[0]
     if (!d) return
     const w = d.rasterWidth ?? 1400
     const h = d.rasterHeight ?? 900
+
+    // THE WALL. Same line the ghost just pulled, along the far edge, committed
+    // as a user-traced wall — so it stands up framed, squared and real, and the
+    // next step has something to find the rest OF. There is no separate build
+    // to press: a traced wall is a standing wall.
+    if (step.perform === 'wall') {
+      performed.current = true
+      if (d.parsedWalls.some((pw) => pw.source === 'user')) return
+      addUserTracedWall(d.id, {
+        x1: w * 0.10, y1: h * 0.14,
+        x2: w * 0.90, y2: h * 0.14,
+        thickness: 8,
+      })
+      return
+    }
+
+    if (step.perform !== 'floor') return
+    if (floorsAreas.length > 0) { performed.current = true; return }
     performed.current = true
     // Built with the SAME settings the Floors picker is holding, so what the
     // tour lays is what the user would have laid — I-joists at 16" o.c. here,
@@ -148,6 +166,7 @@ export default function TourGhost() {
   // The real thing now exists (this step performed it, or the user did) — the
   // ghost has nothing left to say and would only draw over the actual floor.
   if (step?.perform === 'floor' && floorsAreas.length > 0) return null
+  if (step?.perform === 'wall' && drawings.some((d) => d.parsedWalls.some((w) => w.source === 'user'))) return null
 
   const ph = phaseAt(t)
   /**
