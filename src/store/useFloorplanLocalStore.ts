@@ -594,8 +594,23 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   }),
   closeUpgrade: () => set({ upgradeReason: null }),
 
-  startTutorial: () => set({ tutorialActive: true, tutorialStep: 0 }),
-  exitTutorial: () => set({ tutorialActive: false }),
+  // Start CLEAN. Leaving a previous run's trace mode on meant the opening line
+  // played over a workspace the app still considered busy — which, among other
+  // things, suppresses the idle spin, so the first sentence ("this is a model")
+  // was delivered over a completely still picture.
+  startTutorial: () => set({
+    tutorialActive: true,
+    tutorialStep: 0,
+    traceMode: false,
+    tracePaused: false,
+    traceStart: null,
+    traceStroke: [],
+    placeObjectType: null,
+    activePanel: null,
+  }),
+  // And leave clean: a tour abandoned mid-trace should not strand the user in
+  // trace mode with no run to finish.
+  exitTutorial: () => set({ tutorialActive: false, traceMode: false, traceStart: null, traceStroke: [] }),
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
   setGestureLock: (v) => set({ gestureLock: v }),
   setWallTrimArmed: (v) => set({ wallTrimArmed: v }),

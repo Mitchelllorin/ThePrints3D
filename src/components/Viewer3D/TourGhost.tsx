@@ -18,7 +18,7 @@
  */
 import { useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Line } from '@react-three/drei'
+import { Line, Html } from '@react-three/drei'
 
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -78,6 +78,14 @@ export default function TourGhost() {
     // other, smaller move. Inset just enough to sit inside the sheet margin.
     const ix = w * 0.40
     const iz = d * 0.36
+    // Calibration is measured along ONE known edge, not across the building —
+    // you pick two points you can put a real dimension between.
+    if (kind === 'calibrate') {
+      return {
+        a: [cx - ix, LIFT, cz + iz] as [number, number, number],
+        b: [cx + ix, LIFT, cz + iz] as [number, number, number],
+      }
+    }
     const a: [number, number, number] = [cx - ix, LIFT, cz - iz]
     const b: [number, number, number] = kind === 'wallRun'
       ? [cx + ix, LIFT, cz - iz]      // a wall runs the length of one side
@@ -101,7 +109,11 @@ export default function TourGhost() {
    * DEMONSTRATION of a wall borrows the accent, which reads over both the dark
    * grid and the sheet.
    */
-  const colour = kind === 'wallRun' ? '#38bdf8' : LAYER_COLORS.floors
+  const colour = kind === 'wallRun' ? '#38bdf8'
+    // The same amber the real calibration arrow uses (FloorplanOverlay), so the
+    // demonstration and the thing being demonstrated are the same colour.
+    : kind === 'calibrate' ? '#f59e0b'
+    : LAYER_COLORS.floors
   const { a, b } = pts
 
   // Where the band's leading end has reached — this is the "finger", implied by
@@ -156,6 +168,41 @@ export default function TourGhost() {
         <>
           <Line points={rect} color={colour} lineWidth={2.5} transparent opacity={0.9 * ph.fade} />
           <GhostFloor a={a} b={b} colour={colour} grow={ph.result} fade={ph.fade} />
+        </>
+      )}
+
+      {/* CALIBRATION: the pull is the whole answer — two points and the line
+          between them. What arrives at the end is the DIMENSION, because the
+          measurement is the thing being asked for; the line on its own is just
+          a line, and the step's sentence is about knowing how big things are. */}
+      {ph.result > 0 && kind === 'calibrate' && (
+        <>
+          <Line points={[a, b]} color={colour} lineWidth={4} transparent opacity={0.95 * ph.fade} />
+          {/* Tick marks at each end, the way a dimension is drawn on a print. */}
+          {[a, b].map((p, i) => (
+            <Line
+              key={i}
+              points={[[p[0], LIFT, p[2] - 0.5], [p[0], LIFT, p[2] + 0.5]]}
+              color={colour}
+              lineWidth={3}
+              transparent
+              opacity={0.95 * ph.fade}
+            />
+          ))}
+          <Html
+            position={[(a[0] + b[0]) / 2, LIFT + 0.35, (a[2] + b[2]) / 2]}
+            center
+            style={{ pointerEvents: 'none' }}
+          >
+            <span style={{
+              color: colour,
+              fontSize: 13,
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+              opacity: ph.fade,
+              textShadow: '0 1px 3px rgba(0,0,0,1), 0 0 8px rgba(0,0,0,0.9)',
+            }}>a known distance</span>
+          </Html>
         </>
       )}
     </group>

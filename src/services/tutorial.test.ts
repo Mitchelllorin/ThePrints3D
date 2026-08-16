@@ -20,7 +20,7 @@ describe('tutorial script', () => {
     expect(ids).toEqual([
       // ONE line of orientation, then work. Four talking steps up front was
       // three too many, and "lock the scale" told presets to do nothing.
-      'welcome',
+      'welcome', 'calibrate',
       'floor', 'wall', 'findRest',
       'build', 'roof', 'openings', 'plumbing', 'electrical', 'takeoff',
     ])

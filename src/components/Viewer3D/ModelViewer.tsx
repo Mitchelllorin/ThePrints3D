@@ -35,6 +35,7 @@ import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
 import TourGhost from './TourGhost'
 import TourUnderReveal from './TourUnderReveal'
+import { TUTORIAL_STEPS, clampStep } from '../../services/tutorial'
 import { requirePro } from '../Pro/usePro'
 import styles from './ModelViewer.module.css'
 
@@ -153,9 +154,14 @@ function OrbitEnabledGuard({ controlsRef, enabled }: {
 const IDLE_MS = 4000
 const IDLE_SPIN_SPEED = 0.35
 
-function IdleSpin({ controlsRef, allowed }: {
+function IdleSpin({ controlsRef, allowed, force }: {
   controlsRef: React.MutableRefObject<OrbitControlsImpl | null>
   allowed: boolean
+  /** Spin NOW, without waiting out the idle timer. The tour's opening line is
+   *  spoken over a turning print — the whole point of that first sentence is
+   *  "this is a model, not a picture", and four seconds of stillness first says
+   *  the opposite. Any input still stops it dead, exactly as before. */
+  force?: boolean
 }) {
   const { gl } = useThree()
   const lastInput = useRef(0)
@@ -182,7 +188,7 @@ function IdleSpin({ controlsRef, allowed }: {
   useFrame(() => {
     const ctrl = controlsRef.current
     if (!ctrl) return
-    const idle = allowed && performance.now() - lastInput.current > IDLE_MS
+    const idle = allowed && (force || performance.now() - lastInput.current > IDLE_MS)
     if (ctrl.autoRotate !== idle) {
       ctrl.autoRotate = idle
       ctrl.autoRotateSpeed = IDLE_SPIN_SPEED
@@ -561,6 +567,10 @@ export default function ModelViewer() {
   const editMode       = useFloorplanLocalStore((s) => s.editMode)
   const planView       = useFloorplanLocalStore((s) => s.planView)
   const editSelected   = useFloorplanLocalStore((s) => s.editSelected)
+  // The tour's opening line is spoken over a turning print — see IdleSpin.force.
+  const tourActive     = useFloorplanLocalStore((s) => s.tutorialActive)
+  const tourStep       = useFloorplanLocalStore((s) => s.tutorialStep)
+  const tourOpeningLine = tourActive && TUTORIAL_STEPS[clampStep(tourStep)]?.id === 'welcome'
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
   // Construction wizard is opened from Settings → "Re-run Wizard" via the store.
@@ -1029,6 +1039,7 @@ export default function ModelViewer() {
         <IdleSpin
           controlsRef={controlsRef}
           allowed={orbitEnabled && !traceMode && !placeObjectType && !calibratingNow && !editSelected}
+          force={tourOpeningLine}
         />
 
 

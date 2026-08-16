@@ -62,7 +62,7 @@ export interface TutorialStep {
   /** Run a looping demonstration of the gesture over the plan. Words alone do
    *  not teach a gesture — "tap two opposite corners" only means something once
    *  you have watched it happen. Stops the moment the user starts. */
-  demo?: 'twoCorners' | 'wallRun'
+  demo?: 'twoCorners' | 'wallRun' | 'calibrate'
   /** Move on by itself after this long, for a step with nothing to detect.
    *  Every other step advances when the user DOES the thing; a step that only
    *  says something has no such signal, and sits there until Next is found —
@@ -85,13 +85,32 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   // moment it matters — on a real upload.
   {
     id: 'welcome',
-    title: 'Let’s build a house.',
-    body: 'You trace over the plan; it stands up in 3D, framed. Everything you need is down the left edge.',
+    // The user's words, verbatim. He wrote this one himself — see the note in
+    // the memory: the copy is his, and it is spoken over a slowly turning print
+    // (IdleSpin.force in ModelViewer), because the first thing the sentence has
+    // to prove is that this is a model and not a picture.
+    title: 'Welcome to ThePrints3D',
+    body: 'We build 3D models from 2D prints, floorplans and drawings. This is a simple floor plan we will turn into an interactive model.',
     // NO spotlight here. Ringing BUILD on the opening line left a pulsing
     // highlight sitting on the rail with nothing being asked of it — and once
     // the eye has been told that glow means "tap this", a glow that means
     // nothing is worse than no glow at all.
-    autoAdvanceMs: 7000,
+    // Paced to the copy: this line takes about eight seconds to read at the
+    // speed someone reads a screen they have never seen before.
+    autoAdvanceMs: 9500,
+    done: () => false,
+  },
+  {
+    id: 'calibrate',
+    // The user's words. Deliberately has NO `enter`: nothing opens, nothing is
+    // selected, the camera is not touched and the print keeps turning — the
+    // hand does the whole job while the sentence is read. A preset already
+    // carries its scale, so this pull is purely a demonstration; it is the only
+    // chance to show the mechanic before a real upload demands it.
+    title: 'It starts with calibration',
+    body: 'There are a few ways ThePrints3D creates 3D walls. They all begin with calibration: we need a known, measured distance marked, so we know how big or small things are.',
+    demo: 'calibrate',
+    autoAdvanceMs: 12000,
     done: () => false,
   },
   {
