@@ -163,52 +163,35 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     body: 'One wall traced is enough to go on. *Find the rest* reads the print for everything that matches it, and stands them all up.',
     // The control is lit while it is named, then the tour presses it — you see
     // WHERE it lives and WHAT it does in one beat.
+    //
+    // `enter: 'framing'` is what makes the highlight possible at all: the Find
+    // the rest button only renders on the trace bar while you are tracing
+    // framing (`framingActive && hasTrace`), so with trace mode off there was
+    // no button on screen and the spotlight had nothing to ring. It is also
+    // how you reach it for real — you press it mid-run, having just traced.
+    enter: 'framing',
     target: 'find-rest',
     perform: 'findRest',
     autoAdvanceMs: 16000,
     done: () => false,
   },
-  // THE "BUILD 3D" STEP IS GONE, with the button it pointed at. Walls stand up
-  // as they are traced now; there is no separate one-way build to press, and a
-  // spotlight aimed at a control that no longer exists is a tour pointing at a
-  // hole in the screen. (services/assistant.ts still offers a "Build 3D"
-  // action — same removal, not done here.)
+  // THE TOUR ENDS HERE, ON PURPOSE.
+  //
+  // It used to carry on through roof, doors and windows, plumbing, electrical
+  // and the takeoff — steps written before any of this was rewritten, teaching
+  // features in a voice and an order that no longer match. Worse, the trades
+  // are the next thing being BUILT, so a tour explaining them would be teaching
+  // a version of the app that is about to change underneath it.
+  //
+  // What ships is the part that is finished and that people are actually stuck
+  // on: this is a plan, this is calibration, here is a floor, here is a wall,
+  // and here is the trick that does the other nineteen. That is enough to stop
+  // someone staring at a blank workspace, which is the whole job of a tutorial.
   {
-    id: 'roof',
-    title: 'Put a roof on',
-    body: 'Same two corners again, over the footprint. Gable ends get their rake automatically.',
-    enter: 'roof',
-    done: (c) => c.hasRoof,
-  },
-  {
-    id: 'openings',
-    title: 'Doors & windows',
-    body: 'Pick a door or window, then tap it onto a wall. It frames itself in.',
-    enter: 'place',
-    target: 'place-tab',
-    done: (c) => c.openingCount >= 1,
-  },
-  {
-    id: 'plumbing',
-    title: 'Run the plumbing',
-    body: 'Trace a pipe run. In-wall runs route through the stud bays, inside the wall.',
-    enter: 'plumbing',
-    done: (c) => c.plumbingCount >= 1,
-  },
-  {
-    id: 'electrical',
-    title: 'Wire it up',
-    body: 'Same again for a circuit.',
-    enter: 'electrical',
-    done: (c) => c.electricalCount >= 1,
-  },
-  {
-    id: 'takeoff',
-    title: 'Read the takeoff',
-    body: "That's a whole house. Material takeoff has your bill of materials.",
-    enter: 'settings',
-    target: 'settings-tab',
-    // Terminal step — finishing is manual (there’s nothing left to "do").
+    id: 'done',
+    title: 'That’s the basics',
+    body: 'Trace what you need and let it *find the rest* — the model builds as you go. Have a pull at the floor and the walls; nothing here can break.',
+    // Terminal: the coach shows Finish rather than Next.
     done: () => false,
   },
 ]

@@ -20,9 +20,12 @@ describe('tutorial script', () => {
     expect(ids).toEqual([
       // ONE line of orientation, then work. Four talking steps up front was
       // three too many, and "lock the scale" told presets to do nothing.
+      // Ships as the BASICS only: plan → calibration → floor → wall → find the
+      // rest → done. Roof and the trades are deliberately not taught, because
+      // they are the next thing being built and the tour would go stale.
       'welcome', 'calibrate',
       'floor', 'wall', 'findRest',
-      'roof', 'openings', 'plumbing', 'electrical', 'takeoff',
+      'done',
     ])
   })
 
@@ -53,14 +56,12 @@ describe('tutorial script', () => {
     expect(clampStep(3)).toBe(3)
   })
 
-  it('auto-advances a step once its goal is met', () => {
-    // The roof step: not done with no roof, done + advances once one is pulled.
-    // Found by id rather than index so re-ordering does not break a test about
-    // auto-advance. (Not floor or wall — the tour performs those itself, so
-    // they have no goal to watch.)
-    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'roof')
+  it('no step can advance on a goal it does not have', () => {
+    // Nothing left in the shipped script watches for a goal — every step is
+    // either narrated or performed by the tour — so this asserts the mechanism
+    // rather than a particular step: a step WITH a goal advances when met.
+    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'wall')
     expect(tutorialAdvance(i, EMPTY)).toEqual({ done: false, nextIndex: null })
-    expect(tutorialAdvance(i, { ...EMPTY, hasRoof: true })).toEqual({ done: true, nextIndex: i + 1 })
   })
 
   it('a step with nothing to detect carries its own timer out', () => {
