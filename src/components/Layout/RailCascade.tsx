@@ -105,6 +105,14 @@ export default function RailCascade() {
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
+  const setTraceStroke = useFloorplanLocalStore((s) => s.setTraceStroke)
+  const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
+  const setHoverPixel = useFloorplanLocalStore((s) => s.setHoverPixel)
+  const setTraceMode = useFloorplanLocalStore((s) => s.setTraceMode)
+  /** Put the tool down — mirrors cancelTracing in FloorplanPanel. */
+  const endTracing = () => {
+    setTraceMode(false); setTraceStroke([]); setTraceStart(null); setHoverPixel(null)
+  }
   const armPlaceExclusive = useFloorplanLocalStore((s) => s.armPlaceExclusive)
   const clearWorkspace = useAppStore((s) => s.clearWorkspace)
   const hasDrawings = useAppStore((s) => s.drawings.length > 0)
@@ -153,6 +161,19 @@ export default function RailCascade() {
   }
 
   const selectSection = (id: Section) => {
+    /**
+     * MID-TRACE, THE RAIL IS THE WAY OUT.
+     *
+     * The trace bar's "✓ Done" button is gone — it was a button whose only job
+     * was to undo the mode you were in, sitting permanently in the corner of the
+     * workspace. Escape does it on a desktop, but a phone has no Escape, so
+     * tapping the rail item you started from now puts the tool down. It is the
+     * same gesture as closing an open drawer, and it costs no chrome.
+     */
+    if (traceMode) {
+      endTracing()
+      if (id === 'build') return
+    }
     if (active[id]) {
       // Tapping the open section closes it.
       if (id === 'place') { setPlaceOpen(false); setPlaceObjectType(null) }

@@ -12,6 +12,31 @@ import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { TUTORIAL_STEPS, tutorialAdvance, clampStep, type TutorialContext, type TutorialEnter } from '../../services/tutorial'
 
+/**
+ * Highlight the words that carry the lesson.
+ *
+ * The copy is plain prose in tutorial.ts, written by the person who knows the
+ * trade — so the markup has to be something you can type mid-sentence without
+ * thinking about it. Wrap a phrase in *asterisks* and it comes out in the
+ * accent colour: the terms worth remembering (calibration, find the rest,
+ * ThePrints3D) stand out of a paragraph that is otherwise read once and
+ * skimmed.
+ *
+ * Deliberately the ONLY markup. Anything richer turns the script into a
+ * template language and the copy into something you have to escape.
+ */
+function highlighted(body: string) {
+  return body.split(/(\*[^*]+\*)/g).map((chunk, i) => (
+    chunk.startsWith('*') && chunk.endsWith('*') && chunk.length > 2
+      ? (
+        <span key={i} style={{ color: 'var(--bp-accent, #38bdf8)', fontWeight: 700 }}>
+          {chunk.slice(1, -1)}
+        </span>
+      )
+      : chunk
+  ))
+}
+
 export default function TutorialCoach() {
   const active = useFloorplanLocalStore((s) => s.tutorialActive)
   const rawStep = useFloorplanLocalStore((s) => s.tutorialStep)
@@ -330,7 +355,7 @@ export default function TutorialCoach() {
             {step + 1}/{total}
           </span>
           <span style={{ fontWeight: 700 }}>{current.title}</span>
-          <span style={{ color: '#e2e8f0' }}>{current.body}</span>
+          <span style={{ color: '#e2e8f0' }}>{highlighted(current.body)}</span>
           {current.hint && <span style={{ color: '#9fb1c4', fontStyle: 'italic' }}>{current.hint}</span>}
         </div>
 

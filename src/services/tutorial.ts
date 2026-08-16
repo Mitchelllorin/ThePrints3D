@@ -95,7 +95,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     // (IdleSpin.force in ModelViewer), because the first thing the sentence has
     // to prove is that this is a model and not a picture.
     title: 'Welcome to ThePrints3D',
-    body: 'We build 3D models from 2D prints, floorplans and drawings. This is a simple floor plan we will turn into an interactive model.',
+    body: 'We build *3D models from 2D prints*, floorplans and drawings. This is a simple floor plan we will turn into an interactive model.',
     // NO spotlight here. Ringing BUILD on the opening line left a pulsing
     // highlight sitting on the rail with nothing being asked of it — and once
     // the eye has been told that glow means "tap this", a glow that means
@@ -113,7 +113,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     // carries its scale, so this pull is purely a demonstration; it is the only
     // chance to show the mechanic before a real upload demands it.
     title: 'It starts with calibration',
-    body: 'There are a few ways ThePrints3D creates 3D walls. They all begin with calibration: we need a known, measured distance marked, so we know how big or small things are.',
+    body: 'There are a few ways ThePrints3D creates 3D walls. They all begin with *calibration*: we need a *known, measured distance* marked, so we know how big or small things are.',
     demo: 'calibrate',
     autoAdvanceMs: 12000,
     done: () => false,
@@ -149,7 +149,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     // move; their hand makes the wall. It ends when they lay one, with no
     // timer, because a timer would move the tour on with a finger still down.
     title: 'Now let’s get some walls up',
-    body: 'One way is to trace on the print with your finger: pick a wall, drop a dot, and pull along the wall line. Lift when you’re done — and a 3D wall stands up, studs and board and all, auto-squared — that’s a setting, turn it off for an angled wall — on the line you traced. Once that one’s up it will chain as many as you like, or you can use the G.C. to “find the rest”.',
+    body: 'One way is to trace on the print with your finger: pick a wall, drop a dot, and pull along the wall line. Lift when you’re done and a 3D wall, studs and board (if you want, it’s a setting) and all, stands, auto squared (a setting, should you want an angled wall) and on the line you traced. Once that one’s up it will chain as many as you like, or you can use the G.C. to *find the rest*.',
     // Performed, like the floor. No `enter`: nothing opens and trace mode stays
     // off, so the print keeps turning while the hand works.
     demo: 'wallRun',
@@ -160,7 +160,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'findRest',
     title: 'Or let it find the rest',
-    body: 'One wall traced is enough to go on. Find the rest reads the print for everything that matches it, and stands them all up.',
+    body: 'One wall traced is enough to go on. *Find the rest* reads the print for everything that matches it, and stands them all up.',
     // The control is lit while it is named, then the tour presses it — you see
     // WHERE it lives and WHAT it does in one beat.
     target: 'find-rest',

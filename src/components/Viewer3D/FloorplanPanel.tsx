@@ -808,8 +808,11 @@ export default function FloorplanPanel() {
             </button>
           )}
           {/* No "End run" button — double-tapping the workspace ends the current
-              wall run (the natural "I'm done with this line" gesture). */}
-          <button className={styles.traceBarBtn} onClick={cancelTracing} title="Finish tracing">✓ Done</button>
+              wall run (the natural "I'm done with this line" gesture) — and no
+              "✓ Done" either. It was a permanent button in the corner of the
+              workspace whose only purpose was to leave the mode you were in.
+              Escape does it on a desktop; on a phone, tapping the rail item you
+              started from does (see selectSection in RailCascade). */}
         </div>
       )}
 
