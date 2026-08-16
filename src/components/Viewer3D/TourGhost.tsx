@@ -65,7 +65,13 @@ export default function TourGhost() {
 
   const [t, setT] = useState(0)
   const elapsed = useRef(0)
+  /** Which step this ref's "already performed" flag belongs to.
+   *
+   *  It was one flag for the whole tour, so the floor step set it and the wall
+   *  step — checking the same flag — returned before it could do anything. The
+   *  wall never got built. It is per-step now: a fresh step gets a fresh go. */
   const performed = useRef(false)
+  const performedFor = useRef<number | null>(null)
 
   const step = TUTORIAL_STEPS[clampStep(rawStep)]
   const kind = step?.demo
@@ -87,6 +93,10 @@ export default function TourGhost() {
      * because that is the space floor areas are stored in (see pixelToWorld in
      * FloorJoistsLayer).
      */
+    if (performedFor.current !== rawStep) {
+      performedFor.current = rawStep
+      performed.current = false
+    }
     if (performed.current) return
     if (!active || !step?.perform) return
     if (elapsed.current / LOOP < 0.74) return       // the pull has to land first
