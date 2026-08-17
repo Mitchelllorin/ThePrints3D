@@ -35,9 +35,14 @@ function runAction(kind: AssistantActionKind) {
     case 'autoBuild':
       app.buildForMe()
       break
-    case 'build':
-      app.buildModel()
+    // Seed-guided: they traced one, go find the ones that match it. Replaces
+    // the old 'build' action, whose button no longer exists and whose job the
+    // app now does as you trace.
+    case 'findRest': {
+      const d = app.drawings.find((x) => x.id === app.floorplanOverlay.drawingId) ?? app.drawings[0]
+      if (d) void app.processWithSeeds(d.id)
       break
+    }
   }
 }
 

@@ -110,6 +110,24 @@ export default function TutorialCoach() {
     }
   }, [active, step, setActiveTraceLayer, setDrawerOpen, setTraceMode, closeAllPanels])
 
+  /**
+   * A TOUR WITHOUT A PLAN IS NARRATING AN EMPTY ROOM.
+   *
+   * Every step from here on talks about "the print", points at it, and draws on
+   * it. Tap CLEAR mid-tour — or start the tour some way that skips the preset —
+   * and it carries on cheerfully describing a drawing that is not on screen.
+   *
+   * So it stands down. Only once a plan has actually been seen, otherwise the
+   * first frame of a starting tour (preset still loading) would close it before
+   * it began.
+   */
+  const sawPlan = useRef(false)
+  useEffect(() => {
+    if (!active) { sawPlan.current = false; return }
+    if (drawings.length > 0) { sawPlan.current = true; return }
+    if (sawPlan.current) exit()
+  }, [active, drawings.length, exit])
+
   // ── Auto-advance only steps the user COMPLETES (not ones done on arrival) ────
   const arrivalDone = useRef<Record<number, boolean>>({})
   useEffect(() => {

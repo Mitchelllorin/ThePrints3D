@@ -65,9 +65,12 @@ describe('nextSuggestion — decision tree (first match wins)', () => {
     expect(s?.id).toBe('autoBuild')
     expect(s?.message).toContain('7')
   })
-  it('floor + user-traced walls → build', () => {
+  it('floor + user-traced walls → offer to find the rest', () => {
+    // Not "build" any more: walls stand as they are traced, so there is nothing
+    // to build and no button to build it with. The useful offer at this exact
+    // moment is the seed-guided one.
     const s = nextSuggestion(ctx({ hasWalls: true, userWallCount: 3 }))
-    expect(s?.id).toBe('build')
+    expect(s?.id).toBe('findRest')
     expect(s?.message).toContain('3 walls')
   })
   it('floor, no walls at all → trace', () => {

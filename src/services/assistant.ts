@@ -17,7 +17,7 @@ export type AssistantActionKind =
   | 'useDetectedScale'
   | 'layFloor'
   | 'autoBuild'
-  | 'build'
+  | 'findRest'
   | 'trace'
 
 export interface Suggestion {
@@ -115,12 +115,23 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
     }
   }
 
+  /**
+   * ONCE THEY HAVE TRACED ONE, THE OFFER IS "FIND THE REST".
+   *
+   * This used to say "Ready to see it in 3D?" with a Build 3D button. There is
+   * no such button any more, and there is nothing to build: the walls stand up
+   * as they are traced. So the coach was offering a step that had already
+   * happened, by way of a control that no longer exists.
+   *
+   * What is genuinely worth offering at that exact moment is the thing the app
+   * does that nothing else does — you traced one, let it find the others.
+   */
   if (ctx.userWallCount > 0) {
     return {
-      id: 'build',
-      message: `Nice — ${ctx.userWallCount} wall${ctx.userWallCount === 1 ? '' : 's'} traced. Ready to see it in 3D?`,
-      actionLabel: 'Build 3D',
-      actionKind: 'build',
+      id: 'findRest',
+      message: `Nice — ${ctx.userWallCount} wall${ctx.userWallCount === 1 ? '' : 's'} traced. Want me to find the rest that match?`,
+      actionLabel: '✨ Find the rest',
+      actionKind: 'findRest',
       tone: 'idle',
     }
   }
