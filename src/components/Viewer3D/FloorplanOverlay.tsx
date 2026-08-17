@@ -1060,15 +1060,36 @@ export default function FloorplanOverlay() {
   //
   // Traced walls still WIN: they are the ones you drew, and detection can throw
   // off noise (a title block full of parallel lines reads as dozens of walls).
-  // So the auto set is a FALLBACK, used only on a storey where you have not
-  // traced anything yet — which is exactly the preset case and never overrides
-  // work you did by hand.
-  const placementWalls = useMemo(() => {
+  //
+  // BUT "WIN" IS PER PLACEMENT, NOT PER STOREY. This used to return the traced
+  // walls ALONE the moment there was at least one, which quietly deleted every
+  // detected wall on the plan as far as placement was concerned. Trace a single
+  // wall in one corner and a door dropped on any of the other nineteen had
+  // nothing within reach to snap or orient to: it landed a half-metre off the
+  // line at yaw 0, square to the world, while BuildingModel went on cutting the
+  // hole at the wall's real angle. That is the "doors don't rotate or line up"
+  // bug, and it was worst in the normal workflow — trace one, find the rest,
+  // start hanging doors — because one traced wall is all it took to trigger it.
+  //
+  // So keep both sets and let REACH decide: a traced wall still beats a detected
+  // one wherever both are in range (searched first, and ties go to it), and the
+  // detected walls are consulted only where no traced wall is near enough to
+  // have an opinion. Detection noise can only ever affect a spot you have not
+  // traced, which is exactly where it is better than nothing.
+  const { tracedWalls, detectedWalls } = useMemo(() => {
     const onLevel = (w: { level?: number }) => (w.level ?? 0) === activeLevel
-    const traced = userWalls.filter(onLevel)
-    if (traced.length > 0) return traced
-    return drawing ? drawing.parsedWalls.filter((w) => w.source !== 'user' && onLevel(w)) : []
+    return {
+      tracedWalls: userWalls.filter(onLevel),
+      detectedWalls: drawing
+        ? drawing.parsedWalls.filter((w) => w.source !== 'user' && onLevel(w))
+        : [],
+    }
   }, [userWalls, activeLevel, drawing])
+  /** Every wall a placement may consider, traced first so it wins ties. */
+  const placementWalls = useMemo(
+    () => [...tracedWalls, ...detectedWalls],
+    [tracedWalls, detectedWalls],
+  )
   // Click-target half-width for walls, ~20px of the print mapped to metres.
   const wallPickWidthM = Math.max(0.25, 20 * (width / imageWidth))
 
@@ -1100,23 +1121,33 @@ export default function FloorplanOverlay() {
   // teleports what you are placing out from under your hand — so snapToWall
   // keeps its own, shorter reach.
   const ORIENT_REACH_M = 3.0
-  const autoOrientYaw = (x: number, z: number): number => {
+  /** Nearest wall in one set, as {distance, yaw}. */
+  const nearestYawIn = (walls: typeof placementWalls, x: number, z: number) => {
     let best = Infinity, yaw = 0
-    for (const w of placementWalls) {
+    for (const w of walls) {
       const a = planeLocalToWorld([w.x1, w.y1])
       const b = planeLocalToWorld([w.x2, w.y2])
       const d = segDist(x, z, a[0], a[2], b[0], b[2])
       if (d < best) { best = d; yaw = -Math.atan2(b[2] - a[2], b[0] - a[0]) }
     }
-    return best < ORIENT_REACH_M ? yaw : 0
+    return { best, yaw }
+  }
+  const autoOrientYaw = (x: number, z: number): number => {
+    // Traced walls get first refusal within reach; detected walls answer only
+    // where nothing you drew is close enough to.
+    const t = nearestYawIn(tracedWalls, x, z)
+    if (t.best < ORIENT_REACH_M) return t.yaw
+    const d = nearestYawIn(detectedWalls, x, z)
+    return d.best < ORIENT_REACH_M ? d.yaw : 0
   }
 
   // Snap a point onto the nearest user wall (projected onto the wall centreline)
   // so wall devices sit IN the wall — boxes attach to the studs. Returns the tap
   // point unchanged when no wall is within reach.
-  const snapToWall = (x: number, z: number): { x: number; z: number } => {
-    let best = 1.2, sx = x, sz = z
-    for (const w of placementWalls) {
+  const SNAP_REACH_M = 1.2
+  const snapOnto = (walls: typeof placementWalls, x: number, z: number) => {
+    let best = SNAP_REACH_M, sx = x, sz = z, hit = false
+    for (const w of walls) {
       const a = planeLocalToWorld([w.x1, w.y1])
       const b = planeLocalToWorld([w.x2, w.y2])
       const ax = a[0], az = a[2], bx = b[0], bz = b[2]
@@ -1126,9 +1157,17 @@ export default function FloorplanOverlay() {
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2))
       const px = ax + t * dx, pz = az + t * dz
       const d = Math.hypot(x - px, z - pz)
-      if (d < best) { best = d; sx = px; sz = pz }
+      if (d < best) { best = d; sx = px; sz = pz; hit = true }
     }
-    return { x: sx, z: sz }
+    return { x: sx, z: sz, hit }
+  }
+  const snapToWall = (x: number, z: number): { x: number; z: number } => {
+    // Same order of precedence as the orientation: your line first, the
+    // detector's only where you have not drawn one.
+    const t = snapOnto(tracedWalls, x, z)
+    if (t.hit) return { x: t.x, z: t.z }
+    const d = snapOnto(detectedWalls, x, z)
+    return { x: d.x, z: d.z }
   }
 
   // Final pose for a placement tap: wall devices snap ONTO the wall; everything

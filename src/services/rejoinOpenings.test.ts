@@ -59,6 +59,21 @@ describe('rejoining walls across their openings', () => {
     expect(out[0].wallRole).toBe('exterior-bearing')
   })
 
+  it('welds across a doorway in an angled wall', () => {
+    // The weld was axis-aligned too, so even once an angled doorway WAS found
+    // the wall either side of it stayed split in two.
+    const a: ParsedWall = { x1: 0, y1: 0, x2: 200, y2: 200, thickness: 8, source: 'auto' }
+    const b: ParsedWall = { x1: 227, y1: 227, x2: 500, y2: 500, thickness: 8, source: 'auto' }
+    const { walls: out, openings } = rejoinAcrossOpenings([a, b], { scaleMmPerPx: SCALE })
+
+    expect(out).toHaveLength(1)
+    expect(out[0].x1).toBeCloseTo(0, 6)
+    expect(out[0].y1).toBeCloseTo(0, 6)
+    expect(out[0].x2).toBeCloseTo(500, 6)
+    expect(out[0].y2).toBeCloseTo(500, 6)
+    expect(openings.some((o) => o.type === 'door')).toBe(true)
+  })
+
   it('passes walls through untouched when there is nothing to bridge', () => {
     const walls = [h(0, 500, 100)]
     const { walls: out } = rejoinAcrossOpenings(walls, { scaleMmPerPx: SCALE })

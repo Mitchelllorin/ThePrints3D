@@ -190,7 +190,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'done',
     title: 'That’s the basics',
-    body: 'Trace what you need and let it *find the rest* — the model builds as you go. Have a pull at the floor and the walls; nothing here can break.',
+    body: 'Trace what you need and let it *find the rest* — the model builds as you go. Have a pull at the floor and the walls.',
     // Terminal: the coach shows Finish rather than Next.
     done: () => false,
   },

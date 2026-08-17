@@ -532,7 +532,6 @@ export default function FloorplanPanel() {
   const calibrationHandled = calibrationHandledIds.includes(drawing.id)
   // Tracing/building is reachable once calibration is set OR explicitly skipped.
   const calibrationCleared = isCalibrated || calibrationHandled
-  const hasWalls     = drawing.parsedWalls.length > 0
 
   // ── editing (post-build): wall + object selection ───────────────────────
   const editMode = !overlay.calibrationMode && !traceMode
@@ -696,8 +695,6 @@ export default function FloorplanPanel() {
   const roofActive = activeTraceLayer === 'roof'
   // Floors & roofs are "area" layers: pull a rectangle instead of tracing a line.
   const areaActive = floorsActive || roofActive
-  // Construction order in the guided flow: floor goes in before the walls.
-  const hasFloor = floorsAreas.length > 0
   // Floors/roofs reuse the same trace flow as the trades (start/pause/picker/done),
   // just committing rectangles instead of lines.
   const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac' || areaActive
@@ -1089,10 +1086,17 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Step 1: calibrate ── */}
+        {/* ── Calibrate ──
+         * KEPT, and deliberately: the step counter went with the wizard, but the
+         * prompt itself is not tour narration. On a real upload nothing can be
+         * measured until the scale is set, and this is the only way into
+         * calibration from the drawer (Settings → Recalibrate is the other one,
+         * and nobody finds it first). Presets carry their own scale, so this
+         * never fires on the path the wizard was cluttering.
+         */}
         {!isAnalysing && !isPending && !calibrationCleared && !overlay.calibrationMode && !traceMode && (
           <div className={styles.step}>
-            <span className={styles.stepLabel}>Step 1 of 3</span>
+            <span className={styles.stepLabel}>Scale</span>
             <span className={styles.stepText}>Set the scale</span>
             <span className={styles.stepHint}>Tap two points on a dimension you know the length of</span>
             <button className={styles.action} onClick={startCalibration}>
@@ -1147,55 +1151,19 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Step 2: lay the floor, then Step 3: walls (real construction order) ── */}
-        {!isAnalysing && !isPending && calibrationCleared && !overlay.calibrationMode && !traceMode && !pickerOpen && (
-          !hasFloor ? (
-            <div className={styles.step}>
-              <span className={styles.stepLabel}>Step 2 of 3</span>
-              <span className={styles.stepText}>Lay the floor</span>
-              <span className={styles.stepHint}>Concrete slab or wood-frame floor — pull the floor area, then the walls frame on top of it.</span>
-              <div className={styles.btnRow}>
-                <button className={styles.action} onClick={() => { setActiveTraceLayer('floors'); openPicker() }}>
-                  Lay the floor →
-                </button>
-                <button className={styles.secondary} onClick={openPicker}>Skip to walls</button>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.step}>
-              {hasWalls ? (
-                <>
-                  <span className={styles.stepLabel}>{userWallCount > 0 ? 'Walls' : 'Step 3 of 3'}</span>
-                  <span className={styles.stepText}>
-                    {userWallCount > 0
-                      ? `${userWallCount} wall${userWallCount === 1 ? '' : 's'} traced`
-                      : `${drawing.parsedWalls.length} walls detected`}
-                  </span>
-                  <span className={styles.stepHint}>
-                    {userWallCount > 0 ? 'Trace more, or edit what’s there' : 'Trace manually to correct anything wrong'}
-                  </span>
-                  <div className={styles.btnRow}>
-                    <button className={styles.action} onClick={openPicker}>
-                      {userWallCount > 0 ? 'Trace more' : 'Trace walls'}
-                    </button>
-                    <button className={styles.secondary} onClick={startCalibration}>
-                      Re-calibrate
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <span className={styles.stepLabel}>Step 3 of 3</span>
-                  <span className={styles.stepText}>Trace the walls</span>
-                  <span className={styles.stepHint}>Draw over each wall — they frame on top of the floor</span>
-                  <button className={styles.action} onClick={openPicker}>
-                    Start tracing →
-                  </button>
-                </>
-              )}
-            </div>
-          )
-        )}
+        {/* THE "STEP 2 OF 3 / STEP 3 OF 3" WIZARD USED TO LIVE HERE. IT IS GONE.
+         *
+         * It was written when the Build drawer was a linear three-step wizard —
+         * set the scale, lay the floor, trace the walls — and it never got taken
+         * out when the rail replaced that with sections you pick in any order.
+         * So selecting Framing answered with "Step 2 of 3: Lay the floor", which
+         * is the drawer arguing with the section you just chose.
+         *
+         * Nothing is lost by removing it. The rail already names the gesture for
+         * whichever section is live ("Pull a floor — tap opposite corners",
+         * "Trace framing runs"), Choose type is right underneath it, and the
+         * traced-wall count now reads off the trace bar where the tracing is.
+         */}
 
         {/* ── Active tracing ── */}
         {traceMode && !pickerOpen && (

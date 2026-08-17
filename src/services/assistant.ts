@@ -90,15 +90,20 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
     }
   }
 
-  if (!ctx.hasFloor) {
-    return {
-      id: 'floor',
-      message: 'Next up: lay the floor — the walls frame on top of it. I can get you started.',
-      actionLabel: 'Lay the floor',
-      actionKind: 'layFloor',
-      tone: 'idle',
-    }
-  }
+  /**
+   * NO "NEXT UP: LAY THE FLOOR".
+   *
+   * This was the last surviving piece of the old three-step wizard: load a
+   * preset and a card came across the top of the workspace telling you to lay a
+   * floor, in the same voice, before you had looked at the plan. The wizard it
+   * belonged to is gone from the Build drawer, and a coach that opens by handing
+   * out the first chore is the thing this app is supposed to not be.
+   *
+   * The suggestions BELOW earn their place — they offer something the user could
+   * not have done themselves in one tap (find the rest, use a scale we read off
+   * the drawing, build from what we detected). "Lay the floor" is just the next
+   * item on a list, and the rail already says it, in the section that does it.
+   */
 
   // "Model's standing" is the TERMINAL step — only declare it once there are real
   // WALLS in the model. `ctx.built` is sticky (a fresh auto-build on load, or

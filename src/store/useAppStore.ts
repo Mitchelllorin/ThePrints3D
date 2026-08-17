@@ -728,7 +728,20 @@ function computeFramingResult(
         y: o.pxY as number,
         widthPx: widthMm / scaleMmPerPx,
         widthMm,
+        // The real direction, not just the nearest axis. `orientation` stays as
+        // the two-state approximation for the code that still reads it; `angle`
+        // is what anything measuring along the wall should use, and is the only
+        // one of the two that can describe a door in a wall running at 30
+        // degrees. Placement yaw is the negative of the plan-pixel angle (local
+        // +X runs along the wall, and pixel Y grows downward), normalised to
+        // [0, PI) because a line has no front and back.
+        //
+        // Exact while the print sits square in the world, which is the norm; a
+        // rotated overlay shifts every opening's angle by the same amount, and
+        // the framing only ever compares openings against walls read off the
+        // same print, so the offset cancels.
         orientation: Math.abs(Math.cos(o.rotationY)) >= Math.abs(Math.sin(o.rotationY)) ? 'horizontal' : 'vertical',
+        angle: ((-o.rotationY % Math.PI) + Math.PI) % Math.PI,
         type: o.type as 'door' | 'window',
       } satisfies ParsedOpening
     })

@@ -55,9 +55,85 @@ function classifyByWidth(widthMm: number | null): ParsedOpening['type'] {
   return 'unknown'
 }
 
+/**
+ * A DOORWAY IS A GAP IN A LINE, AND A LINE CAN POINT ANYWHERE.
+ *
+ * This used to split the walls into "horizontal" and "vertical" piles, bucket
+ * each pile by a single coordinate (`y1` or `x1`), and scan for gaps along one
+ * axis. Everything about that is fine on a rectangular house and wrong the
+ * moment a wall runs at an angle: a bay, a splayed corner, anything on a
+ * diagonal grid. Two segments either side of a real doorway in a 30-degree wall
+ * were filed under "horizontal" (because the run is wider than it is tall),
+ * bucketed by whichever `y1` they happened to start at — which differ, because
+ * the wall is climbing — and so never compared. The doorway was invisible.
+ *
+ * The general version is no harder: group segments that lie on the same
+ * INFINITE LINE, measure along that line's own direction, and a gap is a gap
+ * whichever way the wall points.
+ */
+
+/** The infinite line a wall lies on: unit direction + signed offset from origin. */
+interface WallLine { ux: number; uy: number; c: number; angle: number }
+
+/** How far two lines may differ in direction and still count as the same one. */
+const ANGLE_SNAP_RAD = (10 * Math.PI) / 180
+
+function lineOf(w: ParsedWall): WallLine | null {
+  const dx = w.x2 - w.x1, dy = w.y2 - w.y1
+  if (Math.hypot(dx, dy) < 1e-6) return null
+  // Canonical direction in [0, PI): a wall and the same wall traced backwards
+  // are one line, and must land in one group.
+  let angle = Math.atan2(dy, dx)
+  if (angle < 0) angle += Math.PI
+  if (angle >= Math.PI - 1e-9) angle = 0
+  // Snap the near-zero component so axis-aligned walls stay EXACT — callers
+  // compare welded endpoints against whole pixels.
+  const rawX = Math.cos(angle), rawY = Math.sin(angle)
+  const ux = Math.abs(rawX) < 1e-12 ? 0 : rawX
+  const uy = Math.abs(rawY) < 1e-12 ? 0 : rawY
+  return { ux, uy, c: -w.x1 * uy + w.y1 * ux, angle }
+}
+
+/** Smallest angle between two undirected line directions. */
+function angleDiff(a: number, b: number): number {
+  const d = Math.abs(a - b) % Math.PI
+  return Math.min(d, Math.PI - d)
+}
+
+/** Distance from a point to a line, along the line's normal. */
+const perpDist = (l: WallLine, x: number, y: number) => Math.abs(-x * l.uy + y * l.ux - l.c)
+
+/** The point at parameter `s` along a line. Inverse of `param`. */
+const pointAt = (l: WallLine, s: number) => ({
+  x: -l.c * l.uy + s * l.ux,
+  y: l.c * l.ux + s * l.uy,
+})
+
+/** How far along a line a point sits. */
+const param = (l: WallLine, x: number, y: number) => x * l.ux + y * l.uy
+
+/** Walls sorted into sets that share one infinite line. */
+function collinearGroups(walls: ParsedWall[]): { line: WallLine; walls: ParsedWall[] }[] {
+  const groups: { line: WallLine; walls: ParsedWall[] }[] = []
+  for (const w of walls) {
+    const l = lineOf(w)
+    if (!l) continue
+    const mx = (w.x1 + w.x2) / 2, my = (w.y1 + w.y2) / 2
+    const g = groups.find(
+      (grp) =>
+        angleDiff(l.angle, grp.line.angle) <= ANGLE_SNAP_RAD &&
+        // Measured at the MIDPOINT, so two walls that share a start point but
+        // splay apart are not mistaken for one line.
+        perpDist(grp.line, mx, my) <= LINE_SNAP_PX,
+    )
+    if (g) g.walls.push(w)
+    else groups.push({ line: l, walls: [w] })
+  }
+  return groups
+}
+
 function findGaps(
   walls: ParsedWall[],
-  orientation: 'horizontal' | 'vertical',
   minGapPx: number,
   maxGapPx: number,
   scaleMmPerPx: number | null,
@@ -66,57 +142,48 @@ function findGaps(
 
   const openings: ParsedOpening[] = []
 
-  // Group walls that lie on the same "line" (within LINE_SNAP_PX perpendicular)
-  const groups = new Map<number, ParsedWall[]>()
-  for (const w of walls) {
-    const perpKey = orientation === 'horizontal' ? w.y1 : w.x1
-    const bucket = Math.round(perpKey / LINE_SNAP_PX) * LINE_SNAP_PX
-    if (!groups.has(bucket)) groups.set(bucket, [])
-    groups.get(bucket)!.push(w)
-  }
+  for (const group of collinearGroups(walls)) {
+    if (group.walls.length < 2) continue
+    const line = group.line
 
-  for (const group of groups.values()) {
-    if (group.length < 2) continue
-
-    // Sort by start position along the wall's axis
-    const sorted =
-      orientation === 'horizontal'
-        ? group.slice().sort((a, b) => a.x1 - b.x1)
-        : group.slice().sort((a, b) => a.y1 - b.y1)
-
-    // Scan for gaps between consecutive segments
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const a = sorted[i]
-      const b = sorted[i + 1]
-
-      const aEnd = orientation === 'horizontal' ? a.x2 : a.y2
-      const bStart = orientation === 'horizontal' ? b.x1 : b.y1
-      const gap = bStart - aEnd
-
-      if (gap < minGapPx || gap > maxGapPx) continue
-
-      // Mid-point of the gap
-      const parallelMid = aEnd + gap / 2
-      const perpMid =
-        orientation === 'horizontal'
-          ? (a.y1 + b.y1) / 2
-          : (a.x1 + b.x1) / 2
-
-      const [ox, oy] =
-        orientation === 'horizontal'
-          ? [parallelMid, perpMid]
-          : [perpMid, parallelMid]
-
-      const widthMm = scaleMmPerPx != null ? gap * scaleMmPerPx : null
-
-      openings.push({
-        x: Math.round(ox),
-        y: Math.round(oy),
-        widthPx: Math.round(gap),
-        widthMm: widthMm != null ? Math.round(widthMm) : null,
-        orientation,
-        type: classifyByWidth(widthMm),
+    // Each wall as the span it occupies ALONG its own line.
+    const spans = group.walls
+      .map((w) => {
+        const s1 = param(line, w.x1, w.y1)
+        const s2 = param(line, w.x2, w.y2)
+        return { lo: Math.min(s1, s2), hi: Math.max(s1, s2), w }
       })
+      .sort((a, b) => a.lo - b.lo)
+
+    let end = spans[0].hi
+    let endWall = spans[0].w
+    for (let i = 1; i < spans.length; i++) {
+      const next = spans[i]
+      const gap = next.lo - end
+
+      if (gap >= minGapPx && gap <= maxGapPx) {
+        const sMid = end + gap / 2
+        // Sit the opening on the average of the two lines it bridges, the way
+        // the axis-aligned version averaged the two walls' perpendicular coord.
+        const before = lineOf(endWall)
+        const after = lineOf(next.w)
+        const c = before && after ? (before.c + after.c) / 2 : line.c
+        const p = pointAt({ ...line, c }, sMid)
+        const widthMm = scaleMmPerPx != null ? gap * scaleMmPerPx : null
+
+        openings.push({
+          x: Math.round(p.x),
+          y: Math.round(p.y),
+          widthPx: Math.round(gap),
+          widthMm: widthMm != null ? Math.round(widthMm) : null,
+          orientation: Math.abs(line.ux) >= Math.abs(line.uy) ? 'horizontal' : 'vertical',
+          angle: line.angle,
+          type: classifyByWidth(widthMm),
+        })
+      }
+
+      // Overlapping segments must not open a phantom gap behind them.
+      if (next.hi > end) { end = next.hi; endWall = next.w }
     }
   }
 
@@ -140,17 +207,10 @@ export function detectOpenings(
     scaleMmPerPx != null ? Math.round(WINDOW_MAX_MM / scaleMmPerPx) : 300
   const maxGapPx = options.maxGapPx ?? defaultMaxGapPx
 
-  const horiz = walls.filter(
-    (w) => Math.abs(w.x2 - w.x1) >= Math.abs(w.y2 - w.y1),
-  )
-  const vert = walls.filter(
-    (w) => Math.abs(w.y2 - w.y1) > Math.abs(w.x2 - w.x1),
-  )
-
-  return [
-    ...findGaps(horiz, 'horizontal', minGapPx, maxGapPx, scaleMmPerPx),
-    ...findGaps(vert, 'vertical', minGapPx, maxGapPx, scaleMmPerPx),
-  ]
+  // No horizontal/vertical split any more: collinear grouping separates walls
+  // that point different ways on its own, and keeps the ones that point the
+  // same way together no matter WHICH way that is.
+  return findGaps(walls, minGapPx, maxGapPx, scaleMmPerPx)
 }
 
 /**
@@ -188,7 +248,6 @@ export function rejoinAcrossOpenings(
   const openings = detectOpenings(walls, options)
   if (openings.length === 0) return { walls, openings }
 
-  const horizontal = (w: ParsedWall) => Math.abs(w.x2 - w.x1) >= Math.abs(w.y2 - w.y1)
   // Only real openings weld. See the note above.
   const bridgeable = openings.filter((o) => o.type === 'door' || o.type === 'window')
 
@@ -196,22 +255,31 @@ export function rejoinAcrossOpenings(
   const consumed = new Set<number>()
 
   for (const o of bridgeable) {
-    const along = o.orientation === 'horizontal'
+    // Work in the opening's OWN line direction, so a doorway in a wall running
+    // at any angle is measured along that wall rather than along the page.
+    const angle = o.angle ?? (o.orientation === 'horizontal' ? 0 : Math.PI / 2)
+    const rawX = Math.cos(angle), rawY = Math.sin(angle)
+    const ux = Math.abs(rawX) < 1e-12 ? 0 : rawX
+    const uy = Math.abs(rawY) < 1e-12 ? 0 : rawY
+    const oLine: WallLine = { ux, uy, c: -o.x * uy + o.y * ux, angle }
+    const oS = param(oLine, o.x, o.y)
+    const gapStart = oS - o.widthPx / 2
+    const gapEnd = oS + o.widthPx / 2
+
     // The two segments this gap sits between: same line, ends meeting the gap.
     let left = -1
     let right = -1
     for (let i = 0; i < out.length; i++) {
       if (consumed.has(i)) continue
       const w = out[i]
-      if (horizontal(w) !== along) continue
-      const perp = along ? (w.y1 + w.y2) / 2 : (w.x1 + w.x2) / 2
-      const oPerp = along ? o.y : o.x
-      if (Math.abs(perp - oPerp) > LINE_SNAP_PX) continue
+      const l = lineOf(w)
+      if (!l || angleDiff(l.angle, angle) > ANGLE_SNAP_RAD) continue
+      if (perpDist(oLine, (w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2) > LINE_SNAP_PX) continue
 
-      const end = along ? Math.max(w.x1, w.x2) : Math.max(w.y1, w.y2)
-      const start = along ? Math.min(w.x1, w.x2) : Math.min(w.y1, w.y2)
-      const gapStart = (along ? o.x : o.y) - o.widthPx / 2
-      const gapEnd = (along ? o.x : o.y) + o.widthPx / 2
+      const s1 = param(oLine, w.x1, w.y1)
+      const s2 = param(oLine, w.x2, w.y2)
+      const start = Math.min(s1, s2)
+      const end = Math.max(s1, s2)
 
       if (Math.abs(end - gapStart) <= 2) left = i
       if (Math.abs(start - gapEnd) <= 2) right = i
@@ -220,12 +288,19 @@ export function rejoinAcrossOpenings(
 
     // One wall, spanning both, keeping the left segment's identity — its
     // framing type, role and materials are the wall's, and a doorway does not
-    // change them.
+    // change them. Its own line is kept too, so welding cannot shift the wall
+    // sideways onto the neighbour's.
     const a = out[left]
     const b = out[right]
-    out[left] = along
-      ? { ...a, x1: Math.min(a.x1, b.x1), x2: Math.max(a.x2, b.x2) }
-      : { ...a, y1: Math.min(a.y1, b.y1), y2: Math.max(a.y2, b.y2) }
+    const aLine = lineOf(a)
+    if (!aLine) continue
+    const ends = [
+      param(aLine, a.x1, a.y1), param(aLine, a.x2, a.y2),
+      param(aLine, b.x1, b.y1), param(aLine, b.x2, b.y2),
+    ]
+    const p1 = pointAt(aLine, Math.min(...ends))
+    const p2 = pointAt(aLine, Math.max(...ends))
+    out[left] = { ...a, x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y }
     consumed.add(right)
   }
 

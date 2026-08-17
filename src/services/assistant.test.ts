@@ -55,10 +55,14 @@ describe('nextSuggestion — decision tree (first match wins)', () => {
     expect(s?.id).toBe('calibrate')
     expect(s?.actionKind).toBe('calibrate')
   })
-  it('calibrated, no floor → layFloor', () => {
+  it('calibrated, no floor → does NOT nag about laying one', () => {
+    // The old three-step wizard is gone, and this suggestion was its last piece:
+    // load a preset and a card came across the workspace assigning you a floor
+    // before you had looked at the plan. The rail names that gesture in the
+    // section that performs it, so the coach stays out of it.
     const s = nextSuggestion(ctx({ hasFloor: false }))
-    expect(s?.id).toBe('floor')
-    expect(s?.actionKind).toBe('layFloor')
+    expect(s?.id).not.toBe('floor')
+    expect(s?.actionKind).not.toBe('layFloor')
   })
   it('floor + detected walls, none traced → autoBuild', () => {
     const s = nextSuggestion(ctx({ hasWalls: true, detectedWallCount: 7 }))

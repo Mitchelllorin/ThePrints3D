@@ -1,10 +1,19 @@
 /**
  * PlacedObjectsLayer — renders user-placed furniture/fixtures as coloured box
  * stand-ins in world space, with a simple move/rotate gizmo for the selected
- * one. Positions are stored in world metres, so no overlay transform is needed.
+ * one.
  *
  * Dragging uses transient local state and only commits to the store (one
  * undoable step) on pointer-up, so a drag doesn't flood the history stack.
+ *
+ * A DRAG IS A PLACEMENT. It did not used to be: dropping a door ran it through
+ * snapping and auto-orientation, and dragging that same door wrote nothing but
+ * x/z — so it kept whatever angle it happened to have and stopped anywhere,
+ * including half in the wall. Worse, the cached `pxX`/`pxY` were left behind,
+ * and those are what the framing, drywall and envelope layers use to find an
+ * opening. The door moved; its hole did not. Both paths now go through
+ * `placementPose` (services/planPlacement), which is also where the arithmetic
+ * can finally be tested.
  */
 import { useState, useRef, useLayoutEffect } from 'react'
 import * as THREE from 'three'
@@ -13,7 +22,8 @@ import { Edges, Line } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
+import { getCatalogItem, deviceMountHeightM, isWallMountedType } from '../../data/objectCatalog'
+import { placementPose, type PlanTransform, type PlanWall } from '../../services/planPlacement'
 import ObjectModel from './ObjectModels'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -90,6 +100,9 @@ export default function PlacedObjectsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  // The print plane, so a drag can be re-snapped against the walls on it.
+  const overlay = useAppStore((s) => s.floorplanOverlay)
+  const drawings = useAppStore((s) => s.drawings)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
@@ -130,6 +143,47 @@ export default function PlacedObjectsLayer() {
     selectObjectExclusive(id)
   }
 
+  const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
+  const planTransform: PlanTransform | null = drawing
+    ? {
+        position: overlay.position,
+        scale: overlay.scale,
+        rotationDeg: overlay.rotationDeg,
+        imageWidth: drawing.rasterWidth ?? 1400,
+        imageHeight: drawing.rasterHeight ?? 900,
+      }
+    : null
+
+  /**
+   * Where a dragged object comes to rest.
+   *
+   * Wall-mounted things (doors, windows, outlets, switches) are re-snapped and
+   * re-oriented against the walls on their own storey, because a door that does
+   * not line up with its wall is simply wrong. Furniture is not re-oriented: a
+   * sofa you turned to face the window stays turned, and nudging it across the
+   * room must not spin it back. Everything gets its pixel position rewritten,
+   * because that is what the framing and boarding layers read.
+   */
+  const dropPose = (obj: PlacedObject, x: number, z: number): Partial<PlacedObject> => {
+    if (!drawing || !planTransform) return { x, z }
+    const level = obj.level ?? 0
+    const onLevel = (w: { level?: number }) => (w.level ?? 0) === level
+    const walls = drawing.parsedWalls
+    const wallMounted = isWallMountedType(obj.type)
+    const pose = placementPose({
+      x, z,
+      transform: planTransform,
+      tracedWalls: walls.filter((w) => w.source === 'user' && onLevel(w)) as PlanWall[],
+      detectedWalls: walls.filter((w) => w.source !== 'user' && onLevel(w)) as PlanWall[],
+      wallMounted,
+      // No wall near enough to have an opinion → keep the angle it already has.
+      // A drag must never quietly spin something back to due north.
+      fallbackYaw: obj.rotationY,
+    })
+    const moved = { x: pose.x, z: pose.z, pxX: pose.pxX, pxY: pose.pxY }
+    return wallMounted ? { ...moved, rotationY: pose.rotationY } : moved
+  }
+
   // Rotate knob (only shows when selected): an explicit rotate drag.
   const startDrag = (e: ThreeEvent<PointerEvent>, obj: PlacedObject, kind: 'move' | 'rotate') => {
     e.stopPropagation()
@@ -162,9 +216,15 @@ export default function PlacedObjectsLayer() {
     if (!drag) return
     e.stopPropagation()
     if (drag.moved) {
-      updatePlacedObject(drag.id, drag.kind === 'move'
-        ? { x: drag.x, z: drag.z }
-        : { rotationY: drag.rotationY })
+      if (drag.kind === 'move') {
+        const obj = placedObjects.find((o) => o.id === drag.id)
+        updatePlacedObject(drag.id, obj ? dropPose(obj, drag.x, drag.z) : { x: drag.x, z: drag.z })
+      } else {
+        // An explicit rotate is the user overruling the wall, so the angle is
+        // taken as given — but the object has not moved, so its pixel position
+        // is still correct and nothing else needs rewriting.
+        updatePlacedObject(drag.id, { rotationY: drag.rotationY })
+      }
     } else {
       select(drag.id)   // a tap (no movement) just selects → opens the editor
     }
