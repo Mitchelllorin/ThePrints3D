@@ -467,25 +467,51 @@ describe('gable-end rake termination', () => {
     g.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push((o.userData?.info as string) ?? '') })
     return out
   }
-  const angledRakes = (g: THREE.Object3D) => {
+
+  /**
+   * A rake is the sloped termination at a gable end. This USED to be built as a
+   * box tilted to the pitch and labelled "Rake fascia", and that is what this
+   * test asserted — a rotation greater than zero on a mesh with that name.
+   *
+   * It is built better than that now: an extruded PROFILE, whose top edge
+   * follows the roof surface and whose ends are cut plumb, so the two boards
+   * butt in one line at the peak instead of horning up past each other. The
+   * slope lives in the geometry, not in a rotation, and the mesh is named
+   * "Rake board". So the old assertion could only ever fail — it was testing
+   * for a shape the code deliberately stopped making.
+   *
+   * What it should assert is the INTENT: a gable end gets a sloped rake, a
+   * hipped or flat roof does not.
+   */
+  const rakeBoards = (g: THREE.Object3D) =>
+    infos(g).filter((i) => i.startsWith('Rake board')).length
+
+  /** The rake soffit runs up the slope, so it genuinely is tilted. */
+  const tiltedRakeSoffits = (g: THREE.Object3D) => {
     let n = 0
     g.traverse((o) => {
       const m = o as THREE.Mesh
-      if (m.isMesh && m.userData?.info === 'Rake fascia') {
-        // a rake must actually be tilted to follow the slope (not a flat board)
+      if (m.isMesh && m.userData?.info === 'Rake soffit') {
         if (Math.abs(m.rotation.x) > 0.05 || Math.abs(m.rotation.z) > 0.05) n++
       }
     })
     return n
   }
 
-  it('gable & truss roofs get sloped rake fascia on the gable ends', () => {
-    expect(angledRakes(buildRoofByType('Gable', opts))).toBeGreaterThan(0)
-    expect(angledRakes(buildRoofByType('Truss', opts))).toBeGreaterThan(0)
+  it('gable & truss roofs get a rake board on each slope of both gable ends', () => {
+    // Two ends × two slopes.
+    expect(rakeBoards(buildRoofByType('Gable', opts))).toBe(4)
+    expect(rakeBoards(buildRoofByType('Truss', opts))).toBe(4)
   })
+
+  it('the rake soffit follows the pitch rather than lying flat', () => {
+    expect(tiltedRakeSoffits(buildRoofByType('Gable', opts))).toBeGreaterThan(0)
+    expect(tiltedRakeSoffits(buildRoofByType('Truss', opts))).toBeGreaterThan(0)
+  })
+
   it('hip / flat / shed keep the four-side boxed eave (no rake)', () => {
     for (const type of ['Hip', 'Flat', 'Shed', 'Gambrel', 'Saltbox']) {
-      expect(infos(buildRoofByType(type, opts))).not.toContain('Rake fascia')
+      expect(rakeBoards(buildRoofByType(type, opts)), type).toBe(0)
     }
   })
 })
