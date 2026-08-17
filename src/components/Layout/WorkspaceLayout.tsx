@@ -831,6 +831,17 @@ export default function WorkspaceLayout() {
 
       const st = useFloorplanLocalStore.getState()
 
+      // 0. A STUCK GESTURE LOCK IS NOT A STATE, SO IT NEVER COSTS A PRESS.
+      //
+      // gestureLock freezes the camera while a layer owns the pointer. It is
+      // released on pointer-up now wherever that happens (see ModelViewer), so
+      // it should never still be up by the time anyone reaches for Escape — but
+      // if it somehow is, the workspace is frozen with nothing on screen to
+      // explain why, and Escape is the one thing everybody tries. Cleared
+      // WITHOUT returning, so this cannot swallow the press that was meant to
+      // close a panel.
+      if (st.gestureLock) st.setGestureLock(false)
+
       // 1. A tool is in your hand — put it down.
       if (st.placeObjectType) { st.setPlaceObjectType(null); return }
       if (st.wallTrimArmed) { st.setWallTrimArmed(false); return }

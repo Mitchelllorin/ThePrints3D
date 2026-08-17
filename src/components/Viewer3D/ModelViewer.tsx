@@ -627,6 +627,54 @@ export default function ModelViewer() {
   // deliberate boundary between looking and working.
   const editingSelection = editMode && editSelected !== null
   const orbitEnabled = !overlay.orbitLocked && !placing && !gestureLock && !editingSelection
+
+  /**
+   * A LOCK MUST NOT OUTLIVE THE GESTURE THAT RAISED IT.
+   *
+   * `gestureLock` is raised on pointer-DOWN by whichever layer grabbed the drag
+   * (placed objects, roof, floor joists) and lowered in that same layer's
+   * pointer-UP handler, which is bound to a mesh inside the canvas. So the
+   * release depends on one specific element receiving one specific event.
+   *
+   * It does not always get it. Lift the finger outside the canvas, let the
+   * browser claim the gesture (a second touch, a system swipe, a scroll), tab
+   * away mid-drag, and no pointerup ever reaches that mesh. The lock stays up.
+   *
+   * And nothing else could take it down: it is not in the Escape chain, tapping
+   * empty space does not touch it, and leaving edit mode does not either. The
+   * camera was simply frozen from then on, with no way back short of reloading
+   * the page — a dead end you could not back out of, which is exactly how it
+   * was reported.
+   *
+   * The gesture is over when the pointer is up. That is true no matter which
+   * layer started it or where the finger ended, so the release belongs here,
+   * once, on the window, rather than in each layer's own handler. Those still
+   * run first and commit their own state; this only guarantees the lock falls.
+   * FloorplanOverlay already does the same for its own drag (see the
+   * pointercancel listener there) — this extends the courtesy to every layer.
+   */
+  // Listeners are ALWAYS mounted, never gated on `gestureLock` being up.
+  // Gating them looks tidier and reintroduces the bug in miniature: the lock is
+  // raised during a pointerdown, but the effect that would listen for the
+  // release does not run until React has committed the next render. A quick
+  // enough tap lifts the finger inside that window, the listener is not there
+  // to hear it, and the lock is stranded again. Two idle listeners cost
+  // nothing; the state is read at event time.
+  useEffect(() => {
+    const release = () => {
+      const st = useFloorplanLocalStore.getState()
+      if (st.gestureLock) st.setGestureLock(false)
+    }
+    window.addEventListener('pointerup', release)
+    window.addEventListener('pointercancel', release)
+    // A drag cannot survive the tab losing the pointer entirely.
+    window.addEventListener('blur', release)
+    return () => {
+      window.removeEventListener('pointerup', release)
+      window.removeEventListener('pointercancel', release)
+      window.removeEventListener('blur', release)
+    }
+  }, [])
   const panEnabled = (!traceMode || tracePaused) && !placing
 
   function handleDragOver(e: React.DragEvent) {
