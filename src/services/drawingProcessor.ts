@@ -5,7 +5,7 @@ import { deriveScaleFromNotation } from './scaleParser'
 import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
 import { classifyWallType, pxToMm, type DrywallConfig } from './wallTypeClassifier'
 import { extractRooms } from './roomExtractor'
-import { detectOpenings } from './openingDetector'
+import { rejoinAcrossOpenings } from './openingDetector'
 import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
 import { inferScaleFromPaper, inferScaleFromStructure } from './scaleInference'
@@ -172,7 +172,7 @@ export async function processDrawing(
     //    meet get extended/trimmed to an exact intersection, so detected
     //    walls connect instead of floating as disjoint segments.
     const corneredWalls = inferCorners(filtered.walls)
-    const walls: ParsedWall[] = corneredWalls.map((w) => {
+    let walls: ParsedWall[] = corneredWalls.map((w) => {
       const finishedMm = pxToMm(w.thickness, effectiveScale)
       if (finishedMm === null) {
         return {
@@ -199,10 +199,18 @@ export async function processDrawing(
       scaleMmPerPx: effectiveScale,
     })
 
-    // 7. Detect door/window openings as gaps between co-linear wall segments
-    const openings = detectOpenings(walls, {
+    // 7. Detect door/window openings — and REJOIN the walls they interrupt.
+    //    In framing this hole is a ROUGH OPENING (R.O.): the studs stop, king
+    //    and jack studs frame the sides, a header spans it and the plate runs
+    //    over the top. It is a hole in a wall, not the end of one. The detector
+    //    was leaving two stub walls with a gap, so framing put a wall end where
+    //    a header belongs and anything routing inside the wall stopped at the
+    //    door.
+    const rejoined = rejoinAcrossOpenings(walls, {
       scaleMmPerPx: effectiveScale,
     })
+    walls = rejoined.walls
+    const openings = rejoined.openings
 
     // 8. Derive text/symbol/annotation semantics by combining detector outputs
     //    with the canonical symbol glossary.

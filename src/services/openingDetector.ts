@@ -152,3 +152,85 @@ export function detectOpenings(
     ...findGaps(vert, 'vertical', minGapPx, maxGapPx, scaleMmPerPx),
   ]
 }
+
+/**
+ * REJOIN WALLS ACROSS THEIR OPENINGS.
+ *
+ * A doorway is not a break in a wall. On site the wall runs through: the studs
+ * stop, king and jack studs frame the sides, a header spans it and the plate
+ * carries straight over the top. The hole itself has a name — a ROUGH OPENING,
+ * the R.O. — and it is sized to the unit plus shim space, in wood or steel
+ * alike. On a print it may be DRAWN as a break, but structurally it is one wall
+ * with an R.O. in it.
+ *
+ * The detector had no idea. It bridges gaps of 4–8px (`mergeGapPx`), which is
+ * scan-noise territory — a 900mm door at ~23.5mm/px is about 38px, five to ten
+ * times that. So every doorway split its wall into two stub walls with a hole
+ * between them, and everything downstream inherited the lie: framing put a
+ * plate end and a pair of studs where a header belongs, the takeoff counted two
+ * walls, and anything routing INSIDE a wall stopped dead at the door.
+ *
+ * So: segments on the same line, separated by a gap the size of a real door or
+ * window, become ONE wall spanning both — and the opening that used to be a
+ * hole is returned alongside, to be carried by the wall rather than to
+ * interrupt it.
+ *
+ * Conservative on purpose. Only gaps that classify as a door or a window are
+ * bridged; an `unknown` gap is left alone, because a genuine hole in a wall
+ * (a missing segment the detector failed on, a corridor, a change in wall type)
+ * must not be silently papered over. Guessing wrong here welds together two
+ * walls that were never one.
+ */
+export function rejoinAcrossOpenings(
+  walls: ParsedWall[],
+  options: OpeningDetectorOptions = {},
+): { walls: ParsedWall[]; openings: ParsedOpening[] } {
+  const openings = detectOpenings(walls, options)
+  if (openings.length === 0) return { walls, openings }
+
+  const horizontal = (w: ParsedWall) => Math.abs(w.x2 - w.x1) >= Math.abs(w.y2 - w.y1)
+  // Only real openings weld. See the note above.
+  const bridgeable = openings.filter((o) => o.type === 'door' || o.type === 'window')
+
+  const out = walls.slice()
+  const consumed = new Set<number>()
+
+  for (const o of bridgeable) {
+    const along = o.orientation === 'horizontal'
+    // The two segments this gap sits between: same line, ends meeting the gap.
+    let left = -1
+    let right = -1
+    for (let i = 0; i < out.length; i++) {
+      if (consumed.has(i)) continue
+      const w = out[i]
+      if (horizontal(w) !== along) continue
+      const perp = along ? (w.y1 + w.y2) / 2 : (w.x1 + w.x2) / 2
+      const oPerp = along ? o.y : o.x
+      if (Math.abs(perp - oPerp) > LINE_SNAP_PX) continue
+
+      const end = along ? Math.max(w.x1, w.x2) : Math.max(w.y1, w.y2)
+      const start = along ? Math.min(w.x1, w.x2) : Math.min(w.y1, w.y2)
+      const gapStart = (along ? o.x : o.y) - o.widthPx / 2
+      const gapEnd = (along ? o.x : o.y) + o.widthPx / 2
+
+      if (Math.abs(end - gapStart) <= 2) left = i
+      if (Math.abs(start - gapEnd) <= 2) right = i
+    }
+    if (left < 0 || right < 0 || left === right) continue
+
+    // One wall, spanning both, keeping the left segment's identity — its
+    // framing type, role and materials are the wall's, and a doorway does not
+    // change them.
+    const a = out[left]
+    const b = out[right]
+    out[left] = along
+      ? { ...a, x1: Math.min(a.x1, b.x1), x2: Math.max(a.x2, b.x2) }
+      : { ...a, y1: Math.min(a.y1, b.y1), y2: Math.max(a.y2, b.y2) }
+    consumed.add(right)
+  }
+
+  return {
+    walls: out.filter((_, i) => !consumed.has(i)),
+    openings,
+  }
+}
