@@ -44,6 +44,7 @@ import {
 } from '../../services/wallTraceReducer'
 import { ensureInkBuffer, getInkBuffer, snapSegmentToInk } from '../../services/inkRaster'
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, isWallMountedType, deviceMountHeightM } from '../../data/objectCatalog'
+import { roomEdgeWalls } from '../../services/planPlacement'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { validateElectrical } from '../../services/constructionCode'
@@ -1078,11 +1079,18 @@ export default function FloorplanOverlay() {
   // traced, which is exactly where it is better than nothing.
   const { tracedWalls, detectedWalls } = useMemo(() => {
     const onLevel = (w: { level?: number }) => (w.level ?? 0) === activeLevel
+    const detected = drawing
+      ? drawing.parsedWalls.filter((w) => w.source !== 'user' && onLevel(w))
+      : []
     return {
       tracedWalls: userWalls.filter(onLevel),
-      detectedWalls: drawing
-        ? drawing.parsedWalls.filter((w) => w.source !== 'user' && onLevel(w))
-        : [],
+      // Room edges stand in when there is no wall data at all, which is every
+      // practice preset — see roomEdgeWalls. Only when `detected` is empty, so
+      // a real drawing never has its walls diluted by room rectangles.
+      detectedWalls:
+        detected.length > 0
+          ? detected
+          : roomEdgeWalls(drawing?.parsedRooms ?? []),
     }
   }, [userWalls, activeLevel, drawing])
   /** Every wall a placement may consider, traced first so it wins ties. */

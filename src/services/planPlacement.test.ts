@@ -3,6 +3,7 @@ import {
   planPixelToWorld,
   worldToPlanPixel,
   placementPose,
+  roomEdgeWalls,
   ORIENT_REACH_M,
   type PlanTransform,
   type PlanWall,
@@ -135,6 +136,39 @@ describe('placementPose — traced walls win, but per placement', () => {
     expect(pose.oriented).toBe(true)
     expect(pose.snapped).toBe(false)
     expect(pose.z).toBeCloseTo(between, 6)
+  })
+})
+
+describe('roomEdgeWalls — the fallback for a plan with no wall data', () => {
+  it('turns a room into its four edges', () => {
+    const edges = roomEdgeWalls([{ x1: 100, y1: 200, x2: 400, y2: 600 }])
+    expect(edges).toHaveLength(4)
+    // Every edge is a real segment lying on the rectangle.
+    for (const e of edges) {
+      expect(Math.hypot(e.x2 - e.x1, e.y2 - e.y1)).toBeGreaterThan(0)
+      expect([100, 400]).toContain(Math.min(e.x1, e.x2))
+    }
+  })
+
+  it('tolerates reversed corners and skips degenerate rooms', () => {
+    expect(roomEdgeWalls([{ x1: 400, y1: 600, x2: 100, y2: 200 }])).toHaveLength(4)
+    expect(roomEdgeWalls([{ x1: 10, y1: 10, x2: 10, y2: 90 }])).toHaveLength(0)
+  })
+
+  it('lets a door line up on a plan that ships rooms but no walls', () => {
+    // THE PRACTICE-PRESET CASE. With parsedWalls stripped to [], a door had
+    // nothing to snap to and landed flat at 0 degrees wherever it was tapped.
+    const rooms = [{ x1: 100, y1: 100, x2: 500, y2: 500 }]
+    const T2: PlanTransform = { ...T, scale: [10, 10], imageWidth: 1000, imageHeight: 1000 }
+    // Just inside the room's LEFT edge (x=100px → world -4.0m), and halfway
+    // down it so the top and bottom edges are not the nearer answer.
+    const pose = placementPose({
+      x: -3.9, z: -2, transform: T2,
+      tracedWalls: [], detectedWalls: roomEdgeWalls(rooms), wallMounted: true,
+    })
+    expect(pose.snapped).toBe(true)
+    expect(pose.x).toBeCloseTo(-4, 6)                       // pulled onto the edge
+    expect(Math.abs(deg(pose.rotationY))).toBeCloseTo(90, 6) // and turned to match it
   })
 })
 

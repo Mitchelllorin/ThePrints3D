@@ -76,6 +76,40 @@ export function worldToPlanPixel(t: PlanTransform, x: number, z: number): { px: 
   }
 }
 
+/**
+ * The four edges of a room, as walls you can snap to.
+ *
+ * A PRACTICE PRESET SHIPS NO WALLS. `parsedWalls` is stripped to [] on purpose
+ * — tracing them is the exercise — so the walls exist only as ink on the
+ * image. Everything that reasons about walls then has nothing: a door dropped
+ * on a preset has nothing to seat into and nothing to line up with, so it
+ * lands flat at zero degrees in the middle of a room, which is exactly what
+ * "doors don't line up" looks like from the outside.
+ *
+ * Rooms deliberately SURVIVE practice mode, and a room rectangle's edges are
+ * the wall lines — the same preset definition drew both. So this invents
+ * nothing: it reads geometry the plan already carries. Used only as the last
+ * tier, behind anything traced or detected, so on a real drawing it never
+ * competes with a wall that actually exists.
+ */
+export function roomEdgeWalls(
+  rooms: { x1: number; y1: number; x2: number; y2: number }[],
+): PlanWall[] {
+  const out: PlanWall[] = []
+  for (const r of rooms) {
+    const x1 = Math.min(r.x1, r.x2), x2 = Math.max(r.x1, r.x2)
+    const y1 = Math.min(r.y1, r.y2), y2 = Math.max(r.y1, r.y2)
+    if (x2 - x1 < 1e-6 || y2 - y1 < 1e-6) continue
+    out.push(
+      { x1, y1, x2, y2: y1 },   // top
+      { x1, y1: y2, x2, y2 },   // bottom
+      { x1, y1, x2: x1, y2 },   // left
+      { x1: x2, y1, x2, y2 },   // right
+    )
+  }
+  return out
+}
+
 /** Distance from a point to a segment, and the closest point on it. */
 function nearestOnSeg(
   x: number, z: number, ax: number, az: number, bx: number, bz: number,

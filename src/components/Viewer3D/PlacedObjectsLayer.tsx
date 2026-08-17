@@ -23,7 +23,7 @@ import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { getCatalogItem, deviceMountHeightM, isWallMountedType } from '../../data/objectCatalog'
-import { placementPose, type PlanTransform, type PlanWall } from '../../services/planPlacement'
+import { placementPose, roomEdgeWalls, type PlanTransform, type PlanWall } from '../../services/planPlacement'
 import ObjectModel from './ObjectModels'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -170,11 +170,14 @@ export default function PlacedObjectsLayer() {
     const onLevel = (w: { level?: number }) => (w.level ?? 0) === level
     const walls = drawing.parsedWalls
     const wallMounted = isWallMountedType(obj.type)
+    const detected = walls.filter((w) => w.source !== 'user' && onLevel(w)) as PlanWall[]
     const pose = placementPose({
       x, z,
       transform: planTransform,
       tracedWalls: walls.filter((w) => w.source === 'user' && onLevel(w)) as PlanWall[],
-      detectedWalls: walls.filter((w) => w.source !== 'user' && onLevel(w)) as PlanWall[],
+      // Same last-resort tier as placement: a practice preset carries no walls,
+      // only rooms, and a door dragged there must still find the line.
+      detectedWalls: detected.length > 0 ? detected : roomEdgeWalls(drawing.parsedRooms ?? []),
       wallMounted,
       // No wall near enough to have an opinion → keep the angle it already has.
       // A drag must never quietly spin something back to due north.
