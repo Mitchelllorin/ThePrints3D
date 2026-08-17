@@ -245,6 +245,99 @@ function buildCards(): KnowledgeCard[] {
       keywords: ['foundation', 'footing', 'excavation', 'slab', 'basement', 'crawl', 'depth', k, ...tokenize(v.label), ...tokenize(v.note)],
     })
   }
+  /**
+   * MEP ROUGH-IN — the rules that decide where a pipe or a wire is ALLOWED to
+   * go, not just where it looks nice.
+   *
+   * Researched and written down here rather than left in a chat, because these
+   * are the numbers the auto-router has to obey and the ones a tradesperson
+   * will check us against. Every one of them is a hard limit: break it and the
+   * model is showing work that would fail an inspection.
+   */
+  const MEP_ROUGH_IN: Omit<KnowledgeCard, 'keywords'>[] = [
+    {
+      id: 'mep-sequence',
+      trade: 'general',
+      title: 'Rough-in sequence — and why it is that order',
+      answer:
+        'After framing, before insulation and drywall, with the walls open: plumbing, then electrical, then HVAC, then low voltage — scheduled apart so trades are not fighting for the same bay. The rule underneath the order is LEAST FLEXIBLE FIRST. DWV is gravity-driven so its slope is not negotiable; ducts are big and barely bend; supply water bends more; wire bends anywhere. Route in that order and the flexible systems work around the constrained ones.',
+      source: 'Trade practice — MEP rough-in sequencing',
+    },
+    {
+      id: 'plumb-dwv-slope',
+      trade: 'plumbing',
+      title: 'DWV drain slope',
+      answer:
+        'Drains 3" and smaller: 1/4" per foot (1:48). Sewer mains 4" and larger: 1/8" per foot is usually permitted. Too steep is a DEFECT, not a bonus — the liquid outruns the solids, which strand and block. Horizontal vents also slope 1/4" per foot back toward the drain so water cannot stand in them.',
+      source: 'IPC / UPC drainage',
+    },
+    {
+      id: 'plumb-dwv-sizes',
+      trade: 'plumbing',
+      title: 'DWV stack and branch sizes',
+      answer:
+        'Main stack 3–4" running straight up and out through the roof. Secondary stacks 2–3" serving a branch. Fixture branch drains 1 1/2–2". Turns use sweeping fittings, never abrupt ones, so waste is carried rather than caught.',
+      source: 'IPC drainage sizing',
+    },
+    {
+      id: 'plumb-vent-height',
+      trade: 'plumbing',
+      title: 'Vent must rise above the flood rim',
+      answer:
+        'A vent has to rise above the flood rim level of the highest fixture it serves BEFORE it runs horizontally. Run it horizontal too low and a blocked drain pushes waste into the vent.',
+      source: 'IPC venting',
+    },
+    {
+      id: 'framing-bore-stud',
+      trade: 'framing',
+      title: 'Boring a stud — how big, how close',
+      answer:
+        'Bore up to 60% of the stud width. Over 40% in an exterior wall or bearing partition and the stud must be DOUBLED, with no more than two successive doubled studs bored. Keep the hole edge at least 5/8" from the edge of the stud, and never in the same section as a notch.',
+      source: 'IRC R602.6',
+    },
+    {
+      id: 'framing-notch-stud',
+      trade: 'framing',
+      title: 'Notching a stud',
+      answer:
+        'Exterior wall or bearing partition: notch no deeper than 25% of the stud width. Non-bearing partition: up to 40%. Notching is always the worse option — bore if you can.',
+      source: 'IRC R602.6',
+    },
+    {
+      id: 'framing-bore-joist',
+      trade: 'framing',
+      title: 'Boring a joist',
+      answer:
+        'Holes up to 1/3 of the joist depth — a 2x10 takes about a 3 1/16" hole — kept at least 2" clear of both the top and bottom edges. Bored holes are allowed ANYWHERE in the span, including the middle third where notches are not.',
+      source: 'IRC R502.8',
+    },
+    {
+      id: 'framing-notch-joist',
+      trade: 'framing',
+      title: 'Notching a joist',
+      answer:
+        'Notches no deeper than 1/6 of the depth, no longer than 1/3 of the depth, and never in the middle third of the span — that is where the bending stress lives.',
+      source: 'IRC R502.8',
+    },
+    {
+      id: 'elec-bore-clearance',
+      trade: 'electrical',
+      title: 'Cable through a bored hole — 1 1/4" or a nail plate',
+      answer:
+        'The edge of the hole must be at least 1 1/4" from the face of the stud, or the cable gets a steel nail plate at least 1/16" thick. A 2x4 is 3 1/2" actual, so a CENTRED hole leaves exactly 1 1/4" each side — dead on the limit. Anywhere off centre, or any 2x3 or furring, and the plate is not optional.',
+      source: 'NEC 300.4(A)(1) / 300.4(D)',
+    },
+  ]
+  for (const card of MEP_ROUGH_IN) {
+    add({
+      ...card,
+      keywords: [
+        ...tokenize(card.title), ...tokenize(card.answer), ...tokenize(card.source),
+        'rough', 'rough-in', 'mep', 'code', card.trade,
+      ],
+    })
+  }
+
   const frost = (excavation as Record<string, unknown>).frostLineDepths as
     | Record<string, { depthM: number; label: string }>
     | undefined
