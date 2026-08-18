@@ -1,10 +1,31 @@
 """
 CubiCasa5k dataset loader for wall segmentation training.
 
+!! LICENCE BLOCKER - DO NOT SHIP A MODEL TRAINED ON THIS !!
+-----------------------------------------------------------
+CubiCasa5k is CC BY-**NC** 4.0 (NonCommercial). Its own LICENSE file and its
+Zenodo record both say so:
+    https://github.com/CubiCasa/CubiCasa5k/blob/master/LICENSE
+
+An earlier version of THIS docstring claimed CC BY 4.0. That was wrong, and the
+claim is repeated here only to kill it: the correction lived in README.md while
+this file — the one you actually open to start a training run — went on saying
+the permissive thing. Weights are a derivative work of the data they were fit
+to, so training a SHIPPED model on this is a licence violation.
+
+The detection engine is proprietary. Anything trained here must come from data
+we are free to commercialise, which today means `synth.py` (our own copyright,
+perfect ground truth, unlimited volume) or a corpus we hold a commercial
+licence to. The loader below is licence-agnostic and works with either.
+
+`data/test-prints/` is a separate matter and stays that way: those government
+drawing sets are for MEASURING a model, never for training one.
+
 Dataset source
 --------------
 CubiCasa5k is an open dataset of ~5,000 annotated floor-plan images released
-by Cubicasa under the Creative Commons Attribution 4.0 International licence.
+by Cubicasa under the Creative Commons Attribution-NonCommercial 4.0
+International licence.
 
   Paper : "CubiCasa5K: A Dataset and an Improved Multi-Task Model for
            Floorplan Image Analysis" (Kalervo et al., 2019)
