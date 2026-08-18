@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { roomKindOf, looksLikeRoomName, cleanRoomLabel, statedAreaSqM } from './roomNames'
+import { roomKindOf, looksLikeRoomName, cleanRoomLabel, statedAreaSqM, isPlausibleRoomLabel } from './roomNames'
 import { isWetRoom } from './wetWalls'
 
 describe('roomKindOf', () => {
@@ -105,5 +105,28 @@ describe('statedAreaSqM', () => {
   it('returns null when no area is stated', () => {
     expect(statedAreaSqM('BEDROOM')).toBeNull()
     expect(statedAreaSqM('5,37 m')).toBeNull()
+  })
+})
+
+describe('isPlausibleRoomLabel', () => {
+  it('accepts real labels, including ones no lexicon has', () => {
+    for (const good of ['Bathroom', 'LIVING ROOM AREA', 'Entry Hall', 'REC RM 2', 'MBR']) {
+      expect(isPlausibleRoomLabel(good)).toBe(true)
+    }
+  })
+
+  it('rejects the junk that named rooms on the ADU screenshot', () => {
+    // All of these were promoted to room tags by the ALL-CAPS fallback and went
+    // on to name rooms. A wrongly named room changes what gets built.
+    for (const bad of ['TOTAL AREA = 71 m?', 'E', 'J', '5,37 m', '71', '', '4,5 m²']) {
+      expect(isPlausibleRoomLabel(bad)).toBe(false)
+    }
+  })
+
+  it('rejects text about the drawing rather than a space in it', () => {
+    for (const bad of ['SCALE 1:50', 'SHEET NO. 3', 'GROSS AREA', 'PROJECT NORTH',
+                       'AREA = 71 m?', 'TOTAL = 71']) {
+      expect(isPlausibleRoomLabel(bad)).toBe(false)
+    }
   })
 })

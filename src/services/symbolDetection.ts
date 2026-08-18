@@ -9,7 +9,7 @@ import type {
   ParsedWall,
 } from '../types'
 import type { RasterTextToken } from './pdfRasterizer'
-import { looksLikeRoomName, cleanRoomLabel } from './roomNames'
+import { looksLikeRoomName, cleanRoomLabel, isPlausibleRoomLabel } from './roomNames'
 
 interface DetectSemanticEntitiesInput {
   classifiedLines: ClassifiedLine[]
@@ -86,8 +86,15 @@ function classifyTextKind(text: string): ParsedTextEntity['kind'] {
   // hand you — the ADU screenshot says "Bathroom" and "Living Area", which the
   // caps-only test rejected. Vocabulary first, caps as a fallback for the
   // labels no lexicon will ever cover ("REC RM 2", "AREA B").
-  if (looksLikeRoomName(value)) return 'room_tag'
-  if (/[A-Z]/.test(value) && value === value.toUpperCase() && /[A-Z]/.test(value[0])) {
+  if (looksLikeRoomName(value) && isPlausibleRoomLabel(value)) return 'room_tag'
+  // The caps fallback covers labels no lexicon will have ("REC RM 2"), but it
+  // must still look like a NAME — see isPlausibleRoomLabel. Unguarded it
+  // promoted "TOTAL AREA = 71 m?" and stray OCR characters, and those went on to
+  // name rooms, which decides whether a wall gets tile backer.
+  if (
+    /[A-Z]/.test(value) && value === value.toUpperCase() && /[A-Z]/.test(value[0]) &&
+    isPlausibleRoomLabel(value)
+  ) {
     return 'room_tag'
   }
   if (/^(section|detail|elevation)\b/i.test(value)) {

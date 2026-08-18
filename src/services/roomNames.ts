@@ -134,3 +134,38 @@ export function statedAreaSqM(text: string): number | null {
   }
   return null
 }
+
+/**
+ * IS THIS TEXT PLAUSIBLY A ROOM'S NAME AT ALL.
+ *
+ * The ALL-CAPS fallback that promotes a token to a room tag is useful — plenty
+ * of real labels ("REC RM 2", "AREA B") are in no lexicon — and far too eager on
+ * its own. On the ADU capture it promoted "TOTAL AREA = 71 m?" and a scatter of
+ * single OCR characters, and those went on to NAME rooms. That is not cosmetic:
+ * a room called BATH gets tile backer instead of gypsum, so a wrongly named room
+ * changes what gets built and quoted.
+ *
+ * A name is mostly letters, has at least a short word in it, and is not a
+ * measurement. Anything that states an area or reads as a bare dimension is a
+ * number the drawing is telling us, not a room.
+ */
+export function isPlausibleRoomLabel(text: string | undefined | null): boolean {
+  if (!text) return false
+  const value = text.trim()
+  if (value.length < 3) return false
+  // A stated measurement is a figure, not a name.
+  if (statedAreaSqM(value) != null) return false
+  if (/^\s*[\d.,]+\s*(m|mm|cm|ft|in|")?\s*$/i.test(value)) return false
+  const letters = (value.match(/[A-Za-z]/g) ?? []).length
+  if (letters < 3) return false
+  // Mostly letters, not a figure with a word attached.
+  if (letters / value.replace(/\s/g, '').length < 0.5) return false
+  // A room is never named with an equals or a colon. That is a schedule entry,
+  // a scale note or a callout — "AREA = 71 m?" got through every other check
+  // here and went on to name a room, because "AREA" is four honest letters.
+  if (/[=:]/.test(value)) return false
+  // "TOTAL AREA", "GROSS AREA", schedules and title blocks are about the
+  // drawing, not a space inside it.
+  if (/\b(total|gross|net|scale|sheet|drawn|date|rev|no\.?|project|client)\b/i.test(value)) return false
+  return true
+}

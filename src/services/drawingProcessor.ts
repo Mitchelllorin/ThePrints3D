@@ -15,7 +15,7 @@ import { inferCorners } from './wallTraceReducer'
 import { setInkBuffer } from './inkRaster'
 import { normalizeForDetection } from './rasterNormalize'
 import { ocrRaster, shouldOcr, groupIntoLines } from './ocr'
-import { statedAreaSqM } from './roomNames'
+import { statedAreaSqM, looksLikeRoomName } from './roomNames'
 import { scaleFromTotalArea, footprintAreaPx } from './scaleInference'
 
 export type DrawingPatch = Partial<Drawing>
@@ -330,6 +330,18 @@ export async function processDrawing(
     // 6. Extract enclosed room regions from the rasterized image
     const rooms = extractRooms(detectImage, {
       scaleMmPerPx: effectiveScale,
+      /**
+       * The drawing's own labels, as ground truth for the fill.
+       *
+       * Five room names means five rooms, so a fill that swallows two of them
+       * has escaped through a doorway and the extractor can widen its seal and
+       * try again. Only tokens that actually NAME a room are passed — a
+       * dimension or a title block is not an interior point, and seeding on one
+       * would ask the extractor to justify a room that is not there.
+       */
+      labels: textTokens
+        .filter((t) => looksLikeRoomName(t.text))
+        .map((t) => ({ x: t.x, y: t.y })),
     })
 
     // 7. Detect door/window openings — and REJOIN the walls they interrupt.
