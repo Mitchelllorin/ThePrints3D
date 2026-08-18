@@ -3,7 +3,6 @@
 ThePrints3D turns 2D construction prints and drawing sets into an interactive 3D workspace. It is a React and TypeScript web app that can also be packaged for Android with Capacitor.
 
 - Website: <https://theprints3d.com>
-- Google Play: <https://play.google.com/store/apps/details?id=com.theprints3d.app>
 - Companion marketing site: <https://github.com/Mitchelllorin/ThePrints3D---Site>
 
 ## What the app does
@@ -14,7 +13,7 @@ ThePrints3D turns 2D construction prints and drawing sets into an interactive 3D
 - Renders drawings as an interactive Three.js building model with camera controls, layer visibility, explode controls, element editing, annotations, distance measurement, and PNG snapshots.
 - Supports trade and construction layers, including framing, floors, roofs, drywall, envelope, plumbing, electrical, and HVAC content.
 - Provides material takeoffs, a CSV export for unlocked Pro users, construction calculators, and unit conversion.
-- Stores saved projects and their drawing data locally in IndexedDB. The free tier keeps one saved project; the Android build can offer a one-time Google Play Pro unlock for additional gated features.
+- Stores saved projects and their drawing data locally in IndexedDB. The free tier keeps one saved project; additional project and export features are gated by the in-app Pro entitlement.
 
 The core drawing-to-model workflow runs in the client. An optional Ask AI proxy can be configured at build time, and product-catalog links deliberately open third-party sites when a user chooses them.
 
@@ -69,15 +68,15 @@ docs/            Play Store listing and release guidance
 proxy/           optional Cloudflare Worker for Ask AI
 ```
 
-## Android and Google Play
+## Android release configuration
 
 The Android application ID and Capacitor app ID are `com.theprints3d.app`. The app declares network access and Android 13+ image-read access for importing drawing images. It does not declare video-read access.
 
-`npm run build:android` builds the web application and runs `cap sync android`. For a signed release bundle, follow [`docs/play-store-release.md`](docs/play-store-release.md). The `Build Android AAB` workflow runs manually or for tags matching `v*`; it builds a signed AAB when the required Android keystore secrets are available and publishes the bundle as a workflow artifact.
+`npm run build:android` builds the web application and runs `cap sync android`. For a signed release bundle, follow [`docs/play-store-release.md`](docs/play-store-release.md). The `Build Android AAB` workflow runs manually or for tags matching `v*`; it builds a signed AAB when the required Android keystore secrets are available and publishes the bundle as a workflow artifact. This repository does not confirm publication to a public app store.
 
 ## Web pages and deployment
 
-The production web build is generated in `dist/`. This repository also contains static landing, privacy, and data-safety pages in `public/`. On pushes to `main` that change those files, `.github/workflows/deploy-site.yml` publishes them to GitHub Pages for `theprints3d.com`.
+The production web build is generated in `dist/`. This repository also contains legacy static landing, privacy, and data-safety pages in `public/`. On pushes to `main` that change those files, `.github/workflows/deploy-site.yml` publishes them to this repository's default GitHub Pages project URL. The companion marketing repository owns production `theprints3d.com`.
 
 The app manifest is in `public/manifest.json`. The bundled PWA precaches application assets while treating PDF files as network-only runtime resources.
 
