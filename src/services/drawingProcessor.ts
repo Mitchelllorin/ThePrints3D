@@ -13,6 +13,7 @@ import { detectSemanticEntities } from './symbolDetection'
 import { filterWallsForNoisyPrint } from './noisyPrintFilter'
 import { inferCorners } from './wallTraceReducer'
 import { setInkBuffer } from './inkRaster'
+import { normalizeForDetection } from './rasterNormalize'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -48,7 +49,36 @@ export async function processDrawing(
     const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8), pageOverride)
     // Cache a grayscale "ink" buffer so tracing can snap to the actual printed
     // line under the stroke — even on lines detection discarded as noise.
-    setInkBuffer(drawing.id, raster.imageData)
+    /**
+     * NORMALISE BEFORE ANYTHING LOOKS AT IT.
+     *
+     * Every stage below compares brightness against a fixed number —
+     * INK_THRESHOLD in inkRaster, WALL_GRAY_THRESHOLD in roomExtractor, and the
+     * ImageNet mean/std the wall model was trained with over clean synthetic
+     * plans. Those constants are right for a PDF render (near-white paper,
+     * near-black ink) and meaningless for a screenshot, whose paper sits around
+     * 200 and whose ink sits around 120 — lighter than both thresholds, so
+     * nothing reads as a wall at all.
+     *
+     * Stretching the print onto the full range first makes one set of constants
+     * correct for every source. A clean PDF is passed through untouched (see
+     * rasterNormalize) so this can only help the broken cases.
+     *
+     * The DISPLAY raster is deliberately left alone: `rasterUrl` below still
+     * points at the original render, because the user should see their drawing,
+     * not our corrected copy of it.
+     */
+    const norm = normalizeForDetection(raster.imageData)
+    let detectImage: ImageData = raster.imageData
+    if (norm.adjusted) {
+      // Copied into a freshly allocated buffer: ImageData will not take an
+      // array that might be backed by a SharedArrayBuffer.
+      const bytes = new Uint8ClampedArray(norm.image.data.length)
+      bytes.set(norm.image.data)
+      detectImage = new ImageData(bytes, norm.image.width, norm.image.height)
+    }
+
+    setInkBuffer(drawing.id, detectImage)
 
     // 2. Discipline gate — skip wall detection on M/E/P/C/L/F/T sheets where
     //    "thick parallels" are ducts/pipes/conduit, not walls.
@@ -98,9 +128,9 @@ export async function processDrawing(
      */
     setProgress(82)
     const isRasterPhoto = drawing.file.type.startsWith('image/')
-    let result = await detectWallsWithAI(raster.imageData)
+    let result = await detectWallsWithAI(detectImage)
     if (!result) {
-      const { result: detected } = await detectWallsOffThread(raster.imageData, [
+      const { result: detected } = await detectWallsOffThread(detectImage, [
         // Strict: reduces annotation noise (text, dimension lines).
         {
           edgeThreshold: isRasterPhoto ? 30 : 34,
@@ -135,8 +165,8 @@ export async function processDrawing(
       walls: result.walls,
       classified: result.classified,
       stats: result.stats,
-      imageWidth: raster.imageData.width,
-      imageHeight: raster.imageData.height,
+      imageWidth: detectImage.width,
+      imageHeight: detectImage.height,
       minWallLengthPx: isRasterPhoto ? 40 : 55,
     })
     const classificationStats = result.stats
@@ -219,7 +249,7 @@ export async function processDrawing(
     })
 
     // 6. Extract enclosed room regions from the rasterized image
-    const rooms = extractRooms(raster.imageData, {
+    const rooms = extractRooms(detectImage, {
       scaleMmPerPx: effectiveScale,
     })
 

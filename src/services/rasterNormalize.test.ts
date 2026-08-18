@@ -107,7 +107,7 @@ describe('normalizeForDetection', () => {
 
   it('handles a dark scan as well as a washed-out one', () => {
     // Underexposed: everything crushed toward black.
-    const dark = raster(60, 60, (x, y) => (x % 15 === 0 ? 4 : 70))
+    const dark = raster(60, 60, (x) => (x % 15 === 0 ? 4 : 70))
     const r = normalizeForDetection(dark)
     expect(r.adjusted).toBe(true)
     expect(inkStats(r.image).contrast).toBeGreaterThan(180)
