@@ -7,9 +7,9 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vite.dev/)
 [![PWA Ready](https://img.shields.io/badge/PWA-ready-5A0FC8?logo=pwa)](https://web.dev/progressive-web-apps/)
 
-**Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely in the browser.**
+**Turn 2D prints and drawings into interactive, explodable 3D models — right on your phone or in the browser.**
 
-ThePrints3D is a React + TypeScript web application that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. All processing happens client-side — no drawings ever leave your device.
+ThePrints3D is a React + TypeScript app for web and Android that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. Core processing stays on-device, so drawings do not have to leave your phone or browser just to become a model.
 
 🌐 **[Website](https://theprints3d.com)** &nbsp;|&nbsp; 📱 **[Get it on Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app)**
 
@@ -162,6 +162,17 @@ A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smo
 | PWA | vite-plugin-pwa + Workbox |
 | Testing | Vitest |
 | Linting | ESLint 10 + typescript-eslint |
+
+---
+
+## Privacy and Play Store
+
+- **Privacy policy:** `https://theprints3d.com/privacy`
+- **Data safety page:** `https://theprints3d.com/data-safety`
+- **Google Play:** `https://play.google.com/store/apps/details?id=com.theprints3d.app`
+- **Privacy contact:** `privacy@theprints3d.com`
+
+The Android app package name is `com.theprints3d.app`. Use the live URLs above for Play Console metadata.
 
 ---
 
