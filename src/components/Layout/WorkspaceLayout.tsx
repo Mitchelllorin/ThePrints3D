@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import CameraCapture from '../Upload/CameraCapture'
+import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
+import ProjectLibrary from '../Projects/ProjectLibrary'
+import AssistantBubble from './AssistantBubble'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -13,10 +17,15 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
+import UpgradeSheet from '../Pro/UpgradeSheet'
+import ProSection from '../Pro/ProSection'
+import { hasToured, markToured } from '../../onboarding/firstRun'
+import { watermarkedPng } from '../../services/watermark'
 import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/stairs'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { HEATING_SYSTEMS, type HeatingType } from '../../services/tradeRules'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useConfigStore, type ActiveUnit } from '../../store/useConfigStore'
 import styles from './WorkspaceLayout.module.css'
@@ -170,6 +179,7 @@ function SettingsContent() {
   const resetCfg = useConfigStore((x) => x.reset)
   const previewMode = useAppStore((x) => x.previewMode)
   const setPreviewMode = useAppStore((x) => x.setPreviewMode)
+  const isPro = useAppStore((x) => x.isPro)   // titles the Pro section
 
   // Single-open accordion, matching the panel tab strip's toggle behaviour.
   const [openId, setOpenId] = useState<string | null>('appearance')
@@ -226,6 +236,34 @@ function SettingsContent() {
         <Slider label="Deflection gap" val={cfg.steelDeflectionGapMm} min={0} max={40} step={1} unit="mm" onChange={(v) => setCfg({ steelDeflectionGapMm: v })} />
       </CollapsibleSection>
 
+      {/* WALL DETECTION — the dial for "it is picking up everything, not just
+          walls". The panel was written, wired to the store, given six sliders
+          with real hints and reset buttons — and imported by nothing, so the
+          one control that answers the commonest complaint about the detector
+          had no door. Inline here rather than as its own modal: it is a tool
+          you use WHILE looking at the plan it tunes, and a centred dialog
+          covers the very thing you are judging. */}
+      {/* PROJECTS — saving a job, which was not possible at all. projectStorage
+          persists the drawings INCLUDING the raw file blobs to IndexedDB, and
+          ProjectLibrary is a complete save/list/load UI for it — imported by
+          nothing, so an uploaded print died on reload. On a job site that is not
+          a missing feature, it is losing your work. */}
+      <CollapsibleSection id="projects" title="Projects" openId={openId} setOpenId={setOpenId}>
+        <ProjectLibrary inline />
+      </CollapsibleSection>
+
+      {/* PRO — the state of the unlock, and the way back to it after a reinstall
+          or a new phone. Restore has to be findable without buying anything to
+          find it, which is why it sits here rather than only inside the upgrade
+          sheet: someone who has already paid should never be shown a price. */}
+      <CollapsibleSection id="pro" title={isPro ? 'Pro — unlocked' : 'Pro'} openId={openId} setOpenId={setOpenId}>
+        <ProSection />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="detect" title="Wall detection" openId={openId} setOpenId={setOpenId}>
+        <WallCalibrationPanel inline />
+      </CollapsibleSection>
+
       <CollapsibleSection id="build" title="Build output" openId={openId} setOpenId={setOpenId}>
         <Slider label="Floor height" val={cfg.buildFloorHeightM} min={2} max={6} step={0.1} unit="m" onChange={(v) => setCfg({ buildFloorHeightM: v })} />
         <Select label="Type" val={cfg.buildType} options={BUILD_TYPE_OPTIONS} onChange={(v) => setCfg({ buildType: v as BuildingType })} />
@@ -239,7 +277,12 @@ function SettingsContent() {
 
       <CollapsibleSection id="explode" title="Explode" openId={openId} setOpenId={setOpenId}>
         <Slider label="Speed" val={cfg.explodeSpeed} min={0.5} max={12} step={0.5} onChange={(v) => setCfg({ explodeSpeed: v })} />
-        <Slider label="Spread" val={cfg.explodeSpread} min={0} max={3} step={0.1} unit="×" onChange={(v) => setCfg({ explodeSpread: v })} />
+        {/* Ceiling raised 3× → 8×. The old top end was not enough separation to
+            read a wall assembly apart at full explode — layers still overlapped
+            at the point they were meant to be most legible. The default is
+            unchanged, so this only adds room at the far end for anyone who
+            wants it. */}
+        <Slider label="Spread" val={cfg.explodeSpread} min={0} max={8} step={0.1} unit="×" onChange={(v) => setCfg({ explodeSpread: v })} />
         {EXPLODE_SYSTEMS.map((sys) => (
           <Slider
             key={sys.key}
@@ -256,6 +299,43 @@ function SettingsContent() {
 
       <CollapsibleSection id="preview" title="Preview" openId={openId} setOpenId={setOpenId}>
         <Toggle label="Sample room" val={previewMode} onChange={setPreviewMode} />
+      </CollapsibleSection>
+
+      {/* HOW MUCH THE BUILD DOES FOR YOU.
+          These are settings rather than one baked-in behaviour because there is
+          no single right answer: tracing every wall is the point of the app for
+          one person and busywork for the next, and which one you are changes
+          with the job. Defaults are the helpful end; both switches turn off. */}
+      <CollapsibleSection id="buildhelp" title="Build help" openId={openId} setOpenId={setOpenId}>
+        <Toggle
+          label="Presets: trace it yourself"
+          val={ui.presetMode === 'practice'}
+          onChange={(v) => setUI({ presetMode: v ? 'practice' : 'ready' })}
+        />
+        <Toggle
+          label="Carry exterior up a storey"
+          val={ui.autoCarryShellUp}
+          onChange={(v) => setUI({ autoCarryShellUp: v })}
+        />
+      </CollapsibleSection>
+
+      {/* HEATING DECIDES WHICH TRADE OWNS THE WORK, so it belongs with the
+          build decisions and not buried in an HVAC panel. Only forced air has
+          ducts; baseboard is electrical, in-floor is plumbing. It also has to
+          be answered BEFORE devices are placed — a baseboard under a window
+          displaces the receptacle that would otherwise go there. */}
+      <CollapsibleSection id="heating" title="Heating" openId={openId} setOpenId={setOpenId}>
+        {(Object.keys(HEATING_SYSTEMS) as HeatingType[]).map((key) => (
+          <button
+            key={key}
+            className={`${styles.specBtn} ${ui.heatingType === key ? styles.specBtnOn : ''}`}
+            onClick={() => setUI({ heatingType: key })}
+            aria-pressed={ui.heatingType === key}
+          >
+            {HEATING_SYSTEMS[key].label}
+          </button>
+        ))}
+        <p className={styles.sectionNote}>{HEATING_SYSTEMS[ui.heatingType].note}</p>
       </CollapsibleSection>
 
       <CollapsibleSection id="wordmark" title="3D wordmark" openId={openId} setOpenId={setOpenId}>
@@ -401,6 +481,13 @@ function ConverterPanel() {
 // ── Layout ───────────────────────────────────────────────────────────────────
 export default function WorkspaceLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // SCAN means the camera. It called the same file picker as Browse, so the two
+  // chips were the same button wearing different words — and the one thing a
+  // tradesperson actually does on site, photograph the print on the tailgate,
+  // took as many taps as digging through the gallery. CameraCapture already
+  // existed and was already wired into DrawingUploader; the workspace chip just
+  // never reached it.
+  const [scanOpen, setScanOpen] = useState(false)
 
   // Auto-build DISABLED — the user builds by tracing (this "model builds itself"
   // behaviour was deliberately reverted; re-enabling it auto-laid slabs coplanar
@@ -408,9 +495,19 @@ export default function WorkspaceLayout() {
   // useAutoBuild()
 
   const drawings            = useAppStore((s) => s.drawings)
+  const selectedDrawingId   = useAppStore((s) => s.selectedDrawingId)
+  const reprocessDrawing    = useAppStore((s) => s.processDrawing)
   const addDrawings         = useAppStore((s) => s.addDrawings)
   const loadPresetDrawing   = useAppStore((s) => s.loadPresetDrawing)
+  const presetMode          = useUISettingsStore((s) => s.presetMode)
+  const setUI               = useUISettingsStore((s) => s.set)
+  const showcaseCladding    = useUISettingsStore((s) => s.cladding)
   const hasHistory = useAppStore((s) => s.historyPast.length > 0)
+  const selectionGranularity = useFloorplanLocalStore((s) => s.selectionGranularity)
+  const selectedMemberLabel = useFloorplanLocalStore((s) => s.selectedMemberLabel)
+  const isolatedMemberId = useFloorplanLocalStore((s) => s.isolatedMemberId)
+  const setIsolatedMember = useFloorplanLocalStore((s) => s.setIsolatedMember)
+  const setSelectionGranularity = useFloorplanLocalStore((s) => s.setSelectionGranularity)
   const traceModeActive = useFloorplanLocalStore((s) => s.traceMode)
   const traceStartPt = useFloorplanLocalStore((s) => s.traceStart)
   const pendingTrace = useFloorplanLocalStore((s) => s.pendingWalls)
@@ -440,6 +537,8 @@ export default function WorkspaceLayout() {
   // once there's a standing model to grab.
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
+  /** The one-time unlock — decides the export watermark and the gated verbs. */
+  const isPro = useAppStore((s) => s.isPro)
   // Happy-place invariant: no drawer over the workspace while tracing.
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
@@ -451,23 +550,6 @@ export default function WorkspaceLayout() {
   useEffect(() => {
     if (editMode && actionActive) setEditMode(false)
   }, [editMode, actionActive, setEditMode])
-  const buildResult = useAppStore((s) => s.buildResult)
-  const modelStatus = useAppStore((s) => s.model.status)
-  const floorCount = useAppStore((s) => s.floorsAreas.length)
-  const roofCount = useAppStore((s) => s.roofAreas.length)
-  const objectCount = useAppStore((s) => s.placedObjects.length)
-  // Traced WALLS and trade runs count as something to edit too. They didn't, and
-  // walls are the main thing you trace — so a plan with walls on it and nothing
-  // else offered no Edit button at all, even though the edit rail handles walls
-  // and runs fully. Worse since the model reflects tracing live: there is no
-  // build step left to flip buildResult, so on a walls-only plan NOTHING here was
-  // ever true and Edit simply never appeared.
-  const wallCount = useAppStore((s) => {
-    let n = 0
-    for (const d of s.drawings) for (const w of d.parsedWalls) if (w.source === 'user') n++
-    return n
-  })
-  const runCount = useAppStore((s) => s.plumbingLines.length + s.electricalLines.length + s.hvacLines.length)
   // Floors the user actually HAS, from what they've traced/placed — not from
   // model.floorLevels, which only exists after a build. The floor bar (fade +
   // isolate) was gated on the built model, so on an unbuilt plan it never
@@ -489,12 +571,6 @@ export default function WorkspaceLayout() {
     () => (floorKey ? floorKey.split(',').map(Number) : []),
     [floorKey],
   )
-  // Reachable once there's ANYTHING to grab — a built model, or any traced wall,
-  // floor, roof, run or placed object. If you can select it, you can edit it, so
-  // the same things that make a selection possible make Edit reachable.
-  const built = buildResult !== null || modelStatus === 'ready'
-    || floorCount > 0 || roofCount > 0 || objectCount > 0
-    || wallCount > 0 || runCount > 0
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
   // What the selection can be told to do. Buttons, not handles — see selectionEdit.
@@ -505,6 +581,24 @@ export default function WorkspaceLayout() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
+
+  /**
+   * AUTO-LANDING IN PLAN IS PULLED for now — the manual toggle stays.
+   *
+   * Opening a new drawing straight into plan is right, and the flow is what the
+   * user asked for. But on load it raced the build: the print ended up hidden
+   * along with the model (4 meshes visible, 1471 hidden) and plan came up
+   * blank. The PLAN button in the rail works reliably because by then
+   * everything has settled, so that is what ships tonight rather than a broken
+   * first impression. Re-land this once entering plan waits for the overlay and
+   * the build to be ready, instead of firing on the status flag.
+   */
+  const wallDetailExplode = useFloorplanLocalStore((s) => s.wallDetailExplode)
+  const setWallDetailExplode = useFloorplanLocalStore((s) => s.setWallDetailExplode)
+  const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
+  const setDetailExplodeId = useFloorplanLocalStore((s) => s.setDetailExplodeId)
+  const activePanel = useFloorplanLocalStore((s) => s.activePanel)
+  const openSelectionPanel = useFloorplanLocalStore((s) => s.openSelectionPanel)
   const stairEdit = useMemo(() => {
     if (editSelected?.kind !== 'object') return null
     const o = placedObjects.find((x) => x.id === editSelected.id)
@@ -561,12 +655,15 @@ export default function WorkspaceLayout() {
     closePanels()
   }
 
+  // Free exports carry a corner mark; Pro exports the canvas untouched. The
+  // export itself is never blocked — a share is how other trades find the app,
+  // so the free tier keeps it and simply signs it.
   const sharePng = () => {
     const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
     if (!canvas) return
     try {
       const a = document.createElement('a')
-      a.href = canvas.toDataURL('image/png')
+      a.href = isPro ? canvas.toDataURL('image/png') : watermarkedPng(canvas)
       a.download = `theprints3d-${Date.now()}.png`
       a.click()
     } catch (e) {
@@ -586,22 +683,122 @@ export default function WorkspaceLayout() {
 
   const handleLoadPreset = (presetId: PresetDifficulty) => {
     try {
-      loadPresetDrawing(presetId, true)
+      // PRACTICE IS A CHOICE, NOT THE ONLY OPTION.
+      //
+      // This passed a hard-coded `true` — practice mode — which strips
+      // parsedWalls to []. The walls then exist only as ink on the image, and
+      // everything that reasons about walls has nothing to reason about: doors
+      // have nothing to orient to or seat into, "Find the rest" has no seed, the
+      // envelope has no perimeter. And there was no UI anywhere to turn it off,
+      // so it was not a choice anyone could make.
+      //
+      // Practice is right for someone learning to read a plan, which is who a
+      // preset is for, so it is the DEFAULT again — a preset that arrives as a
+      // finished house leaves nothing to practise on. 'ready' is one switch
+      // away for when you want the shell handed to you. See Settings → Build
+      // help.
+      loadPresetDrawing(presetId, presetMode === 'practice')
       // UX convention: a one-shot pick (preset, file, etc.) retracts the panel.
       closePanels()
     } catch (error) {
       console.error('Failed to load preset:', presetId, error)
     }
   }
+  /**
+   * A FINISHED HOUSE, STANDING, IN ONE TAP.
+   *
+   * Every other way in gives you a job to do: a preset is a print to trace, an
+   * upload is a print to build. Nothing in the app ever just SHOWED you the
+   * thing the app makes. That left no way to see what you were working towards
+   * before doing the work — and no way to hand someone the phone and let them
+   * turn a building over in their hands.
+   *
+   * Not a special mode and not a canned scene: it is the ordinary preset path
+   * with the switches set the way they would be at the END of a build — walls
+   * in the data rather than stripped out, and finishes applied instead of
+   * waiting to be asked for. So everything works on it exactly as it works on
+   * a model you built: explode, x-ray, layers, edit, inspect, measure.
+   */
+  const loadShowcaseModel = () => {
+    try {
+      // 'hard' is Two-Storey with Garage. 'medium' is the Three-Bed Ranch —
+      // a single storey that merely SHIPS a second-floor sheet, so it loads as
+      // one level with an empty floor above and shows none of the stacking.
+      loadPresetDrawing('hard', false)
+      /**
+       * THE SHOWCASE MUST NOT REWRITE YOUR SETTINGS.
+       *
+       * Turning the finish layers on is right HERE — the whole point of this
+       * model is to be looked at, and a dried-in shell is not that. But these
+       * writes persist, so pressing Practice model once switched sheathing and
+       * board on for every project afterwards, including a real print uploaded
+       * later. The user found exactly that: walls popping out with sheathing
+       * and board on despite both being off by default.
+       *
+       * Sheathing and board stay OFF. They are interior/structural layers you
+       * turn on to inspect, and a showcase does not need them to look finished
+       * — what makes it read as a house is the cladding and the wrap, which is
+       * all this now enables. Anyone who wants to see the sheathing has a
+       * toggle for it, and it is no longer decided for them behind their back.
+       */
+      setUI({
+        finishesApplied: true,
+        wrapVisible: true,
+        claddingVisible: true,
+        // Default cladding is 'none' — a dried-in shell. A showcase should be
+        // clad, or the exterior reads as unfinished.
+        cladding: showcaseCladding === 'none' ? 'fiber-cement-lap' : showcaseCladding,
+      })
+      // Stand the upper storey up too. Carrying the shell up normally happens
+      // the moment you MOVE to floor 2 — nobody has moved anywhere here, so a
+      // showcase would otherwise be a two-storey house with an empty second
+      // floor, which is the one thing it must not be.
+      // NO CARRY-UP HERE, deliberately, having tried it.
+      //
+      // Carrying the shell up adds level-1 walls to the SAME drawing, but the
+      // storey list is computed from drawings — so the building never learns it
+      // has two floors. The shell then gets derived for one storey and the ROOF
+      // lands at level 0, underneath the second storey's walls. A house with
+      // its roof in the middle of it.
+      //
+      // Openings do not carry either, so the upper floor came out a windowless
+      // box. A correct one-storey house beats a broken two-storey one; proper
+      // multi-storey wants the storey list fixed first, which is its own job.
+      // ORDER MATTERS, and getting it wrong is what put studs through the
+      // doorways. The framing engine reads its openings from PLACED OBJECTS —
+      // that is how it knows to skip studs and add king/jack/header. Build
+      // first and it frames a wall with no openings in it, and the doors that
+      // arrive afterwards are just holes with sticks across them.
+      //
+      // So: hang the doors and windows FIRST, then frame around them. Then run
+      // it once more for the roof, because buildForMe derives one and throws it
+      // away (tracing a roof is meant to be an act). The second pass cannot
+      // duplicate anything — openings dedupe on position.
+      useAppStore.getState().finishShell()
+      useAppStore.getState().buildForMe()
+      useAppStore.getState().finishShell()
+      closePanels()
+    } catch (error) {
+      console.error('Failed to load showcase model:', error)
+    }
+  }
+
   // Start the guided "build a whole house" walkthrough. Drops a starter plan
   // first if the workspace is empty so step 1 (the plan) is already satisfied.
   const startGuidedTour = () => {
     if (drawings.length === 0) handleLoadPreset('easy')
+    // Marked on START, not on finish — see onboarding/firstRun.ts. Someone who
+    // bails three steps in has answered the question.
+    markToured()
+    setFirstRun(false)
     startTutorial()
   }
   const hasDrawings = drawings.length > 0
   // Onboarding card persists until a plan is actually loaded — no dismiss.
   const showUploadHint = !hasDrawings
+  /** Never been shown around. Read once into state so the invitation cannot
+   *  flicker away mid-render when the flag is written. */
+  const [firstRun, setFirstRun] = useState(() => !hasToured())
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -633,6 +830,17 @@ export default function WorkspaceLayout() {
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return
 
       const st = useFloorplanLocalStore.getState()
+
+      // 0. A STUCK GESTURE LOCK IS NOT A STATE, SO IT NEVER COSTS A PRESS.
+      //
+      // gestureLock freezes the camera while a layer owns the pointer. It is
+      // released on pointer-up now wherever that happens (see ModelViewer), so
+      // it should never still be up by the time anyone reaches for Escape — but
+      // if it somehow is, the workspace is frozen with nothing on screen to
+      // explain why, and Escape is the one thing everybody tries. Cleared
+      // WITHOUT returning, so this cannot swallow the press that was meant to
+      // close a panel.
+      if (st.gestureLock) st.setGestureLock(false)
 
       // 1. A tool is in your hand — put it down.
       if (st.placeObjectType) { st.setPlaceObjectType(null); return }
@@ -694,7 +902,23 @@ export default function WorkspaceLayout() {
       <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
         multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
-      {/* 3D Viewport — fills the whole screen at all times. */}
+      {scanOpen && (
+        <CameraCapture
+          onCapture={(file) => { setScanOpen(false); addDrawings([file]) }}
+          onClose={() => setScanOpen(false)}
+          /* getUserMedia needs a secure context; over plain LAN http on a phone
+             it is blocked, so fall back to the input, which still opens the
+             rear camera on mobile. */
+          onFallback={() => { setScanOpen(false); fileInputRef.current?.click() }}
+        />
+      )}
+
+      {/* 3D Viewport — fills the whole screen at all times.
+          It briefly shrank while the tour was running, to hand the coach its
+          own band. That was the wrong trade: the print ended up small and shoved
+          to the top of the screen, which is a bigger insult to the drawing than
+          a line of text near its bottom edge ever was. The answer was to make
+          the coach small, not to make the workspace smaller. */}
       <div className={styles.viewport}>
         <ModelViewer />
       </div>
@@ -763,48 +987,129 @@ export default function WorkspaceLayout() {
           grid itself is the drop target, so this is just a whisper + a few chips. */}
       {showUploadHint && (
         <div className={styles.uploadHint}>
-          <p className={styles.uploadHintSub}>Drop a plan on the grid, or start from a preset</p>
+          {/* FIRST LAUNCH LEADS WITH THE TOUR.
+              Everything below this was already here, and that was the problem:
+              a person who has never seen the app was handed seven equal chips —
+              Browse, Scan, Tour, Practice, and three presets — with no way to
+              rank them. Someone who knows the trade but not this app has no
+              reason to read "Tour" as "start here". So on a first run it stops
+              being a sibling and becomes the offer, in a sentence that says what
+              they get; the other doors stay open, one line down, for anyone who
+              would rather dig in. Second launch onward, this collapses back to
+              the row it always was. */}
+          {firstRun ? (
+            <>
+              <p className={styles.uploadHintLead}>New here? I’ll build a whole house with you — floor, walls, roof, pipes and wire — one tap at a time.</p>
+              <button className={styles.uploadHintPrimary} onClick={startGuidedTour}>🎓 Show me how</button>
+              <p className={styles.uploadHintSub}>or start on your own</p>
+            </>
+          ) : (
+            <p className={styles.uploadHintSub}>Drop a plan on the grid, or start from a preset</p>
+          )}
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Browse</button>
-            <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Scan</button>
-            <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Tour</button>
+            <button className={styles.uploadHintChip} onClick={() => setScanOpen(true)}>Scan</button>
+            {!firstRun && <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Tour</button>}
           </div>
+          {/* The only door into a FINISHED house. Everything else here hands
+              you a job; this hands you the result, to turn over and pull
+              apart before deciding whether the work is worth it. */}
+          <button className={styles.showcaseChip} onClick={loadShowcaseModel}>
+            Practice model
+          </button>
           <PresetPanel onLoad={handleLoadPreset} />
         </div>
       )}
 
-      {/* Edit toggle — bottom-left, only when a model is standing AND the
-          workspace is IDLE (no trace/calibration/placement owning it). An action
-          locks the workspace, so edit is only offered between actions. */}
-      {hasDrawings && built && !actionActive && (
-        <div className={styles.editBar}>
-          <button
-            className={`${styles.editToggle} ${editMode ? styles.editToggleOn : ''}`}
-            onClick={() => setEditMode(!editMode)}
-            aria-pressed={editMode}
-          >
-            {editMode ? '✓ Done editing' : '✏️ Edit'}
-          </button>
-          {editMode && <span className={styles.editHint}>Drag anything to move it</span>}
-        </div>
-      )}
+      {/* WHICH SHEET THIS CAME FROM. Say it out loud.
+          A multi-page PDF gets ONE of its sheets picked automatically, and
+          until now the app never mentioned which — you were shown a building
+          with no way of knowing it came from sheet 3 of 6, or that the pick
+          could be wrong. On an instructional brochure it once chose a section
+          drawing and looked simply broken.
+          Only appears when there was a choice to make. Ambient text on the
+          perimeter, not a card: a line you can read and ignore. */}
+      {(() => {
+        const d = drawings.find((x) => x.id === selectedDrawingId) ?? drawings[0]
+        if (!d || d.pageCount <= 1 || d.status === 'processing') return null
+        const go = (page: number) => {
+          if (page >= 1 && page <= d.pageCount) reprocessDrawing(d.id, page)
+        }
+        return (
+          <div className={styles.sheetNote}>
+            <button
+              className={styles.sheetStep}
+              onClick={() => go(d.currentPage - 1)}
+              disabled={d.currentPage <= 1}
+              aria-label="Previous sheet"
+            >‹</button>
+            <span>Sheet {d.currentPage} of {d.pageCount}</span>
+            <button
+              className={styles.sheetStep}
+              onClick={() => go(d.currentPage + 1)}
+              disabled={d.currentPage >= d.pageCount}
+              aria-label="Next sheet"
+            >›</button>
+          </div>
+        )
+      })()}
 
-      {/* Persistent Explode slider — always reachable on its own SOLID surface
-          (so it can't vanish at low UI opacity), bottom-right. RETAINED on mobile
+      {/* Edit lives in the RAIL now (RailCascade), with the other verbs.
+          It floated here at bottom-left, which sat it right beside CLEAR —
+          the adjacency Clear was pushed to the rail foot to avoid. */}
+
+      {/* Persistent Explode slider — a narrow VERTICAL column on the right edge,
+          pulled up rather than dragged sideways, so it takes a strip of chrome
+          instead of a bar across the middle of the bottom. RETAINED on mobile
           even with the Place sheet open (Android parity) — it just lifts above the
           sheet so it never overlaps. Hidden only during calibration. */}
       {hasDrawings && !calibrationMode && !traceMode && (
         <div className={`${styles.explodeBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
+          {/* A little bomb — but DRAWN, not an emoji. Every other icon in this
+              chrome is a thin monochrome glyph taking its colour from the theme;
+              a colour emoji is a filled multi-colour blob and stays one however
+              much you desaturate it. This inherits currentColor, so it dims,
+              highlights and re-themes exactly like the rail does. */}
+          <svg
+            className={styles.explodeIcon}
+            viewBox="0 0 24 24"
+            width="19"
+            height="19"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <title>Explode</title>
+            {/* Comic-book burst: eight spikes, alternating long and short radii
+                about the centre. Drawn rather than typed so it takes
+                currentColor like every other glyph in the chrome. */}
+            <path d="M23 12 18.3 14.6 19.8 19.8 14.6 18.3 12 23 9.4 18.3 4.2 19.8 5.7 14.6 1 12 5.7 9.4 4.2 4.2 9.4 5.7 12 1 14.6 5.7 19.8 4.2 18.3 9.4 Z" />
+            {/* The bomb inside it, with a stub of fuse. */}
+            <circle cx="11.4" cy="12.6" r="3.1" />
+            <path d="M13.6 10.4 15.2 8.8" />
+          </svg>
           <span className={styles.explodeLabel}>Explode</span>
           <input
             className={styles.explodeSlider}
             type="range" min={0} max={1} step={0.01} value={explodeAmount}
             onChange={(e) => setExplodeAmount(Number(e.target.value))}
             aria-label="Explode separation"
+            title="Explode"
           />
-          {explodeAmount > 0 && (
-            <button className={styles.explodeReset} onClick={() => setExplodeAmount(0)} aria-label="Reset explode">Reset</button>
-          )}
+          {/* Reserved even at 0 so the slider never shifts down the moment you
+              touch it — a control that moves under your finger. */}
+          <button
+            className={styles.explodeReset}
+            style={{ visibility: explodeAmount > 0 ? 'visible' : 'hidden' }}
+            onClick={() => setExplodeAmount(0)}
+            aria-label="Reset explode"
+            aria-hidden={explodeAmount === 0}
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -821,6 +1126,50 @@ export default function WorkspaceLayout() {
 
           Lives in the chrome on the right edge, mirroring the left rail, so it
           never sits on top of the thing you are editing. */}
+      {/* WHAT THE NEXT TAP WILL PICK.
+          Shown whenever edit mode is on, with or without a selection — the
+          whole value of a stated mode is knowing BEFORE you tap. Tapping a stud
+          and getting the whole wall is right most of the time and useless the
+          rest of it, and guessing from tap-length or zoom would make an already
+          sensitive editor unpredictable.
+          One switch for the entire model, because the distinction is the same
+          everywhere: wall/stud, deck/joist, roof/rafter. */}
+      {editMode && !traceMode && !calibrationMode && (
+        <div className={styles.grainSwitch}>
+          <span className={styles.grainCaption}>Select</span>
+          <button
+            className={`${styles.grainBtn} ${selectionGranularity === 'assembly' ? styles.grainBtnOn : ''}`}
+            onClick={() => setSelectionGranularity('assembly')}
+            title="Tap picks the whole wall, deck or roof"
+            aria-pressed={selectionGranularity === 'assembly'}
+          >Whole</button>
+          <button
+            className={`${styles.grainBtn} ${selectionGranularity === 'member' ? styles.grainBtnOn : ''}`}
+            onClick={() => setSelectionGranularity('member')}
+            title="Tap picks the single stud, plate, joist or rafter under it"
+            aria-pressed={selectionGranularity === 'member'}
+          >Member</button>
+        </div>
+      )}
+
+      {/* A PICKED MEMBER, named, with the one verb that matters for it.
+          The generic edit rail below is built around assemblies — move, stretch,
+          rotate a wall — and none of that is what you want from a single stud.
+          What you want is to SEE it, so this offers exactly that and says which
+          stick you are holding. */}
+      {editMode && editSelected?.kind === 'member' && !traceMode && !calibrationMode && (
+        <div className={styles.memberRail}>
+          <span className={styles.editRailLabel}>{selectedMemberLabel ?? 'Member'}</span>
+          <button
+            className={`${styles.grainBtn} ${isolatedMemberId ? styles.grainBtnOn : ''}`}
+            onClick={() => setIsolatedMember(isolatedMemberId ? null : editSelected.id)}
+            aria-pressed={!!isolatedMemberId}
+          >
+            {isolatedMemberId ? 'Show all' : 'Isolate'}
+          </button>
+        </div>
+      )}
+
       {editMode && selectionEdit && !traceMode && !calibrationMode && (
         <div className={styles.editRail}>
           <span className={styles.editRailLabel}>{selectionEdit.label}</span>
@@ -872,6 +1221,77 @@ export default function WorkspaceLayout() {
               </div>
             </div>
           )}
+
+          {/* SPECS — the property card, on request only.
+              Selecting something used to raise the card by itself, so you could
+              not tap a thing to nudge it without a panel landing in front of the
+              model. The rail already does move/rotate/stretch/X-ray/delete; this
+              is only for what the rail cannot say — a door's swing, a board type.
+              Tap again to put it away. */}
+          <div className={styles.editRailGroup}>
+            <button
+              className={`${styles.editRailBtn} ${activePanel ? styles.editRailBtnOn : ''}`}
+              aria-pressed={!!activePanel}
+              aria-label={`Specs for this ${selectionEdit.label.toLowerCase()}`}
+              title={activePanel ? 'Hide specs' : `Specs for this ${selectionEdit.label.toLowerCase()}`}
+              onClick={() => openSelectionPanel()}
+            >⋯</button>
+          </div>
+
+          {/* X-RAY — the answer to "how do I make this see-through?".
+              Captioned, not just an icon, because the whole problem was that
+              nobody could find it: it lived inside the wall panel AND the object
+              panel, worded differently in each, and floors and roofs had no way
+              to do it at all. One mark, one word, same place for everything you
+              can select. Accent when it is on, so the rail tells you the state
+              of the thing you are looking at. */}
+          {selectionEdit.xray && (
+            <div className={styles.editRailGroup}>
+              <span className={styles.editRailCaption}>X-ray</span>
+              <button
+                className={`${styles.editRailBtn} ${selectionEdit.xray.on ? styles.editRailBtnOn : ''}`}
+                aria-pressed={selectionEdit.xray.on}
+                aria-label={`X-ray this ${selectionEdit.label.toLowerCase()}`}
+                title={selectionEdit.xray.on
+                  ? 'X-ray on — tap to make solid again'
+                  : `See through this ${selectionEdit.label.toLowerCase()}`}
+                onClick={() => selectionEdit.xray!.toggle()}
+              >◐</button>
+            </div>
+          )}
+
+          {/* EXPLODE PARTS — the second explode, which edit mode had locked out.
+              There have always been two: the slider, which lifts the whole model
+              apart by layer, and this one, which blows a SINGLE thing into its
+              pieces — the studs out of a wall, the parts out of a fixture. But
+              its only buttons lived inside the wall panel and the object panel,
+              and selecting something in edit mode deliberately suppresses those
+              panels (`activePanel: s.editMode ? null : 'wall'`). So the mode was
+              still there and had no door: you could not reach it the new way of
+              working at all.
+              Same remedy as X-ray directly above — one mark, one word, same
+              place, for everything that can express it. */}
+          {(editSelected?.kind === 'wall' || editSelected?.kind === 'object') && (() => {
+            const isWall = editSelected.kind === 'wall'
+            const on = isWall ? wallDetailExplode : detailExplodeId === editSelected.id
+            return (
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Explode</span>
+                <button
+                  className={`${styles.editRailBtn} ${on ? styles.editRailBtnOn : ''}`}
+                  aria-pressed={on}
+                  aria-label={`Explode this ${selectionEdit.label.toLowerCase()} into its parts`}
+                  title={on
+                    ? 'Collapse back together'
+                    : `Explode this ${selectionEdit.label.toLowerCase()} into its parts`}
+                  onClick={() => {
+                    if (isWall) setWallDetailExplode(!wallDetailExplode)
+                    else setDetailExplodeId(on ? null : editSelected.id)
+                  }}
+                >✳</button>
+              </div>
+            )
+          })()}
 
           {/* DELETE. The one verb every selection has, and it was the one the
               rail could not do — each type's delete lived in its own panel, so
@@ -1000,11 +1420,22 @@ export default function WorkspaceLayout() {
       {/* Ambient inference nudge — gentle "snap flush?" prompt, bottom-centre. */}
       <InferencePrompt />
 
-      {/* (Removed: the proactive "next-step" coach cards — redundant with Ask,
-          they floated over other menus and their suggestion order was off.) */}
+      {/* THE NEXT-STEP COACH, back — because with it gone there was no guidance
+          at all. It was pulled for two fair reasons: it floated over other
+          menus, and its suggestion order was wrong. Both are fixed rather than
+          waved away — assistant.ts now requires real walls before it declares
+          the model finished (floor → walls → build → done, in step), and the
+          bubble goes silent whenever a drawer is open, on the same principle as
+          its existing busy gate: if the user is doing something, say nothing.
+          One line at a time, dismissible, with a button that does the step. */}
+      <AssistantBubble />
 
       {/* The guided "build a whole house" walkthrough (its own persistent card). */}
       <TutorialCoach />
+
+      {/* Shown only when a locked feature was reached for — it names what, and
+          renders nothing at all until then. */}
+      <UpgradeSheet />
     </div>
   )
 }

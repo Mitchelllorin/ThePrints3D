@@ -9,6 +9,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Billboard, Text } from '@react-three/drei'
+import { labelText } from './labelStyle'
 import { useExplodeChildren } from './explodeRuntime'
 import { renderWallThicknessM, wallHeightM } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
@@ -18,6 +19,8 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { wallFramingSpec } from '../../services/constructionCode'
+import { XRAY_OPACITY } from './editHelpers'
+import { modelWalls } from '../../services/modelWalls'
 import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import type { ActiveUnit } from '../../store/useConfigStore'
@@ -53,6 +56,7 @@ interface WallMeshProps {
 function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, storeyHeight, detailExplode }: WallMeshProps) {
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
+  const dimensionsVisible = useUISettingsStore((s) => s.dimensionsVisible)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
   // Thickness first — it sets how far to extend ends into a corner.
@@ -135,10 +139,11 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
         rotation={[0, -angle, 0]}
         onDoubleClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleGhostedLevel(wall.level ?? 0) }}
       />
-      {/* Nameplate — the wall's real length while tracing; hidden once built. */}
-      {!built && (
+      {/* Nameplate — the wall's real length while tracing; hidden once built,
+          and hideable outright when a storey full of them stops helping. */}
+      {!built && dimensionsVisible && (
         <Billboard position={[cx, baseY + wallHeight + 0.28, cz]}>
-          <Text fontSize={0.32 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.025 * labelScale} outlineColor="#0b1120">
+          <Text {...labelText(0.46 * labelScale, labelColor)}>
             {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
           </Text>
         </Billboard>
@@ -154,6 +159,7 @@ export default function LiveWallsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const visibleLayers = useAppStore((s) => s.visibleLayers)
   const framingMaterial = useConfigStore((s) => s.framingMaterial)
   const steelGauge = useConfigStore((s) => s.steelGauge)
   const steelTrackTop = useConfigStore((s) => s.steelTrackTop)
@@ -195,15 +201,10 @@ export default function LiveWallsLayer() {
     )
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
-  const userWalls = useMemo(() => {
-    const out: Array<{ wall: ParsedWall; scaleMmPerPx: number | null }> = []
-    for (const d of drawings) {
-      for (const w of d.parsedWalls) {
-        if (w.source === 'user') out.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
-      }
-    }
-    return out
-  }, [drawings])
+  // Traced walls AND detected ones — see modelWalls. Detected walls were built
+  // by nothing, so "Find the rest" changed the data and never the model. Traced
+  // walls stay first in the list, so `selectedWallIndex` still means what it did.
+  const userWalls = useMemo(() => modelWalls(drawings), [drawings])
 
   // Which wall ends meet another wall (shared endpoint, ~4px tolerance) — those
   // are corners, and get extended so the framing joins instead of gapping.
@@ -291,6 +292,12 @@ export default function LiveWallsLayer() {
   const built = buildResult !== null || model.status === 'ready' || model.status === 'building'
 
   if (userWalls.length === 0) return null
+  // The Framing switch in the Layers panel was wired to nothing — no renderer
+  // has ever read `visibleLayers.has('framing')`, so turning it off left every
+  // stud standing. Honouring it here also gives the obvious X-ray for free:
+  // drop the framing and the drywall, sheathing and cladding stay up, because
+  // each of those is its own layer with its own toggle.
+  if (!visibleLayers.has('framing')) return null
 
   return (
     <group name="live-walls" ref={groupRef}>
@@ -317,8 +324,11 @@ export default function LiveWallsLayer() {
           opacity={(() => {
             const level = wall.level ?? 0
             if (isolatedFloor !== null && level !== isolatedFloor) return 0
+            // Per-wall X-ray before the storey ghost, matching every other
+            // layer: your call on this wall beats a floor-wide setting.
+            if (wall.transparent) return XRAY_OPACITY
             if (ghostedLevels.includes(level)) return 0.15
-            return wall.transparent ? 0.16 : built ? 1 : 0.7
+            return built ? 1 : 0.7
           })()}
           built={built}
           activeUnit={activeUnit}

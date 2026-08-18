@@ -33,7 +33,88 @@ import DrywallLayer from './DrywallLayer'
 import EnvelopeLayer from './EnvelopeLayer'
 import PlacedObjectsLayer from './PlacedObjectsLayer'
 import TradeLayersRenderer from './TradeLayersRenderer'
+import TourGhost from './TourGhost'
+import TourUnderReveal from './TourUnderReveal'
+import { TUTORIAL_STEPS, clampStep } from '../../services/tutorial'
+import { requirePro } from '../Pro/usePro'
 import styles from './ModelViewer.module.css'
+
+/**
+ * Dev-only: hand the live scene graph to `window.__scene`.
+ *
+ * The stores are already exposed for the same reason (see main.tsx) — you can
+ * inject a roof area and read it back. But half the questions worth asking are
+ * about what actually got RENDERED: is that wall really see-through, did the
+ * sheathing land on the outside face, are the joists at 16" o.c. The store
+ * cannot answer any of those, and eyeballing a screenshot cannot answer them
+ * precisely. With the scene in hand you measure instead of guess. Stripped in
+ * production builds.
+ */
+function DevSceneHandle() {
+  const { scene, camera } = useThree()
+  useEffect(() => {
+    ;(window as unknown as Record<string, unknown>).__scene = scene
+    // The camera is NOT in the scene graph, so `scene` alone cannot answer
+    // "where are we looking from" — which is exactly the question when a camera
+    // move is meant to have happened and you cannot tell whether it did, or
+    // whether you simply looked a second too late.
+    ;(window as unknown as Record<string, unknown>).__camera = camera
+  }, [scene, camera])
+  return null
+}
+
+/**
+ * THE WORKSPACE GOING BLACK, AND STAYING BLACK.
+ *
+ * A WebGL context is not guaranteed. The GPU driver resets, the OS reclaims
+ * memory, an Android WebView is backgrounded and comes back — any of these fire
+ * `webglcontextlost` on the canvas. This app had no handler for it anywhere,
+ * and the default behaviour of that event is the trap:
+ *
+ *   UNLESS preventDefault() IS CALLED, THE CONTEXT IS NEVER RESTORABLE.
+ *
+ * So the canvas went black and stayed black. Every store still held the right
+ * data, every mesh was still in the scene, no error was thrown, and nothing on
+ * screen said what had happened — the DOM chrome kept painting perfectly,
+ * because only the 3D is WebGL. Nothing short of killing the app brought it
+ * back. That is a dead end in the most literal sense: the state is all there,
+ * and none of it can be drawn.
+ *
+ * Calling preventDefault() asks the browser to give the context back. Three
+ * re-uploads its own buffers and textures on `webglcontextrestored`, so the
+ * scene rebuilds itself and the workspace simply returns.
+ *
+ * Restoration is not promised either, though, so the second half matters as
+ * much as the first: while the context is down we say so, and offer the one
+ * action that always works. A black screen that explains itself and hands you
+ * a way out is a fault; a black screen that does neither is the app being
+ * broken with no way to tell.
+ */
+function WebGLContextGuard({ onLost, onRestored }: { onLost: () => void; onRestored: () => void }) {
+  const { gl, invalidate } = useThree()
+  useEffect(() => {
+    const canvas = gl.domElement
+    const lost = (e: Event) => {
+      // MUST be called, and must be called synchronously here, or the browser
+      // will not attempt to restore the context at all.
+      e.preventDefault()
+      onLost()
+    }
+    const restored = () => {
+      onRestored()
+      // Nudge the loop so the first frame after restore is drawn immediately
+      // rather than whenever something else happens to invalidate.
+      invalidate()
+    }
+    canvas.addEventListener('webglcontextlost', lost as EventListener)
+    canvas.addEventListener('webglcontextrestored', restored)
+    return () => {
+      canvas.removeEventListener('webglcontextlost', lost as EventListener)
+      canvas.removeEventListener('webglcontextrestored', restored)
+    }
+  }, [gl, invalidate, onLost, onRestored])
+  return null
+}
 
 function CameraRig() {
   const { camera } = useThree()
@@ -101,6 +182,73 @@ function OrbitEnabledGuard({ controlsRef, enabled }: {
   useFrame(() => {
     const ctrl = controlsRef.current
     if (ctrl && ctrl.enabled !== enabled) ctrl.enabled = enabled
+  })
+  return null
+}
+
+/**
+ * IDLE SPIN — the model turns itself when you leave it alone.
+ *
+ * A still 3D view reads as a picture. One slow revolution and it reads as a
+ * thing you can walk around, which is the whole pitch in the first two seconds
+ * somebody looks at the screen.
+ *
+ * Rules that keep it from being annoying, which is the real design problem:
+ *   • ANY input stops it dead and restarts the clock — pointer, wheel, key.
+ *     Touching the model must never fight you.
+ *   • It only starts after a real pause (IDLE_MS), so it cannot creep in between
+ *     two deliberate drags.
+ *   • Never while the workspace is busy — tracing, calibrating, placing, editing.
+ *     Those own the view, and a moving camera under a trace is unusable.
+ *   • Slow. This is ambient, not a carousel.
+ * OrbitControls does the spinning itself (autoRotate), so damping, the tether
+ * and the target all keep working exactly as they do under your own hand.
+ */
+const IDLE_MS = 4000
+const IDLE_SPIN_SPEED = 0.35
+
+function IdleSpin({ controlsRef, allowed, force }: {
+  controlsRef: React.MutableRefObject<OrbitControlsImpl | null>
+  allowed: boolean
+  /** Spin NOW, without waiting out the idle timer. The tour's opening line is
+   *  spoken over a turning print — the whole point of that first sentence is
+   *  "this is a model, not a picture", and four seconds of stillness first says
+   *  the opposite. Any input still stops it dead, exactly as before. */
+  force?: boolean
+}) {
+  const { gl } = useThree()
+  const lastInput = useRef(0)
+
+  useEffect(() => {
+    const el = gl.domElement
+    // performance.now() rather than Date.now(): monotonic, and this only ever
+    // measures an elapsed gap.
+    const touch = () => { lastInput.current = performance.now() }
+    touch()
+    const opts = { passive: true } as const
+    el.addEventListener('pointerdown', touch, opts)
+    el.addEventListener('pointermove', touch, opts)
+    el.addEventListener('wheel', touch, opts)
+    window.addEventListener('keydown', touch, opts)
+    return () => {
+      el.removeEventListener('pointerdown', touch)
+      el.removeEventListener('pointermove', touch)
+      el.removeEventListener('wheel', touch)
+      window.removeEventListener('keydown', touch)
+    }
+  }, [gl])
+
+  useFrame(() => {
+    const ctrl = controlsRef.current
+    if (!ctrl) return
+    const idle = allowed && (force || performance.now() - lastInput.current > IDLE_MS)
+    if (ctrl.autoRotate !== idle) {
+      ctrl.autoRotate = idle
+      ctrl.autoRotateSpeed = IDLE_SPIN_SPEED
+    }
+    // autoRotate only advances when update() is called, and damping means
+    // OrbitControls wants that every frame anyway.
+    if (idle) ctrl.update()
   })
   return null
 }
@@ -184,28 +332,66 @@ function framePrintPreset(
  * footprint settles (after the scale estimate / calibration) — so the plan
  * lands centred and full and the user never has to position it. Edge-triggered
  * per drawing+footprint so it doesn't fight manual camera moves afterwards.
+ * Also re-frames when trace mode starts so the print is always in view before
+ * the user taps (pan is disabled during active trace, so this is the last
+ * chance to guarantee the plan is visible).
  */
 function PrintAutoFrame() {
   const { size } = useThree()
   const drawingId = useAppStore((s) => s.floorplanOverlay.drawingId)
   const scale = useAppStore((s) => s.floorplanOverlay.scale)
   const position = useAppStore((s) => s.floorplanOverlay.position)
+  const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const setCameraPreset = useAppStore((s) => s.setCameraPreset)
   const lastKey = useRef<string | null>(null)
+  const lastFramedForTrace = useRef(false)
 
   useEffect(() => {
     if (!drawingId) { lastKey.current = null; return }
     const [w, d] = scale
     if (!w || !d) return
-    // Reframe on a new drawing OR when its rounded footprint changes (scale
-    // estimate / calibration) — not on every tiny jitter, so we don't yank the
-    // camera while the user works.
-    const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}`
+    // Don't frame until the canvas has a real size — without this guard the
+    // effect can fire before R3F's ResizeObserver delivers the first measurement
+    // (size = 0×0), which produces aspect = NaN and places the camera at
+    // [NaN, NaN, NaN].  When the real size arrives the key already matches so
+    // the camera is never corrected, leaving the print permanently invisible.
+    if (!size.width || !size.height) return
+    // Reframe on a new drawing or a changed footprint — and NOT on trace start.
+    //
+    // Re-framing when a trace begins was added to guarantee the plan was in view
+    // before the first tap. It also yanks the camera out from under you every
+    // time you start ANY pull, and a roof is the case that breaks: you line up an
+    // angled view to pull a roof, the pull starts, and the camera snaps to the
+    // top-down print framing — the one perspective from which a roof cannot be
+    // pulled at all. The framing it forces is wrong for the job it interrupts.
+    //
+    // The print-disappearing bug this shipped with was the NaN camera guarded
+    // above, not the framing; that guard stays and does the real work. If the
+    // plan is genuinely off screen the answer is a camera preset the user asks
+    // for, not one taken from them mid-action.
+    /**
+     * THE CANVAS ASPECT BELONGS IN THE KEY.
+     *
+     * The framing this computes bakes in size.width / size.height, but the key
+     * only carried the drawing and the SHEET size — so after a window resize
+     * the key was unchanged, the early return fired, and the camera kept a
+     * framing worked out for the old aspect. On a wide, short window that puts
+     * the building off screen and the viewport is simply BLACK, with nothing
+     * apparently wrong: the model is built, every mesh is visible, and one
+     * synthetic resize event brings it all back. Almost certainly the same
+     * fault behind "it froze after trying to resize".
+     *
+     * Rounded to two places so ordinary jitter does not re-frame the view while
+     * someone is dragging a window edge — only a real change in shape does.
+     */
+    const aspect = size.width / size.height
+    const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}:${aspect.toFixed(2)}`
+    lastFramedForTrace.current = traceMode
     if (lastKey.current === key) return
     lastKey.current = key
     const mobile = typeof window !== 'undefined' && window.innerWidth < 768
-    setCameraPreset(framePrintPreset(w, d, position, size.width / size.height, 55, mobile))
-  }, [drawingId, scale, position, size.width, size.height, setCameraPreset])
+    setCameraPreset(framePrintPreset(w, d, position, aspect, 55, mobile))
+  }, [drawingId, scale, position, size.width, size.height, traceMode, setCameraPreset])
 
   return null
 }
@@ -228,6 +414,8 @@ function DrawerRecenter() {
   const buildOpen = useFloorplanLocalStore((s) => s.buildDrawerOpen)
   const settingsOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
   const placeOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
+  /** Screen the tutorial coach is standing on at the bottom, 0 when off. */
+  const coachBand = useFloorplanLocalStore((s) => s.coachBand)
   // While TRACING or CALIBRATING, never apply a view-offset: shifting the
   // rendered plan under the pointer makes taps feel like the cursor is "pulled
   // away" and can drop a point at the wrong spot (a stray wall). Taps must map
@@ -267,11 +455,16 @@ function DrawerRecenter() {
     // Build and Settings both open from the LEFT now (beside the rail), so both
     // shift the plan RIGHT into the visible sliver.
     const offsetX = (buildOpen || settingsOpen ? -drawerW / 2 : 0) - RAIL_CLEAR_PX / 2
-    const offsetY = placeOpen ? h * 0.2 : 0
+    // The tutorial coach's band counts exactly like an open drawer: shift the
+    // framing up by half of it and the print sits centred in the space that is
+    // actually left, instead of centred behind the words. Half, not all — the
+    // whole band would overshoot and push it off the top, which is the same
+    // mistake in the other direction.
+    const offsetY = (placeOpen ? h * 0.2 : 0) + coachBand / 2
     if (offsetX === 0 && offsetY === 0) cam.clearViewOffset()
     else cam.setViewOffset(w, h, offsetX, offsetY, w, h)
     cam.updateProjectionMatrix()
-  }, [camera, size.width, size.height, buildOpen, settingsOpen, placeOpen, traceMode, calibrationMode, placeObjectType])
+  }, [camera, size.width, size.height, buildOpen, settingsOpen, placeOpen, coachBand, traceMode, calibrationMode, placeObjectType])
   return null
 }
 
@@ -432,17 +625,28 @@ export default function ModelViewer() {
   const controlsRef    = useRef<OrbitControlsImpl | null>(null)
   const gestureLock    = useFloorplanLocalStore((s) => s.gestureLock)
   const editMode       = useFloorplanLocalStore((s) => s.editMode)
+  const planView       = useFloorplanLocalStore((s) => s.planView)
   const editSelected   = useFloorplanLocalStore((s) => s.editSelected)
+  // The tour's opening line is spoken over a turning print — see IdleSpin.force.
+  const tourActive     = useFloorplanLocalStore((s) => s.tutorialActive)
+  const tourStep       = useFloorplanLocalStore((s) => s.tutorialStep)
+  const tourOpeningLine = tourActive && TUTORIAL_STEPS[clampStep(tourStep)]?.id === 'welcome'
   const [measurementsPanelCollapsed, setMeasurementsPanelCollapsed] = useState(false)
   const [pendingForm, setPendingForm]   = useState<FormState | null>(null)
   // Construction wizard is opened from Settings → "Re-run Wizard" via the store.
   const wizardOpen     = useFloorplanLocalStore((s) => s.wizardOpen)
   const setWizardOpen  = useFloorplanLocalStore((s) => s.setWizardOpen)
   const traceMode      = useFloorplanLocalStore((s) => s.traceMode)
+  // Read here too (DrawerRecenter has its own copy) so the idle spin can stand
+  // down while the plan is being calibrated.
+  const calibratingNow = useAppStore((s) => s.floorplanOverlay.calibrationMode)
   const tracePaused    = useFloorplanLocalStore((s) => s.tracePaused)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const [exportOpen, setExportOpen]     = useState(false)
   const [isDragOver, setIsDragOver]     = useState(false)
+  /** The GPU dropped the 3D context. Everything is still in memory; none of it
+   *  can be drawn until the browser hands the context back. */
+  const [glLost, setGlLost] = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
 
   // UI reset: the old top toolbar + camera HUD are retired. Their actions live
@@ -479,6 +683,54 @@ export default function ModelViewer() {
   // deliberate boundary between looking and working.
   const editingSelection = editMode && editSelected !== null
   const orbitEnabled = !overlay.orbitLocked && !placing && !gestureLock && !editingSelection
+
+  /**
+   * A LOCK MUST NOT OUTLIVE THE GESTURE THAT RAISED IT.
+   *
+   * `gestureLock` is raised on pointer-DOWN by whichever layer grabbed the drag
+   * (placed objects, roof, floor joists) and lowered in that same layer's
+   * pointer-UP handler, which is bound to a mesh inside the canvas. So the
+   * release depends on one specific element receiving one specific event.
+   *
+   * It does not always get it. Lift the finger outside the canvas, let the
+   * browser claim the gesture (a second touch, a system swipe, a scroll), tab
+   * away mid-drag, and no pointerup ever reaches that mesh. The lock stays up.
+   *
+   * And nothing else could take it down: it is not in the Escape chain, tapping
+   * empty space does not touch it, and leaving edit mode does not either. The
+   * camera was simply frozen from then on, with no way back short of reloading
+   * the page — a dead end you could not back out of, which is exactly how it
+   * was reported.
+   *
+   * The gesture is over when the pointer is up. That is true no matter which
+   * layer started it or where the finger ended, so the release belongs here,
+   * once, on the window, rather than in each layer's own handler. Those still
+   * run first and commit their own state; this only guarantees the lock falls.
+   * FloorplanOverlay already does the same for its own drag (see the
+   * pointercancel listener there) — this extends the courtesy to every layer.
+   */
+  // Listeners are ALWAYS mounted, never gated on `gestureLock` being up.
+  // Gating them looks tidier and reintroduces the bug in miniature: the lock is
+  // raised during a pointerdown, but the effect that would listen for the
+  // release does not run until React has committed the next render. A quick
+  // enough tap lifts the finger inside that window, the listener is not there
+  // to hear it, and the lock is stranded again. Two idle listeners cost
+  // nothing; the state is read at event time.
+  useEffect(() => {
+    const release = () => {
+      const st = useFloorplanLocalStore.getState()
+      if (st.gestureLock) st.setGestureLock(false)
+    }
+    window.addEventListener('pointerup', release)
+    window.addEventListener('pointercancel', release)
+    // A drag cannot survive the tab losing the pointer entirely.
+    window.addEventListener('blur', release)
+    return () => {
+      window.removeEventListener('pointerup', release)
+      window.removeEventListener('pointercancel', release)
+      window.removeEventListener('blur', release)
+    }
+  }, [])
   const panEnabled = (!traceMode || tracePaused) && !placing
 
   function handleDragOver(e: React.DragEvent) {
@@ -543,7 +795,8 @@ export default function ModelViewer() {
           </button>
           <button
             className={`${styles.toolBtn} ${measureMode ? styles.toolBtnActive : ''}`}
-            onClick={() => setMeasureMode(!measureMode)}
+            // Gated on the way IN only — see the Edit button in RailCascade.
+            onClick={() => (measureMode ? setMeasureMode(false) : requirePro('The measuring tape', () => setMeasureMode(true)))}
             title="Measure distances (click two points)"
           >
             {measureMode ? 'Measuring…' : 'Measure'}
@@ -725,6 +978,17 @@ export default function ModelViewer() {
         </>
       )}
 
+      {/* The 3D is gone and the DOM is not, so this is the one thing on screen
+          that can explain a black workspace. Pinned to the bottom edge like
+          every other notice — a full-screen apology would cover the very thing
+          we are hoping comes back. */}
+      {glLost && (
+        <div className={styles.glLostNotice} role="status">
+          <span>3D paused — the graphics context was dropped. It usually comes back on its own.</span>
+          <button onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      )}
+
       {/* FloorplanPanel renders DOM controls (inputs, buttons) outside the
          Canvas so they stay in the react-dom reconciler. */}
       <div className={styles.floorplanPanelRoot}>
@@ -774,6 +1038,11 @@ export default function ModelViewer() {
           local.closeAllPanels()
         }}
       >
+        {import.meta.env.DEV && <DevSceneHandle />}
+        <WebGLContextGuard
+          onLost={() => setGlLost(true)}
+          onRestored={() => setGlLost(false)}
+        />
         <CameraRig />
         <PrintAutoFrame />
         <DrawerRecenter />
@@ -838,16 +1107,27 @@ export default function ModelViewer() {
         )}
 
         <FloorplanOverlay />
+        {/* The tour's worked example, drawn ON the print so it orbits with it. */}
+        <TourGhost />
+        {/* …and the one-shot duck underneath when the real floor lands. */}
+        <TourUnderReveal />
         <ExplodeDriver />
-        <LiveWallsLayer />
-        <FloorJoistsLayer />
-        <CeilingLayer />
-        <RoofLayer />
-        <HoverNameplate />
-        <DrywallLayer />
-        <EnvelopeLayer />
-        <PlacedObjectsLayer />
-        <TradeLayersRenderer />
+        {/* THE BUILT MODEL, hidden in plan view.
+            FloorplanOverlay stays outside this group on purpose — the print and
+            the lines you have traced on it ARE the 2D view, and they are what
+            you are there to judge. An invisible group is also skipped by the
+            raycaster, so nothing hidden can be picked by accident. */}
+        <group visible={!planView}>
+          <LiveWallsLayer />
+          <FloorJoistsLayer />
+          <CeilingLayer />
+          <RoofLayer />
+          <HoverNameplate />
+          <DrywallLayer />
+          <EnvelopeLayer />
+          <PlacedObjectsLayer />
+          <TradeLayersRenderer />
+        </group>
 
         {model.status === 'building' && <BuildingProgress />}
         {(model.status === 'building' || model.status === 'ready') && (
@@ -863,6 +1143,9 @@ export default function ModelViewer() {
           ref={(r) => { controlsRef.current = r; cameraControls.current = r }}
           makeDefault
           enabled={orbitEnabled}
+          /* Straight down and STAYS down. Orbiting a plan view is how you end
+             up unsure whether a line sits on the drawing or above it. */
+          enableRotate={!planView}
           enableDamping
           dampingFactor={0.12}
           rotateSpeed={0.6}
@@ -876,6 +1159,14 @@ export default function ModelViewer() {
         <OrbitEnabledGuard controlsRef={controlsRef} enabled={orbitEnabled} />
         <CameraPresetApplier controlsRef={controlsRef} />
         <CameraTether controlsRef={controlsRef} />
+        {/* Only spin when the workspace is genuinely idle: orbit is on, nothing
+            is being traced or calibrated or placed, and nothing is selected for
+            editing. Anything that owns the view owns the camera too. */}
+        <IdleSpin
+          controlsRef={controlsRef}
+          allowed={orbitEnabled && !traceMode && !placeObjectType && !calibratingNow && !editSelected}
+          force={tourOpeningLine}
+        />
 
 
       </Canvas>

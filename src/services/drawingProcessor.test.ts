@@ -77,18 +77,32 @@ describe('inferScaleFromStructure', () => {
     expect(inferScaleFromStructure([wall(0, 0, 40, 0, 1)])).toBeNull()
   })
 
-  it('infers a plausible scale from multiple stud-width walls', () => {
-    // 4 walls at ~3.75 px thickness → 89mm / 3.75px ≈ 23.7 mm/px (≈1:100 at 108dpi)
+  it('refuses to infer a scale from 4px strokes', () => {
+    // WAS: "4 walls at ~3.75px thickness -> 89mm / 3.75px = 23.7 mm/px".
+    // That arithmetic is the screenshot bug. 4px is the LINE WEIGHT a drawing
+    // was published at, not a wall seen at some scale, and asking what scale
+    // makes it standard yields an answer for every entry in the table — the
+    // ADU capture in data/test-prints/ settled on 171/4 = 42.75 mm/px, about
+    // 3.1x too big, and every dimension downstream inherited it.
     const walls: ParsedWall[] = [
       wall(0, 0, 400, 0, 4),
       wall(0, 300, 400, 300, 4),
       wall(0, 0, 0, 300, 4),
       wall(400, 0, 400, 300, 4),
     ]
+    expect(inferScaleFromStructure(walls)).toBeNull()
+  })
+
+  it('still infers from walls thick enough to carry the information', () => {
+    const walls: ParsedWall[] = [
+      wall(0, 0, 400, 0, 12),
+      wall(0, 300, 400, 300, 12),
+      wall(0, 0, 0, 300, 12),
+      wall(400, 0, 400, 300, 12),
+    ]
     const result = inferScaleFromStructure(walls)
     expect(result).not.toBeNull()
     expect(result!.scaleMmPerPx).toBeGreaterThan(0)
-    expect(result!.confidence).toBeGreaterThan(0.3)
   })
 
   it('confidence is higher with more supporting walls', () => {

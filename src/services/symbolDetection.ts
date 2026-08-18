@@ -9,6 +9,7 @@ import type {
   ParsedWall,
 } from '../types'
 import type { RasterTextToken } from './pdfRasterizer'
+import { looksLikeRoomName, cleanRoomLabel, isPlausibleRoomLabel } from './roomNames'
 
 interface DetectSemanticEntitiesInput {
   classifiedLines: ClassifiedLine[]
@@ -22,6 +23,16 @@ interface DetectSemanticEntitiesResult {
   symbols: ParsedSymbol[]
   text: ParsedTextEntity[]
   annotations: ParsedAnnotationCandidate[]
+  /**
+   * The rooms handed in, with `name` filled from the label found inside them.
+   *
+   * The matching already happened here — the nearest room tag to each room was
+   * being used to place an annotation — and the answer was then thrown away.
+   * `wetWalls` and the electrical rules both key off `room.name`, so on any
+   * detected plan they read undefined and nothing was ever tiled or given a
+   * kitchen circuit.
+   */
+  rooms: ParsedRoom[]
 }
 
 const GLOSSARY_ENTRIES = glossary.entries as SymbolEntry[]
@@ -70,7 +81,20 @@ function classifyTextKind(text: string): ParsedTextEntity['kind'] {
   if (/^\d+(\.\d+)?\s*(mm|cm|m|ft|in|")$/i.test(value) || /^\d+(\.\d+)?\s*[x×]\s*\d+(\.\d+)?$/i.test(value)) {
     return 'dimension'
   }
-  if (/[A-Z]/.test(value) && value === value.toUpperCase() && /[A-Z]/.test(value[0])) {
+  // A room is named by its WORD, not its capitalisation. ALL CAPS is a fair
+  // description of a permit set and a poor one of the plans people actually
+  // hand you — the ADU screenshot says "Bathroom" and "Living Area", which the
+  // caps-only test rejected. Vocabulary first, caps as a fallback for the
+  // labels no lexicon will ever cover ("REC RM 2", "AREA B").
+  if (looksLikeRoomName(value) && isPlausibleRoomLabel(value)) return 'room_tag'
+  // The caps fallback covers labels no lexicon will have ("REC RM 2"), but it
+  // must still look like a NAME — see isPlausibleRoomLabel. Unguarded it
+  // promoted "TOTAL AREA = 71 m?" and stray OCR characters, and those went on to
+  // name rooms, which decides whether a wall gets tile backer.
+  if (
+    /[A-Z]/.test(value) && value === value.toUpperCase() && /[A-Z]/.test(value[0]) &&
+    isPlausibleRoomLabel(value)
+  ) {
     return 'room_tag'
   }
   if (/^(section|detail|elevation)\b/i.test(value)) {
@@ -160,11 +184,38 @@ export function detectSemanticEntities({
   }
 
   const roomTagTexts = text.filter((t) => t.kind === 'room_tag')
-  for (const room of rooms) {
+  /**
+   * A label belongs to the room it is PRINTED IN.
+   *
+   * Nearest-centroid was already being used to attach an annotation, and it is
+   * the right idea, but proximity alone will hand a hallway label to the
+   * bathroom beside it on a tight plan. A label drawn inside a room's bounding
+   * box is that room's label and nothing else's, so containment wins and
+   * distance only breaks the remaining ties.
+   */
+  const namedRooms: ParsedRoom[] = rooms.map((r) => ({ ...r }))
+  for (const room of namedRooms) {
     const nearestText = roomTagTexts
       .map((t) => ({ t, d2: (t.x - room.cx) ** 2 + (t.y - room.cy) ** 2 }))
       .sort((a, b) => a.d2 - b.d2)[0]
 
+    const inside = roomTagTexts.filter(
+      (t) => t.x >= room.x1 && t.x <= room.x2 && t.y >= room.y1 && t.y <= room.y2,
+    )
+    const chosen = inside.length
+      ? inside
+          .map((t) => ({ t, d2: (t.x - room.cx) ** 2 + (t.y - room.cy) ** 2 }))
+          .sort((a, b) => a.d2 - b.d2)[0]
+      : nearestText
+
+    if (!chosen || (chosen === nearestText && (!nearestText || nearestText.d2 > 240 ** 2))) continue
+
+    // THE WIRE THAT WAS MISSING. Everything above already knew which words
+    // belong to this room; nothing ever wrote them onto it.
+    if (!room.name) {
+      const label = cleanRoomLabel(chosen.t.text)
+      if (label) room.name = label
+    }
     if (!nearestText || nearestText.d2 > 240 ** 2) continue
     nextSymbolId = maybePushSymbol(
       symbols,
@@ -186,5 +237,5 @@ export function detectSemanticEntities({
     })
   }
 
-  return { symbols, text, annotations }
+  return { symbols, text, annotations, rooms: namedRooms }
 }

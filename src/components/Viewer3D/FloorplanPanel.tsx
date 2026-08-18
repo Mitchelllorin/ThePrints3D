@@ -6,15 +6,17 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
 import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import {
-  TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS, LAYER_TRACE_HINT,
+  TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS, LAYER_TRACE_HINT, PRO_TRACE_LAYERS,
   PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER, FLOORS_PICKER, ROOF_PICKER, LEVEL_OPTIONS,
 } from '../../data/traceLayers'
+import { requirePro } from '../Pro/usePro'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
 import { suggestWetWalls } from '../../services/wetWalls'
 import {
@@ -24,7 +26,6 @@ import {
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import styles from './AmbientGuide.module.css'
 import EdgeDrawer from '../Layout/EdgeDrawer'
-import LayersPanel from '../Layout/LayersPanel'
 import FinishesPanel from '../Layout/FinishesPanel'
 
 // ── Discipline layer tabs (Framing/Plumbing/Electrical wired; HVAC placeholder)
@@ -72,6 +73,7 @@ const framingShort = (key: string) => FRAMING_TYPES.find((t) => t.key === key)?.
 const roleShort = (key: string) => WALL_ROLES.find((r) => r.key === key)?.short ?? key
 
 export default function FloorplanPanel() {
+  const isPro           = useAppStore((s) => s.isPro)
   const drawings        = useAppStore((s) => s.drawings)
   const overlay         = useAppStore((s) => s.floorplanOverlay)
   const addDrawings     = useAppStore((s) => s.addDrawings)
@@ -84,6 +86,7 @@ export default function FloorplanPanel() {
   const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
   const carryWallsUp    = useAppStore((s) => s.carryWallsUp)
   const carryFloorUp    = useAppStore((s) => s.carryFloorUp)
+  const autoCarryShellUp = useUISettingsStore((s) => s.autoCarryShellUp)
   const clearFloorLevel = useAppStore((s) => s.clearFloorLevel)
   const setRoofOverhang = useAppStore((s) => s.setRoofOverhang)
   const assignDrawingToLevel = useAppStore((s) => s.assignDrawingToLevel)
@@ -179,6 +182,10 @@ export default function FloorplanPanel() {
   const roofSize = useFloorplanLocalStore((s) => s.roofSize)
   const setRoof = useFloorplanLocalStore((s) => s.setRoof)
   const activeLevel = useFloorplanLocalStore((s) => s.activeLevel)
+  // The General's electrical pass, and the one line it says afterwards.
+  const autoPlaceElectrical = useAppStore((s) => s.autoPlaceElectrical)
+  const built = useAppStore((s) => !!s.buildResult)
+  const [generalNote, setGeneralNote] = useState<string | null>(null)
   const setActiveLevel = useFloorplanLocalStore((s) => s.setActiveLevel)
   const elecElement = useFloorplanLocalStore((s) => s.elecElement)
   const elecAmp = useFloorplanLocalStore((s) => s.elecAmp)
@@ -221,6 +228,7 @@ export default function FloorplanPanel() {
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
   // The wall-type picker shows before tracing begins, and can be reopened
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
+  const objectPanelOpen = useFloorplanLocalStore((s) => s.activePanel === 'object')
   const pickerOpen = useFloorplanLocalStore((s) => s.activePanel === 'picker')
   const panelBoardOpen = useFloorplanLocalStore((s) => s.activePanel === 'panelBoard')
   const openPicker = useFloorplanLocalStore((s) => s.openPicker)
@@ -237,15 +245,21 @@ export default function FloorplanPanel() {
   // (carry* dedupe by footprint) and guarded on the storey being empty, so it
   // fires once on entry and never loops.
   useEffect(() => {
+    if (!autoCarryShellUp) return
     if (!drawing || activeLevel <= 0 || customLevels.includes(activeLevel)) return
-    const userWalls = drawing.parsedWalls.filter((w) => w.source === 'user')
-    const below = userWalls.filter((w) => (w.level ?? 0) === activeLevel - 1).length
-    const here = userWalls.filter((w) => (w.level ?? 0) === activeLevel).length
+    // COUNT DETECTED WALLS AS WALLS. This looked only at source 'user', so a
+    // storey whose shell came from detection — a preset, or "Find the rest" —
+    // read as empty, `below` was 0, and the carry never fired. The floor below
+    // plainly had walls; they just were not ones you had traced by hand. That is
+    // why upper storeys had to be pulled manually all of a sudden.
+    const walls = drawing.parsedWalls
+    const below = walls.filter((w) => (w.level ?? 0) === activeLevel - 1).length
+    const here = walls.filter((w) => (w.level ?? 0) === activeLevel).length
     if (below === 0 || here > 0) return
     carryWallsUp(drawing.id, activeLevel - 1)
     carryFloorUp(activeLevel - 1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeLevel, drawing?.id, customLevels])
+  }, [autoCarryShellUp, activeLevel, drawing?.id, customLevels])
   // "Find the rest" can fire as soon as one wall is traced — in either Line
   // (2-point) or Freehand mode. (Was gated on an 8+ point freehand stroke,
   // which never matched line-mode tracing.)
@@ -387,8 +401,20 @@ export default function FloorplanPanel() {
   const handleSmartRefine = async () => {
     if (!drawing) return
     setSeedProcessing(true)
-    await processWithSeeds(drawing.id)
-    setSeedProcessing(false)
+    try {
+      await processWithSeeds(drawing.id)
+    } catch (err) {
+      // A THROWN SEED PASS MUST NOT LATCH THE BUTTON.
+      //
+      // Without the finally, one rejection left seedProcessing true forever:
+      // the button reads "Finding…" and is disabled, so the run can never be
+      // retried and — since Find the rest is the reason to be on the trace bar
+      // at all — that corner of the UI is simply dead. It rasterises the file
+      // and runs the detector, either of which can fail on a bad image.
+      console.error('Find the rest failed:', err)
+    } finally {
+      setSeedProcessing(false)
+    }
   }
 
   // When non-null, the next file picked is imported AS the plan for this storey
@@ -518,7 +544,6 @@ export default function FloorplanPanel() {
   const calibrationHandled = calibrationHandledIds.includes(drawing.id)
   // Tracing/building is reachable once calibration is set OR explicitly skipped.
   const calibrationCleared = isCalibrated || calibrationHandled
-  const hasWalls     = drawing.parsedWalls.length > 0
 
   // ── editing (post-build): wall + object selection ───────────────────────
   const editMode = !overlay.calibrationMode && !traceMode
@@ -611,13 +636,28 @@ export default function FloorplanPanel() {
   // The storey directly below + how many user walls stand on it — drives the
   // "carry walls up" action so an upper floor can stack plumb on the one below.
   const belowLevelLabel = LEVEL_OPTIONS.find((l) => l.value === activeLevel - 1)?.label ?? 'below'
+  // Count DETECTED walls as walls too. These were user-only, so on a preset (or
+  // any plan built by detection) the storey below read as empty, the carry-up
+  // control never appeared, and there was nothing to stack.
   const wallsBelowCount = drawing.parsedWalls.filter(
-    (w) => w.source === 'user' && (w.level ?? 0) === activeLevel - 1,
+    (w) => (w.level ?? 0) === activeLevel - 1,
   ).length
   const wallsAtActiveLevel = drawing.parsedWalls.filter(
-    (w) => w.source === 'user' && (w.level ?? 0) === activeLevel,
+    (w) => (w.level ?? 0) === activeLevel,
   ).length
   const floorMode: 'typical' | 'custom' = customLevels.includes(activeLevel) ? 'custom' : 'typical'
+
+  // NO AUTOMATIC CARRY-UP HOOK HERE.
+  //
+  // A useEffect at this point in the file froze the app on load: there are early
+  // returns above (a wall/object/line/area selection can bail out before this
+  // line), so the hook was called conditionally, which breaks the Rules of Hooks
+  // and re-renders forever. Exactly the failure the previous commit fixed —
+  // "blank screen from a hook after an early return".
+  //
+  // Carrying the shell up therefore stays on the TYPICAL button below, where it
+  // is an explicit act. If it should happen on its own, the hook has to live at
+  // the top of the component with the other hooks, above every early return.
   const chooseTypical = () => {
     setCustomLevels((prev) => prev.filter((l) => l !== activeLevel))
     if (wallsBelowCount > 0 && wallsAtActiveLevel === 0) {
@@ -667,8 +707,6 @@ export default function FloorplanPanel() {
   const roofActive = activeTraceLayer === 'roof'
   // Floors & roofs are "area" layers: pull a rectangle instead of tracing a line.
   const areaActive = floorsActive || roofActive
-  // Construction order in the guided flow: floor goes in before the walls.
-  const hasFloor = floorsAreas.length > 0
   // Floors/roofs reuse the same trace flow as the trades (start/pause/picker/done),
   // just committing rectangles instead of lines.
   const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac' || areaActive
@@ -779,8 +817,11 @@ export default function FloorplanPanel() {
             </button>
           )}
           {/* No "End run" button — double-tapping the workspace ends the current
-              wall run (the natural "I'm done with this line" gesture). */}
-          <button className={styles.traceBarBtn} onClick={cancelTracing} title="Finish tracing">✓ Done</button>
+              wall run (the natural "I'm done with this line" gesture) — and no
+              "✓ Done" either. It was a permanent button in the corner of the
+              workspace whose only purpose was to leave the mode you were in.
+              Escape does it on a desktop; on a phone, tapping the rail item you
+              started from does (see selectSection in RailCascade). */}
         </div>
       )}
 
@@ -921,9 +962,17 @@ export default function FloorplanPanel() {
                 key={l.key}
                 className={activeTraceLayer === l.key ? styles.layerTabActive : styles.layerTab}
                 style={activeTraceLayer === l.key ? { borderColor: l.color, color: l.color } : undefined}
-                onClick={() => { setActiveTraceLayer(l.key); closeAllPanels() }}
+                // The SAME gate as the Layers panel — this is the other way to
+                // arm a trade layer, and a paywall with a second door is not a
+                // paywall. Structure stays free here too.
+                onClick={() => (
+                  PRO_TRACE_LAYERS.has(l.key)
+                    ? requirePro(`${l.label} layers`, () => { setActiveTraceLayer(l.key); closeAllPanels() })
+                    : (() => { setActiveTraceLayer(l.key); closeAllPanels() })()
+                )}
               >
                 {l.label}
+                {PRO_TRACE_LAYERS.has(l.key) && !isPro && <span className={styles.layerTabPro}>PRO</span>}
               </button>
             ))}
           </div>
@@ -1049,10 +1098,17 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Step 1: calibrate ── */}
+        {/* ── Calibrate ──
+         * KEPT, and deliberately: the step counter went with the wizard, but the
+         * prompt itself is not tour narration. On a real upload nothing can be
+         * measured until the scale is set, and this is the only way into
+         * calibration from the drawer (Settings → Recalibrate is the other one,
+         * and nobody finds it first). Presets carry their own scale, so this
+         * never fires on the path the wizard was cluttering.
+         */}
         {!isAnalysing && !isPending && !calibrationCleared && !overlay.calibrationMode && !traceMode && (
           <div className={styles.step}>
-            <span className={styles.stepLabel}>Step 1 of 3</span>
+            <span className={styles.stepLabel}>Scale</span>
             <span className={styles.stepText}>Set the scale</span>
             <span className={styles.stepHint}>Tap two points on a dimension you know the length of</span>
             <button className={styles.action} onClick={startCalibration}>
@@ -1107,55 +1163,19 @@ export default function FloorplanPanel() {
           </div>
         )}
 
-        {/* ── Step 2: lay the floor, then Step 3: walls (real construction order) ── */}
-        {!isAnalysing && !isPending && calibrationCleared && !overlay.calibrationMode && !traceMode && !pickerOpen && (
-          !hasFloor ? (
-            <div className={styles.step}>
-              <span className={styles.stepLabel}>Step 2 of 3</span>
-              <span className={styles.stepText}>Lay the floor</span>
-              <span className={styles.stepHint}>Concrete slab or wood-frame floor — pull the floor area, then the walls frame on top of it.</span>
-              <div className={styles.btnRow}>
-                <button className={styles.action} onClick={() => { setActiveTraceLayer('floors'); openPicker() }}>
-                  Lay the floor →
-                </button>
-                <button className={styles.secondary} onClick={openPicker}>Skip to walls</button>
-              </div>
-            </div>
-          ) : (
-            <div className={styles.step}>
-              {hasWalls ? (
-                <>
-                  <span className={styles.stepLabel}>{userWallCount > 0 ? 'Walls' : 'Step 3 of 3'}</span>
-                  <span className={styles.stepText}>
-                    {userWallCount > 0
-                      ? `${userWallCount} wall${userWallCount === 1 ? '' : 's'} traced`
-                      : `${drawing.parsedWalls.length} walls detected`}
-                  </span>
-                  <span className={styles.stepHint}>
-                    {userWallCount > 0 ? 'Trace more, or edit what’s there' : 'Trace manually to correct anything wrong'}
-                  </span>
-                  <div className={styles.btnRow}>
-                    <button className={styles.action} onClick={openPicker}>
-                      {userWallCount > 0 ? 'Trace more' : 'Trace walls'}
-                    </button>
-                    <button className={styles.secondary} onClick={startCalibration}>
-                      Re-calibrate
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <span className={styles.stepLabel}>Step 3 of 3</span>
-                  <span className={styles.stepText}>Trace the walls</span>
-                  <span className={styles.stepHint}>Draw over each wall — they frame on top of the floor</span>
-                  <button className={styles.action} onClick={openPicker}>
-                    Start tracing →
-                  </button>
-                </>
-              )}
-            </div>
-          )
-        )}
+        {/* THE "STEP 2 OF 3 / STEP 3 OF 3" WIZARD USED TO LIVE HERE. IT IS GONE.
+         *
+         * It was written when the Build drawer was a linear three-step wizard —
+         * set the scale, lay the floor, trace the walls — and it never got taken
+         * out when the rail replaced that with sections you pick in any order.
+         * So selecting Framing answered with "Step 2 of 3: Lay the floor", which
+         * is the drawer arguing with the section you just chose.
+         *
+         * Nothing is lost by removing it. The rail already names the gesture for
+         * whichever section is live ("Pull a floor — tap opposite corners",
+         * "Trace framing runs"), Choose type is right underneath it, and the
+         * traced-wall count now reads off the trace bar where the tracing is.
+         */}
 
         {/* ── Active tracing ── */}
         {traceMode && !pickerOpen && (
@@ -1613,8 +1633,14 @@ export default function FloorplanPanel() {
         )}
       </EdgeDrawer>
 
-      {/* ── Property card for the selected placed object (above the tray) ── */}
-      {selectedObject && objDims && (
+      {/* ── Property card for the selected placed object (above the tray) ──
+          Gated on activePanel, not merely on there being a selection. In edit
+          mode selecting something no longer raises a panel (see
+          selectObjectExclusive), so tapping a thing to nudge it leaves the
+          workspace clear; the card comes back on the rail's ⋯ mark when you
+          actually want the specs. Outside edit mode selection still opens it,
+          which is what tapping is for when you are not editing. */}
+      {selectedObject && objDims && objectPanelOpen && (
         <div className={styles.propCard} style={{ bottom: trayVisible ? 76 : 16 }}>
           <div className={styles.propHeader}>
             <span className={styles.propTitle}>{selectedObject.label}</span>
@@ -1649,7 +1675,12 @@ export default function FloorplanPanel() {
               </div>
             )
           })()}
-          {selectedObject.type === 'door' && (
+          {/* No hinge on an overhead door, so no hand to choose. Offering LH/RH
+              on a sectional garage door is a control that cannot do anything —
+              worse than missing, because it implies the model is wrong. Same
+              width test the 3D uses. */}
+          {selectedObject.type === 'door'
+            && ((selectedObject.scaleX ?? 1) * (getCatalogItem('door')?.defaultW ?? 0.9)) < 2.1 && (
             <div className={styles.propRow}>
               <span className={styles.propLabel}>Swing</span>
               <div className={styles.btnRow}>
@@ -1913,8 +1944,35 @@ export default function FloorplanPanel() {
           open={placeDrawerOpen && !tracingActive}
           onToggle={() => setDrawerOpen('place', !placeDrawerOpen)}
         >
-          <span className={styles.stepLabel}>Layers</span>
-          <LayersPanel />
+          {/* Layers moved to its OWN rail section (RailCascade). It lived down
+              here inside the Place drawer, which meant the trade toggles — a
+              thing you reach for constantly — were two levels down behind
+              another menu. Mounting it in both places rendered the list twice. */}
+
+          {/* THE GENERAL'S FIRST PASS. Sits above the catalog on purpose: the
+              tray below is the box-by-box path and stays exactly as it was, so
+              this is an offer, not a replacement. Everything it places is an
+              ordinary object you can drag, retype or delete, and the whole pass
+              is one undo. */}
+          {built && (
+            <>
+              <span className={styles.stepLabel}>The General — place it for me</span>
+              <button
+                className={styles.action}
+                onClick={() => {
+                  const n = autoPlaceElectrical(activeLevel)
+                  setGeneralNote(
+                    n > 0
+                      ? `Placed ${n} receptacle${n === 1 ? '' : 's'} — drag, retype or delete any of them`
+                      : 'Nothing placed — this storey needs walls and a known scale',
+                  )
+                }}
+              >
+                ⚡ Auto-place receptacles
+              </button>
+              {generalNote && <p className={styles.stepHint}>{generalNote}</p>}
+            </>
+          )}
           {trayVisible && (
             <>
               <span className={styles.stepLabel}>Catalog — tap an item, then tap the plan</span>

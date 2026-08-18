@@ -85,7 +85,7 @@ export interface ParsedWall {
    *  real span comes out balloon framed for free — the span is the whole feature. */
   spanLevels?: number
   /** X-ray this wall — render it see-through so you can see what's behind/inside
-   *  (studs, MEP) without deleting it. Toggled from the wall edit panel. */
+   *  (studs, MEP) without deleting it. Toggled from the edit rail. */
   transparent?: boolean
 }
 
@@ -198,6 +198,10 @@ export interface TracedLine {
    *  roof's pitch comes from `size` (auto). Stage 1 carries `pitch` (rise/run);
    *  later stages add cross-offset (saltbox) and end insets (hip). */
   ridge?: RoofRidge
+  /** X-ray this area — see-through, so you can look at what it covers without
+   *  deleting it. Same flag and same meaning as a wall's, so ONE control on the
+   *  edit rail serves floors, roofs and walls alike. */
+  transparent?: boolean
 }
 
 /** Editable roof ridge — the line the user drags to shape the roof. All values
@@ -247,8 +251,24 @@ export interface ParsedOpening {
   widthPx: number
   /** Width in mm (null if scale unknown) */
   widthMm: number | null
-  /** Orientation of the wall containing this opening */
+  /**
+   * Orientation of the wall containing this opening.
+   *
+   * A TWO-STATE APPROXIMATION, kept because plenty of code reads it. It cannot
+   * describe a doorway in a wall that runs at 30 degrees — both answers are
+   * wrong — so anything that needs the real direction should read `angle` and
+   * treat this as the nearest axis.
+   */
   orientation: 'horizontal' | 'vertical'
+  /**
+   * Direction of the wall line this opening sits in, in radians, in PIXEL
+   * space, normalised to [0, PI). 0 is a wall running left-to-right; PI/2 is
+   * one running top-to-bottom.
+   *
+   * Optional only for backwards compatibility with openings persisted before
+   * this existed; everything the detector produces now carries it.
+   */
+  angle?: number
   /** Best guess at opening type based on gap width */
   type: 'door' | 'window' | 'unknown'
 }

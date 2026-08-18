@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  solveStair, stairIssues, stairOpeningM,
+  solveStair, stairIssues, stairOpeningM, stairHolePlacement,
   MAX_RISER_M, MIN_TREAD_M, MIN_WIDTH_M, MIN_LANDING_M, MAX_FLIGHT_RISE_M,
 } from './stairs'
 
@@ -111,5 +111,59 @@ describe('stair floor opening', () => {
     const steep = solveStair({ totalRiseM: STOREY, targetRiserM: MAX_RISER_M })
     const shallow = solveStair({ totalRiseM: STOREY, targetRiserM: 0.15 })
     expect(stairOpeningM(shallow).lengthM).toBeGreaterThanOrEqual(stairOpeningM(steep).lengthM)
+  })
+})
+
+describe('the stairwell opening lines up with the stairs', () => {
+  const straight = solveStair({ totalRiseM: 2.9, shape: 'straight' })
+  const open = stairOpeningM(straight, 0.32)
+  const place = (yaw = 0) => stairHolePlacement({
+    openingLengthM: open.lengthM,
+    openingWidthM: open.widthM,
+    footprintLengthM: straight.footprint.lengthM,
+    yaw,
+  })
+
+  it('pushes the hole to the TOP of the run, not the middle of it', () => {
+    // The regression: the opening is a sub-span measured back from the top, so
+    // centring it on the stair leaves the top of the flight under solid deck.
+    expect(open.lengthM).toBeLessThan(straight.footprint.lengthM)
+    expect(place().shiftZ).toBeCloseTo((straight.footprint.lengthM - open.lengthM) / 2, 6)
+    expect(place().shiftZ).toBeGreaterThan(0)
+  })
+
+  it('lands the hole flush with the top end of the run', () => {
+    // Top of the run sits at +footprint/2; the hole's far edge must reach it.
+    const p = place()
+    expect(p.shiftZ + open.lengthM / 2).toBeCloseTo(straight.footprint.lengthM / 2, 6)
+  })
+
+  it('does not shift a hole that already spans the whole run', () => {
+    // A short flight needs its full footprint open — nothing to slide.
+    const p = stairHolePlacement({
+      openingLengthM: 3, openingWidthM: 1, footprintLengthM: 3,
+    })
+    expect(p.shiftZ).toBeCloseTo(0, 9)
+  })
+
+  it('carries the shift along the way the stair actually faces', () => {
+    // Turned a quarter turn, the run points down world X, not Z.
+    const p = place(Math.PI / 2)
+    expect(p.shiftX).toBeCloseTo((straight.footprint.lengthM - open.lengthM) / 2, 6)
+    expect(p.shiftZ).toBeCloseTo(0, 6)
+  })
+
+  it('swaps the hole’s sides when the stair is turned a quarter turn', () => {
+    const flat = place(0), turned = place(Math.PI / 2)
+    expect(turned.w).toBeCloseTo(flat.d, 6)
+    expect(turned.d).toBeCloseTo(flat.w, 6)
+  })
+
+  it('never returns a hole smaller than the opening it has to clear', () => {
+    for (const yaw of [0, 0.4, Math.PI / 4, 1.9, Math.PI]) {
+      const p = place(yaw)
+      expect(p.w).toBeGreaterThanOrEqual(Math.min(open.widthM, open.lengthM) - 1e-9)
+      expect(p.d).toBeGreaterThanOrEqual(Math.min(open.widthM, open.lengthM) - 1e-9)
+    }
   })
 })

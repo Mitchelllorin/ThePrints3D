@@ -322,7 +322,12 @@ export function wrbLayer(kind: WrbKind = 'housewrap'): EnvelopeLayer | null {
       return { label: 'Air/vapour barrier', thicknessM: WRB_T * 1.5, color: '#2f4f6f' }
     case 'housewrap':
     default:
-      return { label: 'Housewrap (WRB)', thicknessM: WRB_T, color: '#eef2f6', brand: 'Tyvek (DuPont)' }
+      // Named the way it is named on site. "Housewrap (WRB)" is what it IS, but
+      // nobody on a job says it — and an unlabelled white sheet over the
+      // sheathing reads as drywall on the outside of the building, which is the
+      // one thing it must never look like. Nominative use of DuPont's mark, with
+      // the attribution kept in `brand` so the credit travels with the label.
+      return { label: 'Tyvek® housewrap (WRB)', thicknessM: WRB_T, color: '#eef2f6', brand: 'Tyvek® (DuPont)' }
   }
 }
 
@@ -335,6 +340,31 @@ export function wrbLayer(kind: WrbKind = 'housewrap'): EnvelopeLayer | null {
 export function wallTakesEnvelope(wallRole?: string, framingType?: string): boolean {
   if (framingType === 'cmu') return false
   return wallRole === 'exterior-bearing'
+}
+
+/**
+ * Same question, for a wall that may not carry a ROLE at all.
+ *
+ * A traced wall is stamped with a role by the picker. A DETECTED wall is not —
+ * detection reports geometry, not intent. Asking wallTakesEnvelope about one
+ * therefore always answered "no", with two visible consequences the moment
+ * detected walls started being built:
+ *
+ *   the envelope skipped them        → "sheathing does nothing"
+ *   drywall read them as partitions  → boarded on BOTH faces, inside and out
+ *
+ * Neither was a sheathing or a boarding bug. Both were this: an unlabelled wall
+ * being treated as a definite "not exterior" instead of an "unknown".
+ *
+ * So an absent role means UNDECIDED, and the caller's geometry test decides —
+ * every caller already ANDs this with a perimeter test, which is the more
+ * trustworthy signal anyway. A role that IS set still wins: mark a perimeter
+ * wall interior by hand and it stays interior.
+ */
+export function wallMayTakeEnvelope(wall: { wallRole?: string; framingType?: string }): boolean {
+  if (wall.framingType === 'cmu') return false
+  if (!wall.wallRole) return true          // undecided — let geometry answer
+  return wallTakesEnvelope(wall.wallRole, wall.framingType)
 }
 
 
@@ -357,6 +387,28 @@ export function finishesVisible(
   if (tracing) return false
   return timing === 'live' || applied
 }
+
+// ── Masonry veneer support ───────────────────────────────────────────────────
+//
+// A brick or stone veneer does not hang on the wall — it stands on the ground, on
+// a shelf cast into the foundation, and is only TIED back to the wall for
+// stability. That is why it needs a ledge, and why the cavity behind it has to
+// drain: water gets through brick, runs down the back face, lands on flashing and
+// leaves through the weeps. Miss any part of that and you have built a bucket.
+//
+// IRC R703.8: ties one per 2.67 sq ft and no more than 24" apart each way; weeps
+// no more than 33" o.c. in the course immediately above the flashing.
+
+/** Vertical face of the foundation shelf. */
+export const LEDGE_DROP_M = 0.203        // 8"
+/** Bearing beyond the veneer's own thickness, so it is not perched on the edge. */
+export const LEDGE_BEARING_EXTRA_M = 0.025
+/** Weep spacing — 24" is common practice, inside the 33" the code allows. */
+export const WEEP_SPACING_M = 0.610
+/** Tie spacing, each way. Exactly 24" — a rounded 0.610 sits over the limit. */
+export const TIE_SPACING_M = 0.6096
+/** How far the flashing turns UP the sheathing behind the veneer. */
+export const FLASHING_UPTURN_M = 0.203
 
 // ── Per-wall framing spec ─────────────────────────────────────────────────────
 // THE source of truth that lets a build honour EACH wall's own framing (material,

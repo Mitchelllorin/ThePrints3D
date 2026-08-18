@@ -218,6 +218,17 @@
 
 .layerTab:hover { background: rgba(30, 41, 59, 0.6); color: #e2e8f0; }
 
+/* Marks a trade tab as locked before it is tapped. Same quiet treatment as the
+   Layers panel — the label is still the thing you read first. */
+.layerTabPro {
+  margin-left: 5px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bp-accent, #38bdf8);
+  vertical-align: 1px;
+}
+
 .layerTabActive {
   background: rgba(30, 41, 59, 0.8);
   border-color: var(--bp-accent, #38bdf8);
@@ -284,23 +295,35 @@
    climbing into whatever is above it. */
 .propCard {
   position: absolute;
-  right: 56px;             /* clear of the ~44px edit rail at right: 6px */
+  /* THE LEFT EDGE, because the right one is taken.
+     The card and the edit rail are two surfaces raised by the SAME selection, and
+     they were both fighting for the right edge. Clearing the rail by pushing the
+     card inward (right: 104px) only traded one bug for a worse one: at 232px wide
+     that lands it in the middle of a phone workspace, which breaks the rule that
+     the centre is never obscured.
+     They cannot share an edge, so they don't. The rail keeps the right, the card
+     takes the left, and the middle stays clear on any width. */
+  left: 8px;
+  right: auto;
   bottom: 64px;            /* clear of the explode bar along the bottom */
-  left: auto;
   transform: none;
   /* NARROW. It was 320px — nearly two thirds of a phone-width workspace, and
      with the stair rows in it that is a wall of buttons standing over the model.
      The controls are chips, not form fields, so they do not need the width. */
   width: 232px;
-  max-width: calc(100vw - 76px);
+  /* Leave the rail's lane free even when the clamp bites on a narrow screen. */
+  max-width: calc(100vw - 124px);
   max-height: calc(100dvh - 150px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.94));
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(51, 65, 85, 0.6);
+  /* NEARLY INVISIBLE. It was 0.94 — a solid slab parked on the model. The chrome
+     is meant to read as marks floating over the workspace, not as panels sitting
+     on top of it, so the surface drops back and the blur does the separating. */
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.55);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(51, 65, 85, 0.35);
   border-radius: 12px;
   padding: 12px 14px;
   z-index: 31;

@@ -43,6 +43,34 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 
+/* First launch only: the sentence that says what they're being offered, and the
+   one button that takes it. Bigger than the chips below because it IS the
+   instruction — but still text on the grid, not a card: no panel, no border, no
+   slab in the middle of the workspace. */
+.uploadHintLead {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  font-weight: 600;
+  color: var(--bp-text, #f1f5f9);
+  text-align: center;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+}
+
+.uploadHintPrimary {
+  background: var(--bp-accent, #38bdf8);
+  color: #06121f;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 22px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  transition: filter 0.12s;
+}
+.uploadHintPrimary:hover { filter: brightness(1.08); }
+
 .uploadHintActions {
   display: flex;
   flex-direction: row;
@@ -65,6 +93,28 @@
   transition: background 0.12s;
 }
 .uploadHintChip:hover { background: color-mix(in srgb, var(--bp-accent, #38bdf8) 24%, transparent); }
+
+/* "See a finished house" — the one chip that hands you a result instead of a
+   job, so it reads as its own offer rather than a fourth sibling of
+   Browse/Scan/Tour. Same pill language, on its own line, slightly quieter than
+   the accent chips because it is an aside, not the main instruction. */
+.showcaseChip {
+  margin-top: 8px;
+  background: none;
+  color: var(--bp-text-dim, #94a3b8);
+  border: 1px solid color-mix(in srgb, var(--bp-text-dim, #94a3b8) 35%, transparent);
+  border-radius: 999px;
+  padding: 4px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  transition: color 0.12s, border-color 0.12s;
+}
+.showcaseChip:hover {
+  color: var(--bp-text, #f1f5f9);
+  border-color: var(--bp-accent, #38bdf8);
+}
 
 /* ── Preset picker (in the onboarding card + Settings drawer) ──────────────── */
 /* Small floating pills — wrap in a row, not stacked slabs. */
@@ -296,6 +346,21 @@
   transition: background 0.15s;
 }
 .specBtn:hover { background: rgba(255, 255, 255, 0.14); }
+/* The chosen one in a set of mutually-exclusive spec buttons — accent colour and
+   an accent edge, no filled slab, so the list still reads as a list. */
+.specBtnOn {
+  color: var(--bp-accent, #38bdf8);
+  border-color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 14%, transparent);
+  font-weight: 700;
+}
+/* The one-line "why" under a choice — explains the consequence without a card. */
+.sectionNote {
+  margin: 4px 2px 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--bp-text-dim, #94a3b8);
+}
 
 .specSlider {
   width: 100%;
@@ -304,25 +369,56 @@
 }
 
 /* ── Layers panel — four trade-layer rows (bottom "Place & Layers" drawer) ─── */
-.layerList { display: flex; flex-direction: column; gap: 8px; }
+/* The whole list is now every layer in the model rather than four trades, so it
+   is sized for a LIST: tight rows, hairline separation, no row-sized gaps. Four
+   comfortable rows and thirteen comfortable rows are different objects — at this
+   length "comfortable" fills the workspace, which is the one thing the chrome
+   must never do. */
+.layerList { display: flex; flex-direction: column; gap: 3px; }
+.layerGroupBlock { display: flex; flex-direction: column; gap: 3px; }
+
+/* Group caption inside the layer list. Deliberately a caption and not a panel —
+   the list stays one column of rows, and the heading is just a quiet marker in
+   it rather than a box around a box. */
+.layerGroup {
+  margin: 7px 0 1px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--bp-text-dim, #94a3b8);
+  opacity: 0.6;
+}
 
 .layerRow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 30px;
-  padding: 3px 8px;
+  gap: 8px;
+  min-height: 24px;
+  padding: 1px 7px;
   border: 1px solid var(--bp-border);
-  border-radius: 7px;
+  border-radius: 6px;
 }
 .layerRowActive { border-color: var(--bp-accent, #38bdf8); }
 
+/* The colour dot is also the SOLO button — press it to see only that layer,
+   press it again to bring everything back. It was decoration; making it the
+   control costs the row no width and spares it a third button. */
 .layerDot {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 0;
+  cursor: pointer;
+  transition: box-shadow 0.12s, transform 0.12s;
+}
+.layerDot:hover { transform: scale(1.25); }
+/* Soloed: an accent ring, so at a glance you can see WHY everything else is
+   off — otherwise a stripped-down model just looks broken. */
+.layerDotSolo {
+  box-shadow: 0 0 0 2px var(--bp-accent, #38bdf8), 0 0 8px var(--bp-accent, #38bdf8);
 }
 
 .layerName {
@@ -331,21 +427,34 @@
   background: none;
   border: none;
   color: var(--bp-text, #f1f5f9);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 500;
   cursor: pointer;
   padding: 0;
 }
 
+/* Says a row is locked before it is tapped. Small and quiet — the row is still
+   readable as a layer name first; nobody needs a badge shouting at them from
+   inside their own drawing. */
+.layerProTag {
+  margin-left: 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bp-accent, #38bdf8);
+  opacity: 0.9;
+  vertical-align: 1px;
+}
+
 .layerToggle {
-  min-width: 44px;
-  min-height: 26px;
+  min-width: 34px;
+  min-height: 20px;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.35));
   border: 1px solid var(--bp-border);
   color: #94a3b8;
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 600;
-  border-radius: 7px;
+  border-radius: 6px;
   cursor: pointer;
 }
 .layerToggleOn {
@@ -356,34 +465,49 @@
 
 /* ── Persistent Explode slider — bottom-right, own SOLID surface (never fades
    with UI opacity), slim to match the rest of the chrome. ──────────────────── */
+/* Sits BESIDE the rail, not under it. The rail is a 44px full-height column
+   whose Clear button is pinned to its foot with margin-top:auto — which is the
+   same bottom-left corner this bar was claiming, so EDIT and CLEAR printed on
+   top of each other. Clearing the rail's width keeps both on the perimeter and
+   still leaves the middle of the workspace empty. */
 .editBar {
   position: absolute;
   bottom: 14px;
-  left: 14px;
+  left: 58px;
   z-index: 56;
   display: flex;
   align-items: center;
   gap: 10px;
   pointer-events: auto;
 }
+/* NO BOX. It was the last slab of chrome on the workspace — a filled, blurred,
+   bordered button sitting where everything else is a glyph floating on the
+   model. Same idiom as the rail now: icon over a tiny uppercase caption, dim
+   until you reach for it, accent COLOUR rather than a filled pill when it is
+   on. There is plenty of perimeter; none of it needs a container. */
 .editToggle {
-  height: 34px;
-  padding: 0 16px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--bp-text, #f1f5f9);
-  background: rgba(8, 12, 24, 0.9);
-  border: 1px solid var(--bp-border);
-  border-radius: 8px;
-  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: none;
+  border: none;
   cursor: pointer;
+  color: var(--bp-text-dim, #94a3b8);
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  opacity: 0.82;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  transition: opacity 0.12s, color 0.12s;
 }
-.editToggle:hover { border-color: var(--bp-accent, #38bdf8); }
-.editToggleOn {
-  color: #052e16;
-  background: #22d3ee;
-  border-color: #22d3ee;
-  box-shadow: 0 0 14px rgba(34, 211, 238, 0.5);
+.editToggle:hover { opacity: 1; color: var(--bp-text, #f1f5f9); }
+.editToggleOn { color: var(--bp-accent, #38bdf8); opacity: 1; }
+.editIcon {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
 }
 .editHint {
   font-size: 11px;
@@ -397,42 +521,153 @@
 @media (max-width: 767px), (max-height: 600px) {
   /* Lift Edit off the bottom edge into the same visible band as the Place tab —
      the phone's gesture bar (and the emulator's window chrome) clip anything
-     within ~40px of the bottom. Left column, so no conflict with Place (centre)
-     or Explode (right, lifted higher still). */
-  .editBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); left: 10px; }
+     within ~40px of the bottom. Clear of Place (centre) and Explode (right,
+     lifted higher still) — and now clear of CLEAR, which this rule had missed:
+     the rail's foot button sits in this same left column, so at left:10px the
+     two captions printed on top of each other. */
+  .editBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); left: 58px; }
   .editHint { display: none; }
+}
+
+/* "Sheet 3 of 6" — which page of a multi-page set the model was built from,
+   and the arrows to say "not that one". Sits above Edit in the bottom-left
+   column, dim and container-less like the rest of the chrome: a statement of
+   fact you can read at a glance, not a panel demanding a decision. */
+.sheetNote {
+  position: absolute;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  /* BESIDE the rail, not in it. At left:14px this line runs straight through the
+     rail's left column: in landscape it printed across PLAN, in the gap between
+     PLACE and EDIT, and at every size it landed on CLEAR's caption — the arrows
+     are a 44px touch target on a phone, so the note's box is taller than the one
+     line of text suggests. The rail is 44px wide; 58px clears it with the same
+     inset the rest of this corner already uses. */
+  left: 58px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: var(--bp-text-dim, #94a3b8);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+.sheetStep {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--bp-text-dim, #94a3b8);
+  cursor: pointer;
+}
+.sheetStep:hover:not(:disabled) { color: var(--bp-accent, #38bdf8); }
+.sheetStep:disabled { opacity: 0.3; cursor: default; }
+@media (max-width: 767px), (max-height: 600px) {
+  /* Lifted off the bottom edge, where a phone's gesture bar clips it. The left
+     inset is the base 58px at every size now — see .sheetNote. */
+  .sheetNote { bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+}
+/* Below 340px tall the rail wraps into two 44px columns (RailCascade), so the
+   58px that used to clear it now lands inside the strip. Clear the wider rail. */
+@media (max-height: 340px) {
+  .sheetNote { left: 110px; }
 }
 
 .explodeBar {
   position: absolute;
   bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-  right: 14px;
+  /* STOOD ON END, on the right edge.
+     It was a horizontal strip lying across the bottom-centre: label + 120px of
+     slider + Reset, ~180px of chrome reaching in along the one axis the model
+     wants most. Vertical costs the workspace a ~30px column of edge instead,
+     and a slider that moves the way the building comes apart — up — reads as
+     the thing it does.
+     Right edge because that column already answers "what am I looking at"
+     (floors, x-ray, edit). It sits at the BOTTOM of it, and the rail above is
+     bounded so the two never meet — see .editRail's max-height. */
+  right: 8px;
+  left: auto;
+  transform: none;
   z-index: 56;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 4px;
+  gap: 4px;
+  padding: 0;
   /* No box — floats over the model. */
   background: none;
   border: none;
   pointer-events: auto;
 }
-.explodeLabel {
-  font-size: 11px;
-  font-weight: 600;
+/* An icon, in the rail's own idiom — dim glyph, no box, no permanent caption.
+   The word was set sideways to keep the column narrow and simply could not be
+   read at 8px on its side. */
+/* Same treatment as the left rail's glyphs (RailCascade .glyph/.icon): dim
+   theme colour, a drop-shadow to stay legible over the model, 0.82 opacity
+   lifting to full on hover. Because it is an SVG on currentColor rather than an
+   emoji, it actually TAKES the colour — which is the whole reason it is drawn
+   and not typed. */
+.explodeIcon {
+  display: block;
+  color: var(--bp-text-dim, #94a3b8);
+  opacity: 0.82;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+  transition: opacity 0.12s, color 0.12s;
+}
+.explodeBar:hover .explodeIcon {
+  opacity: 1;
   color: var(--bp-text, #f1f5f9);
+}
+/* The word, on hover only, and ABSOLUTE so it costs the column no width when
+   it is not showing — it hangs off to the left, over the workspace, for the
+   moment you are pointing at the control anyway. */
+.explodeLabel {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  margin-right: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--bp-text-dim, #94a3b8);
   white-space: nowrap;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
 }
-.explodeSlider { width: 120px; accent-color: var(--bp-accent, #38bdf8); cursor: pointer; }
+.explodeBar:hover .explodeLabel { opacity: 1; }
+.explodeSlider {
+  /* vertical-lr + rtl puts 0 at the BOTTOM and full separation at the top,
+     which is the direction the parts actually travel. (vertical-rl alone
+     inverts it.) `slider-vertical` is the pre-Chrome-111 spelling, kept for
+     older Android WebViews; the two agree on direction. */
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  width: 20px;
+  height: 110px;
+  accent-color: var(--bp-accent, #38bdf8);
+  cursor: pointer;
+}
 .explodeReset {
   background: none;
   border: none;
+  padding: 0;
   color: var(--bp-text-dim, #94a3b8);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
   cursor: pointer;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
 }
 .explodeReset:hover { color: var(--bp-text, #f1f5f9); }
 /* When the bottom Place sheet is open, float the explode control ABOVE it so it
@@ -454,7 +689,7 @@
 .floorBarLifted { bottom: auto; }
 .floorBar {
   position: absolute;
-  top: 70px;
+  top: 92px;
   right: 6px;
   z-index: 56;
   display: flex;
@@ -467,6 +702,66 @@
   border: none;
   pointer-events: auto;
 }
+/* "Select: Whole | Member" — the granularity switch, right edge above the edit
+   rail. Same container-less language as everything else: tiny caption, two word
+   buttons, accent COLOUR on the active one rather than a filled pill. It is a
+   statement of what the next tap does, so it is always legible and never a
+   surface sitting on the model. */
+.grainSwitch {
+  position: absolute;
+  top: 40px;
+  right: 6px;
+  z-index: 56;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  pointer-events: auto;
+  /* ONE LINE. "Select / Whole / Member" was wrapping to two on a phone, which
+     doubled the row to 44px tall and pushed it straight through the edit rail
+     beginning below it — the selection's own name printed on top of the
+     switch. It is three short words; it should never have been allowed to
+     stack. Pinned by `right`, so keeping it on one line grows it leftward
+     along the edge instead of downward into the rail. */
+  white-space: nowrap;
+}
+.grainCaption {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--bp-text-dim, #94a3b8);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+}
+/* The picked-member rail: what you are holding, and the verb for it. Sits just
+   under the grain switch on the right edge, same container-less language. */
+.memberRail {
+  position: absolute;
+  top: 66px;
+  right: 6px;
+  z-index: 56;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  pointer-events: auto;
+}
+
+.grainBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--bp-text-dim, #94a3b8);
+  opacity: 0.8;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  transition: color 0.12s, opacity 0.12s;
+}
+.grainBtn:hover { opacity: 1; color: var(--bp-text, #f1f5f9); }
+.grainBtnOn { color: var(--bp-accent, #38bdf8); opacity: 1; }
+
 /* Edit rail — VERTICAL, right edge, mirroring the Build/Ask/Settings/Place rail
    on the left so both sides read as one system. Container-less: glyphs and tiny
    uppercase captions floating on the workspace, no panel, no box. It sits in the
@@ -474,7 +769,7 @@
    you are editing cover the very thing you are looking at. */
 .editRail {
   position: absolute;
-  top: 70px;
+  top: 92px;
   right: 6px;
   z-index: 56;
   display: flex;
@@ -484,7 +779,47 @@
   background: none;
   border: none;
   pointer-events: auto;
+  /* THE RAIL SCROLLS, so everything fits in it.
+     It was a fixed column that simply grew: add the stair rows to a selection
+     and it ran off the bottom of a phone, which is the whole reason the
+     type-specific controls ended up in a separate floating card in the first
+     place. A card is a second surface competing for the same edge and standing
+     on the model. One scrolling rail is the same idea done once — no matter how
+     many verbs a selection has, they are all in the one place, on the perimeter.
+     Bounded so it never reaches the explode column along the bottom. The old
+     sum assumed the explode column was ~126px tall; measured, it is 167 (a
+     110px slider plus its icon and padding) sitting 14 off the bottom, so the
+     reservation was ~40px short and the two overlapped by 35px on a phone.
+     Real sum: 92 (top) + 167 (explode) + 14 (its offset) + 20 (gap).
+     Top is 92 rather than 70 because the Select switch above it is 44px tall —
+     its buttons are full touch targets — so it runs to y=84 and the rail's own
+     label was printing over it. */
+  max-height: calc(100dvh - 293px);
+  /* WRAPS INTO A SECOND COLUMN rather than scrolling its verbs out of reach.
+     A full selection is label + step + pad + rotate + stretch + specs + x-ray +
+     explode + delete — about 310px of controls with nowhere near that much
+     edge to stand in once the explode column has its share. Scrolling "solved"
+     it by hiding half the verbs below the fold, which for a toolbar means they
+     may as well not exist: you cannot scroll for something you do not know is
+     there. Wrapping keeps every verb on screen and spends width instead, which
+     this edge has. The element is pinned by `right`, so extra columns grow
+     leftward across the workspace edge rather than off the screen. */
+  flex-wrap: wrap;
+  align-content: flex-end;
+  /* TWO COLUMNS AT MOST. Left to itself it wrapped to three and stood 240px
+     into a 562px workspace — 43% of the width, which is the centre of the model
+     and the one place chrome may not go. Two is enough for every selection we
+     have and still reads as an edge. */
+  max-width: 184px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* No visible scrollbar — a track and thumb is exactly the boxed chrome this
+     rail exists to avoid. It scrolls by drag/wheel like the model does. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
 }
+.editRail::-webkit-scrollbar { width: 0; height: 0; }
 
 /* What's selected — the rail's only prose, so you know what the buttons act on. */
 .editRailLabel {
@@ -493,7 +828,11 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  /* Same reason as the captions below: no surface behind it, so the shadow is
+     doing all the separating when the rail floats over pale siding or a print. */
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.98),
+    0 0 6px rgba(0, 0, 0, 0.85);
 }
 
 .editRailGroup {
@@ -502,13 +841,20 @@
   align-items: center;
   gap: 2px;
 }
+/* Bright enough to read off a WHITE model, not just off the dark grid. The rail
+   has no surface behind it by design, so the only thing separating the text
+   from what it floats over is its own contrast — and dim grey on pale siding or
+   a scanned print is invisible. Full-strength text plus a heavier shadow keeps
+   it legible on both without giving it a box. */
 .editRailCaption {
-  color: var(--bp-text-dim, #94a3b8);
+  color: var(--bp-text, #f1f5f9);
   font-size: 8px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.98),
+    0 0 6px rgba(0, 0, 0, 0.85);
 }
 
 .editRailBtn {
@@ -538,12 +884,25 @@
     '.    up    .'
     'left .     right'
     '.    down  .';
-  grid-template-columns: repeat(3, 26px);
-  grid-template-rows: repeat(3, 22px);
+  grid-template-columns: repeat(3, 20px);
+  grid-template-rows: repeat(3, 17px);
   place-items: center;
 }
 
 .editRailPair { display: flex; gap: 2px; }
+
+/* The CLUSTERS shrink; the single verbs do not.
+   Move, rotate and stretch are four, two and two marks each — at full size the
+   rail ran long enough to crowd the explode slider it shares this edge with.
+   They also read as one control rather than several, so they carry being small
+   in a way a lone glyph does not. Specs, X-ray, Explode and Delete keep their
+   full target: each is the only thing you can tap for that job. */
+.editRailPad .editRailBtn,
+.editRailPair .editRailBtn {
+  width: 20px;
+  height: 20px;
+  font-size: 13px;
+}
 
 /* Selected option in a rail group. Accent COLOUR, never a filled box — the rail
    is marks on the workspace, not buttons in a container. */
@@ -616,19 +975,30 @@
 }
 
 @media (max-width: 767px), (max-height: 600px) {
-  /* Sits one row ABOVE the Edit + Place band: Explode (right) and the Place tab
-     (centre) overlap horizontally, so they can't share a height. */
-  .explodeBar {
-    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
-    min-height: 44px;
-    height: 44px;
-    right: 10px;
-  }
+  /* Now that it is a narrow column it no longer needs a row of its own: the
+     Place tab sits centre and the verbs live in the left rail, so nothing is a
+     vertical neighbour here. Stays at 46: that number came from watching a real
+     phone clip anything within ~40px of the bottom, and env(safe-area-inset-
+     bottom) is frequently 0 in Chrome Android because the browser's own UI
+     already occupies that band — so this 46 is doing the work by itself, not
+     padding a safe area. It was briefly dropped to 30 to buy the edit rail
+     vertical room, which was measuring a 468px-tall desktop window and calling
+     it a phone: a real portrait handset has ~915px and the rail has room to
+     spare. Nothing was bought, and a control was moved into the gesture bar. */
+  .explodeBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); right: 4px; }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
-  .explodeSlider { width: 90px; }
+  .explodeSlider { height: 96px; }
   /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
      the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
   .floorBar { top: 62px; right: 2px; }
-  .editRail { top: 62px; right: 2px; gap: 8px; }
+  /* Same sum as desktop, phone numbers — and measured this time rather than
+     estimated. The old comment guessed the shorter (96px slider) explode column
+     at ~112px; it is 167 including icon and padding, which is why the rail ran
+     35px into it. Real sum: 92 (top) + 167 (explode) + 46 (its offset) + 16.
+     On a portrait handset (~915dvh) that still leaves ~590px against ~310px of
+     controls, so the rail stays ONE column there and the wrap never fires —
+     flex-wrap only breaks when the content actually exceeds the cap. The second
+     column is for short landscape windows, which is where it was seen. */
+  .editRail { top: 92px; right: 2px; gap: 8px; max-height: calc(100dvh - 321px); }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }

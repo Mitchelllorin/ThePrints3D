@@ -10,10 +10,22 @@ import {
   type SavedProject,
 } from '../../services/projectStorage'
 import { useAppStore } from '../../store/useAppStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import styles from './ProjectLibrary.module.css'
 
+/** How many saved jobs the free tier keeps. One is enough to show that the app
+ *  remembers your work; the second is what Pro is for. */
+const FREE_PROJECT_LIMIT = 1
+
 /** Modal-ish overlay showing saved projects + save-current button. */
-export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
+/**
+ * `inline` drops the modal shell so the library can live in a drawer section.
+ * Saving a job is not a thing you do in the middle of the workspace with the
+ * model hidden behind a dialog — and until now it was not a thing you could do
+ * at all, because this component was never imported anywhere. An uploaded print
+ * died on reload.
+ */
+export default function ProjectLibrary({ onClose, inline }: { onClose?: () => void; inline?: boolean }) {
   const [projects, setProjects] = useState<SavedProject[]>([])
   const [busy, setBusy] = useState(false)
   const drawings = useAppStore((s) => s.drawings)
@@ -21,6 +33,8 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
   const measurements = useAppStore((s) => s.measurements)
   const model = useAppStore((s) => s.model)
   const setView = useAppStore((s) => s.setView)
+  const isPro = useAppStore((s) => s.isPro)
+  const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
 
   const refresh = async () => {
     setProjects(await listProjects())
@@ -39,6 +53,14 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
   const saveCurrent = async () => {
     if (drawings.length === 0) {
       alert('Upload at least one drawing before saving the project.')
+      return
+    }
+    // Free keeps one job on the shelf — enough to prove the app remembers your
+    // work, which is the thing that has to be believed before anyone pays. The
+    // second job is the upgrade. Overwriting the existing one still works, so
+    // nobody is stuck: this blocks a NEW save, not saving.
+    if (!isPro && projects.length >= FREE_PROJECT_LIMIT) {
+      openUpgrade('Saving more than one project')
       return
     }
     const name = prompt('Project name?', `Job ${new Date().toLocaleDateString()}`)
@@ -89,7 +111,8 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
         view: restored.length > 0 ? 'model' : 'upload',
       })
       setView(restored.length > 0 ? 'model' : 'upload')
-      onClose()
+      // Inline there is no dialog to dismiss — the drawer stays where it is.
+      onClose?.()
     } finally {
       setBusy(false)
     }
@@ -102,9 +125,9 @@ export default function ProjectLibrary({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.header}>
+    <div className={inline ? styles.inlineWrap : styles.overlay} onClick={inline ? undefined : onClose}>
+      <div className={inline ? styles.inlineBody : styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.header} style={inline ? { display: 'none' } : undefined}>
           <h2 className={styles.title}>📁 My Projects</h2>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
         </div>

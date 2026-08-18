@@ -18,6 +18,7 @@ import { useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
+import { labelText } from './labelStyle'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 
@@ -74,8 +75,25 @@ export default function HoverNameplate() {
     let obj: THREE.Object3D | null = null
     let text: string | null = null
     for (const h of hits) {
-      const d = describe(h.object.userData)
-      if (d) { obj = h.object; text = d; break }
+      // LOOK UP THE CHAIN, not just at the mesh that was hit.
+      //
+      // Most builders stamp every mesh, but a placed object tags its WRAPPER
+      // GROUP once and fills it with untagged meshes — so a door, a window or a
+      // garage door had nothing to describe at the point of contact and the
+      // loop walked straight past them to whatever was behind. Hovering them
+      // produced no nameplate and no halo, which reads exactly like the pick
+      // being dead even though the group's own pointer handlers were fine.
+      // Bounded, because past a few levels the only thing left to find is a
+      // whole-scene container, and naming that would be worse than naming
+      // nothing.
+      let node: THREE.Object3D | null = h.object
+      let d: string | null = null
+      for (let up = 0; node && !d && up < 4; up++) {
+        if (node.userData?.noPick) { node = null; break }
+        d = describe(node.userData)
+        if (!d) node = node.parent
+      }
+      if (d && node) { obj = node; text = d; break }
     }
     if (obj === lastObj.current) return
     lastObj.current = obj
@@ -106,7 +124,7 @@ export default function HoverNameplate() {
         <meshBasicMaterial color="#22d3ee" transparent opacity={0.22} depthWrite={false} depthTest={false} />
       </mesh>
       <Billboard position={plate.pos}>
-        <Text fontSize={0.24 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.024 * labelScale} outlineColor="#0b1120">
+        <Text {...labelText(0.40 * labelScale, labelColor)}>
           {plate.text}
         </Text>
       </Billboard>

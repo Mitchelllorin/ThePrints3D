@@ -1,5 +1,7 @@
 /**
  * TopIcons — persistent global actions, fixed top-right: Undo ↩ plus zoom.
+ * (Clear lives at the foot of the left rail — the most destructive action wants
+ * to be nowhere near the buttons you tap without looking.)
  * (Build / Settings / Place open from their own always-visible edge-drawer tabs,
  * so they're no longer icons here.)
  * Plain-text tooltip to the LEFT on hover (CSS ::before). No emoji, no SVG.

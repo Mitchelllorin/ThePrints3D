@@ -45,6 +45,8 @@ import { mergeAutoAndUserWalls, inferCorners } from '../services/wallTraceReduce
 import { suggestFlushEdge } from '../services/flushInference'
 import { suggestAllCornerTrims } from '../services/cornerInference'
 import { suggestLineSnap } from '../services/lineSnapInference'
+import { autoPlaceOutlets } from '../services/autoPlaceTrades'
+import { useUISettingsStore } from './useUISettingsStore'
 import { pitchToRatio } from '../data/traceLayers'
 
 /** A rectangle/segment in image pixels (opposite corners or endpoints). */
@@ -110,6 +112,7 @@ function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): Infe
 import { defaultSmartProcessingState } from './smartProcessingSlice'
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
+import { readCachedPro } from '../services/billing'
 import { useConfigStore } from './useConfigStore'
 import { useFloorplanLocalStore } from './useFloorplanLocalStore'
 import {
@@ -410,6 +413,9 @@ interface AppState {
   /** Tag a drawing as belonging to a storey (0 = ground), so the overlay can
    *  show the right plan per floor and the AI knows which floors have a plan. */
   assignDrawingToLevel: (id: string, floorNumber: number) => void
+  /** Put the whole workspace down — drawings, build, objects, areas, runs.
+   *  One undo step; drawings stay in the pool so it is fully reversible. */
+  clearWorkspace: () => void
   removeDrawing: (id: string) => void
   updateDrawing: (id: string, patch: Partial<Drawing>) => void
   setDrawingType: (id: string, type: DrawingType) => void
@@ -437,7 +443,9 @@ interface AppState {
   carryWallsUp: (id: string, fromLevel: number, exteriorOnly?: boolean) => void
   clearTracingForDrawing: (id: string) => void
   selectDrawing: (id: string | null) => void
-  processDrawing: (id: string) => Promise<void>
+  /** @param pageOverride 1-based sheet to build from, instead of the one the
+   *  page-picker chose. The "wrong sheet" escape hatch for multi-page sets. */
+  processDrawing: (id: string, pageOverride?: number) => Promise<void>
   toggleLayer: (id: LayerId) => void
   setLayerOpacity: (id: LayerId, opacity: number) => void
   setSidebarOpen: (open: boolean) => void
@@ -454,6 +462,11 @@ interface AppState {
   completeWizardGroup: (groupId: ProjectContextWizardState['currentGroup']) => void
   resetWizard: () => void
   loadPresetDrawing: (difficulty: PresetDifficulty, practiceMode: boolean) => void
+  /** Whether this device owns the one-time Pro unlock. See services/billing.ts.
+   *  Seeded from the local cache so an offline launch does not lock out someone
+   *  who has already paid, then reconciled with the store when it can be asked. */
+  isPro: boolean
+  setPro: (isPro: boolean) => void
   // Measurements
   setMeasureMode: (active: boolean) => void
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
@@ -490,6 +503,13 @@ interface AppState {
   setPreviewMode: (on: boolean) => void
   setExplodeAmount: (amount: number) => void
   // Placed objects (furniture/fixtures)
+  /** Add the roof + ceiling the build pass discards, and hang a real door or
+   *  window in every opening the plan draws. Returns how many openings it
+   *  filled. One undo step. */
+  finishShell: () => number
+  /** Run the General's electrical pass on a storey. Returns how many devices
+   *  it placed, so the caller can say so. One undo step. */
+  autoPlaceElectrical: (level?: number) => number
   addPlacedObject: (obj: PlacedObject) => void
   removePlacedObject: (id: string) => void
   updatePlacedObject: (id: string, patch: Partial<PlacedObject>) => void
@@ -515,8 +535,8 @@ interface AppState {
   removeFloorsArea: (id: string) => void
   /** Drag-move a floor area by a pixel-space delta (both corners). */
   translateFloorsArea: (id: string, dxPx: number, dyPx: number) => void
-  /** Patch a floor area's pixel rect — used by the gizmo's Stretch mode. */
-  updateFloorsArea: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
+  /** Patch a floor area's pixel rect (Stretch) or its X-ray flag. */
+  updateFloorsArea: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2' | 'transparent'>>) => void
   /** Clone the floor area(s) on `fromLevel` up to the next storey — a guaranteed
    *  full upper floor matching the one below (no perspective-prone re-tracing). */
   carryFloorUp: (fromLevel: number) => void
@@ -529,8 +549,8 @@ interface AppState {
   removeRoofArea: (id: string) => void
   /** Drag-move a roof area by a pixel-space delta (both corners). */
   translateRoofArea: (id: string, dxPx: number, dyPx: number) => void
-  /** Patch a roof area's pixel rect — used by the gizmo's Stretch mode. */
-  updateRoofArea: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
+  /** Patch a roof area's pixel rect (Stretch) or its X-ray flag. */
+  updateRoofArea: (id: string, patch: Partial<Pick<TracedLine, 'x1' | 'y1' | 'x2' | 'y2' | 'transparent'>>) => void
   /** Commit a ridge edit (pitch/shape) for a roof area. Pass null to clear the
    *  override and fall back to the auto `size`-derived pitch. */
   setRoofRidge: (id: string, ridge: import('../types').RoofRidge | null) => void
@@ -708,7 +728,20 @@ function computeFramingResult(
         y: o.pxY as number,
         widthPx: widthMm / scaleMmPerPx,
         widthMm,
+        // The real direction, not just the nearest axis. `orientation` stays as
+        // the two-state approximation for the code that still reads it; `angle`
+        // is what anything measuring along the wall should use, and is the only
+        // one of the two that can describe a door in a wall running at 30
+        // degrees. Placement yaw is the negative of the plan-pixel angle (local
+        // +X runs along the wall, and pixel Y grows downward), normalised to
+        // [0, PI) because a line has no front and back.
+        //
+        // Exact while the print sits square in the world, which is the norm; a
+        // rotated overlay shifts every opening's angle by the same amount, and
+        // the framing only ever compares openings against walls read off the
+        // same print, so the offset cancels.
         orientation: Math.abs(Math.cos(o.rotationY)) >= Math.abs(Math.sin(o.rotationY)) ? 'horizontal' : 'vertical',
+        angle: ((-o.rotationY % Math.PI) + Math.PI) % Math.PI,
         type: o.type as 'door' | 'window',
       } satisfies ParsedOpening
     })
@@ -751,6 +784,9 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
+    // Trust the cache first. The store is asked on launch, but a basement with
+    // no signal must not read as "never bought it".
+    isPro: readCachedPro(),
     annotations: loadPersistedAnnotations(),
     selectedAnnotationId: null,
     annotateMode: false,
@@ -859,6 +895,40 @@ export const useAppStore = create<AppState>()(
         const d = s.drawings.find((dr) => dr.id === id)
         if (d) d.floorNumber = floorNumber
       }),
+
+    /**
+     * BACK TO AN EMPTY GRID.
+     *
+     * There was no way to put the workspace down. Removing drawings one at a
+     * time leaves the build, the placed objects, the slab, the roof and every
+     * traced run behind, so the only real reset was reloading the page — which
+     * is a fine trick for whoever wrote the app and invisible to everyone else.
+     *
+     * ONE undo step, and the drawings stay in the pool, so a clear you did not
+     * mean is a single tap back. That is what makes it safe to put a button on;
+     * an irreversible clear would need a confirm dialog, and a confirm dialog is
+     * a modal in the middle of the workspace.
+     */
+    clearWorkspace: () => {
+      pushHistory()
+      set((s) => {
+        for (const d of s.drawings) drawingPool.set(d.id, current(d) as Drawing)
+        s.drawings = []
+        s.selectedDrawingId = null
+        s.floorplanOverlay = { ...deepCopy(DEFAULT_FLOORPLAN_OVERLAY) }
+        s.placedObjects = []
+        s.floorsAreas = []
+        s.roofAreas = []
+        s.plumbingLines = []
+        s.electricalLines = []
+        s.hvacLines = []
+        s.circuits = []
+        s.buildResult = null
+        s.constructionDecisions = []
+        s.model = deepCopy(DEFAULT_MODEL)
+        s.explodeAmount = 0
+      })
+    },
 
     removeDrawing: (id) => {
       pushHistory()
@@ -1103,7 +1173,15 @@ export const useAppStore = create<AppState>()(
         // up. A wall that runs along the edge of the storey's footprint is
         // exterior; one that cuts across the middle is not, whatever it is
         // labelled.
-        const atLevel = userWalls.filter((w) => (w.level ?? 0) === fromLevel)
+        // CARRY UP WHATEVER IS ACTUALLY DOWN THERE — traced or detected.
+        //
+        // This read only `userWalls`, so a storey whose walls came from detection
+        // (a preset, or "Find the rest") had nothing to carry: switching to the
+        // floor above produced an empty storey and you had to trace the whole
+        // shell again by hand. The shell is the shell however it got there.
+        // Clones are stamped 'user' below, because once carried they are walls
+        // you own and can edit like any other.
+        const atLevel = d.parsedWalls.filter((w) => (w.level ?? 0) === fromLevel)
         const xs = atLevel.flatMap((w) => [w.x1, w.x2])
         const ys = atLevel.flatMap((w) => [w.y1, w.y2])
         const minX = Math.min(...xs), maxX = Math.max(...xs)
@@ -1123,7 +1201,7 @@ export const useAppStore = create<AppState>()(
           .filter((w) => !wallCoversLevel(w, toLevel))
           .filter((w) => !userWalls.some((u) => wallCoversLevel(u, toLevel) && sameFootprint(u, w)))
           // SAME footprint coords → plumb (vertical) and flush (faces aligned).
-          .map((w) => ({ ...w, level: toLevel }))
+          .map((w) => ({ ...w, level: toLevel, source: 'user' as const }))
         if (clones.length === 0) return
         // Clones inherit corners from already-clean source walls — append as-is.
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, [...userWalls, ...clones])
@@ -1147,7 +1225,7 @@ export const useAppStore = create<AppState>()(
         s.selectedDrawingId = id
       }),
 
-    processDrawing: async (id) => {
+    processDrawing: async (id, pageOverride) => {
       const drawing = get().drawings.find((d) => d.id === id)
       if (!drawing || drawing.status === 'processing') return
 
@@ -1165,7 +1243,9 @@ export const useAppStore = create<AppState>()(
           const d = s.drawings.find((d) => d.id === id)
           if (d) d.parseProgress = pct
         })
-      }, drywallCfg)
+      }, drywallCfg, pageOverride,
+        // A wall we cannot measure is built the way this project builds walls.
+        useConfigStore.getState().defaultStudSize === '2x6' ? 'stud-2x6' : 'stud-2x4')
 
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)
@@ -1466,6 +1546,13 @@ export const useAppStore = create<AppState>()(
         if (!next) return
         s.historyPast.push(captureSnapshot(s))
         applySnapshot(s, next)
+      }),
+
+    /** Only the billing service should call this — it is the one place that
+     *  knows whether the store actually said yes. */
+    setPro: (isPro) =>
+      set((s) => {
+        s.isPro = isPro
       }),
 
     setMeasureMode: (active) =>
@@ -1835,6 +1922,229 @@ export const useAppStore = create<AppState>()(
       })
     },
 
+    /**
+     * FINISH THE SHELL — the roof, and real doors and windows in the holes.
+     *
+     * `buildForMe` derives a roof and then deliberately throws it away
+     * (`s.roofAreas = userRoofs`), because tracing the roof is meant to be an
+     * act, not something that appears on its own. Right for a build. Wrong for
+     * anything meant to LOOK finished, which is why the showcase came out as
+     * walls under open sky.
+     *
+     * Openings have the same shape of problem from the other side: the plan's
+     * doors and windows are in `parsedOpenings`, so they punch holes in the
+     * framing — and nothing ever fills them. Holes, no doors. This places a
+     * real leaf and a real sash in each one.
+     *
+     * Separate from buildForMe on purpose. Building and finishing are different
+     * intentions, and rolling them together would take the roof decision away
+     * from the person tracing it.
+     */
+    finishShell: () => {
+      const s = get()
+      const walls = s.drawings.flatMap((d) => d.parsedWalls)
+      if (walls.length === 0) return 0
+
+      const levels = Math.max(1, s.model.floorLevels?.length ?? 1)
+      const shell = deriveBuildAreas(walls, {
+        levels,
+        makeId: (role, level) => `auto-${role}-${level}-${genId()}`,
+      })
+
+      // Every opening the plan draws, as an object that can be seen and moved.
+      // Anything already placed there is left alone so finishing twice does not
+      // hang a second door in the same hole.
+      const existing = new Set(
+        s.placedObjects
+          .filter((o) => o.type === 'door' || o.type === 'window')
+          .map((o) => `${Math.round(o.pxX ?? -1)}:${Math.round(o.pxY ?? -1)}`),
+      )
+
+      // The same pixel→world mapping every layer uses. Without it the openings
+      // were pushed with x:0,z:0 — fifteen doors and windows stacked on the
+      // world origin instead of sitting in the holes they belong to.
+      const overlay = s.floorplanOverlay
+      const ref = s.drawings.find((d) => d.id === overlay.drawingId) ?? s.drawings[0]
+      const imageWidth = ref?.rasterWidth ?? 1400
+      const imageHeight = ref?.rasterHeight ?? 900
+      const [overlayW, overlayD] = overlay.scale
+      const rot = (overlay.rotationDeg * Math.PI) / 180
+      const cos = Math.cos(rot)
+      const sin = Math.sin(rot)
+      const toWorld = (px: number, py: number) => {
+        const lx = (px / imageWidth - 0.5) * overlayW
+        const lz = (py / imageHeight - 0.5) * overlayD
+        return {
+          x: overlay.position[0] + (lx * cos + lz * sin),
+          z: overlay.position[1] + (-lx * sin + lz * cos),
+        }
+      }
+
+      /**
+       * WHICH WAY IS INSIDE.
+       *
+       * An opening was rotated from its wall's orientation alone — horizontal
+       * or vertical — which fixes the plane it lies in and says nothing about
+       * which face is the room. So half of them ended up back to front, and
+       * everything that hangs off a door's facing went with them: swing arcs
+       * opening into the yard, and a garage door whose tracks ran out to the
+       * driveway instead of back into the garage.
+       *
+       * The wall plane gives two candidate rotations, half a turn apart. The
+       * building's own centre picks between them: the one whose local +Z points
+       * back towards the middle of the plan is the one facing indoors.
+       */
+      const wallsAll = s.drawings.flatMap((d) => d.parsedWalls)
+      let cx = 0
+      let cy = 0
+      for (const w of wallsAll) { cx += (w.x1 + w.x2) / 2; cy += (w.y1 + w.y2) / 2 }
+      cx /= Math.max(1, wallsAll.length)
+      cy /= Math.max(1, wallsAll.length)
+
+      const facingInto = (op: { x: number; y: number; orientation: string }): number => {
+        const base = op.orientation === 'vertical' ? Math.PI / 2 : 0
+        // Image Y runs down; world Z runs with it, so the plan-space vector to
+        // the centre is the world one.
+        const toCx = cx - op.x
+        const toCy = cy - op.y
+        for (const theta of [base, base + Math.PI]) {
+          // Local +Z under a Y-rotation lands on (sin θ, cos θ) in plan.
+          if (Math.sin(theta) * toCx + Math.cos(theta) * toCy > 0) return theta
+        }
+        return base
+      }
+
+      let added = 0
+      pushHistory()
+      set((st) => {
+        // Keep whatever the user traced; add the derived roof and ceiling that
+        // the build pass discards.
+        const userRoofs = st.roofAreas.filter((a) => !a.id.startsWith('auto-'))
+        st.roofAreas = [...userRoofs, ...shell.roofs]
+        // Add whatever the shell is MISSING, by role, rather than assuming the
+        // build pass left the slab behind. It only lays one if `buildAutoShell`
+        // is on, and a house that is supposed to look finished should not
+        // depend on a config toggle to have something to stand on — that is
+        // exactly how this one ended up as walls in mid-air.
+        //
+        // NOT ceilings. buildForMe drops auto-ceilings deliberately and adding
+        // them back put a flat sheet through the gable — a lone plane hanging
+        // in the roof, which is exactly the thing that decision was avoiding.
+        const haveRole = (prefix: string) => st.floorsAreas.some((a) => a.id.startsWith(prefix))
+        const missing = shell.floors.filter((a) => {
+          if (a.id.startsWith('auto-ceiling')) return false
+          const role = a.id.split('-').slice(0, 2).join('-')  // 'auto-slab', 'auto-deck', …
+          return !haveRole(role)
+        })
+        st.floorsAreas = [...st.floorsAreas, ...missing]
+
+        for (const d of st.drawings) {
+          for (const op of d.parsedOpenings) {
+            const key = `${Math.round(op.x)}:${Math.round(op.y)}`
+            if (existing.has(key)) continue
+            existing.add(key)
+            const item = getCatalogItem(op.type)
+            const widthM = (op.widthMm ?? 0) / 1000
+            const { x, z } = toWorld(op.x, op.y)
+            st.placedObjects.push({
+              id: genId(),
+              type: op.type,
+              x,
+              z,
+              rotationY: facingInto(op),
+              // Fill the hole that was framed, rather than dropping a stock
+              // leaf into an opening cut for something else.
+              scaleX: widthM > 0 && item?.defaultW ? widthM / item.defaultW : 1,
+              scaleZ: 1,
+              scaleY: 1,
+              label: item?.label ?? op.type,
+              pxX: op.x,
+              pxY: op.y,
+              level: d.floorNumber ?? 0,
+            })
+            added++
+          }
+        }
+      })
+      return added
+    },
+
+    /**
+     * THE GENERAL'S FIRST PASS — read the build, place the devices.
+     *
+     * Everything it drops is an ordinary PlacedObject, so the moment it lands
+     * the user can select, drag, retype or delete any of it exactly as if they
+     * had placed it by hand. That is the whole contract: the General does the
+     * tedious first pass, the user keeps absolute control of the result.
+     *
+     * It also goes through pushHistory as one step, so a pass you dislike is a
+     * single undo away rather than forty deletions.
+     */
+    autoPlaceElectrical: (level) => {
+      const s = get()
+      const overlay = s.floorplanOverlay
+      const drawing = s.drawings.find((d) => d.id === overlay.drawingId) ?? s.drawings[0]
+      if (!drawing) return 0
+
+      const storey = level ?? 0
+      const heating = useUISettingsStore.getState().heatingType
+
+      // Windows are where a baseboard emitter goes, and therefore where a
+      // receptacle may not. Only this storey's, in the drawing's pixel space.
+      const windows = s.placedObjects
+        .filter((o) => o.type === 'window' && (o.level ?? 0) === storey)
+        .filter((o) => o.pxX != null && o.pxY != null)
+        .map((o) => ({ pxX: o.pxX as number, pxY: o.pxY as number }))
+
+      const devices = autoPlaceOutlets({
+        walls: drawing.parsedWalls,
+        scaleMmPerPx: drawing.scaleMmPerPx,
+        level: storey,
+        heating,
+        windows,
+      })
+      if (devices.length === 0) return 0
+
+      // Same pixel→world mapping the overlay and every layer uses, so a device
+      // lands on the wall it was computed against rather than near it.
+      const imageWidth = drawing.rasterWidth ?? 1400
+      const imageHeight = drawing.rasterHeight ?? 900
+      const [overlayW, overlayD] = overlay.scale
+      const rot = (overlay.rotationDeg * Math.PI) / 180
+      const toWorld = (px: number, py: number) => {
+        const lx = (px / imageWidth - 0.5) * overlayW
+        const lz = (py / imageHeight - 0.5) * overlayD
+        const cos = Math.cos(rot)
+        const sin = Math.sin(rot)
+        return {
+          x: overlay.position[0] + (lx * cos + lz * sin),
+          z: overlay.position[1] + (-lx * sin + lz * cos),
+        }
+      }
+
+      pushHistory()
+      set((st) => {
+        for (const d of devices) {
+          const { x, z } = toWorld(d.pxX, d.pxY)
+          st.placedObjects.push({
+            id: genId(),
+            type: d.type,
+            x,
+            z,
+            rotationY: d.rotationY,
+            scaleX: 1,
+            scaleZ: 1,
+            scaleY: 1,
+            label: d.reason,
+            pxX: d.pxX,
+            pxY: d.pxY,
+            level: d.level,
+          })
+        }
+      })
+      return devices.length
+    },
+
     // ─── Placed objects (furniture / fixtures) ────────────────────────
     addPlacedObject: (obj) => {
       pushHistory()
@@ -2094,9 +2404,34 @@ export const useAppStore = create<AppState>()(
     toggleTradeLayerVisible: (layer) => {
       set((s) => {
         const next = new Set(s.visibleLayers)
-        if (next.has(layer)) next.delete(layer)
-        else next.add(layer)
+        const nowVisible = !next.has(layer)
+        if (nowVisible) next.add(layer); else next.delete(layer)
         s.visibleLayers = next
+
+        /**
+         * ONE TOGGLE, BOTH WORLDS — the other direction.
+         *
+         * There are two visibility systems. The newer per-system layers read
+         * this `visibleLayers` Set; BuildingModel is handed the `layers` ARRAY
+         * and reads `layer.visible` on it. The Layers panel only ever drove the
+         * Set, so a toggle hid the traced geometry and left everything
+         * BuildingModel had drawn standing — measured, Framing went 1031 → 535
+         * and looked like the switch half-worked. `toggleLayer` already mirrors
+         * the other way and says so in its own comment; this direction was
+         * simply never done.
+         *
+         * Mapped by hand because the two vocabularies disagree: the trade key
+         * is 'hvac', the layer id is 'mechanical'.
+         */
+        const layerId: Partial<Record<TraceLayer, string>> = {
+          floors: 'floors', framing: 'framing', roof: 'structure',
+          electrical: 'electrical', plumbing: 'plumbing', hvac: 'mechanical',
+        }
+        const id = layerId[layer]
+        if (id) {
+          const l = s.layers.find((x) => x.id === id)
+          if (l) l.visible = nowVisible
+        }
       })
     },
 

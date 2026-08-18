@@ -35,9 +35,14 @@ function runAction(kind: AssistantActionKind) {
     case 'autoBuild':
       app.buildForMe()
       break
-    case 'build':
-      app.buildModel()
+    // Seed-guided: they traced one, go find the ones that match it. Replaces
+    // the old 'build' action, whose button no longer exists and whose job the
+    // app now does as you trace.
+    case 'findRest': {
+      const d = app.drawings.find((x) => x.id === app.floorplanOverlay.drawingId) ?? app.drawings[0]
+      if (d) void app.processWithSeeds(d.id)
       break
+    }
   }
 }
 
@@ -51,6 +56,24 @@ export default function AssistantBubble() {
   const tracePaused = useFloorplanLocalStore((s) => s.tracePaused)
   const activePanel = useFloorplanLocalStore((s) => s.activePanel)
   const calibrationHandledIds = useFloorplanLocalStore((s) => s.calibrationHandledIds)
+  /**
+   * SILENT WHENEVER A MENU IS OPEN.
+   *
+   * This coach was pulled once for floating over other menus, and that was a
+   * fair complaint — a suggestion card sitting on top of the drawer you just
+   * opened is in the way of the thing you already decided to do. It has nothing
+   * useful to say at that moment anyway: you are mid-action, not looking for
+   * the next step.
+   *
+   * So the rule is the same one the busy gate below already applies to tracing
+   * and calibrating — if the user is doing something, say nothing. The bubble
+   * is for the pause between actions, which is the only time "what now?" is a
+   * real question.
+   */
+  const buildOpen = useFloorplanLocalStore((s) => s.buildDrawerOpen)
+  const askOpen = useFloorplanLocalStore((s) => s.askDrawerOpen)
+  const settingsOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
+  const aMenuIsOpen = buildOpen || askOpen || settingsOpen
   // The guided tutorial owns the coaching while it runs — don't double up.
   const tutorialActive = useFloorplanLocalStore((s) => s.tutorialActive)
 
@@ -76,7 +99,7 @@ export default function AssistantBubble() {
     activePanel,
   }
 
-  const suggestion = tutorialActive ? null : nextSuggestion(ctx)
+  const suggestion = tutorialActive || aMenuIsOpen ? null : nextSuggestion(ctx)
   const visibleId = suggestion && suggestion.id !== dismissedId ? suggestion.id : null
 
   // Auto-hide after ~15s so it never lingers — it reappears on its own when the

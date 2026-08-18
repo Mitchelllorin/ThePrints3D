@@ -17,7 +17,7 @@ export type AssistantActionKind =
   | 'useDetectedScale'
   | 'layFloor'
   | 'autoBuild'
-  | 'build'
+  | 'findRest'
   | 'trace'
 
 export interface Suggestion {
@@ -90,15 +90,20 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
     }
   }
 
-  if (!ctx.hasFloor) {
-    return {
-      id: 'floor',
-      message: 'Next up: lay the floor — the walls frame on top of it. I can get you started.',
-      actionLabel: 'Lay the floor',
-      actionKind: 'layFloor',
-      tone: 'idle',
-    }
-  }
+  /**
+   * NO "NEXT UP: LAY THE FLOOR".
+   *
+   * This was the last surviving piece of the old three-step wizard: load a
+   * preset and a card came across the top of the workspace telling you to lay a
+   * floor, in the same voice, before you had looked at the plan. The wizard it
+   * belonged to is gone from the Build drawer, and a coach that opens by handing
+   * out the first chore is the thing this app is supposed to not be.
+   *
+   * The suggestions BELOW earn their place — they offer something the user could
+   * not have done themselves in one tap (find the rest, use a scale we read off
+   * the drawing, build from what we detected). "Lay the floor" is just the next
+   * item on a list, and the rail already says it, in the section that does it.
+   */
 
   // "Model's standing" is the TERMINAL step — only declare it once there are real
   // WALLS in the model. `ctx.built` is sticky (a fresh auto-build on load, or
@@ -115,12 +120,23 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
     }
   }
 
+  /**
+   * ONCE THEY HAVE TRACED ONE, THE OFFER IS "FIND THE REST".
+   *
+   * This used to say "Ready to see it in 3D?" with a Build 3D button. There is
+   * no such button any more, and there is nothing to build: the walls stand up
+   * as they are traced. So the coach was offering a step that had already
+   * happened, by way of a control that no longer exists.
+   *
+   * What is genuinely worth offering at that exact moment is the thing the app
+   * does that nothing else does — you traced one, let it find the others.
+   */
   if (ctx.userWallCount > 0) {
     return {
-      id: 'build',
-      message: `Nice — ${ctx.userWallCount} wall${ctx.userWallCount === 1 ? '' : 's'} traced. Ready to see it in 3D?`,
-      actionLabel: 'Build 3D',
-      actionKind: 'build',
+      id: 'findRest',
+      message: `Nice — ${ctx.userWallCount} wall${ctx.userWallCount === 1 ? '' : 's'} traced. Want me to find the rest that match?`,
+      actionLabel: '✨ Find the rest',
+      actionKind: 'findRest',
       tone: 'idle',
     }
   }

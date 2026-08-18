@@ -115,6 +115,56 @@ describe('detectOpenings', () => {
     expect(openings).toHaveLength(0)
   })
 
+  // ── Walls that do not run along the page ──────────────────────────────────
+  //
+  // The detector used to file every wall as "horizontal" or "vertical" and scan
+  // along that axis, so a doorway in an angled wall was never found. These are
+  // the cases that produced nothing at all.
+
+  it('detects a doorway in a 45-degree wall', () => {
+    // One line from (0,0) heading down-right, with a gap between 100,100 and
+    // 150,150 — about 70px of gap measured ALONG the wall.
+    const walls = [wall(0, 0, 100, 100), wall(150, 150, 300, 300)]
+    const openings = detectOpenings(walls, { minGapPx: 10, maxGapPx: 200 })
+    expect(openings).toHaveLength(1)
+    expect(openings[0].widthPx).toBe(71)          // 50*sqrt(2), rounded
+    expect(openings[0].x).toBe(125)               // midpoint of the gap
+    expect(openings[0].y).toBe(125)
+    expect((openings[0].angle! * 180) / Math.PI).toBeCloseTo(45, 6)
+  })
+
+  it('detects a doorway in a shallow-angled wall', () => {
+    // A wall climbing 1 in 5 — comfortably "horizontal" by the old test, but its
+    // y1 values differ between the two segments, so bucketing never paired them.
+    const walls = [wall(0, 0, 100, 20), wall(150, 30, 400, 80)]
+    const openings = detectOpenings(walls, { minGapPx: 10, maxGapPx: 200 })
+    expect(openings).toHaveLength(1)
+    expect(openings[0].orientation).toBe('horizontal')  // nearest axis, as documented
+    expect((openings[0].angle! * 180) / Math.PI).toBeCloseTo(11.31, 1)
+  })
+
+  it('does not pair two angled walls that are parallel but not co-linear', () => {
+    // Same 45-degree direction, offset well clear of each other.
+    const walls = [wall(0, 0, 100, 100), wall(150, 400, 300, 550)]
+    expect(detectOpenings(walls, { minGapPx: 10, maxGapPx: 400 })).toHaveLength(0)
+  })
+
+  it('does not pair walls that share a corner but splay apart', () => {
+    // A corner is not a line. These start together and diverge, so measuring at
+    // the midpoint keeps them in separate groups.
+    const walls = [wall(0, 0, 200, 0), wall(0, 0, 200, 200)]
+    expect(detectOpenings(walls, { minGapPx: 10, maxGapPx: 400 })).toHaveLength(0)
+  })
+
+  it('does not open a phantom gap behind overlapping segments', () => {
+    // A long wall with a short one lying inside it: sorting by start alone would
+    // compare the SHORT one's end against the next segment and invent a gap.
+    const walls = [wall(0, 10, 400, 10), wall(20, 10, 60, 10), wall(450, 10, 600, 10)]
+    const openings = detectOpenings(walls, { minGapPx: 10, maxGapPx: 200 })
+    expect(openings).toHaveLength(1)
+    expect(openings[0].x).toBe(425)   // the real gap, 400→450
+  })
+
   it('detects multiple openings in the same wall line', () => {
     const walls = [
       wall(0, 10, 100, 10),

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall, buildVeneerSupport } from './framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb, boardSpec,
   finishesVisible,
@@ -47,7 +47,7 @@ describe('exterior envelope: sheathing + housewrap', () => {
   it('stacks outward from the stud face: sheathing, then wrap', () => {
     const g = buildWallEnvelope({ ...base, sheathing: wood, wrb: wrbLayer() })
     const sheets = withInfo(g, /OSB/)
-    const wrap = withInfo(g, /Housewrap/)
+    const wrap = withInfo(g, /housewrap/i)
     expect(sheets.length).toBeGreaterThan(0)
     expect(wrap.length).toBeGreaterThan(0)
     const studFace = base.thickness / 2
@@ -68,7 +68,7 @@ describe('exterior envelope: sheathing + housewrap', () => {
   it('omits the wrap when it is switched off, keeping the sheathing', () => {
     const g = buildWallEnvelope({ ...base, sheathing: wood, wrb: null })
     expect(withInfo(g, /OSB/).length).toBeGreaterThan(0)
-    expect(withInfo(g, /Housewrap/).length).toBe(0)
+    expect(withInfo(g, /housewrap/i).length).toBe(0)
   })
 
   it('cuts both layers around a door, and counts sheets for takeoff', () => {
@@ -78,9 +78,9 @@ describe('exterior envelope: sheathing + housewrap', () => {
       openings: [{ centerM: 3, widthM: 1.8, type: 'door' }],
     })
     expect(holed.userData.sheetCount as number).toBeLessThan(solid.userData.sheetCount as number)
-    expect(withInfo(holed, /Housewrap/).length).toBeGreaterThan(0)
+    expect(withInfo(holed, /housewrap/i).length).toBeGreaterThan(0)
     // No wrap piece may span the doorway at door height.
-    for (const m of withInfo(holed, /Housewrap/)) {
+    for (const m of withInfo(holed, /housewrap/i)) {
       m.geometry.computeBoundingBox()
       const bb = m.geometry.boundingBox!
       const x0 = m.position.x + bb.min.x, x1 = m.position.x + bb.max.x
@@ -98,7 +98,7 @@ describe('exterior envelope: sheathing + housewrap', () => {
     // ZIP-style sheathing already has the barrier on its face; a second one would
     // be wrong, so there is no layer to add.
     expect(wrbLayer('integrated')).toBeNull()
-    expect(wrbLayer()?.label).toMatch(/Housewrap/)   // default
+    expect(wrbLayer()?.label).toMatch(/housewrap/i)   // default
   })
 
   it('renders whichever barrier is chosen, still outboard of the sheathing', () => {
@@ -467,25 +467,51 @@ describe('gable-end rake termination', () => {
     g.traverse((o) => { if ((o as THREE.Mesh).isMesh) out.push((o.userData?.info as string) ?? '') })
     return out
   }
-  const angledRakes = (g: THREE.Object3D) => {
+
+  /**
+   * A rake is the sloped termination at a gable end. This USED to be built as a
+   * box tilted to the pitch and labelled "Rake fascia", and that is what this
+   * test asserted — a rotation greater than zero on a mesh with that name.
+   *
+   * It is built better than that now: an extruded PROFILE, whose top edge
+   * follows the roof surface and whose ends are cut plumb, so the two boards
+   * butt in one line at the peak instead of horning up past each other. The
+   * slope lives in the geometry, not in a rotation, and the mesh is named
+   * "Rake board". So the old assertion could only ever fail — it was testing
+   * for a shape the code deliberately stopped making.
+   *
+   * What it should assert is the INTENT: a gable end gets a sloped rake, a
+   * hipped or flat roof does not.
+   */
+  const rakeBoards = (g: THREE.Object3D) =>
+    infos(g).filter((i) => i.startsWith('Rake board')).length
+
+  /** The rake soffit runs up the slope, so it genuinely is tilted. */
+  const tiltedRakeSoffits = (g: THREE.Object3D) => {
     let n = 0
     g.traverse((o) => {
       const m = o as THREE.Mesh
-      if (m.isMesh && m.userData?.info === 'Rake fascia') {
-        // a rake must actually be tilted to follow the slope (not a flat board)
+      if (m.isMesh && m.userData?.info === 'Rake soffit') {
         if (Math.abs(m.rotation.x) > 0.05 || Math.abs(m.rotation.z) > 0.05) n++
       }
     })
     return n
   }
 
-  it('gable & truss roofs get sloped rake fascia on the gable ends', () => {
-    expect(angledRakes(buildRoofByType('Gable', opts))).toBeGreaterThan(0)
-    expect(angledRakes(buildRoofByType('Truss', opts))).toBeGreaterThan(0)
+  it('gable & truss roofs get a rake board on each slope of both gable ends', () => {
+    // Two ends × two slopes.
+    expect(rakeBoards(buildRoofByType('Gable', opts))).toBe(4)
+    expect(rakeBoards(buildRoofByType('Truss', opts))).toBe(4)
   })
+
+  it('the rake soffit follows the pitch rather than lying flat', () => {
+    expect(tiltedRakeSoffits(buildRoofByType('Gable', opts))).toBeGreaterThan(0)
+    expect(tiltedRakeSoffits(buildRoofByType('Truss', opts))).toBeGreaterThan(0)
+  })
+
   it('hip / flat / shed keep the four-side boxed eave (no rake)', () => {
     for (const type of ['Hip', 'Flat', 'Shed', 'Gambrel', 'Saltbox']) {
-      expect(infos(buildRoofByType(type, opts))).not.toContain('Rake fascia')
+      expect(rakeBoards(buildRoofByType(type, opts)), type).toBe(0)
     }
   })
 })
@@ -643,5 +669,127 @@ describe('two walls meeting make ONE framed corner', () => {
     const a = studsIn(buildWallFraming({ ...base })).length
     const b = studsIn(buildWallFraming({ ...base, capLap: {} })).length
     expect(a).toBe(b)
+  })
+})
+
+describe('masonry veneer stands on something', () => {
+  const base = { length: 6, height: 2.44, standoff: 0.12, outward: 1 as const }
+  const brick = claddingSpec('brick-veneer')!
+  const lap = claddingSpec('vinyl-lap')!
+
+  it('builds nothing for cladding that hangs on the wall', () => {
+    // Lap siding is fastened to the wall; it does not need a shelf.
+    expect(meshCount(buildVeneerSupport({ ...base, spec: lap }))).toBe(0)
+  })
+
+  it('gives brick a ledge wide enough to carry veneer AND cavity', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    const ledge = withInfo(g, /Brick ledge/)[0]
+    expect(ledge).toBeTruthy()
+    ledge.geometry.computeBoundingBox()
+    const depth = ledge.geometry.boundingBox!.max.z - ledge.geometry.boundingBox!.min.z
+    // Perching brick on its own thickness leaves the cavity unsupported.
+    expect(depth).toBeGreaterThan(brick.thicknessM + brick.gapM)
+  })
+
+  it('puts the ledge BELOW the wall base, so the veneer bears on its top', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    expect(withInfo(g, /Brick ledge/)[0].position.y).toBeLessThan(0)
+  })
+
+  it('flashes the ledge and turns it UP behind the veneer', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    expect(withInfo(g, /Through-wall flashing/).length).toBe(1)
+    const upturn = withInfo(g, /Flashing upturn/)[0]
+    expect(upturn).toBeTruthy()
+    // Behind the veneer, not out in the cavity.
+    expect(upturn.position.z).toBeLessThan(base.standoff + 1e-6)
+  })
+
+  it('weeps the first course — flashing without weeps is a bucket', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    const weeps = withInfo(g, /Weep/)
+    expect(weeps.length).toBeGreaterThan(0)
+    // Inside the 33" the code allows, at every gap.
+    const xs = weeps.map((m) => m.position.x).sort((a, b) => a - b)
+    for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeLessThanOrEqual(0.84)
+    // Just above the flashing, not up the wall.
+    expect(Math.max(...weeps.map((m) => m.position.y))).toBeLessThan(0.15)
+  })
+
+  it('ties the veneer back no more than 24 inches apart each way', () => {
+    const g = buildVeneerSupport({ ...base, spec: brick })
+    const ties = withInfo(g, /Veneer tie/)
+    expect(ties.length).toBeGreaterThan(0)
+    // Round finely enough to group a row without inventing spacing: at 1mm,
+    // 0.4 and 1.0096 read as 610mm apart and a legal 24" course looks illegal.
+    const rows = [...new Set(ties.map((m) => Math.round(m.position.y * 1e5)))].sort((a, b) => a - b)
+    for (let i = 1; i < rows.length; i++) expect((rows[i] - rows[i - 1]) / 1e5).toBeLessThanOrEqual(0.6096 + 1e-6)
+  })
+
+  it('honours the outward side, like the rest of the envelope', () => {
+    const out = buildVeneerSupport({ ...base, outward: -1, spec: brick })
+    expect(withInfo(out, /Brick ledge/)[0].position.z).toBeLessThan(0)
+  })
+})
+
+describe('housewrap gets taped', () => {
+  const base = {
+    length: 6, height: 2.7, thickness: 0.14, outward: 1 as const,
+    sheathing: sheathingLayer('wood', 'osb'),
+  }
+
+  it('tapes the course laps and every opening', () => {
+    // A wrap is not weathertight because it is stapled up — it is weathertight
+    // because the seams and penetrations are taped. If the model does not draw
+    // it, the model is showing a wall that would fail an inspection.
+    const g = buildWallEnvelope({
+      ...base,
+      wrb: wrbLayer('housewrap'),
+      openings: [{ centerM: 3, widthM: 1.2, type: 'window' }],
+    })
+    const tape = withInfo(g, /tape/i)
+    expect(tape.length).toBeGreaterThan(4)   // laps + head/sill/two jambs
+  })
+
+  it('does NOT tape a barrier that has no seams', () => {
+    // Fluid-applied is monolithic; taping it would be showing work nobody does.
+    const g = buildWallEnvelope({ ...base, wrb: wrbLayer('fluid') })
+    expect(withInfo(g, /tape/i).length).toBe(0)
+  })
+
+  it('does not tape when there is no barrier at all', () => {
+    const g = buildWallEnvelope({ ...base, wrb: null })
+    expect(withInfo(g, /tape/i).length).toBe(0)
+  })
+})
+
+describe('members are individually addressable', () => {
+  // Without an id a joist is anonymous geometry: you can see it and you can
+  // never select it. Studs already carry ids from the framing engine; the
+  // deck's members had none, which is why "select a member" worked on walls
+  // and nowhere else.
+  it('gives every joist its own id and label', () => {
+    const g = buildFloorJoists({ lenX: 6, lenZ: 4, element: '2x10', ocM: 0.4064 })
+    const ids = g.children.map((c) => c.userData.id).filter(Boolean)
+    expect(ids.length).toBeGreaterThan(3)
+    expect(new Set(ids).size).toBe(ids.length)      // unique
+    expect(g.children.every((c) => !c.userData.id || c.userData.label)).toBe(true)
+  })
+
+  it('keeps ids distinct between two decks', () => {
+    // Two floors in one scene must not hand out the same id, or isolating a
+    // joist on one storey would light up its twin on the other.
+    const a = buildFloorJoists({ lenX: 6, lenZ: 4, element: '2x10', ocM: 0.4064, idPrefix: 'deck0' })
+    const b = buildFloorJoists({ lenX: 6, lenZ: 4, element: '2x10', ocM: 0.4064, idPrefix: 'deck1' })
+    const idsA = new Set(a.children.map((c) => c.userData.id))
+    const overlap = b.children.filter((c) => idsA.has(c.userData.id))
+    expect(overlap).toHaveLength(0)
+  })
+
+  it('names the slab too', () => {
+    const g = buildFloorJoists({ lenX: 6, lenZ: 4, element: 'Concrete Slab', ocM: 0.4 })
+    const slab = g.children.find((c) => /slab/i.test(String(c.userData.id ?? '')))
+    expect(slab).toBeTruthy()
   })
 })

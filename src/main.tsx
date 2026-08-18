@@ -7,12 +7,25 @@ import './styles/mobile.css'
 import App from './App.tsx'
 import { useAppStore } from './store/useAppStore'
 import { useFloorplanLocalStore } from './store/useFloorplanLocalStore'
+import { useUISettingsStore } from './store/useUISettingsStore'
 
 // Dev-only: expose the stores so verification scripts can inject state (e.g. a
 // roof area) and read it back without driving the full trace UI. Stripped in prod.
 if (import.meta.env.DEV) {
   ;(window as unknown as Record<string, unknown>).__appStore = useAppStore
   ;(window as unknown as Record<string, unknown>).__floorplanLocalStore = useFloorplanLocalStore
+  // The finishes live here — sheathing, cladding, board, X-ray timing. Half of
+  // what is worth measuring only exists once finishes are on, so verifying it
+  // meant hand-driving the Settings drawer first. Now it does not.
+  ;(window as unknown as Record<string, unknown>).__uiSettingsStore = useUISettingsStore
+  // A ruler for the detector. Run `__scorePrints()` in the console to put all
+  // four real drawing sets through the whole pipeline and print the numbers —
+  // so a change to detection can be measured instead of squinted at. Loaded
+  // lazily so the corpus code never reaches a production bundle.
+  ;(window as unknown as Record<string, unknown>).__scorePrints = async (only?: string[]) => {
+    const { scorePrints } = await import('./dev/scorePrints')
+    return scorePrints(only)
+  }
 }
 
 // Dev self-heal: the production build ships a PWA service worker that precaches
@@ -35,3 +48,15 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// The one-time Pro unlock, reconciled with the Play Store once the app is up.
+// Deliberately after render and deliberately unawaited: the store already opened
+// with the cached answer, so this can only ever improve what we know, and a slow
+// or missing network must never hold up the workspace. refreshEntitlement()
+// returns null when it could not ask — on the web build, or offline — and null
+// leaves the cached entitlement exactly where it was.
+void (async () => {
+  const { refreshEntitlement } = await import('./services/billing')
+  const isPro = await refreshEntitlement()
+  if (isPro !== null) useAppStore.getState().setPro(isPro)
+})()

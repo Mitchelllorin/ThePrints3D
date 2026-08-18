@@ -14,6 +14,7 @@ import * as THREE from 'three'
 import { joistProfile } from '../data/traceLayers'
 import {
   type EnvelopeLayer, type CladdingSpec, type BoardSpec,
+  LEDGE_DROP_M, LEDGE_BEARING_EXTRA_M, WEEP_SPACING_M, TIE_SPACING_M, FLASHING_UPTURN_M,
 } from './constructionCode'
 
 const STUD_WIDTH_M = 0.038    // 1-1/2" nominal stud face
@@ -489,8 +490,13 @@ export function openingPlies(headerSpanM: number): number {
 
 export function buildFloorJoists(opts: {
   lenX: number; lenZ: number; element: string; ocM: number; opacity?: number; holes?: FloorHole[]
+  /** Prefix for per-member ids, so a single joist can be picked and isolated
+   *  the same way a stud can. Without an id a member is just anonymous
+   *  geometry: you can see it and you cannot select it. */
+  idPrefix?: string
 }): THREE.Group {
-  const { lenX, lenZ, element, ocM, opacity = 1, holes = [] } = opts
+  const { lenX, lenZ, element, ocM, opacity = 1, holes = [], idPrefix = 'joist' } = opts
+  let memberNo = 0
   const g = new THREE.Group()
   if (lenX < 0.1 || lenZ < 0.1) return g
 
@@ -504,6 +510,8 @@ export function buildFloorJoists(opts: {
     slab.castShadow = true; slab.receiveShadow = true
     slab.userData.layer = 'floors'
     slab.userData.info = 'Concrete slab · 4"'
+    slab.userData.id = `${idPrefix}-slab`
+    slab.userData.label = 'Concrete slab'
     g.add(slab)
     return g
   }
@@ -522,6 +530,8 @@ export function buildFloorJoists(opts: {
     m.castShadow = true; m.receiveShadow = true
     m.userData.layer = 'floors'
     m.userData.info = info
+    m.userData.id = `${idPrefix}-${memberNo++}`
+    m.userData.label = info
     g.add(m)
   }
   // Joists span the shorter dimension; the row of them runs along the longer.
@@ -630,6 +640,8 @@ export function buildFloorJoists(opts: {
   const half = spanLen / 2
   const addHanger = (w: number, h: number, d: number, x: number, y: number, z: number) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), hangerMat)
+    m.userData.id = `${idPrefix}-hanger-${memberNo++}`
+    m.userData.label = 'Joist hanger'
     m.position.set(x, y, z)
     m.castShadow = true
     m.userData.layer = 'floors'
@@ -792,6 +804,83 @@ export function buildCeiling(opts: { lenX: number; lenZ: number; ocM: number; op
   return g
 }
 
+// ── Per-edge parameters ──────────────────────────────────────────────────────
+
+/**
+ * A quantity that may differ around the building, with a default every edge
+ * falls back to.
+ *
+ * Every "the app cannot do that house" so far traces to the same shape: the
+ * parameters were scalars on the BUILDING. One pitch, one overhang, symmetric
+ * by construction — so 36" on the north and 12" on the south could not be said
+ * at all. Not an oversight; there was nowhere to put it.
+ *
+ * Hanging the value on the EDGE fixes that without making the ordinary case
+ * worse, because the default is inherited:
+ *
+ *     16                          — a normal roof, one number
+ *     { default: 16, eaveA: 36 }  — the odd one, one override
+ *
+ * Which also means an unknown is just an edge with no value, so the intake
+ * questions in `buildIntake` can ask about one edge the same way they ask about
+ * anything else. Asymmetry stops being a special case.
+ */
+export interface EdgeOverhang {
+  /** Metres. Any edge not named falls back to this. */
+  default: number
+  /** True eaves — the two low sides parallel to the ridge. A = positive side. */
+  eaveA?: number
+  eaveB?: number
+  /** Gable rakes — the two sloped ends. A = positive side. */
+  rakeA?: number
+  rakeB?: number
+}
+
+/** Either one number for the whole roof, or per-edge with a default. */
+export type OverhangSpec = number | EdgeOverhang
+
+export type RoofEdge = 'eaveA' | 'eaveB' | 'rakeA' | 'rakeB'
+
+/** The overhang for one edge, in metres. Never negative. */
+export function resolveOverhang(spec: OverhangSpec | undefined, edge: RoofEdge): number {
+  if (spec === undefined) return 0
+  if (typeof spec === 'number') return Math.max(0, spec)
+  const v = spec[edge]
+  return Math.max(0, typeof v === 'number' ? v : spec.default)
+}
+
+/**
+ * A gable RAKE cannot fly as far as an eave, and the limit is structural.
+ *
+ * The rake is carried by outlookers cantilevered over the gable wall, and they
+ * are good for 24" (12" for the ladder-framed version). Past that it wants
+ * engineered support — it is not a preference. An EAVE is a different member
+ * entirely: the rafter tail itself cantilevers, limited by span rather than by
+ * this number, so eaves are left alone.
+ *
+ * A 36" rake was being drawn without a word, which is the app quietly building
+ * something that would not pass. Clamping is the honest default; the UI should
+ * say so when it bites, rather than the number silently changing under you.
+ */
+export const RAKE_OUTLOOKER_MAX_M = 0.6096   // 24"
+
+/** The rake overhang actually workable on this edge, and whether it was cut. */
+export function limitedRakeOverhang(spec: OverhangSpec | undefined, edge: 'rakeA' | 'rakeB'): {
+  m: number; requested: number; clamped: boolean
+} {
+  const requested = resolveOverhang(spec, edge)
+  const m = Math.min(requested, RAKE_OUTLOOKER_MAX_M)
+  return { m, requested, clamped: m < requested - 1e-6 }
+}
+
+/** True when the edges disagree — worth saying out loud in the UI. */
+export function overhangIsAsymmetric(spec: OverhangSpec | undefined): boolean {
+  if (spec === undefined || typeof spec === 'number') return false
+  const edges: RoofEdge[] = ['eaveA', 'eaveB', 'rakeA', 'rakeB']
+  const first = resolveOverhang(spec, edges[0])
+  return edges.some((e) => resolveOverhang(spec, e) !== first)
+}
+
 // ── Gable roof (common rafters + ridge) ──────────────────────────────────────
 
 /**
@@ -805,6 +894,14 @@ export function buildCeiling(opts: { lenX: number; lenZ: number; ocM: number; op
  */
 export function buildGableRoof(opts: {
   lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+  /** Per-edge eave overhang. The tails, deck and shingles run out over it. */
+  overhangM?: OverhangSpec
+  /** The wall cladding, so the gable ends match the walls below them.
+   *  Null means cladding is switched OFF — draw none, rather than falling back
+   *  to a default colour and leaving two triangles up when the layer is hidden. */
+  cladding?: CladdingSpec | null
+  /** Envelope sheathing visibility, so the gable sheathing hides with the rest. */
+  sheathingVisible?: boolean
 }): THREE.Group {
   const { lenX, lenZ, pitch, ocM, opacity = 1 } = opts
   const g = new THREE.Group()
@@ -820,8 +917,57 @@ export function buildGableRoof(opts: {
   const runLen = spanAlongX ? lenZ : lenX
   const half = span / 2
   const rise = Math.max(0.1, half * pitch)
-  const rafterLen = Math.hypot(half, rise)
   const angle = Math.atan2(rise, half)
+  /** Actual gradient of the built slope — `rise` is clamped, so `pitch` can lie. */
+  const slope = rise / half
+
+  /**
+   * THE TAIL IS PART OF THE ROOF.
+   *
+   * The sloped assembly used to stop dead at the wall, and a separate boxed
+   * soffit was hung outside it at a flat height just under the eave line. So
+   * the model had an overhang, and then more overhang: three feet of bare
+   * soffit projecting past the last course of shingles, with nothing over it.
+   *
+   * On a real roof there is one edge, not two. The rafter TAILS continue past
+   * the plate, the deck runs out over them, the shingles lap the drip edge, and
+   * the fascia closes the tail ends — which sit `overhang × slope` BELOW the
+   * wall top, because the tail is still descending. The soffit then runs level
+   * from the wall back to the bottom of that fascia.
+   *
+   * Each eave resolves its own overhang, so the two sides need not match.
+   */
+  /**
+   * THE DECK RUNS PAST THE GABLE TOO.
+   *
+   * The eave fix ran the tails out ACROSS the slope, and left the other axis
+   * exactly as broken: the deck and shingles still spanned the footprint, while
+   * the rake flew 0.92 m past each gable end with open sky over it. Measured —
+   * deck to x ±5.50, rake fascia to ±6.42. Same defect, turned ninety degrees.
+   *
+   * On a real roof the sheathing overhangs the gable wall and the barge board
+   * caps its edge; that projection is what the rake IS. Each end takes its own
+   * rake overhang, so the run is the footprint plus both, shifted toward
+   * whichever end projects further.
+   */
+  const rakeA = limitedRakeOverhang(opts.overhangM, 'rakeA').m
+  const rakeB = limitedRakeOverhang(opts.overhangM, 'rakeB').m
+  const deckRun = runLen + rakeA + rakeB
+  const deckShift = (rakeA - rakeB) / 2
+
+  const eaveEdge = (sign: 1 | -1): RoofEdge => (sign > 0 ? 'eaveA' : 'eaveB')
+  /** Geometry of one slope, ridge to tail end, for the eave on that side. */
+  const slopeOf = (sign: 1 | -1) => {
+    const ovh = resolveOverhang(opts.overhangM, eaveEdge(sign))
+    const run = half + ovh                       // horizontal, ridge to tail
+    return {
+      ovh,
+      len: run * Math.hypot(1, slope),           // along the slope (collinear)
+      midAcross: sign * (run / 2),               // midpoint across
+      midY: (rise - ovh * slope) / 2,            // midpoint height
+      tailY: -ovh * slope,                       // deck line at the tail end
+    }
+  }
 
   const rafterInfo = `Rafter · ${Math.round(pitch * 12)}:12`
   const addBox = (w: number, h: number, d: number, x: number, y: number, z: number, rx: number, ry: number, rz: number, info: string) => {
@@ -839,25 +985,184 @@ export function buildGableRoof(opts: {
   const ps: number[] = [-halfRun + RW / 2, halfRun - RW / 2]
   for (let p = -halfRun + RW / 2 + Math.max(0.3, ocM); p < halfRun - RW / 2; p += Math.max(0.3, ocM)) ps.push(p)
 
+  // Each slope carries its own length and midpoint now, because the two eaves
+  // may overhang by different amounts.
+  const slopeNeg = slopeOf(-1)
+  const slopePos = slopeOf(1)
   if (spanAlongX) {
     for (const p of ps) {
-      addBox(rafterLen, RT, RW, -half / 2, rise / 2, p, 0, 0, angle, rafterInfo)   // left slope
-      addBox(rafterLen, RT, RW, half / 2, rise / 2, p, 0, 0, -angle, rafterInfo)   // right slope
+      addBox(slopeNeg.len, RT, RW, slopeNeg.midAcross, slopeNeg.midY, p, 0, 0, angle, rafterInfo)
+      addBox(slopePos.len, RT, RW, slopePos.midAcross, slopePos.midY, p, 0, 0, -angle, rafterInfo)
     }
     addBox(RW, RT, runLen, 0, rise, 0, 0, 0, 0, 'Ridge board')                     // ridge board
   } else {
     for (const p of ps) {
-      addBox(RW, RT, rafterLen, p, rise / 2, -half / 2, -angle, 0, 0, rafterInfo)
-      addBox(RW, RT, rafterLen, p, rise / 2, half / 2, angle, 0, 0, rafterInfo)
+      addBox(RW, RT, slopeNeg.len, p, slopeNeg.midY, slopeNeg.midAcross, -angle, 0, 0, rafterInfo)
+      addBox(RW, RT, slopePos.len, p, slopePos.midY, slopePos.midAcross, angle, 0, 0, rafterInfo)
     }
     addBox(runLen, RT, RW, 0, rise, 0, 0, 0, 0, 'Ridge board')
   }
+
+  /**
+   * SHEATHE AND SHINGLE IT.
+   *
+   * A pitched roof was rafters, a ridge and ties — correct framing and, to
+   * anyone who is not a framer, an unfinished building. A house reads as
+   * finished from its roof before anything else, so bare sticks up there undo
+   * every other finish on the model.
+   *
+   * Deck first, then courses of shingles stepping up the slope, each course
+   * standing slightly proud of the one below so it throws a shadow line —
+   * exactly the trick the lap siding uses, and for the same reason: the shadow
+   * is what the eye reads as texture.
+   */
+  const DECK_T = 0.012
+  const SHINGLE_EXP = 0.143            // 5-5/8" exposure, standard 3-tab
+  const SHINGLE_T = 0.006
+  const deckMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#8d8f93'), roughness: 0.95, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const shingleMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#4b4f55'), roughness: 0.92, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const FELT_T = 0.002
+  const feltMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#23262b'), roughness: 1, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  /** Lay a deck + its shingles on one slope. `sign` is which side of the ridge. */
+  const clad = (sign: 1 | -1) => {
+    // The rafters on the far side sit at MINUS the pitch: a slope centred at
+    // +half/2 descends as it runs out to the eave. Taking `sign * angle` here
+    // tilted every clad surface the opposite way to the sticks beneath it, so
+    // the roof climbed to the eaves and dipped at the ridge — a butterfly, with
+    // the courses running downhill. One sign governs all three things that must
+    // agree: the panel's tilt, the direction the courses step, and which way the
+    // offset normal lifts them clear of the rafter.
+    const a = -sign * angle
+    // Straight up out of the rafter's own plane.
+    const nx = -Math.sin(a), ny = Math.cos(a)
+    // Follow THIS slope's own tail, so the deck reaches the fascia on an eave
+    // that overhangs further than its opposite number.
+    const sl = sign > 0 ? slopePos : slopeNeg
+    const rafterLen = sl.len
+    const cx = sl.midAcross, cy = sl.midY
+    const put = (mat: THREE.Material, t: number, off: number, alongOff: number, info: string) => {
+      const px = cx + nx * off + Math.cos(a) * alongOff
+      const py = cy + ny * off + Math.sin(a) * alongOff
+      const m = spanAlongX
+        ? new THREE.Mesh(new THREE.BoxGeometry(rafterLen, t, deckRun), mat)
+        : new THREE.Mesh(new THREE.BoxGeometry(deckRun, t, rafterLen), mat)
+      if (spanAlongX) { m.position.set(px, py, deckShift); m.rotation.set(0, 0, a) }
+      else { m.position.set(deckShift, py, px); m.rotation.set(-a, 0, 0) }
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = 'roof'; m.userData.info = info
+      g.add(m)
+    }
+    put(deckMat, DECK_T, RT / 2 + DECK_T / 2, 0, 'Roof sheathing · 1/2" OSB')
+    /**
+     * FELT, BETWEEN THE DECK AND THE SHINGLES.
+     *
+     * Nothing is ever nailed straight to bare deck. The underlayment goes down
+     * first, and it is the layer that actually keeps water out when a shingle
+     * lifts — the shingles are the wear course over it. Leaving it out made the
+     * assembly wrong in the same way an untaped housewrap is wrong: covered,
+     * not detailed.
+     *
+     * Its own layer tag, so it toggles and X-rays with the rest of the roof
+     * build-up rather than being invisible inside the deck.
+     */
+    put(feltMat, FELT_T, RT / 2 + DECK_T + FELT_T / 2, 0, 'Underlayment · #15 felt')
+
+    /**
+     * Courses, starting AT THE EAVE and working up — the way they are nailed.
+     *
+     * They used to start at the ridge and step down a whole number of
+     * exposures, which left the remainder bare at the eave: the one edge on a
+     * roof that must never be short, since that is where the water leaves. The
+     * last course now laps over the ridge instead, which is what actually
+     * happens on site before the cap goes on.
+     */
+    const base = RT / 2 + DECK_T + FELT_T + SHINGLE_T / 2
+    const n = Math.max(1, Math.ceil(rafterLen / SHINGLE_EXP))
+    for (let i = 0; i < n; i++) {
+      const alongOff = rafterLen / 2 - (i + 0.5) * SHINGLE_EXP
+      const m = spanAlongX
+        ? new THREE.Mesh(new THREE.BoxGeometry(SHINGLE_EXP * 1.06, SHINGLE_T, deckRun), shingleMat)
+        : new THREE.Mesh(new THREE.BoxGeometry(deckRun, SHINGLE_T, SHINGLE_EXP * 1.06), shingleMat)
+      const px = cx + nx * base + Math.cos(a) * alongOff
+      const py = cy + ny * base + Math.sin(a) * alongOff
+      if (spanAlongX) { m.position.set(px, py, deckShift); m.rotation.set(0, 0, a) }
+      else { m.position.set(deckShift, py, px); m.rotation.set(-a, 0, 0) }
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = 'roof'; m.userData.info = 'Asphalt shingles'
+      g.add(m)
+    }
+
+    /**
+     * RIDGE CAP — the course that folds over the peak.
+     *
+     * Two flat planes meeting at an apex leave a V-shaped notch along the top,
+     * and you could see the ridge board down it: a thin orange line running the
+     * length of the roof, which is not something you ever see on a finished
+     * house. Forty-four of 3,600 downward rays were landing on the ridge board
+     * through that seam.
+     *
+     * On site the cap is a shingle bent over the peak. Here it is one short
+     * piece per slope that overshoots the apex, so the two overlap and close
+     * the seam from both sides.
+     */
+    // A LINE OF CAP SHINGLES, not one long piece. The ridge is capped with
+    // individual shingles bent over the peak at their own exposure; drawing it
+    // as a single extrusion gave a smooth bar with none of the joints that make
+    // a ridge read as shingled. It also stands properly off the field now —
+    // one shingle thickness barely proud read as nothing, so the two planes
+    // still looked simply butted.
+    const CAP_LEN = SHINGLE_EXP * 2.1
+    const CAP_T = SHINGLE_T * 2.4
+    const capAlong = -rafterLen / 2            // STRADDLE the apex, half either side
+    const capOff = base + SHINGLE_T * 1.6      // stands off the field
+    const capX = cx + nx * capOff + Math.cos(a) * capAlong
+    const capY = cy + ny * capOff + Math.sin(a) * capAlong
+    const capCount = Math.max(1, Math.round(deckRun / SHINGLE_EXP))
+    const capPitch = deckRun / capCount
+    for (let i = 0; i < capCount; i++) {
+      const alongRidge = deckShift - deckRun / 2 + (i + 0.5) * capPitch
+      const piece = spanAlongX
+        ? new THREE.Mesh(new THREE.BoxGeometry(CAP_LEN, CAP_T, capPitch * 0.9), shingleMat)
+        : new THREE.Mesh(new THREE.BoxGeometry(capPitch * 0.9, CAP_T, CAP_LEN), shingleMat)
+      if (spanAlongX) { piece.position.set(capX, capY, alongRidge); piece.rotation.set(0, 0, a) }
+      else { piece.position.set(alongRidge, capY, capX); piece.rotation.set(-a, 0, 0) }
+      piece.castShadow = true; piece.receiveShadow = true
+      piece.userData.layer = 'roof'; piece.userData.info = 'Ridge cap shingle'
+      g.add(piece)
+    }
+  }
+  clad(1); clad(-1)
 
   // ── Complete the framing: ties + gable-end studs (not rafters alone) ──
   // Spec: rafter ties ≤24" OC in the lower third; collar ties ≤48" OC in the
   // upper third; gable studs 16" OC (see research notes).
   const TT = 0.089, TW2 = 0.038
-  const tieY = Math.min(rise * 0.2, 0.3)        // ceiling/rafter ties above the plate
+  /**
+   * THE TIE SITS ON THE PLATE. It was floating above it.
+   *
+   * `min(rise * 0.2, 0.3)` put the tie up to 300mm above the eave line while it
+   * still spanned wall to wall. But the roof is at its LOWEST out there — the
+   * rafter is about 103mm deep at the plate — so the last stretch of every tie
+   * came out through the roof surface. Forty-two of 3,600 downward rays landed
+   * on a tie instead of a shingle: two combs of sticks lying on the shingles,
+   * parallel to the ridge, which is exactly what it looked like.
+   *
+   * A member spanning wall to wall IS a ceiling joist, and a ceiling joist
+   * bears on the top plate. Sitting it there puts its top at 89mm, under the
+   * rafter's 103mm, so the roof passes over it the whole way. (A rafter tie
+   * carried higher up is a different member and a SHORTER one — it lands on the
+   * rafters rather than the plates, the way the collar ties below already do.)
+   */
+  const tieY = TT / 2                           // bearing on the top plate
   const collarY = rise * 0.66                    // collar ties in the upper third
   const collarHalf = half * (1 - collarY / rise) // rafter half-width at collar height
   const studOC = 0.4064                          // 16"
@@ -874,6 +1179,160 @@ export function buildGableRoof(opts: {
       const hAt = Math.max(0.05, rise * (1 - Math.abs(s) / half))
       if (spanAlongX) addBox(TW2, hAt, TW2, s, hAt / 2, gp, 0, 0, 0, 'Gable stud')
       else addBox(TW2, hAt, TW2, gp, hAt / 2, s, 0, 0, 0, 'Gable stud')
+    }
+  }
+
+  /**
+   * SKIN THE GABLE ENDS.
+   *
+   * The wall cladding stops dead at the top plate, because a wall is a wall and
+   * knows nothing about the roof above it. That left the triangle at each end
+   * as bare studs with rake trim round it — from the street, a finished house
+   * with two holes punched in the ends of it.
+   *
+   * A gable end is just wall carried on up: studs, sheathing, siding, same as
+   * below. It is built HERE rather than in the envelope layer because this is
+   * the only place that knows where the triangle is — the roof owns the pitch,
+   * the span and the rake, and handing all three to the wall builder to
+   * reconstruct would be three chances to disagree.
+   *
+   * Tagged 'sheathing' and 'cladding' so the pieces sort with their own kind
+   * for X-ray, explode and the layer toggles rather than reading as roof.
+   */
+  const GABLE_SHEATH_T = 0.011           // 7/16" OSB
+  /**
+   * THE GABLE MATCHES THE WALLS. It is the same wall, carried up.
+   *
+   * The skin used to hard-code a cream colour and a 7" lap, so a house clad in
+   * brick or stucco still got clapboard above the plate — two different
+   * buildings meeting at the top plate. It now takes the same CladdingSpec the
+   * walls are built from: same material, same colour, same exposure. Where the
+   * cladding has no exposure at all (stucco, rainscreen panel) there are no
+   * courses to draw, which is also correct — stucco has no shadow lines.
+   */
+  const gableClad = opts.cladding ?? null
+  const GABLE_SIDING_T = gableClad?.thicknessM ?? 0.019
+  /**
+   * The triangle is bounded by the plate below and the UNDERSIDE OF THE DECK
+   * above — not by the rafter centre line.
+   *
+   * Cutting it to the centre line left a wedge of open air along both slopes,
+   * widest at the ridge, so the peak read as unsided from outside. The deck
+   * underside is that same line lifted by half a rafter depth, measured
+   * VERTICALLY (hence /cos): a perpendicular offset is not a vertical one on a
+   * slope. Lifting the apex by that much and letting the sloped edges run out
+   * to where they now meet the plate puts the sheathing tight under the deck
+   * the whole way up. The few extra centimetres past the wall line are buried
+   * in the eave.
+   */
+  const deckLift = (RT / 2) / Math.cos(angle)
+  const triHalf = half + deckLift / Math.max(0.05, slope)
+  const gableTri = new THREE.Shape()
+  gableTri.moveTo(-triHalf, 0)
+  gableTri.lineTo(triHalf, 0)
+  gableTri.lineTo(0, rise + deckLift)
+  gableTri.closePath()
+  /**
+   * The gable skins are part of the ENVELOPE, so they hide with it. They are
+   * built here because only the roof knows where the triangle is, but that is
+   * an implementation detail — to the user they are sheathing and siding, and
+   * turning sheathing off while two triangles of it stay up at the gables is
+   * the switch lying. Measured: cladding 303 → 28 and sheathing 78 → 2, the
+   * survivors being exactly these.
+   */
+  const gableSkins = [
+    { t: GABLE_SHEATH_T, layer: 'sheathing', info: 'Gable sheathing · 7/16" OSB',
+      mat: new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#c9a273'), roughness: 0.9, metalness: 0,
+        transparent: opacity < 1, opacity, side: THREE.DoubleSide,
+      }) },
+    { t: GABLE_SIDING_T, layer: 'cladding', info: `Gable ${(gableClad?.label ?? 'siding').toLowerCase()}`,
+      mat: new THREE.MeshStandardMaterial({
+        color: new THREE.Color(gableClad?.color ?? '#dcd6c8'), roughness: 0.85, metalness: 0,
+        transparent: opacity < 1, opacity, side: THREE.DoubleSide,
+      }) },
+  ]
+  /**
+   * The siding goes on in COURSES, not as one panel.
+   *
+   * A single flat triangle is technically clad and reads, from the street, as
+   * bare board — which is why the peak still looked unsided even once the
+   * geometry was there and measurably the outermost surface. Siding is only
+   * legible as siding because of the shadow line under every course. The wall
+   * builder below already lays lap courses for exactly this reason; the gable
+   * was the one face still being painted on in one stroke.
+   *
+   * Each course is sized at its own mid-height, so it sits within the triangle
+   * to within half a course at the rake — where the barge board covers it — and
+   * a small reveal is left between courses for the sheathing to read as the
+   * shadow beneath.
+   */
+  const gableSidingMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(gableClad?.color ?? '#dcd6c8'), roughness: 0.85, metalness: 0,
+    transparent: opacity < 1, opacity, side: THREE.DoubleSide,
+  })
+  const LAP_EXPOSURE = gableClad?.exposureM ?? 0.178
+  const apexY = rise + deckLift
+  const showSheath = opts.sheathingVisible !== false
+  const showClad = !!gableClad
+  const activeSkins = gableSkins.filter((k) =>
+    k.layer === 'sheathing' ? showSheath : showClad)
+  for (const gp of [-halfRun + RW / 2, halfRun - RW / 2]) {
+    const outward = gp >= 0 ? 1 : -1
+    let off = TW2 / 2                    // start at the outer face of the studs
+    for (const skin of activeSkins) {
+      const geo = new THREE.ExtrudeGeometry(gableTri, { depth: skin.t, bevelEnabled: false })
+      geo.translate(0, 0, -skin.t / 2)   // centre it so the plane maths is the panel's middle
+      const m = new THREE.Mesh(geo, skin.mat)
+      const plane = gp + outward * (off + skin.t / 2)
+      // The shape is drawn in XY with x ACROSS the gable. When the ridge runs
+      // along X the across-axis is already world X; otherwise turn it to face
+      // down Z. The triangle is symmetric, so which way it turns does not
+      // matter — only that the extrusion ends up on the gable's own axis.
+      if (spanAlongX) m.position.set(0, 0, plane)
+      else { m.rotation.y = Math.PI / 2; m.position.set(plane, 0, 0) }
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = skin.layer
+      m.userData.info = skin.info
+      g.add(m)
+      off += skin.t
+    }
+
+    // Lap courses over the sheathing — only when cladding is shown at all, and
+    // only for cladding that HAS courses.
+    if (!showClad) continue
+    if (gableClad && gableClad.exposureM == null) continue
+    const courses = Math.max(1, Math.ceil(apexY / LAP_EXPOSURE))
+    for (let i = 0; i < courses; i++) {
+      const y0 = i * LAP_EXPOSURE
+      const y1 = Math.min(apexY, y0 + LAP_EXPOSURE)
+      // Width AT THE STRIP'S OWN HEIGHT. Taking it at the course mid-height and
+      // then standing the strip at the course TOP made every one of them too
+      // wide for where it sat, so each poked past the rake on both sides — a
+      // row of dashes down each gable end, which is what the siding course
+      // lines had turned into.
+      const w = 2 * triHalf * (1 - y1 / apexY)
+      if (w < 0.05) continue
+      // A STRIP, not a panel. Sizing whole courses to the triangle left the
+      // sheathing showing through in notches at the rake — 47 of 481 rays on a
+      // gable face — because a rectangle cannot fill a tapering course. The
+      // solid triangle beneath does the covering; these are only the butt edges
+      // that throw the shadow, which is the whole reason siding reads as siding.
+      const h = 0.018
+      const plane = gp + outward * (off + GABLE_SIDING_T / 2)
+      const c = new THREE.Mesh(
+        spanAlongX
+          ? new THREE.BoxGeometry(w, h, GABLE_SIDING_T)
+          : new THREE.BoxGeometry(GABLE_SIDING_T, h, w),
+        gableSidingMat,
+      )
+      const yLine = y1                    // the butt edge of the course
+      if (spanAlongX) c.position.set(0, yLine, plane)
+      else c.position.set(plane, yLine, 0)
+      c.castShadow = true; c.receiveShadow = true
+      c.userData.layer = 'cladding'
+      c.userData.info = `Gable ${(gableClad?.label ?? 'siding').toLowerCase()} · course`
+      g.add(c)
     }
   }
   return g
@@ -1189,9 +1648,13 @@ export function buildRidgeRoof(opts: {
   // Ridge board.
   addRoofBox(g, mat, ridgeLen, ROOF_RT, ROOF_RW, (xA + xB) / 2, rise, c, 0, 0, 0, 'Ridge board')
 
-  // Ceiling / rafter ties across the span at each common rafter.
-  const tieY = Math.min(rise * 0.2, 0.3)
-  for (const p of ps) addRoofBox(g, mat, ROOF_RW, 0.089, W, p, tieY, 0, 0, 0, 0, 'Ceiling/rafter tie')
+  // Ceiling / rafter ties across the span at each common rafter. Bearing on the
+  // top plate, not floating above it — see buildGableRoof for why: a tie that
+  // spans wall to wall while sitting 300mm up comes out through the roof at the
+  // eaves, where the rafter is only ~103mm deep.
+  const TIE_T = 0.089
+  const tieY = TIE_T / 2
+  for (const p of ps) addRoofBox(g, mat, ROOF_RW, TIE_T, W, p, tieY, 0, 0, 0, 0, 'Ceiling/rafter tie')
 
   // Hip rafters for any inset (hipped) end: the two eave corners up to the ridge
   // end, plus a couple of jack rafters landing on each hip.
@@ -1271,9 +1734,13 @@ function buildEaveOverhang(
     ridgeAxis?: 'x' | 'z'
     /** Roof pitch (rise/run) — needed to slope the rake to match the ridge. */
     pitch?: number
+    /** Per-edge overhang, so the two eaves need not match. */
+    spec?: OverhangSpec
+    /** The roof builder ran its own tails out, so the fascia drops to meet them. */
+    coversOwnEaves?: boolean
   },
 ): void {
-  const { lenX, lenZ, overhang, opacity, ridgeAxis, pitch = 0.5 } = opts
+  const { lenX, lenZ, overhang, opacity, ridgeAxis, pitch = 0.5, spec, coversOwnEaves } = opts
   if (overhang <= 0 || lenX < 0.2 || lenZ < 0.2) return
   const wood = roofMat(opacity)
   const soffitMat = new THREE.MeshStandardMaterial({
@@ -1290,6 +1757,7 @@ function buildEaveOverhang(
     buildGableEaveAndRake(g, wood, soffitMat, {
       lenX, lenZ, overhang, ridgeAxis, pitch,
       FAS, FW, SOF, LOOK, hx, hz, soffitY, fasciaY,
+      spec, coversOwnEaves: !!coversOwnEaves,
     })
     return
   }
@@ -1342,60 +1810,226 @@ function buildGableEaveAndRake(
     lenX: number; lenZ: number; overhang: number; ridgeAxis: 'x' | 'z'; pitch: number
     FAS: number; FW: number; SOF: number; LOOK: number
     hx: number; hz: number; soffitY: number; fasciaY: number
+    spec?: OverhangSpec
+    coversOwnEaves: boolean
   },
 ): void {
-  const { lenX, lenZ, overhang, ridgeAxis, pitch, FAS, FW, SOF, LOOK, hx, hz, soffitY, fasciaY } = o
+  const { lenX, lenZ, overhang, ridgeAxis, pitch, FAS, FW, SOF, LOOK, hx, hz, soffitY, fasciaY, spec, coversOwnEaves } = o
   const rakeOnZ = ridgeAxis === 'z'   // ridge along Z → gable ends at ±z, eaves at ±x
   const OC = 0.6096
   const tie = 0.3
-  const lkLen = overhang + tie
+
+  /**
+   * THE FASCIA BELONGS AT THE TAIL, NOT AT THE WALL.
+   *
+   * This used to hang the soffit and fascia at a flat height just under the
+   * eave line, `overhang` out from the footprint — while the roof itself
+   * stopped at the wall. Two edges, disagreeing: bare soffit projecting past
+   * the last shingle with open sky above it.
+   *
+   * The rafter tail keeps descending past the plate, so its end — and the
+   * fascia closing it — sits `overhang × slope` BELOW the wall top. The soffit
+   * then runs level from the wall back to the bottom of that fascia, which is
+   * what a boxed (level) soffit is.
+   *
+   * Each eave takes its own overhang and therefore its own drop, so a house
+   * with 36" one side and 12" the other comes out right on both.
+   */
+  const eaveOvh = (positiveSide: boolean) =>
+    resolveOverhang(spec ?? overhang, positiveSide ? 'eaveA' : 'eaveB')
+  const dropFor = (positiveSide: boolean) => (coversOwnEaves ? eaveOvh(positiveSide) * pitch : 0)
 
   // ── True eaves (the two low sides parallel to the ridge) ──
   // Span the eave members the FULL outer length so they tuck under the rake and
   // cover the corners.
+  /**
+   * THE EAVE FASCIA RUNS PAST THE RAKE AND IS CUT PLUMB.
+   *
+   * It used to stop flush with the rake plane, so the two boards met edge to
+   * edge and the corner had nothing terminating it — the exposed end the user
+   * circled. On site the eave board carries past the rake and its plumb end is
+   * what closes that corner. Far enough to clear the rake board's own face,
+   * plus a little, because it is meant to read as running past rather than
+   * dying into it.
+   */
+  const RUN_PAST_RAKE = FW / 2 + 0.03
   if (rakeOnZ) {
-    const zSpan = lenZ + 2 * overhang
+    const zSpan = lenZ + 2 * overhang + 2 * RUN_PAST_RAKE
     for (const sx of [1, -1]) {
-      addRoofBox(g, soffitMat, overhang, SOF, zSpan, sx * (hx + overhang / 2), soffitY, 0, 0, 0, 0, 'Soffit')
-      addRoofBox(g, wood, FW, FAS, zSpan, sx * (hx + overhang), fasciaY, 0, 0, 0, 0, 'Fascia')
-      addRoofBox(g, wood, FW, FAS, lenZ, sx * hx, fasciaY, 0, 0, 0, 0, 'Frieze')
-    }
-    for (let z = -hz + 0.2; z <= hz; z += OC) {
-      for (const sx of [1, -1]) {
-        addRoofBox(g, wood, lkLen, LOOK, FW, sx * (hx - tie / 2 + overhang / 2), -LOOK / 2, z, 0, 0, 0, 'Lookout')
+      const ovh = eaveOvh(sx > 0)
+      const drop = dropFor(sx > 0)
+      const lkLen = ovh + tie
+      // THE SOFFIT STOPS AT THE WALL. The roof keeps going past it — that is
+      // the whole point of a projection — but the flat soffit underneath dies
+      // at the perpendicular wall line, which is where its end has to be
+      // closed. It used to run the full outer length, straight out under the
+      // rake, which is not how a flat soffit resolves at a gable.
+      addRoofBox(g, soffitMat, ovh, SOF, lenZ, sx * (hx + ovh / 2), soffitY - drop, 0, 0, 0, 0, 'Soffit')
+      addRoofBox(g, wood, FW, FAS, zSpan, sx * (hx + ovh), fasciaY - drop, 0, 0, 0, 0, 'Fascia')
+      addRoofBox(g, wood, FW, FAS, lenZ, sx * hx, fasciaY - drop, 0, 0, 0, 0, 'Frieze')
+      for (let z = -hz + 0.2; z <= hz; z += OC) {
+        addRoofBox(g, wood, lkLen, LOOK, FW, sx * (hx - tie / 2 + ovh / 2), -LOOK / 2 - drop, z, 0, 0, 0, 'Lookout')
       }
     }
   } else {
-    const xSpan = lenX + 2 * overhang
+    const xSpan = lenX + 2 * overhang + 2 * RUN_PAST_RAKE
     for (const sz of [1, -1]) {
-      addRoofBox(g, soffitMat, xSpan, SOF, overhang, 0, soffitY, sz * (hz + overhang / 2), 0, 0, 0, 'Soffit')
-      addRoofBox(g, wood, xSpan, FAS, FW, 0, fasciaY, sz * (hz + overhang), 0, 0, 0, 'Fascia')
-      addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY, sz * hz, 0, 0, 0, 'Frieze')
+      const ovh = eaveOvh(sz > 0)
+      const drop = dropFor(sz > 0)
+      const lkLen = ovh + tie
+      // The soffit stops at the wall; the roof carries on past it. See above.
+      addRoofBox(g, soffitMat, lenX, SOF, ovh, 0, soffitY - drop, sz * (hz + ovh / 2), 0, 0, 0, 'Soffit')
+      addRoofBox(g, wood, xSpan, FAS, FW, 0, fasciaY - drop, sz * (hz + ovh), 0, 0, 0, 'Fascia')
+      addRoofBox(g, wood, lenX, FAS, FW, 0, fasciaY - drop, sz * hz, 0, 0, 0, 'Frieze')
+      for (let x = -hx + 0.2; x <= hx; x += OC) {
+        addRoofBox(g, wood, FW, LOOK, lkLen, x, -LOOK / 2 - drop, sz * (hz - tie / 2 + ovh / 2), 0, 0, 0, 'Lookout')
+      }
     }
-    for (let x = -hx + 0.2; x <= hx; x += OC) {
-      for (const sz of [1, -1]) {
-        addRoofBox(g, wood, FW, LOOK, lkLen, x, -LOOK / 2, sz * (hz - tie / 2 + overhang / 2), 0, 0, 0, 'Lookout')
+  }
+
+  /**
+   * PORK CHOP — closing the open end of the boxed eave at the gable.
+   *
+   * The boxed eave is a long box: soffit underneath, fascia on the face, and
+   * NOTHING on its ends. Where it runs out at the gable the whole section was
+   * left open — you could see straight into the eave and out the end of the
+   * rafter tails. That is the exposed end the user circled.
+   *
+   * It closes at the WALL LINE, because that is where the flat soffit dies —
+   * the roof itself carries on past, which is what a projection is.
+   *
+   * The trade name is a pork chop (also eave return, cornice return): "the
+   * result of connecting the geometry of a flat soffit on the side eave with
+   * the angle of the gable end… a triangular piece that covers up the end of
+   * the rafters and merges with the soffit below." Widely disliked to look at,
+   * and exactly right for what this roof is — a FLAT soffit meeting a gable has
+   * to resolve somewhere, and this is where. (The way to avoid one is to angle
+   * the soffit up the rafters instead, which is a different eave and worth
+   * offering as a choice later.)
+   */
+  const chopThick = FW
+  for (const endSign of [1, -1]) {
+    for (const eaveSign of [1, -1]) {
+      const ovh = eaveOvh(eaveSign > 0)
+      const drop = dropFor(eaveSign > 0)
+      const chopY = fasciaY - drop + FAS / 2 - FAS / 2   // face centre, as the fascia
+      if (rakeOnZ) {
+        // Eaves run along Z at ±x; the open ends face ±z.
+        addRoofBox(g, wood, ovh, FAS, chopThick,
+          eaveSign * (hx + ovh / 2), chopY, endSign * hz,
+          0, 0, 0, 'Eave return · pork chop')
+      } else {
+        // Eaves run along X at ±z; the open ends face ±x.
+        addRoofBox(g, wood, chopThick, FAS, ovh,
+          endSign * hx, chopY, eaveSign * (hz + ovh / 2),
+          0, 0, 0, 'Eave return · pork chop')
       }
     }
   }
 
   // ── Gable-end rakes (barge board + sloped rake soffit, flying past the wall) ──
+  // RAKE BOARD, not fascia. They are different members and the trade keeps them
+  // apart: the fascia is the trim on the face of the EAVE and it is what the
+  // eavestrough hangs on; the rake board is the trim on the face of the gable
+  // and carries no gutter. Calling both "fascia" hid that the two sides of this
+  // roof do different jobs.
   const half = rakeOnZ ? hx : hz              // across-slope half-span (peak at centre)
   const rise = Math.max(0.1, half * pitch)
-  const slopeLen = Math.hypot(half, rise)
   const angle = Math.atan2(rise, half)
-  const out = (rakeOnZ ? hz : hx) + overhang  // outboard plane of the barge
-  const slopeY = rise / 2                     // midpoint of the slope line
+  const BUILDUP_ABOVE = 0.112             // rafter half + deck + felt + shingles
+  const BUILDUP_BELOW = 0.092             // rafter half
+  const BELOW_MARGIN = 0.05               // laps down over the siding
+  const grade = rise / half                   // the built gradient (rise is clamped)
+  // A board cut to the pitch shows a taller face than the same board level.
+  const rakeTop = BUILDUP_ABOVE / Math.cos(angle)
+  const rakeBottom = BUILDUP_BELOW / Math.cos(angle) + BELOW_MARGIN
+  // Outboard plane of the barge, per END, clamped to what an outlooker can
+  // actually carry — so the trim lands on the deck rather than out past it.
+  const rakeOut = (end: number) =>
+    (rakeOnZ ? hz : hx) + limitedRakeOverhang(spec ?? overhang, end > 0 ? 'rakeA' : 'rakeB').m
   for (const end of [1, -1]) {                // each gable end
     for (const side of [1, -1]) {             // each slope (left / right of ridge)
-      const mid = side * (half / 2)           // along-slope midpoint
+      // The barge caps the roof EDGE, so when that slope's tail runs out past
+      // the wall the rake has to run out with it — otherwise the deck it is
+      // supposed to be capping carries on past the end of the board.
+      const out = rakeOut(end)
+      const ovh = coversOwnEaves ? eaveOvh(side > 0) : 0
+      const run = half + ovh
+      /**
+       * THE TWO RAKE BOARDS MEET IN A PLUMB JOINT AT THE PEAK.
+       *
+       * Each board used to stop dead on the centreline, and a box's end face is
+       * cut square to its OWN slope — so two of them arriving at a point left a
+       * V-notch at the apex that you could see daylight through. On site the
+       * pair are cut to the half-angle and butt in one straight plumb line.
+       *
+       * A box cannot hold a mitre, so each board runs PAST the centreline
+       * instead and the two overlap through it. Same result to look at: solid
+       * to the peak, with the joint on the centreline where it belongs.
+       */
+      /**
+   * THE BOARD COVERS THE LAYERS. That is what it is for.
+   *
+   * It was centred half its own depth below the rafter line, which put its TOP
+   * EDGE on the rafter's centreline — so the upper half of the rafter, the
+   * deck, the felt and the shingles were all left showing as a layered edge.
+   * A fascia exists precisely to hide that; you should see one board, not a
+   * sandwich.
+   *
+   * Two consequences, both from the trade:
+   *   · its top must reach the ROOF SURFACE, not the rafter centre;
+   *   · on a rake it must be TALLER than the same board at an eave, because a
+   *     board cut to the pitch presents a taller face — divide by cos(pitch).
+   *
+   * So the face is sized from the real build-up (rafter + deck + felt +
+   * shingles), converted to vertical, with a margin below to land over the
+   * siding rather than stopping level with it.
+   */
+      /**
+       * A REAL MITRE, not two boxes crossing.
+       *
+       * Crossing them shut the notch but each board kept climbing on its OWN
+       * slope past the centreline, so it horned up above the opposite plane —
+       * a spike on the peak. On site the pair are mitre cut and butt in one
+       * plumb line, leaving a smooth inverted V, and a box cannot hold a mitre.
+       *
+       * So the board is built as its own PROFILE instead: a quadrilateral in
+       * the vertical plane the rake lives in — top edge on the roof surface,
+       * bottom edge below it, and both ends cut PLUMB — then extruded by the
+       * board thickness. The plumb cut at the centreline is the mitre; the two
+       * meet on it exactly, with nothing above the roof line.
+       */
+      const yc = (a: number) => rise - a * grade          // rafter line at across a
+      const prof = new THREE.Shape()
+      prof.moveTo(0, yc(0) + rakeTop)                     // apex, top — the mitre
+      prof.lineTo(run, yc(run) + rakeTop)                 // tail, top
+      prof.lineTo(run, yc(run) - rakeBottom)              // tail, bottom
+      prof.lineTo(0, yc(0) - rakeBottom)                  // apex, bottom
+      prof.closePath()
+      const rakeGeo = new THREE.ExtrudeGeometry(prof, { depth: FW, bevelEnabled: false })
+      rakeGeo.translate(0, 0, -FW / 2)
+      const rake = new THREE.Mesh(rakeGeo, wood)
+      // The profile is drawn with x = across and y = height. Mirror it for the
+      // far slope, then stand it in the rake plane.
       if (rakeOnZ) {
-        // Board runs along X, thin in Z; tilt about Z to follow the slope.
-        addRoofBox(g, wood, slopeLen, FAS, FW, mid, slopeY + fasciaY, end * out, 0, 0, -side * angle, 'Rake fascia')
+        rake.scale.x = side
+        rake.position.set(0, 0, end * out)
+      } else {
+        rake.rotation.y = -Math.PI / 2                    // profile x → world z
+        rake.scale.x = side
+        rake.position.set(end * out, 0, 0)
+      }
+      rake.castShadow = true; rake.receiveShadow = true
+      rake.userData.layer = 'roof'; rake.userData.info = 'Rake board · mitred at the peak'
+      g.add(rake)
+
+      const acrossMid = run / 2
+      const slopeLen = run * Math.hypot(1, grade)
+      const mid = side * acrossMid
+      const slopeY = rise - acrossMid * grade
+      if (rakeOnZ) {
         addRoofBox(g, soffitMat, slopeLen, SOF, overhang, mid, slopeY + soffitY, end * (out - overhang / 2), 0, 0, -side * angle, 'Rake soffit')
       } else {
-        // Board runs along Z, thin in X; tilt about X to follow the slope.
-        addRoofBox(g, wood, FW, FAS, slopeLen, end * out, slopeY + fasciaY, mid, side * angle, 0, 0, 'Rake fascia')
         addRoofBox(g, soffitMat, overhang, SOF, slopeLen, end * (out - overhang / 2), slopeY + soffitY, mid, side * angle, 0, 0, 'Rake soffit')
       }
     }
@@ -1406,9 +2040,22 @@ function buildGableEaveAndRake(
  *  the boxed-eave overhang (soffit/fascia/lookouts) as an axis-aligned sibling. */
 export function buildRoofByType(
   type: string,
-  opts: { lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number; overhangM?: number },
+  opts: {
+    lenX: number; lenZ: number; pitch: number; ocM: number; opacity?: number
+    overhangM?: OverhangSpec
+    /** Wall cladding, so gable ends match the walls (gable builder only). */
+    cladding?: CladdingSpec | null
+    /** Envelope sheathing visibility (gable builder only). */
+    sheathingVisible?: boolean
+  },
 ): THREE.Group {
   const t = (type || '').trim().toLowerCase()
+  // Only the gable builder runs its rafter tails, deck and shingles out over
+  // the overhang. Every other profile still stops at the wall, so their boxed
+  // eave must stay where it is — dropping it to a tail that is not there would
+  // hang the soffit in mid-air. They get the same treatment when they are
+  // converted; this is the first one.
+  let coversOwnEaves = false
   const roof = (() => {
     switch (t) {
       case 'truss':
@@ -1421,10 +2068,14 @@ export function buildRoofByType(
       case 'mono':
       case 'mono-pitch': return buildShedRoof(opts)
       case 'flat': return buildFlatRoof(opts)
-      default: return buildGableRoof(opts)
+      default: coversOwnEaves = true; return buildGableRoof(opts)
     }
   })()
-  const overhangM = opts.overhangM ?? 0.4 // ~16" boxed eave
+  const spec: OverhangSpec = opts.overhangM ?? 0.4 // ~16" boxed eave
+  const overhangM = Math.max(
+    resolveOverhang(spec, 'eaveA'), resolveOverhang(spec, 'eaveB'),
+    resolveOverhang(spec, 'rakeA'), resolveOverhang(spec, 'rakeB'),
+  )
   if (overhangM > 0) {
     const wrapper = new THREE.Group()
     wrapper.add(roof)
@@ -1436,7 +2087,7 @@ export function buildRoofByType(
     const ridgeAxis = ridged ? (opts.lenX <= opts.lenZ ? 'z' : 'x') : undefined
     buildEaveOverhang(eave, {
       lenX: opts.lenX, lenZ: opts.lenZ, overhang: overhangM, opacity: opts.opacity ?? 1,
-      ridgeAxis, pitch: opts.pitch,
+      ridgeAxis, pitch: opts.pitch, spec, coversOwnEaves,
     })
     wrapper.add(eave)
     return wrapper
@@ -1508,16 +2159,33 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
   // An exterior wall is boarded on the INSIDE only. Its outside face takes
   // sheathing and the rest of the envelope; drywall out there would be nonsense.
   const zs = bothSides ? [faceZ, -faceZ] : [inward * faceZ]
-  for (let x = -half; x < half - 0.02; x += cellW + SHEET_GAP) {
-    const w = Math.min(cellW, half - x)
-    if (w < 0.05) continue
-    for (let y = 0; y < height - 0.02; y += cellH + SHEET_GAP) {
-      const h = Math.min(cellH, height - y)
-      if (h < 0.05) continue
-      if (overlapsOpening(x, x + w, y, y + h)) continue   // leave the opening open
+
+  // RUNNING BOND. Every course used to start at the same x, so all the vertical
+  // joints stacked into one continuous seam from floor to ceiling. Nobody
+  // boards a wall that way: a joint running the full height is the weakest line
+  // you can build and the first place a crack shows, which is exactly why the
+  // trade staggers them. It also looked wrong — a flat grid rather than a
+  // boarded wall.
+  //
+  // Rows are the outer loop now, because the offset is per ROW. Alternate rows
+  // start half a sheet over, so each vertical joint lands mid-sheet on the
+  // course above and below it.
+  let row = 0
+  for (let y = 0; y < height - 0.02; y += cellH + SHEET_GAP) {
+    const h = Math.min(cellH, height - y)
+    if (h < 0.05) { row++; continue }
+    const stagger = row % 2 === 1 ? -(cellW + SHEET_GAP) / 2 : 0
+    for (let x = -half + stagger; x < half - 0.02; x += cellW + SHEET_GAP) {
+      // Clamp the leftmost sheet of an offset row — it starts off the end of
+      // the wall and arrives as a narrow cut piece, which is what really
+      // happens on site.
+      const x0 = Math.max(x, -half)
+      const w = Math.min(x + cellW, half) - x0
+      if (w < 0.05) continue
+      if (overlapsOpening(x0, x0 + w, y, y + h)) continue   // leave the opening open
       for (const z of zs) {
         const m = new THREE.Mesh(new THREE.BoxGeometry(w - SHEET_GAP, h - SHEET_GAP, boardT), mat)
-        m.position.set(x + w / 2, y + h / 2, z)
+        m.position.set(x0 + w / 2, y + h / 2, z)
         m.castShadow = true
         m.receiveShadow = true
         m.userData.layer = 'drywall'
@@ -1525,8 +2193,98 @@ export function buildWallDrywall(opts: WallDrywallOpts): THREE.Group {
         group.add(m)
       }
     }
+    row++
   }
   return group
+}
+
+/**
+ * What a masonry veneer STANDS ON, and how the cavity behind it drains.
+ *
+ * Brick and stone veneer do not hang off the wall. They stand on a shelf cast
+ * into the foundation and are only TIED back for stability — which is why the
+ * cladding spec carries `needsLedge`, and why that flag sat unread while the
+ * veneer floated at the wall base with nothing beneath it.
+ *
+ * Four parts, and they only work together:
+ *   LEDGE     the foundation stepped out to carry the veneer's full thickness
+ *   FLASHING  sitting on the ledge and turned UP the sheathing behind, so water
+ *             running down the back of the brick is caught rather than soaking in
+ *   WEEPS     open head joints in the first course above the flashing, letting
+ *             that water back out
+ *   TIES      corrugated metal back to the studs, holding the veneer upright
+ *
+ * Leave the weeps out and the flashing turns the cavity into a bucket, which is
+ * worse than having neither. So they are built as one assembly rather than as
+ * options.
+ */
+export function buildVeneerSupport(opts: {
+  length: number
+  height: number
+  /** Distance from wall centre to the BACK of the veneer (its cavity face). */
+  standoff: number
+  outward: 1 | -1
+  spec: CladdingSpec
+  opacity?: number
+}): THREE.Group {
+  const { length, height, standoff, outward, spec, opacity = 1 } = opts
+  const g = new THREE.Group()
+  if (length < 0.05 || !spec.needsLedge) return g
+
+  const half = length / 2
+  const cavity = spec.gapM
+  const veneer = spec.thicknessM
+  // The shelf carries the veneer AND the cavity, plus a margin so the brick is
+  // not perched on the lip.
+  const bearing = cavity + veneer + LEDGE_BEARING_EXTRA_M
+
+  const add = (
+    w: number, h: number, d: number, x: number, y: number, z: number,
+    color: string, info: string, rough = 0.9, metal = 0,
+  ) => {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshStandardMaterial({
+        color: new THREE.Color(color), roughness: rough, metalness: metal,
+        transparent: opacity < 1, opacity,
+      }),
+    )
+    m.position.set(x, y, z)
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'foundation'
+    m.userData.info = info
+    g.add(m)
+  }
+
+  // LEDGE — concrete, top flush with the wall base so the veneer bears on it.
+  const ledgeZ = outward * (standoff + bearing / 2)
+  add(length, LEDGE_DROP_M, bearing, 0, -LEDGE_DROP_M / 2, ledgeZ,
+      '#b9bcc2', `Brick ledge · ${(bearing * 39.37).toFixed(1)}" bearing`)
+
+  // FLASHING — on the ledge, turned up the sheathing behind the veneer.
+  const FLASH_T = 0.002
+  add(length, FLASH_T, bearing, 0, FLASH_T / 2, ledgeZ,
+      '#3f4650', 'Through-wall flashing', 0.5, 0.4)
+  add(length, FLASHING_UPTURN_M, FLASH_T, 0, FLASHING_UPTURN_M / 2, outward * (standoff - FLASH_T),
+      '#3f4650', 'Flashing upturn', 0.5, 0.4)
+
+  // WEEPS — open head joints in the first course above the flashing.
+  const weepY = FLASH_T + 0.04
+  const weepZ = outward * (standoff + cavity + veneer / 2)
+  for (let x = -half + WEEP_SPACING_M / 2; x < half; x += WEEP_SPACING_M) {
+    add(0.012, 0.05, veneer * 1.02, x, weepY, weepZ,
+        '#241a16', 'Weep (open head joint)', 1)
+  }
+
+  // TIES — corrugated metal back to the studs, both ways at 24".
+  const tieZ = outward * (standoff - cavity / 2)
+  for (let y = 0.4; y < height - 0.1; y += TIE_SPACING_M) {
+    for (let x = -half + TIE_SPACING_M / 2; x < half; x += TIE_SPACING_M) {
+      add(0.022, 0.002, cavity + 0.02, x, y, tieZ,
+          '#cdd2d9', 'Veneer tie (corrugated)', 0.3, 0.85)
+    }
+  }
+  return g
 }
 
 /**
@@ -1607,13 +2365,54 @@ export function buildWallCladding(opts: {
   }
 
   if (spec.exposureM) {
-    // Coursed. Each course covers its exposure; the lap behind it is implied.
+    /**
+     * Coursed siding, as boards rather than as a striped skin.
+     *
+     * It used to draw one flat box per course across the whole wall, 4% shorter
+     * than its exposure for a hairline reveal. From any distance that is a
+     * painted surface with faint lines on it: no butt joints, and no shadow,
+     * because every course sat at exactly the same depth.
+     *
+     * Two things make siding look like siding:
+     *
+     *   BUTT JOINTS. A plank is a finite length — 12ft is the common one — so a
+     *   long wall has vertical joints, and they are staggered course to course
+     *   for the same reason drywall joints are.
+     *
+     *   THE LAP SHADOW. Each course laps over the one beneath, so its butt edge
+     *   stands slightly proud and throws a line of shadow across the course
+     *   below. That shadow IS the texture of a sided wall. Tilting each board a
+     *   couple of degrees gets it honestly, from the light, rather than by
+     *   painting a dark stripe on a flat face.
+     */
+    const PLANK_M = 12 * 0.3048          // 12ft board, the common stock length
+    const BUTT_GAP = 0.004               // the joint itself
+    const LAP_TILT = 0.045               // ~2.6°, enough to catch the light
     let courses = 0
     for (let y = 0; y < height - 0.005; y += spec.exposureM) {
       const h = Math.min(spec.exposureM, height - y)
       if (h < 0.01) break
+      // Half-plank offset on alternate courses so joints never stack.
+      const stagger = courses % 2 === 1 ? PLANK_M / 2 : 0
       for (const [a, b] of spansAt(y, y + h)) {
-        add(b - a, h * 0.96, (a + b) / 2, y + h / 2)   // small reveal between courses
+        // Cut this run into planks, starting from a staggered origin.
+        let x = a - ((a + stagger) % PLANK_M + PLANK_M) % PLANK_M
+        while (x < b - 0.01) {
+          const x0 = Math.max(x, a)
+          const x1 = Math.min(x + PLANK_M, b)
+          const w = x1 - x0 - BUTT_GAP
+          x += PLANK_M
+          if (w < 0.03) continue
+          const m = new THREE.Mesh(new THREE.BoxGeometry(w, h * 0.98, spec.thicknessM), mat)
+          m.position.set((x0 + x1) / 2, y + h / 2, z)
+          // Tip the board so its lower (butt) edge stands proud of the one
+          // below and casts a real shadow line.
+          m.rotation.x = outward > 0 ? LAP_TILT : -LAP_TILT
+          m.castShadow = true; m.receiveShadow = true
+          m.userData.layer = 'cladding'
+          m.userData.info = info
+          g.add(m)
+        }
       }
       courses++
     }
@@ -1634,6 +2433,50 @@ export function buildWallCladding(opts: {
       if (height - r.y1 > 0.02) add(w, height - r.y1, cx, (height + r.y1) / 2)  // above
     }
   }
+
+  /**
+   * CASING AND CORNER BOARDS — the difference between clad and finished.
+   *
+   * Siding stopped dead at every opening and at every corner, leaving raw cut
+   * edges: a wall that has been covered rather than trimmed. On a real house
+   * the casing goes on first and the siding butts INTO it, which is why an
+   * untrimmed opening reads as unfinished from across the street even when
+   * every other layer is right.
+   *
+   * Cheap in geometry and worth more than almost anything else on the exterior:
+   * four boards round each opening, one at each end of the wall.
+   */
+  const TRIM_W = 0.089                     // 1x4 casing
+  const trimT = spec.thicknessM * 1.35     // stands proud of the siding
+  const trimZ = outward * (standoff + trimT / 2)
+  const trimMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f2f0ea'),     // painted trim, lighter than the field
+    roughness: 0.7, metalness: 0,
+    transparent: opacity < 1, opacity,
+  })
+  const board = (w: number, h: number, x: number, y: number, info: string) => {
+    if (w < 0.02 || h < 0.02) return
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, trimT), trimMat)
+    m.position.set(x, y, trimZ)
+    m.castShadow = true; m.receiveShadow = true
+    m.userData.layer = 'cladding'
+    m.userData.info = info
+    g.add(m)
+  }
+  for (const r of rects) {
+    const w = r.x1 - r.x0
+    const cx = (r.x0 + r.x1) / 2
+    const cy = (r.y0 + r.y1) / 2
+    const hh = r.y1 - r.y0
+    board(w + TRIM_W * 2, TRIM_W, cx, r.y1 + TRIM_W / 2, 'Head casing · 1x4')
+    if (r.y0 > 0.02) board(w + TRIM_W * 2, TRIM_W, cx, r.y0 - TRIM_W / 2, 'Sill / apron · 1x4')
+    board(TRIM_W, hh, r.x0 - TRIM_W / 2, cy, 'Side casing · 1x4')
+    board(TRIM_W, hh, r.x1 + TRIM_W / 2, cy, 'Side casing · 1x4')
+  }
+  // Corner boards, where the siding would otherwise show its cut end.
+  board(TRIM_W, height, -half + TRIM_W / 2, height / 2, 'Corner board · 1x4')
+  board(TRIM_W, height, half - TRIM_W / 2, height / 2, 'Corner board · 1x4')
+
   return g
 }
 
@@ -1733,6 +2576,7 @@ export function buildWallEnvelope(opts: WallEnvelopeOpts): THREE.Group {
     // Split the wall into horizontal courses and drop the pieces that fall in an
     // opening — a cheap way to get "wrapped, with the windows cut out".
     const COURSE = 1.5   // ~5' roll width
+    const courseTops: number[] = []
     for (let y = 0; y < height - 0.01; y += COURSE) {
       const h = Math.min(COURSE, height - y)
       const spans: Array<[number, number]> = [[-half, half]]
@@ -1751,6 +2595,62 @@ export function buildWallEnvelope(opts: WallEnvelopeOpts): THREE.Group {
         m.userData.layer = 'sheathing'
         m.userData.info = info
         group.add(m)
+      }
+      courseTops.push(y + h)
+    }
+
+    /**
+     * TAPE. A housewrap is not weathertight because it is stapled up — it is
+     * weathertight because every seam and every penetration is taped. Untaped,
+     * water tracks straight in behind it at the first horizontal lap, which is
+     * why an inspector looks at the tape and not at the wrap.
+     *
+     * So the model draws it: a strip along each course lap, and a frame around
+     * every opening. Only for a housewrap — a fluid-applied barrier is
+     * monolithic and has no seams to tape, and an integrated sheathing carries
+     * its own, so taping those would be showing work nobody does.
+     */
+    if (/housewrap|tyvek/i.test(wrb.label)) {
+      const TAPE_W = 0.075                       // 3" sheathing tape
+      const tapeT = wrb.thicknessM * 1.4
+      const tapeZ = outward * (depth / 2 + sheathing.thicknessM + wrb.thicknessM + tapeT / 2)
+      const tapeMat = new THREE.MeshStandardMaterial({
+        color: new THREE.Color('#c0392b'),        // red sheathing tape
+        roughness: 0.55,
+        transparent: opacity < 1, opacity,
+      })
+      const tape = (w: number, hh: number, x: number, y: number) => {
+        if (w < 0.02 || hh < 0.005) return
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, hh, tapeT), tapeMat)
+        m.position.set(x, y, tapeZ)
+        m.userData.layer = 'sheathing'
+        m.userData.info = 'Sheathing tape — seams + penetrations'
+        group.add(m)
+      }
+
+      // Every horizontal lap between courses (not the very top edge).
+      for (const ct of courseTops) {
+        if (ct >= height - 0.01) continue
+        tape(length, TAPE_W, 0, ct)
+      }
+
+      // A frame round each opening — the penetrations, which is where it
+      // matters most.
+      for (const r of rects) {
+        const w = r.x1 - r.x0
+        const hh = r.y1 - r.y0
+        const cx = (r.x0 + r.x1) / 2
+        tape(w + TAPE_W * 2, TAPE_W, cx, r.y1)                       // head
+        if (r.y0 > 0.02) tape(w + TAPE_W * 2, TAPE_W, cx, r.y0)      // sill
+        const jamb = (x: number) => {
+          const m = new THREE.Mesh(new THREE.BoxGeometry(TAPE_W, hh, tapeT), tapeMat)
+          m.position.set(x, (r.y0 + r.y1) / 2, tapeZ)
+          m.userData.layer = 'sheathing'
+          m.userData.info = 'Sheathing tape — seams + penetrations'
+          group.add(m)
+        }
+        jamb(r.x0 - TAPE_W / 2)
+        jamb(r.x1 + TAPE_W / 2)
       }
     }
   }

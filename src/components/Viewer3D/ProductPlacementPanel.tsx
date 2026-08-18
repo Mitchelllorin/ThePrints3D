@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
+import { requirePro } from '../Pro/usePro'
 import type { ProductCatalogItem, ProductCategory } from '../../types/products'
 import styles from './ProductPlacementPanel.module.css'
 
@@ -69,7 +70,13 @@ export default function ProductPlacementPanel() {
       .filter(Boolean) as Array<{ placement: typeof productPlacements[number]; product: ProductCatalogItem }>
   }, [productPlacements, productCatalog])
 
-  const placeSelected = () => {
+  // Pro. The gate lives on the action rather than on whoever mounts this panel,
+  // so it travels with the feature — this component is not wired into the
+  // workspace yet, and the guard must not be something the next person has to
+  // remember to add.
+  const placeSelected = () => requirePro('Placing catalogue products', doPlaceSelected)
+
+  const doPlaceSelected = () => {
     if (!selected) return
     const offset = productPlacements.length
     addProductPlacement({

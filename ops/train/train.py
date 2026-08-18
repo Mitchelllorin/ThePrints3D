@@ -30,7 +30,7 @@ from tqdm import tqdm
 
 # Allow running from repo root or from ops/train/
 sys.path.insert(0, str(Path(__file__).parent))
-from dataset import CubiCasa5kDataset
+from dataset import build_dataset
 from model import build_model
 
 
@@ -89,7 +89,8 @@ def run_epoch(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description='Train WallSegNet on CubiCasa5k')
-    parser.add_argument('--data', required=True, help='Path to cubicasa5k root directory')
+    parser.add_argument('--data', required=True,
+                        help='Dataset root: a synth.py output dir, or a cubicasa5k tree')
     parser.add_argument('--out', default='checkpoints', help='Output directory for checkpoints')
     parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--batch', type=int, default=16)
@@ -104,14 +105,32 @@ def main() -> None:
         help='Limit dataset size for quick tests',
     )
     parser.add_argument('--resume', default=None, help='Path to checkpoint to resume from')
+    # 0 = load in-process. Was hard-wired to 4, which is actively WRONG on a
+    # 2-core machine: Windows spawns a fresh interpreter per worker and pickles
+    # every batch across it, so four of them fight the two cores that are
+    # supposed to be doing the maths. Measured on this box, in-process wins.
+    parser.add_argument('--val-samples', type=int, default=None, dest='val_samples',
+                        help='Cap the validation split (speeds up slow CPU runs)')
+    parser.add_argument('--workers', type=int, default=0,
+                        help='DataLoader workers (0 = in-process; best on few cores)')
     args = parser.parse_args()
+
+    # A Windows console defaults to cp1252 and raises on any non-ASCII print.
+    # Losing hours of training to a log line is not acceptable.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding='utf-8', errors='replace')  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Device: {device}')
 
     # ── Datasets ──
-    train_ds = CubiCasa5kDataset(args.data, img_size=args.img_size, split='train', augment=True)
-    val_ds = CubiCasa5kDataset(args.data, img_size=args.img_size, split='val', augment=False)
+    # build_dataset sniffs the layout: a synthetic corpus (the shippable one)
+    # or CubiCasa. See dataset.build_dataset and the licence note in README.
+    train_ds = build_dataset(args.data, img_size=args.img_size, split='train', augment=True)
+    val_ds = build_dataset(args.data, img_size=args.img_size, split='val', augment=False)
 
     if args.max_samples is not None and args.max_samples < len(train_ds):
         from torch.utils.data import Subset
@@ -119,16 +138,20 @@ def main() -> None:
         idxs = random.sample(range(len(train_ds)), args.max_samples)
         train_ds = Subset(train_ds, idxs)  # type: ignore[assignment]
 
+    if args.val_samples is not None and args.val_samples < len(val_ds):
+        from torch.utils.data import Subset as _Subset
+        val_ds = _Subset(val_ds, list(range(args.val_samples)))  # type: ignore[assignment]
+
     print(f'Train samples : {len(train_ds)}')
     print(f'Val   samples : {len(val_ds)}')
 
     train_loader = DataLoader(
         train_ds, batch_size=args.batch, shuffle=True,
-        num_workers=min(4, os.cpu_count() or 1), pin_memory=True,
+        num_workers=args.workers, pin_memory=False,
     )
     val_loader = DataLoader(
         val_ds, batch_size=args.batch, shuffle=False,
-        num_workers=min(4, os.cpu_count() or 1), pin_memory=True,
+        num_workers=args.workers, pin_memory=False,
     )
 
     # ── Model ──
@@ -177,7 +200,7 @@ def main() -> None:
         }
         torch.save(ckpt, out_dir / 'last.pth')
 
-        mark = ' ✓' if improved else ''
+        mark = '  <-- best' if improved else ''
         print(
             f'Epoch {epoch + 1:03d}/{args.epochs}  '
             f'train_loss={train_loss:.4f}  train_iou={train_iou:.4f}  '

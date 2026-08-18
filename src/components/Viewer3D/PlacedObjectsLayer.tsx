@@ -1,10 +1,19 @@
 /**
  * PlacedObjectsLayer — renders user-placed furniture/fixtures as coloured box
  * stand-ins in world space, with a simple move/rotate gizmo for the selected
- * one. Positions are stored in world metres, so no overlay transform is needed.
+ * one.
  *
  * Dragging uses transient local state and only commits to the store (one
  * undoable step) on pointer-up, so a drag doesn't flood the history stack.
+ *
+ * A DRAG IS A PLACEMENT. It did not used to be: dropping a door ran it through
+ * snapping and auto-orientation, and dragging that same door wrote nothing but
+ * x/z — so it kept whatever angle it happened to have and stopped anywhere,
+ * including half in the wall. Worse, the cached `pxX`/`pxY` were left behind,
+ * and those are what the framing, drywall and envelope layers use to find an
+ * opening. The door moved; its hole did not. Both paths now go through
+ * `placementPose` (services/planPlacement), which is also where the arithmetic
+ * can finally be tested.
  */
 import { useState, useRef, useLayoutEffect } from 'react'
 import * as THREE from 'three'
@@ -13,7 +22,8 @@ import { Edges, Line } from '@react-three/drei'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { getCatalogItem, deviceMountHeightM } from '../../data/objectCatalog'
+import { getCatalogItem, deviceMountHeightM, isWallMountedType } from '../../data/objectCatalog'
+import { placementPose, roomEdgeWalls, type PlanTransform, type PlanWall } from '../../services/planPlacement'
 import ObjectModel from './ObjectModels'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -90,6 +100,9 @@ export default function PlacedObjectsLayer() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const updatePlacedObject = useAppStore((s) => s.updatePlacedObject)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  // The print plane, so a drag can be re-snapped against the walls on it.
+  const overlay = useAppStore((s) => s.floorplanOverlay)
+  const drawings = useAppStore((s) => s.drawings)
   const selectedObjectId = useFloorplanLocalStore((s) => s.selectedObjectId)
   const detailExplodeId = useFloorplanLocalStore((s) => s.detailExplodeId)
   const selectObjectExclusive = useFloorplanLocalStore((s) => s.selectObjectExclusive)
@@ -98,6 +111,19 @@ export default function PlacedObjectsLayer() {
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  /**
+   * Plan symbols follow the PLAN.
+   *
+   * Jamb marks, swing arcs and window bars are drawn flat on the floor so an
+   * opening reads from straight overhead — which is exactly right while you are
+   * working over the print, and litter once a building is standing: a scatter of
+   * little blue and amber marks around the base of every door and window,
+   * visible from every angle except the one they were drawn for.
+   *
+   * They are annotations for the drawing, so they live and die with it. Turning
+   * the print off in the layer list takes them with it.
+   */
+  const planSymbolsOn = useAppStore((s) => s.floorplanOverlay.visible)
 
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
   // Same storey-to-storey rise the walls/decks use, so an object placed on an
@@ -115,6 +141,50 @@ export default function PlacedObjectsLayer() {
 
   const select = (id: string) => {
     selectObjectExclusive(id)
+  }
+
+  const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
+  const planTransform: PlanTransform | null = drawing
+    ? {
+        position: overlay.position,
+        scale: overlay.scale,
+        rotationDeg: overlay.rotationDeg,
+        imageWidth: drawing.rasterWidth ?? 1400,
+        imageHeight: drawing.rasterHeight ?? 900,
+      }
+    : null
+
+  /**
+   * Where a dragged object comes to rest.
+   *
+   * Wall-mounted things (doors, windows, outlets, switches) are re-snapped and
+   * re-oriented against the walls on their own storey, because a door that does
+   * not line up with its wall is simply wrong. Furniture is not re-oriented: a
+   * sofa you turned to face the window stays turned, and nudging it across the
+   * room must not spin it back. Everything gets its pixel position rewritten,
+   * because that is what the framing and boarding layers read.
+   */
+  const dropPose = (obj: PlacedObject, x: number, z: number): Partial<PlacedObject> => {
+    if (!drawing || !planTransform) return { x, z }
+    const level = obj.level ?? 0
+    const onLevel = (w: { level?: number }) => (w.level ?? 0) === level
+    const walls = drawing.parsedWalls
+    const wallMounted = isWallMountedType(obj.type)
+    const detected = walls.filter((w) => w.source !== 'user' && onLevel(w)) as PlanWall[]
+    const pose = placementPose({
+      x, z,
+      transform: planTransform,
+      tracedWalls: walls.filter((w) => w.source === 'user' && onLevel(w)) as PlanWall[],
+      // Same last-resort tier as placement: a practice preset carries no walls,
+      // only rooms, and a door dragged there must still find the line.
+      detectedWalls: detected.length > 0 ? detected : roomEdgeWalls(drawing.parsedRooms ?? []),
+      wallMounted,
+      // No wall near enough to have an opinion → keep the angle it already has.
+      // A drag must never quietly spin something back to due north.
+      fallbackYaw: obj.rotationY,
+    })
+    const moved = { x: pose.x, z: pose.z, pxX: pose.pxX, pxY: pose.pxY }
+    return wallMounted ? { ...moved, rotationY: pose.rotationY } : moved
   }
 
   // Rotate knob (only shows when selected): an explicit rotate drag.
@@ -149,9 +219,15 @@ export default function PlacedObjectsLayer() {
     if (!drag) return
     e.stopPropagation()
     if (drag.moved) {
-      updatePlacedObject(drag.id, drag.kind === 'move'
-        ? { x: drag.x, z: drag.z }
-        : { rotationY: drag.rotationY })
+      if (drag.kind === 'move') {
+        const obj = placedObjects.find((o) => o.id === drag.id)
+        updatePlacedObject(drag.id, obj ? dropPose(obj, drag.x, drag.z) : { x: drag.x, z: drag.z })
+      } else {
+        // An explicit rotate is the user overruling the wall, so the angle is
+        // taken as given — but the object has not moved, so its pixel position
+        // is still correct and nothing else needs rewriting.
+        updatePlacedObject(drag.id, { rotationY: drag.rotationY })
+      }
     } else {
       select(drag.id)   // a tap (no movement) just selects → opens the editor
     }
@@ -191,6 +267,21 @@ export default function PlacedObjectsLayer() {
         // BuildingModel. Here they show only as a thin translucent opening
         // marker that stays selectable/draggable to reposition the cut.
         const isOpening = obj.type === 'door' || obj.type === 'window'
+        /**
+         * A GARAGE DOOR IS NOT A BIG DOOR.
+         *
+         * It is a sectional overhead: horizontal panels on rollers in a track,
+         * lifted by a motor and parked flat against the garage ceiling. It has
+         * no hinge, no leaf, and no arc — so drawing a quarter-circle swing on
+         * a nine-foot opening is not a stylised symbol, it is the wrong thing.
+         *
+         * Detected by WIDTH rather than a separate catalog type, because width
+         * is what actually decides it: no hinged residential door is 7ft wide,
+         * and every vehicle opening is. That also means existing plans and any
+         * door the user widens become overheads on their own, with no new type
+         * to pick and nothing to migrate.
+         */
+        const isOverheadDoor = obj.type === 'door' && w >= 2.1
         const boxD = isOpening ? 0.06 : d
         // Windows sit at their sill height; electrical devices mount on the
         // wall/ceiling at a standard height; everything else sits on the floor.
@@ -232,24 +323,49 @@ export default function PlacedObjectsLayer() {
                   <DetailExplode amount={obj.id === detailExplodeId ? 0.7 : 0}>{model}</DetailExplode>
                 </XRay>
               ) : (
-                <mesh castShadow={!isOpening} receiveShadow={!isOpening}>
-                  <boxGeometry args={[w, h, boxD]} />
-                  <meshStandardMaterial
-                    color={color}
-                    roughness={0.6}
-                    metalness={0.05}
-                    transparent={isOpening || !!obj.transparent}
-                    opacity={obj.transparent ? 0.18 : isOpening ? 0.8 : 1}
-                    // Openings MUST write depth or a wall wins every depth test and
-                    // hides the door/window from all but a straight-down view (the
-                    // "disappears through a wall" bug). Only X-ray'd objects skip it.
-                    depthWrite={!obj.transparent}
-                  />
-                  {/* An opening is a thin panel — edge-on from the top-down plan
-                      view it collapses to a line, so a bold outline keeps it reading
-                      from any angle even when the face is edge-on. */}
-                  {isOpening && !obj.transparent && <Edges color={color} lineWidth={2.5} />}
-                </mesh>
+                <group>
+                  {/* Sectional overhead: four panels with a reveal between them,
+                      which is what makes it read as a garage door from outside
+                      rather than a slab in a big hole. */}
+                  {isOverheadDoor ? (
+                    Array.from({ length: 4 }, (_, i) => {
+                      const ph = h / 4
+                      return (
+                        <mesh key={i} position={[0, -h / 2 + ph * (i + 0.5), 0]}>
+                          <boxGeometry args={[w, ph * 0.94, boxD]} />
+                          <meshStandardMaterial
+                            color={color}
+                            roughness={0.55}
+                            metalness={0.08}
+                            transparent={!!obj.transparent}
+                            opacity={obj.transparent ? 0.18 : 0.92}
+                            depthWrite={!obj.transparent}
+                          />
+                          {!obj.transparent && <Edges color={color} lineWidth={1.5} />}
+                        </mesh>
+                      )
+                    })
+                  ) : (
+                    <mesh castShadow={!isOpening} receiveShadow={!isOpening}>
+                      <boxGeometry args={[w, h, boxD]} />
+                      <meshStandardMaterial
+                        color={color}
+                        roughness={0.6}
+                        metalness={0.05}
+                        transparent={isOpening || !!obj.transparent}
+                        opacity={obj.transparent ? 0.18 : isOpening ? 0.8 : 1}
+                        // Openings MUST write depth or a wall wins every depth test and
+                        // hides the door/window from all but a straight-down view (the
+                        // "disappears through a wall" bug). Only X-ray'd objects skip it.
+                        depthWrite={!obj.transparent}
+                      />
+                      {/* An opening is a thin panel — edge-on from the top-down plan
+                          view it collapses to a line, so a bold outline keeps it reading
+                          from any angle even when the face is edge-on. */}
+                      {isOpening && !obj.transparent && <Edges color={color} lineWidth={2.5} />}
+                    </mesh>
+                  )}
+                </group>
               )}
               {/* Selection outline — an invisible bounding box carrying the edges.
                   Amber when selected; cyan when hovered in edit mode. */}
@@ -266,7 +382,61 @@ export default function PlacedObjectsLayer() {
                 its quarter-circle arc, drawn FLAT on the floor so the door reads
                 from straight overhead (the vertical panel above is edge-on and
                 invisible top-down). Bold + opaque so it never looks "missing". */}
-            {obj.type === 'door' && (() => {
+            {/* THE TRACKS, as real hardware rather than a plan annotation — so
+                they show whether or not the print is up. A sectional door does
+                not lift straight and it does not swing: it runs up the jamb,
+                round a radius bend at the head, and then back HORIZONTALLY
+                along the garage ceiling, which is where the door ends up
+                parked. Drawing the bend is what makes the mechanism legible;
+                two straight rails would just look like posts. */}
+            {isOverheadDoor && (() => {
+              const railX = w / 2 - 0.07
+              const R = 0.34                       // radius of the bend at the head
+              const back = Math.max(h * 0.95, 2.0) // horizontal run, about the door's own height
+              const pts: [number, number, number][] = []
+              // Up the jamb.
+              pts.push([0, 0.02, 0], [0, h - R, 0])
+              // Quarter turn from vertical to horizontal, centred at (h-R, R).
+              const N = 10
+              for (let i = 1; i <= N; i++) {
+                const t = (i / N) * (Math.PI / 2)
+                pts.push([0, h - R + R * Math.sin(t), R - R * Math.cos(t)])
+              }
+              // Back along the ceiling.
+              pts.push([0, h, back])
+              const shift = (xs: number): [number, number, number][] =>
+                pts.map(([, y, z]) => [xs, y, z] as [number, number, number])
+              return (
+                <>
+                  <Line points={shift(-railX)} color="#94a3b8" lineWidth={2.5} />
+                  <Line points={shift(railX)} color="#94a3b8" lineWidth={2.5} />
+                </>
+              )
+            })()}
+
+            {planSymbolsOn && isOverheadDoor && (() => {
+              // Plan symbol for an overhead: the door across the opening, and
+              // the two tracks running back INTO the garage — which is where it
+              // actually goes. No arc, because nothing swings.
+              const y = 0.07
+              const reach = Math.min(w, 2.4)   // roughly its own height back
+              const bar: [number, number, number][] = [[-w / 2, y, 0], [w / 2, y, 0]]
+              const jambL: [number, number, number][] = [[-w / 2, y, -0.12], [-w / 2, y, 0.12]]
+              const jambR: [number, number, number][] = [[w / 2, y, -0.12], [w / 2, y, 0.12]]
+              const trackL: [number, number, number][] = [[-w / 2 + 0.06, y, 0], [-w / 2 + 0.06, y, reach]]
+              const trackR: [number, number, number][] = [[w / 2 - 0.06, y, 0], [w / 2 - 0.06, y, reach]]
+              return (
+                <>
+                  <Line points={jambL} color={color} lineWidth={4} />
+                  <Line points={jambR} color={color} lineWidth={4} />
+                  <Line points={bar} color={color} lineWidth={5} />
+                  <Line points={trackL} color={color} lineWidth={2} dashed dashSize={0.12} gapSize={0.09} />
+                  <Line points={trackR} color={color} lineWidth={2} dashed dashSize={0.12} gapSize={0.09} />
+                </>
+              )
+            })()}
+
+            {planSymbolsOn && obj.type === 'door' && !isOverheadDoor && (() => {
               const swing = obj.swing ?? 'left'
               const hinge = swing === 'left' ? -w / 2 : w / 2
               const sign = swing === 'left' ? 1 : -1
@@ -293,7 +463,7 @@ export default function PlacedObjectsLayer() {
             {/* Window plan symbol — a double bar across the opening between two
                 jambs, flat on the floor so a window reads top-down just like a
                 door (it has no swing to draw). */}
-            {obj.type === 'window' && (() => {
+            {planSymbolsOn && obj.type === 'window' && (() => {
               const y = 0.07
               const barA: [number, number, number][] = [[-w / 2, y, -0.05], [w / 2, y, -0.05]]
               const barB: [number, number, number][] = [[-w / 2, y, 0.05], [w / 2, y, 0.05]]

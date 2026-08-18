@@ -7,6 +7,30 @@ const COMMON_FINISHED_WALLS_MM = [70, 89, 121, 152, 171, 184, 203, 235, 286, 305
 const MIN_SCALE_MM_PER_PX = 0.2
 const MAX_SCALE_MM_PER_PX = 50
 
+/**
+ * THIN ENOUGH AND A WALL IS NOT A WALL, IT IS A LINE.
+ *
+ * Scale was inferred partly by assuming a wall's PIXEL thickness is its real
+ * thickness at some standard size. That works on a print rendered big enough to
+ * resolve one, and collapses on a screenshot: a 759px-wide capture of a 9m
+ * building draws every wall as a 4px stroke, because 4px is the LINE WEIGHT the
+ * drawing was published with, not 100mm of timber seen at that scale.
+ *
+ * Ask what scale makes a 4px wall standard and you get an answer for every
+ * entry in the table — 70/4 = 17.5 through 305/4 = 76 mm/px — and the winner is
+ * then chosen by classifying the same walls with the same guess, which cannot
+ * disagree with itself. On the ADU screenshot it settled on 171/4 = 42.75
+ * mm/px, about 3.1x too big, and every dimension, wall type and opening width
+ * downstream inherited that.
+ *
+ * A stroke has to be thick enough for one pixel of error not to swamp the
+ * answer. Adjacent standard walls differ by about a third (89 vs 121mm), so at
+ * 6px a +/-1px misread is ~17% and the buckets are still distinguishable; at
+ * 4px it is 25% and they are not. Below this, thickness says nothing about
+ * scale and is not asked.
+ */
+const MIN_RESOLVABLE_WALL_PX = 6
+
 export interface InferredScale {
   scaleMmPerPx: number
   confidence: number
@@ -24,6 +48,19 @@ function roundScaleBucket(scaleMmPerPx: number): number {
   return Math.round(scaleMmPerPx * 20) / 20
 }
 
+/** Longest side of everything drawn, in pixels. */
+function drawnExtentPx(walls: ParsedWall[]): number {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const w of walls) {
+    minX = Math.min(minX, w.x1, w.x2)
+    maxX = Math.max(maxX, w.x1, w.x2)
+    minY = Math.min(minY, w.y1, w.y2)
+    maxY = Math.max(maxY, w.y1, w.y2)
+  }
+  if (!Number.isFinite(minX)) return 0
+  return Math.max(maxX - minX, maxY - minY)
+}
+
 function collectCandidateScales(walls: ParsedWall[]): number[] {
   const openings = detectOpenings(walls, { minGapPx: 12, maxGapPx: 320 })
   const candidates: number[] = []
@@ -39,7 +76,7 @@ function collectCandidateScales(walls: ParsedWall[]): number[] {
   }
 
   for (const wall of walls) {
-    if (wall.thickness < 2) continue
+    if (wall.thickness < MIN_RESOLVABLE_WALL_PX) continue
     for (const widthMm of COMMON_FINISHED_WALLS_MM) {
       const scale = widthMm / wall.thickness
       if (scale >= MIN_SCALE_MM_PER_PX && scale <= MAX_SCALE_MM_PER_PX) {
@@ -70,7 +107,7 @@ function scoreScaleCandidate(
   let wallHits = 0
 
   for (const wall of walls) {
-    if (wall.thickness < 2) continue
+    if (wall.thickness < MIN_RESOLVABLE_WALL_PX) continue
     const result = classifyWallType(wall.thickness * scaleMmPerPx, drywall)
     if (result.type === 'unknown') continue
     const length = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1)
@@ -95,6 +132,137 @@ function scoreScaleCandidate(
     wallHits,
     openingHits,
   }
+}
+
+/**
+ * The drawing scales that actually get used, as real millimetres per paper
+ * millimetre. Imperial first (this is a US/Canadian 1-&-2-family market), then
+ * the metric ratios.
+ *
+ * 48 is 1/4"=1'-0", the residential floor-plan default; 96 is 1/8"=1'-0" for a
+ * bigger building on the same sheet; the small numbers are details and sections.
+ */
+const ARCHITECTURAL_RATIOS = [
+  192, 128, 96, 64, 48, 32, 24, 16, 12, 8, 4,   // 1/16" … 3"=1'-0"
+  20, 25, 50, 100, 200,                          // 1:20 … 1:200
+]
+
+/** 1/4"=1'-0" and 1/8"=1'-0": the residential floor-plan defaults in the
+ *  imperial market this app is built for. */
+const DEFAULT_RATIOS = new Set([48, 96])
+/** Also common, just not the first guess. */
+const PLAUSIBLE_RATIOS = new Set([64, 50, 100])
+
+/**
+ * A "wall" thinner than this ON PAPER is a pen line, not a wall.
+ *
+ * The single most useful fact in here. A detector reports the thickness of the
+ * ink it found, and on the real 1-&-2-family sheet 217 of 274 "walls" came back
+ * 3–5px — which at 108 pixels to the paper inch is 0.7–1.2mm of pen. Those are
+ * single drawn faces, not wall widths, and they outnumber the genuine
+ * double-line walls 6:1, so any scale that flatters them wins on volume alone.
+ * That is how the estimate landed 2.7× out, calling every pen stroke a tidy
+ * 120mm partition.
+ *
+ * Line weight does not change with drawing scale — a heavy pen is ~1mm at any
+ * scale — while a real wall is always wider than the pen that draws it. So this
+ * threshold is measured in PAPER millimetres and needs no scale to apply, which
+ * is precisely what makes it safe to use before the scale is known.
+ */
+const MIN_WALL_PAPER_MM = 1.5
+/** Below this many surviving walls, trust the crowd again: a small or lightly
+ *  drawn plan may legitimately have almost no heavy linework. */
+const MIN_FILTERED_WALLS = 6
+
+/**
+ * How believable is a drawing that turns out to be this many metres across?
+ *
+ * The evidence the wall/opening scorer uses is weaker than it looks on a real
+ * sheet. Most "wall thicknesses" a detector returns are LINE WEIGHTS — the
+ * modal value on the real 1-&-2-family plan is 4px, and at 108 pixels to the
+ * paper inch that is 0.037" of pen, not a 4½" partition. Feed those to the
+ * classifier and a 2.7×-too-large scale looks great: every pen line becomes a
+ * tidy 120mm stud wall.
+ *
+ * Overall extent cannot be faked that way. The sheet is dimensioned 24'-6" and
+ * the whole drawing is tens of metres across; the scale that made those pen
+ * lines into stud walls also made the building 117 METRES wide, which no
+ * 1-&-2-family plan is. So size sanity gets a vote, and it is the vote that
+ * settles it.
+ *
+ * A multiplier rather than a filter — an unusual building should be dragged
+ * down, not ruled out.
+ */
+function extentPlausibility(metres: number): number {
+  if (!Number.isFinite(metres) || metres <= 0) return 1
+  if (metres < 3) return 0.2          // a doll's house — the scale is too small
+  if (metres <= 60) return 1          // a house, or a sheet of them
+  if (metres <= 120) return 0.5       // a big building, or a scale one step out
+  return 0.15                         // a city block. Almost certainly wrong.
+}
+
+/**
+ * Infer scale KNOWING HOW BIG THE PAPER IS.
+ *
+ * The structural inference below is a guess conditioned on nothing: it will
+ * happily land on 42.85 mm/px, call every wall 600mm of masonry, and be
+ * internally consistent while being about 4× wrong — which is exactly what it
+ * did to the real 1-&-2-family set.
+ *
+ * A PDF page, though, states its own size. 3888px across a 36" sheet is 108
+ * pixels per paper inch, and that is not a guess. The only unknown left is
+ * WHICH standard scale the sheet was plotted at, and there are about sixteen of
+ * those in the world. Choosing among sixteen physically real options beats
+ * searching a continuum, so the same wall/opening evidence now decides a much
+ * easier question.
+ *
+ * @param pxPerPaperInch raster pixels per inch of PAPER (not of the building).
+ */
+export function inferScaleFromPaper(
+  walls: ParsedWall[],
+  pxPerPaperInch: number,
+  drywall: DrywallConfig = 'single-layer',
+): InferredScale | null {
+  if (walls.length === 0) return null
+  if (!Number.isFinite(pxPerPaperInch) || pxPerPaperInch <= 0) return null
+
+  const mmPerPxOnPaper = 25.4 / pxPerPaperInch
+
+  // Judge the scale on real walls only — see MIN_WALL_PAPER_MM. Extent still
+  // comes from EVERY wall: the pen lines are part of the drawing even if they
+  // are not evidence of thickness, and throwing them away would shrink the
+  // building.
+  const heavy = walls.filter((w) => w.thickness * mmPerPxOnPaper >= MIN_WALL_PAPER_MM)
+  const evidence = heavy.length >= MIN_FILTERED_WALLS ? heavy : walls
+  const extentPx = drawnExtentPx(walls)
+
+  let best: InferredScale | null = null
+  let bestScore = 0
+
+  for (const ratio of ARCHITECTURAL_RATIOS) {
+    const scaleMmPerPx = mmPerPxOnPaper * ratio
+    if (scaleMmPerPx < MIN_SCALE_MM_PER_PX || scaleMmPerPx > MAX_SCALE_MM_PER_PX) continue
+
+    const { score, wallHits, openingHits } = scoreScaleCandidate(evidence, scaleMmPerPx, drywall)
+    if (wallHits < 2 && openingHits < 1) continue
+    // A thumb on the scale for the ratios a floor plan is actually drawn at.
+    // It only decides near-ties — evidence still outranks it — but 1:50 and
+    // 1/4"=1'-0" are 4% apart and both fit any drawing that fits either, so
+    // something has to break that tie, and in this market it is the imperial one.
+    const prior = DEFAULT_RATIOS.has(ratio) ? 1.2 : PLAUSIBLE_RATIOS.has(ratio) ? 1.1 : 1
+    const weighted = score * prior * extentPlausibility((extentPx * scaleMmPerPx) / 1000)
+    if (weighted <= bestScore) continue
+
+    bestScore = weighted
+    best = {
+      scaleMmPerPx,
+      confidence: clamp(0.5 + score / 12, 0, 0.95),
+      support: { walls: wallHits, openings: openingHits },
+    }
+  }
+
+  if (!best || bestScore < 2.2) return null
+  return best
 }
 
 export function inferScaleFromStructure(
@@ -128,4 +296,47 @@ export function inferScaleFromStructure(
   if (best.support.walls < 2 && best.support.openings < 1) return null
   if (bestScore < 2.2) return null
   return best
+}
+
+/**
+ * SCALE FROM A NUMBER THE USER ALREADY KNOWS.
+ *
+ * Every other route here guesses: a door is probably 813mm, a wall is probably
+ * 121mm. They are guesses because the drawing did not say. But a tradesperson
+ * always knows roughly how big the place is, and a plan usually prints it —
+ * "TOTAL AREA = 71 m²" is on the ADU screenshot in the test corpus.
+ *
+ * One number turns the whole question into arithmetic. The building covers a
+ * measurable area in pixels; if it also covers 71 m², the scale follows exactly,
+ * with no assumption about what anything is made of. That is why square footage
+ * is the one thing worth asking for when detection is unsure — it is the
+ * highest-leverage question in the intake, and the only one that fixes every
+ * dimension at once.
+ *
+ * @param areaSqM      Stated floor area of the building, in square metres.
+ * @param footprintPx  Area the building covers on the raster, in square pixels.
+ */
+export function scaleFromTotalArea(areaSqM: number, footprintPx: number): number | null {
+  if (!(areaSqM > 0) || !(footprintPx > 0)) return null
+  // 1 m² = 1e6 mm². mm/px is the square root of mm² per px².
+  const mmPerPx = Math.sqrt((areaSqM * 1e6) / footprintPx)
+  if (mmPerPx < MIN_SCALE_MM_PER_PX || mmPerPx > MAX_SCALE_MM_PER_PX) return null
+  return mmPerPx
+}
+
+/**
+ * The area the walls enclose, in square pixels — the footprint to pair with a
+ * stated floor area. Uses the bounding box of everything drawn, which is the
+ * outside face of the exterior walls on a plan with no site drawn around it.
+ */
+export function footprintAreaPx(walls: ParsedWall[]): number {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const w of walls) {
+    minX = Math.min(minX, w.x1, w.x2)
+    maxX = Math.max(maxX, w.x1, w.x2)
+    minY = Math.min(minY, w.y1, w.y2)
+    maxY = Math.max(maxY, w.y1, w.y2)
+  }
+  if (!Number.isFinite(minX)) return 0
+  return Math.max(0, maxX - minX) * Math.max(0, maxY - minY)
 }

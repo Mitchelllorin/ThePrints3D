@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
+import { labelText } from './labelStyle'
 import { explodeRuntime } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -23,8 +24,8 @@ import {
 } from '../../services/framingGeometry'
 import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import { VERTICAL_CIRCULATION, getCatalogItem } from '../../data/objectCatalog'
-import { solveStair, stairOpeningM, stairShapeFromSubtype } from '../../services/stairs'
-import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight } from './editHelpers'
+import { solveStair, stairOpeningM, stairShapeFromSubtype, stairHolePlacement } from '../../services/stairs'
+import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
 
@@ -111,9 +112,11 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
   const holeKey = JSON.stringify(holes ?? [])
   const joists = useMemo(
-    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes }),
+    // Namespaced by the AREA id: two decks in one scene must not hand out the
+    // same member id, or isolating a joist downstairs lights up its twin above.
+    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes, idPrefix: area.id }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lenX, lenZ, area.elementType, area.size, holeKey],
+    [lenX, lenZ, area.elementType, area.size, holeKey, area.id],
   )
   const ref = useRef<THREE.Group>(null)
   // Deck top sits at this storey's elevation; the structure hangs below it.
@@ -149,6 +152,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   const deck = useMemo(() => buildFloorDeck({ lenX, lenZ, holes }), [lenX, lenZ, holeKey])
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
+  const dimensionsVisible = useUISettingsStore((s) => s.dimensionsVisible)
   const ref = useRef<THREE.Group>(null)
   const level = area.level ?? 0
   useFloorExplode(ref, level * storeyHeight, level, DECK_LIFT)
@@ -175,9 +179,9 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
         rotation={[0, rotRad, 0]}
         {...(bodyHandlers ?? {})}
       />
-      {sheetCount > 0 && (
+      {sheetCount > 0 && dimensionsVisible && (
         <Billboard position={[centre.x, 0.5, centre.z]}>
-          <Text fontSize={0.26 * labelScale} color={labelColor} anchorX="center" anchorY="middle" outlineWidth={0.02 * labelScale} outlineColor="#0b1120">
+          <Text {...labelText(0.40 * labelScale, labelColor)}>
             {`${sheetCount} sheets · 4×8`}
           </Text>
         </Billboard>
@@ -201,6 +205,8 @@ export default function FloorJoistsLayer() {
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
+  const selectMember = useFloorplanLocalStore((s) => s.selectMember)
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
@@ -243,6 +249,10 @@ export default function FloorJoistsLayer() {
         const item = getCatalogItem(o.type)
         let w = (item?.defaultW ?? 1) * o.scaleX
         let d = (item?.defaultD ?? 1) * o.scaleZ
+        // Where the opening sits relative to the object, and its axis-aligned
+        // size. A lift shaft is centred on itself and square to the plan, so it
+        // starts as no shift at its own footprint.
+        let place = { shiftX: 0, shiftZ: 0, w, d }
         // A STAIR's opening is not its footprint — it has to run back far enough
         // that somebody climbing still has headroom where the floor edge cuts
         // across. The solver works that out from the riser; the catalog box knows
@@ -259,12 +269,20 @@ export default function FloorJoistsLayer() {
           const open = stairOpeningM(sol, FLOOR_ASSEMBLY_H)
           w = open.widthM
           d = open.lengthM
+          // WHERE the hole goes — the half of this that was missing. See
+          // stairHolePlacement: the opening is measured back from the TOP, so
+          // centring it on the stair left the top of the flight under solid deck.
+          place = stairHolePlacement({
+            openingLengthM: d, openingWidthM: w,
+            footprintLengthM: sol.footprint.lengthM,
+            yaw: o.rotationY ?? 0,
+          })
         }
-        const dx = o.x - centre.x, dz = o.z - centre.z
+        const dx = o.x + place.shiftX - centre.x, dz = o.z + place.shiftZ - centre.z
         const localX = dx * cos + dz * sin
         const localZ = -dx * sin + dz * cos
-        if (Math.abs(localX) < lenX / 2 + w / 2 && Math.abs(localZ) < lenZ / 2 + d / 2) {
-          hs.push({ x: localX, z: localZ, w, d })
+        if (Math.abs(localX) < lenX / 2 + place.w / 2 && Math.abs(localZ) < lenZ / 2 + place.d / 2) {
+          hs.push({ x: localX, z: localZ, w: place.w, d: place.d })
         }
       }
       if (hs.length) map[area.id] = hs
@@ -322,6 +340,24 @@ export default function FloorJoistsLayer() {
   // and it changes no geometry.
   const handlersFor = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => (traceMode || overlay.calibrationMode)
     ? {}
+    : editMode && granularity === 'member'
+    ? {
+        // Member grain: the tap picks the actual JOIST it landed on, not the
+        // whole deck. Same rule as walls — one switch, one meaning.
+        onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+          const ud = e.object.userData as { id?: string; label?: string }
+          if (!ud.id) return
+          e.stopPropagation()
+          selectMember(ud.id, ud.label ?? 'Joist')
+        },
+        onPointerOver: (e: ThreeEvent<PointerEvent>) => {
+          const id = (e.object.userData as { id?: string }).id
+          if (!id) return
+          e.stopPropagation()
+          setEditHover({ kind: 'member', id })
+        },
+        onPointerOut: () => setEditHover(null),
+      }
     : editMode
     ? {
         onPointerDown: onAreaDown(area),
@@ -343,9 +379,13 @@ export default function FloorJoistsLayer() {
   const decked = structural.filter((a) => !FLOOR_SLAB_TYPES.has(a.elementType))
 
   // Isolation: only show areas on the active floor. Ghosted: semi-transparent.
+  // X-ray is the user's own per-area call, so it beats the storey-wide ghost —
+  // you turned this one see-through to look through it, and a floor-level
+  // setting should not quietly put it back.
   const areaOpacity = (area: TracedLine) => {
     const level = area.level ?? 0
     if (isolatedFloor !== null && level !== isolatedFloor) return 0
+    if (area.transparent) return XRAY_OPACITY
     if (ghostedLevels.includes(level)) return 0.15
     return undefined // default (fully opaque)
   }

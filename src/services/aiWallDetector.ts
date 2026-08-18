@@ -4,8 +4,41 @@ const MODEL_URL = '/models/floorplan-wall-segmentation.onnx'
 const MODEL_INPUT_SIZE = 256
 const AI_THRESHOLD = 0.5
 
+/**
+ * ImageNet mean/std — the SAME values `ops/train/dataset.py` normalises with.
+ *
+ * These must match the training pipeline exactly or the model sees inputs on a
+ * different scale than it was fitted to and returns noise. This file used to
+ * feed raw 0–1 and would have done precisely that the first time a real model
+ * was dropped in — a silent failure, since a plausible-looking garbage mask
+ * just yields bad walls rather than an error.
+ *
+ * If you change these, change `_IMG_MEAN`/`_IMG_STD` in dataset.py in the same
+ * commit and retrain.
+ */
+const IMG_MEAN = [0.485, 0.456, 0.406]
+const IMG_STD = [0.229, 0.224, 0.225]
+
 let _supported: boolean | null = null
 let _sessionPromise: Promise<import('onnxruntime-web').InferenceSession> | null = null
+
+/**
+ * ONE INFERENCE AT A TIME. An onnxruntime-web session is not re-entrant: a
+ * second `run()` while the first is in flight throws "Session already started",
+ * and both callers then fall back to the classical detector.
+ *
+ * That is not a hypothetical. Dropping several files at once processes them in
+ * a loop, so two sheets in the same second is the normal case, not the edge
+ * one. Each run waits its turn on this chain instead. The tail is swallowed so
+ * one failed inference cannot poison every run that queues behind it.
+ */
+let _runQueue: Promise<unknown> = Promise.resolve()
+
+function serialize<T>(work: () => Promise<T>): Promise<T> {
+  const result = _runQueue.then(work, work)
+  _runQueue = result.catch(() => undefined)
+  return result
+}
 
 function pickProviders() {
   const providers: Array<'webgpu' | 'wasm'> = ['wasm']
@@ -28,6 +61,29 @@ async function getSession() {
   if (_sessionPromise) return _sessionPromise
   _sessionPromise = (async () => {
     const ort = await import('onnxruntime-web')
+    /**
+     * RUN THE MODEL OFF THE MAIN THREAD.
+     *
+     * By default onnxruntime-web initialises WASM and runs inference on
+     * whatever thread called it — which here is the one that has to paint. This
+     * is the FIRST thing the processor does with a drawing, before the
+     * heuristic detector is even reached, and it is where the time was going: a
+     * print sat past sixty seconds with the tab locked solid, and moving the
+     * heuristic passes into a worker barely moved the number because they were
+     * not the bottleneck.
+     *
+     * `wasm.proxy` makes onnxruntime host its own worker and marshal calls to
+     * it, so session creation, WASM init and inference all happen off-thread.
+     * Threads are capped rather than maximised: this runs on phones, where
+     * spawning one worker per core costs more in memory and start-up than it
+     * returns.
+     *
+     * Both settings must be applied BEFORE the first session is created —
+     * afterwards they are ignored, which is a quiet way to think you have fixed
+     * this and not have.
+     */
+    ort.env.wasm.proxy = true
+    ort.env.wasm.numThreads = Math.max(1, Math.min(4, (navigator.hardwareConcurrency ?? 4) - 1))
     return ort.InferenceSession.create(MODEL_URL, {
       executionProviders: pickProviders(),
       graphOptimizationLevel: 'all',
@@ -60,10 +116,11 @@ function resizeToModelInput(
     for (let x = 0; x < targetSize; x++) {
       const idx = y * targetSize + x
       const rgbaIdx = idx * 4
-      // NCHW
-      data[idx] = resized[rgbaIdx] / 255
-      data[targetSize * targetSize + idx] = resized[rgbaIdx + 1] / 255
-      data[2 * targetSize * targetSize + idx] = resized[rgbaIdx + 2] / 255
+      // NCHW, and normalised the way the model was TRAINED — see IMG_MEAN.
+      const plane = targetSize * targetSize
+      data[idx] = (resized[rgbaIdx] / 255 - IMG_MEAN[0]) / IMG_STD[0]
+      data[plane + idx] = (resized[rgbaIdx + 1] / 255 - IMG_MEAN[1]) / IMG_STD[1]
+      data[2 * plane + idx] = (resized[rgbaIdx + 2] / 255 - IMG_MEAN[2]) / IMG_STD[2]
     }
   }
   return { tensorData: data, width: targetSize, height: targetSize }
@@ -133,7 +190,7 @@ export async function detectWallsWithAI(
     const inputName = session.inputNames[0]
     const outputName = session.outputNames[0]
     const input = new ort.Tensor('float32', tensorData, [1, 3, height, width])
-    const output = await session.run({ [inputName]: input }, [outputName])
+    const output = await serialize(() => session.run({ [inputName]: input }, [outputName]))
     const tensor = output[outputName]
     const mask = readMaskTensor({
       data: tensor.data as Float32Array,
@@ -154,7 +211,12 @@ export async function detectWallsWithAI(
       detectionConfidence: Math.max(w.detectionConfidence ?? 0.75, 0.75),
     }))
     return aiResult
-  } catch {
+  } catch (err) {
+    // SAY SOMETHING. Returning null falls back to the classical detector, which
+    // is the right behaviour — but silently, so a broken model, a missing WASM
+    // file or a shape mismatch all present as "the AI made no difference" with
+    // nothing anywhere to explain why. The fallback stays; the silence goes.
+    console.error('[ThePrints3D] AI wall detection failed, falling back to the classical detector:', err)
     return null
   }
 }

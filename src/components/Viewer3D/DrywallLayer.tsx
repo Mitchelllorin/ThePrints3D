@@ -14,8 +14,10 @@ import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import { wallTakesEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec, type BoardKind } from '../../services/constructionCode'
+import { wallMayTakeEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec, type BoardKind } from '../../services/constructionCode'
 import { footprintCentroids, inwardSign, perimeterTest } from '../../services/wallFacing'
+import { XRAY_OPACITY } from './editHelpers'
+import { modelWalls } from '../../services/modelWalls'
 import type { ParsedWall, PlacedObject } from '../../types'
 
 
@@ -54,10 +56,17 @@ function WallBoard({ wall, pixelToWorld, scaleMmPerPx, wallHeight, orientation, 
   const board = useMemo(() => {
     if (isMasonry) return new THREE.Group()
     const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
-    const g = buildWallDrywall({ length, height: wallHeight, thickness: thicknessM, orientation, openings: wallOpenings, bothSides, inward, board: boardType, opacity: 0.96 })
+    // X-ray the wall, X-ray its board. The board is the layer standing between
+    // you and everything you turned X-ray ON to look at — the studs, the MEP in
+    // the bay — so leaving it opaque made the whole toggle look broken.
+    const g = buildWallDrywall({
+      length, height: wallHeight, thickness: thicknessM, orientation,
+      openings: wallOpenings, bothSides, inward, board: boardType,
+      opacity: wall.transparent ? XRAY_OPACITY : 0.96,
+    })
     g.userData.level = wall.level ?? 0  // so the shared explode peels boards floor-by-floor
     return g
-  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level, bothSides, inward, boardType])
+  }, [length, wallHeight, thicknessM, orientation, isMasonry, openings, wall.level, bothSides, inward, boardType, wall.transparent])
 
   useEffect(() => () => {
     board.traverse((o) => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); (o.material as THREE.Material).dispose() } })
@@ -104,15 +113,9 @@ export default function DrywallLayer() {
     return new THREE.Vector3(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
-  const userWalls = useMemo(() => {
-    const out: Array<{ wall: ParsedWall; scaleMmPerPx: number | null }> = []
-    for (const d of drawings) {
-      for (const w of d.parsedWalls) {
-        if (w.source === 'user') out.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
-      }
-    }
-    return out
-  }, [drawings])
+  // Detected walls get boarded too — see modelWalls. A wall the app found but
+  // never boarded is a wall you can see through, which reads as a hole.
+  const userWalls = useMemo(() => modelWalls(drawings), [drawings])
 
   // Assign placed doors/windows to their nearest wall (pixel space) so the board
   // is cut around them — same logic the framing uses.
@@ -185,7 +188,12 @@ export default function DrywallLayer() {
     const tests = new Map<number, (w: ParsedWall) => boolean>()
     for (const [lv, list] of byLevel) tests.set(lv, perimeterTest(list))
     return (w: ParsedWall) =>
-      wallTakesEnvelope(w.wallRole, w.framingType)
+      // wallMayTakeEnvelope, not wallTakesEnvelope. A DETECTED wall has no role,
+      // so this answered "not exterior" for every one of them — which flows
+      // straight into bothSides below and boarded the whole building on BOTH
+      // faces, exterior walls included. Unlabelled means undecided; the
+      // perimeter test decides.
+      wallMayTakeEnvelope(w)
       && (tests.get(w.level ?? 0)?.(w) ?? false)
   }, [userWalls])
 

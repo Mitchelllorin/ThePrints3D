@@ -7,11 +7,11 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vite.dev/)
 [![PWA Ready](https://img.shields.io/badge/PWA-ready-5A0FC8?logo=pwa)](https://web.dev/progressive-web-apps/)
 
-**Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely in the browser.**
+**Turn 2D prints and drawings into interactive, explodable 3D models — right on your phone or in the browser.**
 
-ThePrints3D is a React + TypeScript web application that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. All processing happens client-side — no drawings ever leave your device.
+ThePrints3D is a React + TypeScript app for web and Android that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. Core processing stays on-device, so drawings do not have to leave your phone or browser just to become a model.
 
-🌐 **[Website](https://theprints3d.com)** &nbsp;|&nbsp; 📱 **Google Play listing coming soon**
+🌐 **[Website](https://theprints3d.com)** &nbsp;|&nbsp; 📱 **[Get it on Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app)**
 
 ---
 
@@ -33,8 +33,8 @@ ThePrints3D is a React + TypeScript web application that ingests architectural d
 | **Construction calculators** | On-the-fly estimating helpers |
 | **Project library** | Save and reopen projects from browser IndexedDB |
 | **Share PNG** | Export a snapshot of the current 3D view |
-| **PWA / offline** | Installable; core workflows work on-device |
-| **Privacy-first** | Drawing processing stays on-device; no account required |
+| **PWA / offline** | Installable; works offline after first load |
+| **Privacy-first** | 100 % client-side — no server, no uploads |
 
 ---
 
@@ -101,8 +101,8 @@ src/
 │   ├── drawingProcessor.ts     # End-to-end processing pipeline
 │   ├── materialEstimator.ts    # Bill-of-materials estimator
 │   ├── projectStorage.ts       # IndexedDB project persistence
-│   ├── datasetCollector.ts     # Local dataset preparation utilities
-│   ├── pilotMetrics.ts         # Local pilot CSV snapshot/export utilities
+│   ├── datasetCollector.ts     # Anonymous feature collection for model training
+│   ├── pilotMetrics.ts         # Pilot CSV snapshot/export utilities
 │   └── logger.ts               # Structured event logging
 ├── store/
 │   └── useAppStore.ts          # Centralised state + actions (Zustand + Immer)
@@ -167,12 +167,12 @@ A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smo
 
 ## Privacy and Play Store
 
-- **Privacy policy:** `https://theprints3d.com/privacy.html`
-- **Data safety page:** `https://theprints3d.com/datasafety.html`
-- **Support email:** `info@theprints3d.com`
+- **Privacy policy:** `https://theprints3d.com/privacy`
+- **Data safety page:** `https://theprints3d.com/data-safety`
+- **Google Play:** `https://play.google.com/store/apps/details?id=com.theprints3d.app`
 - **Privacy contact:** `privacy@theprints3d.com`
 
-The Android app package name is `com.theprints3d.app`. For Play Console, use the policy URLs above once the site is live on `theprints3d.com`.
+The Android app package name is `com.theprints3d.app`. Use the live URLs above for Play Console metadata.
 
 ---
 
@@ -207,6 +207,18 @@ The Android app package name is `com.theprints3d.app`. For Play Console, use the
 | `ops/mvp_acceptance_criteria.md` | MVP readiness / exit criteria |
 | `ops/data_governance_controls.txt` | Governance controls baseline |
 | `ops/data_access_register_template.csv` | Permission / access register |
+
+---
+
+## 🧩 Part of the 3D Learning Family
+
+ThePrints3D is one of a family of interactive 3D apps built by Mitchell Lorin McKnight, each making an abstract, hands-on trade visual and tangible:
+
+| App | What it does | Links |
+|---|---|---|
+| **ThePrints3D** *(this app)* | Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely in the browser | [theprints3d.com](https://theprints3d.com) · [Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app) |
+| **CircuiTry3D** | Build and simulate electrical circuits in 3D — from macro current flow to the atomic scale, with the FUSE™ failure engine | [circuitry3d.net](https://www.circuitry3d.net) · [Google Play](https://play.google.com/store/apps/details?id=com.circuitry3d.app) |
+| **Automotive3D** | Build real engines in 3D, swap branded parts, and diagnose faults with live DTC codes | [automotive3d.ca](https://automotive3d.ca) · [Google Play](https://play.google.com/store/apps/details?id=com.automotive3d.app) |
 
 ---
 

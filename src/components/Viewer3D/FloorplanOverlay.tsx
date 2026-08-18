@@ -44,6 +44,7 @@ import {
 } from '../../services/wallTraceReducer'
 import { ensureInkBuffer, getInkBuffer, snapSegmentToInk } from '../../services/inkRaster'
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, isWallMountedType, deviceMountHeightM } from '../../data/objectCatalog'
+import { roomEdgeWalls } from '../../services/planPlacement'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { validateElectrical } from '../../services/constructionCode'
@@ -68,12 +69,21 @@ function genLineId() {
   return `line-${_lineSeq++}-${Math.round(performance.now())}`
 }
 
-// Ground plane (y=0) for projecting the pointer ray to a floor point — used by
-// the placement catcher so the ghost tracks even when the 3D build is in front.
+// Plane for projecting the pointer ray onto a floor — used by the placement
+// catcher so the ghost tracks even when the 3D build is in front of the print.
+//
+// `y` is the elevation of the storey being worked on. This was fixed at grade,
+// and the camera looks DOWN, so a ray meets y=0 at a different x/z than it meets
+// the second-floor deck: upstairs the ghost sat at ground height and drifted
+// away from the cursor, further the higher the storey, while the object itself
+// rendered on the floor you had selected. Preview and result on two planes.
 const GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-function rayToGround(e: ThreeEvent<PointerEvent>): THREE.Vector3 | null {
+const LEVEL_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+function rayToGround(e: ThreeEvent<PointerEvent>, y = 0): THREE.Vector3 | null {
   const p = new THREE.Vector3()
-  return e.ray.intersectPlane(GROUND_PLANE, p) ? p : null
+  if (y === 0) return e.ray.intersectPlane(GROUND_PLANE, p) ? p : null
+  LEVEL_PLANE.constant = -y   // plane constant is the NEGATIVE offset along the normal
+  return e.ray.intersectPlane(LEVEL_PLANE, p) ? p : null
 }
 
 const DEFAULT_WIDTH = 12
@@ -228,6 +238,7 @@ export default function FloorplanOverlay() {
   const circuits = useAppStore((s) => s.circuits)
   const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
+  const planView = useFloorplanLocalStore((s) => s.planView)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
 
@@ -1040,9 +1051,52 @@ export default function FloorplanOverlay() {
   // interior partitions change floor to floor (a second floor needs stairs, and
   // that opening moves the layout) — matching against every storey's walls at
   // once let an upstairs door align itself to a downstairs partition.
+  //
+  // A DETECTED WALL IS STILL A WALL. This looked only at `source === 'user'`,
+  // so on a preset — whose walls all arrive as 'auto' — the list came back
+  // EMPTY and there was nothing on the plan to snap or orient against. Doors and
+  // windows dropped wherever the pointer was, flat, un-oriented, and no amount
+  // of aiming helped, because as far as placement was concerned the building had
+  // no walls at all. Same for any plan built from "Find the rest".
+  //
+  // Traced walls still WIN: they are the ones you drew, and detection can throw
+  // off noise (a title block full of parallel lines reads as dozens of walls).
+  //
+  // BUT "WIN" IS PER PLACEMENT, NOT PER STOREY. This used to return the traced
+  // walls ALONE the moment there was at least one, which quietly deleted every
+  // detected wall on the plan as far as placement was concerned. Trace a single
+  // wall in one corner and a door dropped on any of the other nineteen had
+  // nothing within reach to snap or orient to: it landed a half-metre off the
+  // line at yaw 0, square to the world, while BuildingModel went on cutting the
+  // hole at the wall's real angle. That is the "doors don't rotate or line up"
+  // bug, and it was worst in the normal workflow — trace one, find the rest,
+  // start hanging doors — because one traced wall is all it took to trigger it.
+  //
+  // So keep both sets and let REACH decide: a traced wall still beats a detected
+  // one wherever both are in range (searched first, and ties go to it), and the
+  // detected walls are consulted only where no traced wall is near enough to
+  // have an opinion. Detection noise can only ever affect a spot you have not
+  // traced, which is exactly where it is better than nothing.
+  const { tracedWalls, detectedWalls } = useMemo(() => {
+    const onLevel = (w: { level?: number }) => (w.level ?? 0) === activeLevel
+    const detected = drawing
+      ? drawing.parsedWalls.filter((w) => w.source !== 'user' && onLevel(w))
+      : []
+    return {
+      tracedWalls: userWalls.filter(onLevel),
+      // Room edges stand in when there is no wall data at all, which is every
+      // practice preset — see roomEdgeWalls. Only when `detected` is empty, so
+      // a real drawing never has its walls diluted by room rectangles.
+      detectedWalls:
+        detected.length > 0
+          ? detected
+          : roomEdgeWalls(drawing?.parsedRooms ?? []),
+    }
+  }, [userWalls, activeLevel, drawing])
+  /** Every wall a placement may consider, traced first so it wins ties. */
   const placementWalls = useMemo(
-    () => userWalls.filter((w) => (w.level ?? 0) === activeLevel),
-    [userWalls, activeLevel],
+    () => [...tracedWalls, ...detectedWalls],
+    [tracedWalls, detectedWalls],
   )
   // Click-target half-width for walls, ~20px of the print mapped to metres.
   const wallPickWidthM = Math.max(0.25, 20 * (width / imageWidth))
@@ -1063,25 +1117,45 @@ export default function FloorplanOverlay() {
   // WorkspaceLayout, not here. This was one of three competing window-level
   // handlers, so one press disarmed the tool AND closed unrelated drawers.
 
-  // Yaw that aligns an object with the nearest user wall (so it sits IN/along
-  // the wall). Returns 0 when no wall is close enough to snap to.
-  const autoOrientYaw = (x: number, z: number): number => {
+  // Yaw that aligns an object with the nearest wall, so it sits IN/along it.
+  //
+  // ORIENTING REACHES FURTHER THAN SNAPPING, deliberately. They used to share a
+  // 1.2 m cutoff, which is about four feet — drop a window a hand's width past
+  // that and it came down at 0 degrees, square to the world instead of square to
+  // the wall it was obviously meant for. Turning is free and reversible: nothing
+  // moves, the thing just faces the right way, and being turned toward a wall
+  // 2 m off is right far more often than facing due north is. MOVING something
+  // is the part that has to stay tight, because a snap that reaches too far
+  // teleports what you are placing out from under your hand — so snapToWall
+  // keeps its own, shorter reach.
+  const ORIENT_REACH_M = 3.0
+  /** Nearest wall in one set, as {distance, yaw}. */
+  const nearestYawIn = (walls: typeof placementWalls, x: number, z: number) => {
     let best = Infinity, yaw = 0
-    for (const w of placementWalls) {
+    for (const w of walls) {
       const a = planeLocalToWorld([w.x1, w.y1])
       const b = planeLocalToWorld([w.x2, w.y2])
       const d = segDist(x, z, a[0], a[2], b[0], b[2])
       if (d < best) { best = d; yaw = -Math.atan2(b[2] - a[2], b[0] - a[0]) }
     }
-    return best < 1.2 ? yaw : 0
+    return { best, yaw }
+  }
+  const autoOrientYaw = (x: number, z: number): number => {
+    // Traced walls get first refusal within reach; detected walls answer only
+    // where nothing you drew is close enough to.
+    const t = nearestYawIn(tracedWalls, x, z)
+    if (t.best < ORIENT_REACH_M) return t.yaw
+    const d = nearestYawIn(detectedWalls, x, z)
+    return d.best < ORIENT_REACH_M ? d.yaw : 0
   }
 
   // Snap a point onto the nearest user wall (projected onto the wall centreline)
   // so wall devices sit IN the wall — boxes attach to the studs. Returns the tap
   // point unchanged when no wall is within reach.
-  const snapToWall = (x: number, z: number): { x: number; z: number } => {
-    let best = 1.2, sx = x, sz = z
-    for (const w of placementWalls) {
+  const SNAP_REACH_M = 1.2
+  const snapOnto = (walls: typeof placementWalls, x: number, z: number) => {
+    let best = SNAP_REACH_M, sx = x, sz = z, hit = false
+    for (const w of walls) {
       const a = planeLocalToWorld([w.x1, w.y1])
       const b = planeLocalToWorld([w.x2, w.y2])
       const ax = a[0], az = a[2], bx = b[0], bz = b[2]
@@ -1091,9 +1165,17 @@ export default function FloorplanOverlay() {
       const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / len2))
       const px = ax + t * dx, pz = az + t * dz
       const d = Math.hypot(x - px, z - pz)
-      if (d < best) { best = d; sx = px; sz = pz }
+      if (d < best) { best = d; sx = px; sz = pz; hit = true }
     }
-    return { x: sx, z: sz }
+    return { x: sx, z: sz, hit }
+  }
+  const snapToWall = (x: number, z: number): { x: number; z: number } => {
+    // Same order of precedence as the orientation: your line first, the
+    // detector's only where you have not drawn one.
+    const t = snapOnto(tracedWalls, x, z)
+    if (t.hit) return { x: t.x, z: t.z }
+    const d = snapOnto(detectedWalls, x, z)
+    return { x: d.x, z: d.z }
   }
 
   // Final pose for a placement tap: wall devices snap ONTO the wall; everything
@@ -1189,15 +1271,27 @@ export default function FloorplanOverlay() {
   // first wall the ray grazed and "wouldn't go inside" the building. The ground
   // fallback never fired, because the ray had not missed the walls — it had
   // passed through one.
+  /** Elevation of the storey being worked on — the deck you are placing onto. */
+  const placeFloorY = activeLevel * storeyHeight
+
+  // Cast onto THIS STOREY'S deck, not grade.
+  //
+  // Everything cast at y=0. The camera looks down, so a ray meets grade at a
+  // different x/z than it meets the second-floor deck — on an upper storey the
+  // ghost sat at ground height AND drifted away from the cursor, further the
+  // higher you went, while the object itself rendered up on the floor you had
+  // selected. The preview and the result were on two different planes.
   const rayToPlacement = (e: ThreeEvent<PointerEvent>): THREE.Vector3 | null =>
     isWallMountedType(placeObjectType ?? '')
-      ? (rayToWall(e) ?? rayToGround(e))
-      : rayToGround(e)
+      ? (rayToWall(e) ?? rayToGround(e, placeFloorY))
+      : rayToGround(e, placeFloorY)
 
   // Standing height for the placement ghost, so it previews at the real mount
-  // height (wall devices / ceiling fixtures) instead of on the floor.
+  // height (wall devices / ceiling fixtures) instead of on the floor — and on
+  // the storey you are actually working on, so a stair being placed upstairs
+  // previews upstairs.
   const ghostY = (type: string, fallbackH: number) =>
-    deviceMountHeightM(type, ceilingM) ?? fallbackH / 2
+    placeFloorY + (deviceMountHeightM(type, ceilingM) ?? fallbackH / 2)
 
   // Press/drag moves the ghost (imperative — no re-render, so the ghost stays
   // visible). The camera is locked while placing, so the print never drifts.
@@ -1212,17 +1306,25 @@ export default function FloorplanOverlay() {
     ghostRef.current.rotation.y = pose.rotationY
   }
 
-  // Only DRAG moves the ghost — a bare hover must not.
+  // What moves the ghost, which is NOT the same question on a finger and a mouse.
   //
-  // This was wired straight to onPointerMove, which on a phone is fine: there is
-  // no hover, so move only fires while a finger is down and the press-drag-drop
-  // flow works. On a mouse it fires the moment the pointer moves ANYWHERE, so
-  // the ghost parked hi-vis at the plan's edge teleported to the cursor before
-  // you could reach it — the item looked like it vanished the instant you went
-  // to grab it. `buttons` is non-zero only while a mouse button or finger is
-  // actually down, which is the same test on both.
+  // TOUCH has no hover. A move event only ever arrives with a finger already
+  // down, so press-drag-drop is the entire interaction: the item parks hi-vis at
+  // the plan's edge, you grab it, you drag it, you let go. Gating on `buttons`
+  // is what makes that work.
+  //
+  // A MOUSE hovers, and gating it on `buttons` too meant nothing happened until
+  // you pressed — so unless you already knew there was an item parked in the
+  // corner waiting to be grabbed, there was no preview at all. The ghost
+  // following the cursor is the thing people actually remember and want: you see
+  // exactly what you are about to drop, and exactly where, before committing.
+  //
+  // The old objection — that a hovering mouse "teleported the parked ghost away
+  // before you could reach it" — was really a complaint about being made to
+  // fetch it. When the ghost tracks the cursor there is nothing to fetch: it is
+  // already under your hand, and a click drops it.
   const dragGhost = (event: ThreeEvent<PointerEvent>) => {
-    if (event.buttons === 0) return
+    if (event.pointerType === 'touch' && event.buttons === 0) return
     moveGhost(event)
   }
 
@@ -1369,7 +1471,15 @@ export default function FloorplanOverlay() {
           can be run "in the ceiling" before a real ceiling exists. It tracks the
           active storey + the plan's orientation, the way a placed door orients to
           its wall; the ducts still render up at the ceiling band. */}
-      {drawing && drawing.status === 'ready' && activeTraceLayer === 'hvac' && (
+      {/* ONLY WHILE ACTUALLY TRACING. This used to appear whenever HVAC was the
+          selected discipline, which turned out to mean "most of the time": in
+          the layer list, tapping a trade's NAME makes it the active layer, so
+          anyone tapping HVAC to look at it got a full-footprint sheet hanging
+          over the whole model at ceiling height, with nothing to explain it.
+          The plane exists so ducts can be run before a real ceiling is built —
+          that is a TRACING need, and it has no business being there when you
+          are only looking. */}
+      {drawing && drawing.status === 'ready' && activeTraceLayer === 'hvac' && traceMode && (
         <group position={[overlay.position[0], activeLevel * storeyHeight + ceilingM, overlay.position[1]]} rotation={[0, rotationRad, 0]}>
           <mesh rotation={[-Math.PI / 2, 0, 0]} userData={{ noPick: true }}>
             <planeGeometry args={[width, depth]} />
@@ -1521,23 +1631,37 @@ export default function FloorplanOverlay() {
         calibrationMode={overlay.calibrationMode}
       />
 
-      {/* Committed floor areas — outlines at each area's storey elevation. */}
+      {/* Committed floor and roof areas — outlines at each area's storey
+          elevation.
+
+          KNOCKED BACK IN PLAN VIEW. Seen from above these are big bright
+          rectangles laid straight over the drawing — the roof one especially,
+          since it rings everything at the overhang line. While you are tracing
+          in 3D that is the point: it is the thing you just drew. In plan you
+          are reading the PRINT, judging whether a detected line sits on a wall,
+          and a hot pink ring over the top of it is competing with the only
+          thing you are actually looking at. They stay visible, because the gap
+          between the two IS the eave and is worth seeing — just quiet enough to
+          be context rather than the subject. */}
       {visibleLayers.has('floors') && floorsAreas.map((a) => (
         <Line
           key={`floor-${a.id}`}
           points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, CEILING_TYPES.has(a.elementType)))}
           color={LAYER_COLORS.floors}
-          lineWidth={2.5}
+          lineWidth={planView ? 1.2 : 2.5}
+          transparent={planView}
+          opacity={planView ? 0.42 : 1}
         />
       ))}
 
-      {/* Committed roof areas — outlines at each area's storey elevation. */}
       {visibleLayers.has('roof') && roofAreas.map((a) => (
         <Line
           key={`roof-${a.id}`}
           points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, true))}
           color={LAYER_COLORS.roof}
-          lineWidth={2.5}
+          lineWidth={planView ? 1.2 : 2.5}
+          transparent={planView}
+          opacity={planView ? 0.42 : 1}
         />
       ))}
 

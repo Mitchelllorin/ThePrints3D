@@ -17,8 +17,9 @@ export default function PrivacyPolicy({ onClose }: Props) {
 
           <h3>Overview</h3>
           <p>
-            ThePrints3D ("the App") converts architectural drawing files into interactive 3D models.
-            Your privacy matters to us. This policy explains what data the App collects and how it is used.
+            ThePrints3D ("the App") turns 2D prints and drawings into interactive 3D models you can
+            inspect and edit on your phone. This policy explains what data the App collects and how it
+            is handled.
           </p>
 
           <h3>Data We Collect</h3>
@@ -90,9 +91,9 @@ export default function PrivacyPolicy({ onClose }: Props) {
           </p>
           <p>
             The full policy is published at{' '}
-            <a href="https://theprints3d.com/privacy.html" className={styles.link}
+            <a href="https://theprints3d.com/privacy" className={styles.link}
                target="_blank" rel="noopener noreferrer">
-              theprints3d.com/privacy.html
+              theprints3d.com/privacy
             </a>
             .
           </p>

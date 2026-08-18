@@ -8,6 +8,7 @@ import type { Drawing, FloorLevel, FloorplanOverlayState, Layer, ParsedRoom, Par
 import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { modelWalls } from '../../services/modelWalls'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 import { blockMaterial, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -694,12 +695,47 @@ interface FramingAlign {
   yaw: number                // overlay rotation added to each component
 }
 
+/**
+ * @param byWall When true, every member is parented into a per-wall group so
+ *   the explode moves each WALL as one panel. When false they are added flat and
+ *   the explode fans out stick by stick. See `explodeGrain`.
+ */
 function buildFramingGeometry(
   group: THREE.Group,
   components: PlacedComponent[],
   opacity: number,
   align?: FramingAlign,
+  byWall = true,
 ) {
+  /**
+   * WHOLE WALLS OR LOOSE STICKS.
+   *
+   * The explode walks the top group's direct children and pushes each one out
+   * from the centre. Every framing member was a direct child, so a wall did not
+   * fly apart — it disintegrated, hundreds of sticks at once, which is
+   * spectacular and useless for seeing how a building goes together.
+   *
+   * Members carry `wallIndex`, so grouping by it is enough: one child per wall,
+   * and the explode moves the panel intact with its studs, plates and headers
+   * riding along inside. Flip to member grain and they go back to being loose,
+   * which is what you want when the stick IS the thing you are looking at.
+   */
+  const wallGroups = new Map<number, THREE.Group>()
+  const parentFor = (comp: PlacedComponent): THREE.Group => {
+    if (!byWall) return group
+    const idx = (comp as { wallIndex?: number }).wallIndex
+    if (idx == null) return group
+    let g = wallGroups.get(idx)
+    if (!g) {
+      g = new THREE.Group()
+      g.name = `wall-framing-${idx}`
+      g.userData.layer = 'framing'
+      g.userData.wallIndex = idx
+      group.add(g)
+      wallGroups.set(idx, g)
+    }
+    return g
+  }
   // Shared steel material — silvery, metallic — reused across all C-channels.
   const steelMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#9aa6b2'),
@@ -748,7 +784,7 @@ function buildFramingGeometry(
     obj.userData.id = comp.id
     obj.userData.componentType = comp.componentType
     obj.userData.label = comp.label
-    group.add(obj)
+    parentFor(comp).add(obj)
   }
 }
 
@@ -774,6 +810,17 @@ export default function BuildingModel({ layers }: Props) {
   const explodeMults = useConfigStore((s) => s.explodeSystemMultipliers)
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
+  // MEMBER PICKING. Every framing stick is already its own mesh carrying its id
+  // and label; what was missing was anyone listening. These handlers sit on the
+  // whole framing group rather than on each stick — there are thousands of
+  // sticks, and r3f events bubble, so one listener reads `e.object` and gets the
+  // exact member that was hit.
+  const editMode = useFloorplanLocalStore((s) => s.editMode)
+  const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
+  const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
+  const selectMember = useFloorplanLocalStore((s) => s.selectMember)
+  const isolatedMemberId = useFloorplanLocalStore((s) => s.isolatedMemberId)
+  const memberPicking = editMode && granularity === 'member'
 
   // Explode animation state that must persist across frames (not re-rendered).
   const explodeCurrentRef = useRef(0)
@@ -892,12 +939,27 @@ export default function BuildingModel({ layers }: Props) {
       (d) => (d.type === 'floor-plan' || d.type === 'architectural') && d.parsedWalls.length > 0,
     )
 
-    // When the user has traced walls, the live wall layer persists them as the
-    // built walls (ghost → solid) with full detail — steel channel/knockouts,
-    // block courses, framed openings. So the engine wall/framing rendering is
-    // skipped to avoid a duplicate, lower-detail version. Auto-only plans (no
-    // traced walls) still build through the engine path below.
-    const hasUserWalls = drawings.some((d) => d.parsedWalls.some((w) => w.source === 'user'))
+    /**
+     * STAND DOWN WHENEVER THE LIVE LAYER IS BUILDING WALLS — which is whenever
+     * there are any, traced OR detected.
+     *
+     * This used to check for USER-traced walls only, on the reasoning that
+     * auto-only plans still needed the engine path. That stopped being true
+     * when `modelWalls()` started returning detected walls as well: the live
+     * layer frames every real wall now, so on an auto-detected plan BOTH ran
+     * and the model carried two sets of walls on top of each other — proper
+     * framing from one, a painted two-faced box from the other.
+     *
+     * Which is why the layer switches looked broken on an uploaded print.
+     * Hiding Framing took away the studs and left the boxes standing (measured:
+     * 1031 visible → 535), so the toggle read as half-working, and the envelope
+     * toggles did nothing at all to the boxes because a painted face is not a
+     * layer you can hide.
+     *
+     * It also means "upload a print" and "trace it yourself" no longer produce
+     * different qualities of model. Same walls, same framing, same envelope.
+     */
+    const hasUserWalls = modelWalls(drawings).length > 0
 
     // User-placed doors/windows become real openings cut into the wall meshes.
     const openingSpecs: OpeningSpec[] = placedObjects
@@ -993,7 +1055,15 @@ export default function BuildingModel({ layers }: Props) {
           // are cut directly into the wall meshes (see buildRealWalls).
           case 'ceiling': {
             const ceilLayer = layerMap.get('ceiling')
-            const hasRCP = floorDrawings.some((d) => d.type === 'rcp') || sceneConfig.specialFeatures.length > 0
+            // AN RCP DRAWING, and nothing else. This used to also fire on
+            // `specialFeatures.length > 0` — and special features are things
+            // like a fire separation, a stair opening or a basement, which have
+            // nothing whatever to do with a reflected ceiling plan. The preset's
+            // own wizard text mentions all three, so every build got a
+            // full-footprint slab hanging at the top of the storey: the giant
+            // sheet over the model that survived two other fixes because I kept
+            // looking at the layers that were SUPPOSED to draw ceilings.
+            const hasRCP = floorDrawings.some((d) => d.type === 'rcp')
             if (ceilLayer?.visible && hasRCP) {
               buildCeiling(group, fp, elev, fh, ceilLayer.color, ceilLayer.opacity)
             }
@@ -1059,7 +1129,11 @@ export default function BuildingModel({ layers }: Props) {
           yaw: rot,
         }
       }
-      buildFramingGeometry(group, buildResult.components, framingLayer.opacity, align)
+      // Grain follows the SELECTION switch. Working on walls? The explode moves
+      // walls. Working on members? It fans the sticks out so you can get at one.
+      // One switch, one meaning, rather than a second control that can disagree
+      // with the first.
+      buildFramingGeometry(group, buildResult.components, framingLayer.opacity, align, granularity === 'assembly')
     }
 
     // Snapshot each mesh's assembled position + the model centre, so the explode
@@ -1085,7 +1159,48 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects, floorsAreas])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects, floorsAreas, granularity])
+
+  /**
+   * MEMBER ISOLATION — one stick, in the clear.
+   *
+   * Explode cannot do this job on its own: pushed far enough apart to see a
+   * single stud clear of everything, the model is off the screen; close enough
+   * to stay in frame, the stud is still in the crowd. So this hides the crowd
+   * rather than moving it — the chosen member stays exactly where it is, in the
+   * building, and everything else steps out of the way.
+   *
+   * Ghosted, not deleted: the rest of the model drops to a faint outline so the
+   * member is still read IN CONTEXT. A stud floating in a black void tells you
+   * nothing about where it sits.
+   */
+  useEffect(() => {
+    const group = groupRef.current
+    if (!group) return
+    group.traverse((node) => {
+      const mesh = node as THREE.Mesh
+      if (!mesh.isMesh || !mesh.material) return
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      const isTarget = mesh.userData.id === isolatedMemberId
+      for (const m of mats) {
+        const sm = m as THREE.MeshStandardMaterial
+        if (isolatedMemberId === null) {
+          if (sm.userData?.isoBase !== undefined) {
+            sm.opacity = sm.userData.isoBase as number
+            sm.transparent = sm.opacity < 1
+            delete sm.userData.isoBase
+            sm.needsUpdate = true
+          }
+          continue
+        }
+        if (sm.userData?.isoBase === undefined) sm.userData.isoBase = sm.opacity
+        sm.transparent = true
+        sm.opacity = isTarget ? 1 : 0.06
+        sm.depthWrite = isTarget
+        sm.needsUpdate = true
+      }
+    })
+  }, [isolatedMemberId, buildResult, granularity])
 
   // Apply floor isolation and ghost transparency whenever those states change.
   // Isolation hides all levels except the focused one. Ghost makes a level
@@ -1167,5 +1282,22 @@ export default function BuildingModel({ layers }: Props) {
     }
   })
 
-  return <group ref={groupRef} />
+  return (
+    <group
+      ref={groupRef}
+      onPointerOver={memberPicking ? (e) => {
+        const id = e.object.userData.id as string | undefined
+        if (!id) return
+        e.stopPropagation()
+        setEditHover({ kind: 'member', id })
+      } : undefined}
+      onPointerOut={memberPicking ? () => setEditHover(null) : undefined}
+      onPointerDown={memberPicking ? (e) => {
+        const ud = e.object.userData as { id?: string; label?: string; componentType?: string }
+        if (!ud.id) return
+        e.stopPropagation()
+        selectMember(ud.id, ud.label ?? ud.componentType ?? 'Member')
+      } : undefined}
+    />
+  )
 }

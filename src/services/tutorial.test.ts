@@ -18,16 +18,35 @@ describe('tutorial script', () => {
   it('covers the full house build in order', () => {
     const ids = TUTORIAL_STEPS.map((s) => s.id)
     expect(ids).toEqual([
-      'plan', 'scale', 'floor', 'wall', 'findRest',
-      'build', 'roof', 'openings', 'plumbing', 'electrical', 'takeoff',
+      // ONE line of orientation, then work. Four talking steps up front was
+      // three too many, and "lock the scale" told presets to do nothing.
+      // Ships as the BASICS only: plan → calibration → floor → wall → find the
+      // rest → done. Roof and the trades are deliberately not taught, because
+      // they are the next thing being built and the tour would go stale.
+      'welcome', 'calibrate',
+      'floor', 'wall', 'findRest',
+      'done',
     ])
   })
 
-  it('every step has teaching copy and a hint', () => {
+  it('every step has teaching copy, and any hint it carries says something', () => {
     for (const s of TUTORIAL_STEPS) {
       expect(s.title.length).toBeGreaterThan(0)
       expect(s.body.length).toBeGreaterThan(0)
-      expect(s.hint.length).toBeGreaterThan(0)
+      // The hint is optional — a spotlit step does not need prose repeating
+      // what the ring is already pointing at. But an empty string is a mistake
+      // rather than a choice, so it is not allowed to sit there blank.
+      if (s.hint !== undefined) expect(s.hint.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('keeps the copy short enough to read standing over a phone', () => {
+    // A ceiling, not a target. Raised from 180 once the user started writing
+    // the copy himself — his narration steps carry a whole demonstration and
+    // run longer than a one-line instruction, and a limit set by Claude is not
+    // a reason to cut the words of the person who knows the trade.
+    for (const s of TUTORIAL_STEPS) {
+      expect(s.body.length, `${s.id} is getting long`).toBeLessThanOrEqual(420)
     }
   })
 
@@ -37,16 +56,44 @@ describe('tutorial script', () => {
     expect(clampStep(3)).toBe(3)
   })
 
-  it('auto-advances a step once its goal is met', () => {
-    // Step 0 (plan): not done with no plan, done + advances with a plan.
-    expect(tutorialAdvance(0, EMPTY)).toEqual({ done: false, nextIndex: null })
-    expect(tutorialAdvance(0, { ...EMPTY, hasPlan: true })).toEqual({ done: true, nextIndex: 1 })
+  it('no step can advance on a goal it does not have', () => {
+    // Nothing left in the shipped script watches for a goal — every step is
+    // either narrated or performed by the tour — so this asserts the mechanism
+    // rather than a particular step: a step WITH a goal advances when met.
+    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'wall')
+    expect(tutorialAdvance(i, EMPTY)).toEqual({ done: false, nextIndex: null })
   })
 
-  it('find-the-rest completes only when auto walls exceed the traced one', () => {
-    const i = TUTORIAL_STEPS.findIndex((s) => s.id === 'findRest')
-    expect(tutorialAdvance(i, { ...EMPTY, userWallCount: 1, totalWallCount: 1 }).done).toBe(false)
-    expect(tutorialAdvance(i, { ...EMPTY, userWallCount: 1, totalWallCount: 6 }).done).toBe(true)
+  it('a step with nothing to detect carries its own timer out', () => {
+    // Every other step advances when the user DOES the thing. The opening line
+    // has no such signal, so without a timer it waits forever on a Next the
+    // user may never spot — the tour looks hung on its own first sentence.
+    for (const s of TUTORIAL_STEPS) {
+      const isTerminal = s === TUTORIAL_STEPS[TUTORIAL_STEPS.length - 1]
+      const detectable = s.done({
+        ...EMPTY, hasPlan: true, calibrationCleared: true, hasFloor: true, hasRoof: true,
+        built: true, openingCount: 1, plumbingCount: 1, electricalCount: 1,
+        userWallCount: 1, totalWallCount: 9,
+      })
+      if (!detectable && !isTerminal) {
+        expect(s.autoAdvanceMs, `${s.id} would sit forever`).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('the performed steps hold their own time rather than watching for a goal', () => {
+    // floor, wall and find-the-rest are all done BY the tour now, so none of
+    // them has a goal to detect — they run their demonstration and move on on
+    // their own clock. A goal here would fire the moment the tour committed the
+    // thing itself and cut the step off mid-sentence.
+    for (const id of ['floor', 'wall', 'findRest']) {
+      const s = TUTORIAL_STEPS.find((x) => x.id === id)!
+      expect(s.perform, `${id} should perform itself`).toBeTruthy()
+      expect(s.autoAdvanceMs, `${id} needs its own timer`).toBeGreaterThan(0)
+      expect(tutorialAdvance(TUTORIAL_STEPS.indexOf(s), {
+        ...EMPTY, hasFloor: true, userWallCount: 1, totalWallCount: 9,
+      }).done).toBe(false)
+    }
   })
 
   it('the terminal takeoff step never auto-advances', () => {

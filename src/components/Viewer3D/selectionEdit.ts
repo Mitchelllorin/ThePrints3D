@@ -32,6 +32,8 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { worldDeltaToPixel } from './editHelpers'
+import { followWall, segYawDelta } from '../../services/openingFollow'
+import type { ParsedWall } from '../../types'
 
 export type EditVerb = 'move' | 'rotate' | 'stretch'
 
@@ -60,6 +62,19 @@ export interface SelectionEdit {
    *  edit mode, the surface you were working on could not remove it and you had
    *  to go hunting for the right card. Routed here like every other verb. */
   remove: () => void
+  /** X-ray whatever is selected, or null when this type cannot go see-through.
+   *
+   *  Same story as delete, and worse: making something transparent is the move
+   *  you reach for CONSTANTLY — it is how you look inside a wall or under a roof
+   *  — and it was hidden two clicks deep in a per-type panel, spelled
+   *  differently for each type, and missing entirely for floors and roofs. There
+   *  was no answer to "how do I make this see-through?" that worked twice in a
+   *  row. Now there is one: select it, tap the rail.
+   *
+   *  Null for trade runs — a pipe is a thin tube with nothing inside it, so a
+   *  transparent one would just be a hard-to-see pipe. Same honesty rule the
+   *  verbs follow: a control that would do nothing is not offered. */
+  xray: { on: boolean; toggle: () => void } | null
 }
 
 const KIND_LABEL: Record<string, string> = {
@@ -115,12 +130,28 @@ export function useSelectionEdit(): SelectionEdit | null {
     const toPx = (dx: number, dz: number) =>
       worldDeltaToPixel(dx, dz, rotRad, overlayW, overlayD, imageWidth, imageHeight)
 
+    /** Print pixels → world position. Same transform every render layer uses, so
+     *  an object rewritten here lands exactly where its print position says. */
+    const pxToWorld = (px: number, py: number) => {
+      const localX = ((px / imageWidth) - 0.5) * overlayW
+      const localZ = ((py / imageHeight) - 0.5) * overlayD
+      const c = Math.cos(rotRad), s = Math.sin(rotRad)
+      return {
+        x: overlay.position[0] + localX * c + localZ * s,
+        z: overlay.position[1] - localX * s + localZ * c,
+      }
+    }
+
     if (kind === 'object') {
       const o = placedObjects.find((x) => x.id === id)
       if (!o) return null
       return {
         label, verbs: ['move', 'rotate', 'stretch'] as EditVerb[],
         remove: () => removePlacedObject(o.id),
+        xray: {
+          on: !!o.transparent,
+          toggle: () => updatePlacedObject(o.id, { transparent: !o.transparent }),
+        },
         apply: ({ dx = 0, dz = 0, rot = 0, factor = 1 }: EditStep) => updatePlacedObject(o.id, {
           x: o.x + dx, z: o.z + dz,
           rotationY: o.rotationY + rot,
@@ -136,6 +167,14 @@ export function useSelectionEdit(): SelectionEdit | null {
         // No rotation field on an axis-aligned rect, so Rotate is never offered.
         label, verbs: ['move', 'stretch'] as EditVerb[],
         remove: () => (kind === 'roof' ? removeRoofArea(a.id) : removeFloorsArea(a.id)),
+        xray: {
+          on: !!a.transparent,
+          toggle: () => {
+            const patch = { transparent: !a.transparent }
+            if (kind === 'roof') updateRoofArea(a.id, patch)
+            else updateFloorsArea(a.id, patch)
+          },
+        },
         apply: ({ dx = 0, dz = 0, factor = 1 }: EditStep) => {
           if (factor !== 1) {
             // Stretch about the centre: grow/shrink the rect's half-extents.
@@ -169,6 +208,15 @@ export function useSelectionEdit(): SelectionEdit | null {
     const halfLen = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1) / 2
     return {
       label, verbs: ['move', 'rotate', 'stretch'] as EditVerb[],
+      // A wall is the thing people most want to see through; a run is not.
+      xray: kind === 'wall' && drawing
+        ? {
+            on: !!(seg as ParsedWall).transparent,
+            toggle: () => updateUserWall(drawing.id, Number(id), {
+              transparent: !(seg as ParsedWall).transparent,
+            }),
+          }
+        : null,
       remove: () => {
         if (kind === 'wall' && drawing) { deleteUserWall(drawing.id, Number(id)); return }
         // A run's id does not say which trade owns it, so ask each list.
@@ -186,7 +234,36 @@ export function useSelectionEdit(): SelectionEdit | null {
           x1: ncx - Math.cos(ang) * len, y1: ncy - Math.sin(ang) * len,
           x2: ncx + Math.cos(ang) * len, y2: ncy + Math.sin(ang) * len,
         }
-        if (kind === 'wall' && drawing) updateUserWall(drawing.id, Number(id), ends)
+        if (kind === 'wall' && drawing) {
+          // THE OPENINGS COME TOO.
+          //
+          // A door is its own object with its own position, not a child of the
+          // wall, so nothing told it the wall had moved: rotate a wall and it
+          // swung away while every door and window in it stayed behind, hanging
+          // where the wall used to be. Read each opening's position along and
+          // across the OLD wall, write it back against the NEW one, and turn its
+          // facing by however much the wall turned. Done before the wall itself
+          // is written so `seg` is still the old line.
+          const before = { x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2 }
+          const yaw = segYawDelta(before, ends)
+          // Same reach the framing and boarding use to decide which wall an
+          // opening belongs to, so it cannot be framed into one and towed by
+          // another.
+          const reachPx = Math.max(((seg as ParsedWall).thickness || 8) * 2.5, 28)
+          for (const o of placedObjects) {
+            if (o.type !== 'door' && o.type !== 'window') continue
+            if (o.pxX == null || o.pxY == null) continue
+            const moved = followWall(o.pxX, o.pxY, before, ends, reachPx)
+            if (!moved) continue
+            const w = pxToWorld(moved.x, moved.y)
+            updatePlacedObject(o.id, {
+              pxX: moved.x, pxY: moved.y,
+              x: w.x, z: w.z,
+              rotationY: o.rotationY - yaw,   // screen yaw runs opposite plan yaw
+            })
+          }
+          updateUserWall(drawing.id, Number(id), ends)
+        }
         else updateTradeLine(String(id), ends)
       },
     }

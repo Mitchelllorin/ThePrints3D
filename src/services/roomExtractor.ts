@@ -83,6 +83,23 @@ export interface RoomExtractorOptions {
   wallThreshold?: number
   /** Real-world scale used to compute areaSqM. */
   scaleMmPerPx?: number | null
+  /**
+   * Where the drawing's own room labels sit, in original pixels.
+   *
+   * A label is a guaranteed interior point and, more usefully, a COUNT: five
+   * labels means five rooms. That is the only ground truth available here, and
+   * it is what lets the extractor know its answer is wrong — if one filled
+   * region contains two labels, the fill escaped through a doorway and the seal
+   * needs to be wider. Without labels it still works; it just cannot check
+   * itself.
+   */
+  labels?: { x: number; y: number }[]
+  /**
+   * How wide an opening to seal, in original pixels. Derived from
+   * `scaleMmPerPx` when omitted (a doorway is about 900mm), with a small fixed
+   * guess when the scale is unknown.
+   */
+  sealPx?: number
 }
 
 /**
@@ -100,6 +117,8 @@ export function extractRooms(
     minAreaPx = 600,
     wallThreshold: wallThresholdOpt,
     scaleMmPerPx = null,
+    labels = [],
+    sealPx,
   } = options
 
   const { data, width, height } = imageData
@@ -124,88 +143,257 @@ export function extractRooms(
     }
   }
 
-  const visited = new Uint8Array(dw * dh)
+  /**
+   * A DOORWAY IS A HOLE IN A WALL, AND A FLOOD FILL WALKS STRAIGHT THROUGH IT.
+   *
+   * That is why the ADU screenshot in data/test-prints/ reported ONE room. The
+   * plan has five, every one of them reachable from the next through a door
+   * opening, so the fill crossed the whole floor and came back with a single
+   * region — and nothing in the app knew it was wrong. On the studio capture the
+   * same code returned ten, over-segmenting on hatched walls. Both answers were
+   * useless in the same way: unverifiable.
+   *
+   * Every enclosed-region approach to floor plans has to deal with this, and the
+   * standard answer is to SEAL the openings before filling: thicken the walls by
+   * about half a doorway, so the gaps close and the rooms separate. Then grow the
+   * regions back afterwards, because a room measured on thickened walls is
+   * measurably too small and its area feeds the takeoff.
+   *
+   * The seal is sized from the scale — a doorway is roughly 900mm — so it closes
+   * doors without closing a hallway. With no scale it falls back to a few
+   * pixels, which is better than nothing and honest about being a guess.
+   *
+   * And if labels were supplied, the result is CHECKED: one region holding two
+   * labels means the fill still leaked, so the seal widens and it tries again.
+   * Five labels really do mean five rooms.
+   */
+  const labelPts = labels
+    .map((l) => ({ x: Math.floor(l.x / DOWNSAMPLE), y: Math.floor(l.y / DOWNSAMPLE) }))
+    .filter((l) => l.x >= 0 && l.y >= 0 && l.x < dw && l.y < dh)
+
+  /**
+   * NO SCALE, NO SEAL.
+   *
+   * The seal has to be about half a doorway wide, and "half a doorway" is only
+   * meaningful in millimetres. Guessing a pixel count instead is how this first
+   * went wrong: a fixed ten-pixel guess erased every room in a small image
+   * outright, because a seal wide enough to close a door on a 2000px sheet is
+   * wider than an entire room on a 40px one.
+   *
+   * So sealing is a thing we do when we KNOW the scale — which, now that the
+   * drawing's own stated area can be read, is most of the time. Without it the
+   * behaviour is exactly what it always was, which is the honest default: no
+   * silent shrinking, no invented rooms.
+   */
+  const sealBasePx = sealPx != null
+    ? sealPx
+    : scaleMmPerPx != null && scaleMmPerPx > 0
+      ? 900 / scaleMmPerPx
+      : 0
+  const maxRadius = Math.floor(Math.min(dw, dh) / 6)
+  const baseRadius = Math.max(0, Math.min(maxRadius, Math.round(sealBasePx / 2 / DOWNSAMPLE)))
+
+  let best: { open: Uint8Array; radius: number } | null = null
+  for (const radius of [baseRadius, baseRadius + 2, baseRadius + 4]) {
+    const sealed = closeWalls(binary, dw, dh, Math.min(radius, maxRadius))
+    best = { open: sealed, radius }
+    if (radius === 0 || labelPts.length < 2) break
+    const regions = fillRegions(sealed, dw, dh)
+    const worst = Math.max(
+      0,
+      ...regions.map((r) => labelPts.filter((pt) => r.has(pt.y * dw + pt.x)).length),
+    )
+    // One label per region is the goal; stop as soon as nothing holds two.
+    if (worst <= 1) break
+  }
+  const sealedOpen = best!.open
+
   const rooms: ParsedRoom[] = []
   let nextId = 0
 
-  // ── BFS flood-fill over every unvisited open pixel ─────────────────────────
-  for (let startY = 0; startY < dh; startY++) {
-    for (let startX = 0; startX < dw; startX++) {
-      const startIdx = startY * dw + startX
-      if (!binary[startIdx] || visited[startIdx]) continue
+  /**
+   * Label the sealed regions, then GROW THEM BACK.
+   *
+   * The seal that separates the rooms also eats `growRadius` off every wall
+   * face, and a room measured that way is measurably too small — its area feeds
+   * the takeoff, so the error would be quoted. Growing each region back over the
+   * ORIGINAL open space restores the floor it actually has.
+   *
+   * Multi-source BFS, all regions advancing together one ring at a time: a pixel
+   * goes to whichever room reaches it first, and where two rooms meet across a
+   * doorway they stop against each other instead of merging. That boundary is
+   * exactly the seal that was needed to tell them apart.
+   */
+  const NONE = -1
+  const regionOf = new Int32Array(dw * dh).fill(NONE)
+  let regionCountTotal = 0
+  const borderRegion = new Set<number>()
 
-      // BFS
-      const queue: number[] = [startIdx]
-      visited[startIdx] = 1
-
-      let regionCount = 0
-      let sumX = 0
-      let sumY = 0
-      let minX = startX
-      let maxX = startX
-      let minY = startY
-      let maxY = startY
-      let touchesBorder = false
-
-      let head = 0
-      while (head < queue.length) {
-        const cur = queue[head++]
-        const cx = cur % dw
-        const cy = (cur - cx) / dw
-
-        regionCount++
-        sumX += cx
-        sumY += cy
-        if (cx < minX) minX = cx
-        if (cx > maxX) maxX = cx
-        if (cy < minY) minY = cy
-        if (cy > maxY) maxY = cy
-        if (cx === 0 || cx === dw - 1 || cy === 0 || cy === dh - 1) {
-          touchesBorder = true
-        }
-
-        // 4-connectivity neighbours
-        if (cy > 0) {
-          const n = cur - dw
-          if (binary[n] && !visited[n]) { visited[n] = 1; queue.push(n) }
-        }
-        if (cy < dh - 1) {
-          const n = cur + dw
-          if (binary[n] && !visited[n]) { visited[n] = 1; queue.push(n) }
-        }
-        if (cx > 0) {
-          const n = cur - 1
-          if (binary[n] && !visited[n]) { visited[n] = 1; queue.push(n) }
-        }
-        if (cx < dw - 1) {
-          const n = cur + 1
-          if (binary[n] && !visited[n]) { visited[n] = 1; queue.push(n) }
-        }
-      }
-
-      // Discard exterior (border-touching) and too-small regions
-      const areaPx = regionCount * DOWNSAMPLE * DOWNSAMPLE
-      if (touchesBorder || areaPx < minAreaPx) continue
-
-      const areaSqM =
-        scaleMmPerPx != null
-          ? (areaPx * scaleMmPerPx * scaleMmPerPx) / 1_000_000
-          : null
-
-      rooms.push({
-        id: `room-${nextId++}`,
-        cx: Math.round((sumX / regionCount) * DOWNSAMPLE),
-        cy: Math.round((sumY / regionCount) * DOWNSAMPLE),
-        x1: minX * DOWNSAMPLE,
-        y1: minY * DOWNSAMPLE,
-        x2: maxX * DOWNSAMPLE,
-        y2: maxY * DOWNSAMPLE,
-        areaPx,
-        areaSqM,
-      })
+  for (let i = 0; i < sealedOpen.length; i++) {
+    if (!sealedOpen[i] || regionOf[i] !== NONE) continue
+    const id = regionCountTotal++
+    const queue = [i]
+    regionOf[i] = id
+    let head = 0
+    while (head < queue.length) {
+      const cur = queue[head++]
+      const x = cur % dw
+      const y = (cur - x) / dw
+      if (x === 0 || y === 0 || x === dw - 1 || y === dh - 1) borderRegion.add(id)
+      if (y > 0 && sealedOpen[cur - dw] && regionOf[cur - dw] === NONE) { regionOf[cur - dw] = id; queue.push(cur - dw) }
+      if (y < dh - 1 && sealedOpen[cur + dw] && regionOf[cur + dw] === NONE) { regionOf[cur + dw] = id; queue.push(cur + dw) }
+      if (x > 0 && sealedOpen[cur - 1] && regionOf[cur - 1] === NONE) { regionOf[cur - 1] = id; queue.push(cur - 1) }
+      if (x < dw - 1 && sealedOpen[cur + 1] && regionOf[cur + 1] === NONE) { regionOf[cur + 1] = id; queue.push(cur + 1) }
     }
+  }
+
+  // ── Stats per region ──────────────────────────────────────────────────────
+  interface Acc { n: number; sx: number; sy: number; x1: number; y1: number; x2: number; y2: number }
+  const acc = new Map<number, Acc>()
+  for (let i = 0; i < regionOf.length; i++) {
+    const id = regionOf[i]
+    if (id === NONE || borderRegion.has(id)) continue
+    const x = i % dw
+    const y = (i - x) / dw
+    const a = acc.get(id)
+    if (!a) acc.set(id, { n: 1, sx: x, sy: y, x1: x, y1: y, x2: x, y2: y })
+    else {
+      a.n++; a.sx += x; a.sy += y
+      if (x < a.x1) a.x1 = x
+      if (x > a.x2) a.x2 = x
+      if (y < a.y1) a.y1 = y
+      if (y > a.y2) a.y2 = y
+    }
+  }
+
+  for (const a of acc.values()) {
+    const areaPx = a.n * DOWNSAMPLE * DOWNSAMPLE
+    if (areaPx < minAreaPx) continue
+    const areaSqM =
+      scaleMmPerPx != null ? (areaPx * scaleMmPerPx * scaleMmPerPx) / 1_000_000 : null
+    rooms.push({
+      id: `room-${nextId++}`,
+      cx: Math.round((a.sx / a.n) * DOWNSAMPLE),
+      cy: Math.round((a.sy / a.n) * DOWNSAMPLE),
+      x1: a.x1 * DOWNSAMPLE,
+      y1: a.y1 * DOWNSAMPLE,
+      x2: a.x2 * DOWNSAMPLE,
+      y2: a.y2 * DOWNSAMPLE,
+      areaPx,
+      areaSqM,
+    })
   }
 
   // Largest rooms first
   return rooms.sort((a, b) => b.areaPx - a.areaPx)
+}
+
+/**
+ * Thicken the walls by `radius`, which is the same thing as shrinking the open
+ * space. Chebyshev (square) structuring element, done as two 1-D passes so the
+ * cost is O(pixels) per axis rather than O(pixels * radius^2).
+ *
+ * Sealing the openings is what stops a fill escaping through a doorway; see the
+ * note at the fill itself.
+ */
+function dilateOpen(open: Uint8Array, w: number, h: number, radius: number): Uint8Array {
+  if (radius <= 0) return open
+  const rowPass = new Uint8Array(w * h)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let any = 0
+      for (let d = -radius; d <= radius && !any; d++) {
+        const xx = x + d
+        if (xx >= 0 && xx < w && open[y * w + xx]) any = 1
+      }
+      rowPass[y * w + x] = any
+    }
+  }
+  const out = new Uint8Array(w * h)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let any = 0
+      for (let d = -radius; d <= radius && !any; d++) {
+        const yy = y + d
+        if (yy >= 0 && yy < h && rowPass[yy * w + x]) any = 1
+      }
+      out[y * w + x] = any
+    }
+  }
+  return out
+}
+
+/**
+ * CLOSE THE GAPS IN THE WALLS, without making the rooms smaller.
+ *
+ * Morphological closing of the wall mask: thicken the walls until the doorways
+ * are bridged, then thin them back. Gaps narrower than the kernel stay closed
+ * once bridged, which is the whole trick — the doorway is sealed and every room
+ * keeps the floor area it really has. Eroding the open space instead seals the
+ * doors and shrinks every room by the same amount, and a room's area is quoted
+ * in the takeoff.
+ */
+function closeWalls(open: Uint8Array, w: number, h: number, radius: number): Uint8Array {
+  if (radius <= 0) return open
+  return dilateOpen(erodeOpen(open, w, h, radius), w, h, radius)
+}
+
+function erodeOpen(open: Uint8Array, w: number, h: number, radius: number): Uint8Array {
+  if (radius <= 0) return open
+  const rowPass = new Uint8Array(w * h)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let keep = 1
+      for (let d = -radius; d <= radius && keep; d++) {
+        const xx = x + d
+        if (xx < 0 || xx >= w || !open[y * w + xx]) keep = 0
+      }
+      rowPass[y * w + x] = keep
+    }
+  }
+  const out = new Uint8Array(w * h)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let keep = 1
+      for (let d = -radius; d <= radius && keep; d++) {
+        const yy = y + d
+        if (yy < 0 || yy >= h || !rowPass[yy * w + x]) keep = 0
+      }
+      out[y * w + x] = keep
+    }
+  }
+  return out
+}
+
+/**
+ * Every enclosed region of an open mask, as sets of pixel indices.
+ *
+ * Used only to ASK A QUESTION — does any one region contain two room labels,
+ * meaning the fill leaked — so it collects membership and nothing else. Regions
+ * touching the border are the outside and are dropped.
+ */
+function fillRegions(open: Uint8Array, w: number, h: number): Set<number>[] {
+  const seen = new Uint8Array(w * h)
+  const regions: Set<number>[] = []
+  for (let i = 0; i < open.length; i++) {
+    if (!open[i] || seen[i]) continue
+    const set = new Set<number>()
+    const queue = [i]
+    seen[i] = 1
+    let border = false
+    let head = 0
+    while (head < queue.length) {
+      const cur = queue[head++]
+      set.add(cur)
+      const x = cur % w
+      const y = (cur - x) / w
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) border = true
+      if (y > 0 && open[cur - w] && !seen[cur - w]) { seen[cur - w] = 1; queue.push(cur - w) }
+      if (y < h - 1 && open[cur + w] && !seen[cur + w]) { seen[cur + w] = 1; queue.push(cur + w) }
+      if (x > 0 && open[cur - 1] && !seen[cur - 1]) { seen[cur - 1] = 1; queue.push(cur - 1) }
+      if (x < w - 1 && open[cur + 1] && !seen[cur + 1]) { seen[cur + 1] = 1; queue.push(cur + 1) }
+    }
+    if (!border) regions.push(set)
+  }
+  return regions
 }

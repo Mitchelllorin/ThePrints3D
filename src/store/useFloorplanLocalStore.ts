@@ -24,7 +24,30 @@ type TraceStyle = 'line' | 'freehand'
 type DragKind = 'move' | 'corner' | 'edge' | 'rotate' | 'wall' | 'wall-end'
 
 /** What kind of model element an edit-mode hover/select points at. */
-export type EditKind = 'floor' | 'roof' | 'wall' | 'object' | 'line'
+export type EditKind = 'floor' | 'roof' | 'wall' | 'object' | 'line' | 'member'
+
+/**
+ * HOW BIG A THING A TAP PICKS.
+ *
+ * Everything used to select as an ASSEMBLY: you tapped a stud and got the whole
+ * wall. That is right most of the time — you usually mean "this wall" — and
+ * useless the rest of it, because a wall is made of sticks and sometimes the
+ * stick is the thing you care about.
+ *
+ * So it is a stated mode rather than a guess. Guessing from tap duration or
+ * zoom level makes an already-sensitive editor unpredictable; a switch you can
+ * see means you always know what the next tap will do.
+ *
+ * It is deliberately ONE setting for the whole model rather than per-layer,
+ * because the distinction is identical everywhere: wall/stud, deck/joist,
+ * roof/rafter. Every one of those members already renders as its own mesh
+ * carrying its own id and label, so 'member' costs nothing extra to support.
+ */
+export type SelectionGranularity =
+  /** The wall, the deck, the roof plane — the thing as a whole. */
+  | 'assembly'
+  /** The individual stud, plate, header, joist or rafter that was tapped. */
+  | 'member'
 
 /**
  * Default stud size for a wall's structural ROLE.
@@ -196,6 +219,8 @@ interface FloorplanLocalState {
    *  trim (or on Escape) so a stray tap can never eat a wall. */
   wallTrimArmed: boolean
   editMode: boolean
+  /** Whether a tap picks a whole assembly or the single member under it. */
+  selectionGranularity: SelectionGranularity
   /** Element currently hovered while in edit mode (drives the hover highlight). */
   editHover: EditTarget | null
   /** Element selected in edit mode (persistent highlight + modify chip). Kept
@@ -219,6 +244,16 @@ interface FloorplanLocalState {
   settingsDrawerOpen: boolean
   placeDrawerOpen: boolean
   askDrawerOpen: boolean
+  /** Which locked feature the user just reached for, or null when the upgrade
+   *  sheet is closed. It is the REASON rather than a bare open/closed flag so
+   *  the sheet can answer the question actually asked — "editing walls is part
+   *  of Pro" — instead of opening a generic pitch and making them work out why. */
+  upgradeReason: string | null
+  /** Height in CSS px of the band the tutorial coach is standing on at the
+   *  bottom of the screen, 0 when the tour is off. The 3D framing is shifted up
+   *  by half of it so the print sits centred in the space that is actually
+   *  LEFT, rather than centred in a window whose bottom strip is spoken for. */
+  coachBand: number
 
   // ─── guided tutorial (the "build a whole house" walkthrough) ──────
   /** Tutorial running — the coach card is shown and tracks the current step. */
@@ -269,6 +304,9 @@ interface FloorplanLocalState {
   setDetailExplodeId: (v: string | null) => void
   setWallDetailExplode: (v: boolean) => void
   selectAreaExclusive: (kind: 'floor' | 'roof', id: string) => void
+  /** Open (or close) the property card for the current selection. In edit mode
+   *  selecting no longer opens it on its own, so this is how you ask for it. */
+  openSelectionPanel: () => void
   // Coordinated openers — one panel at a time (each sets activePanel + clears the rest).
   openPicker: () => void
   openPanelBoard: () => void
@@ -288,6 +326,10 @@ interface FloorplanLocalState {
   /** Open/close an edge drawer. On compact (phone / landscape-short) screens,
    *  opening one retracts the others so they never stack over the workspace. */
   setDrawerOpen: (which: 'build' | 'settings' | 'place' | 'ask', open: boolean) => void
+  /** Show the upgrade sheet, naming the feature that sent them there. */
+  openUpgrade: (reason: string) => void
+  closeUpgrade: () => void
+  setCoachBand: (px: number) => void
   startTutorial: () => void
   exitTutorial: () => void
   setTutorialStep: (n: number) => void
@@ -296,6 +338,31 @@ interface FloorplanLocalState {
   setGestureLock: (v: boolean) => void
   setWallTrimArmed: (v: boolean) => void
   setEditMode: (v: boolean) => void
+  /** PLAN VIEW — looking straight down at the drawing, 3D hidden.
+   *  2D is where decisions get made (tune the detector, confirm the walls,
+   *  answer the intake questions); 3D is where you check them. Judging a line
+   *  against a print in a perspective view is fighting the camera — you cannot
+   *  tell whether a wall is ON the line or beside it. A mode, not a build step:
+   *  switchable both ways at any time. */
+  planView: boolean
+  setPlanView: (v: boolean) => void
+  setSelectionGranularity: (g: SelectionGranularity) => void
+  /** Pick one framing member (stud/plate/header/joist/rafter) by its id. */
+  selectMember: (id: string, label: string) => void
+  /** Isolate a member (or null to bring the model back). */
+  setIsolatedMember: (id: string | null) => void
+  /** Human label of the selected member, for the rail to name it. */
+  selectedMemberLabel: string | null
+  /**
+   * ISOLATE — show this one member and nothing else.
+   *
+   * Explode alone cannot do this job. Push the model far enough apart to see a
+   * single stud clear of everything and the parts are off the screen; keep it
+   * close enough to stay in frame and the stud is still buried in the crowd.
+   * The two demands genuinely conflict, so seeing one component properly is not
+   * an explode setting — it is its own act: hide the crowd instead of moving it.
+   */
+  isolatedMemberId: string | null
   setEditHover: (h: EditTarget | null) => void
   setEditSelected: (h: EditTarget | null) => void
 }
@@ -356,6 +423,10 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   gestureLock: false,
   wallTrimArmed: false,
   editMode: false,
+  planView: false,
+  selectionGranularity: 'assembly',
+  selectedMemberLabel: null,
+  isolatedMemberId: null,
   editHover: null,
   editSelected: null,
   activePanel: null,
@@ -373,6 +444,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   tutorialStep: 0,
   placeDrawerOpen: false,
   askDrawerOpen: false,
+  upgradeReason: null,
+  coachBand: 0,
 
   setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
@@ -460,10 +533,39 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   // selectedObjectId) could never attach to a floor or roof. Every selector now
   // writes editSelected too, so whatever is picked is THE selection whichever
   // path picked it. See docs/INTERACTIONS.md.
-  selectObjectExclusive: (id) => set({ activePanel: 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'object', id } }),
-  selectWallExclusive: (i) => set({ activePanel: 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'wall', id: String(i) } }),
-  selectLineExclusive: (trade, id) => set({ activePanel: 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'line', id } }),
-  selectAreaExclusive: (kind, id) => set({ activePanel: 'area', selectedArea: { kind, id }, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null, editSelected: { kind, id } }),
+  // SELECTING SOMETHING DOES NOT OPEN A PANEL WHILE YOU ARE EDITING.
+  //
+  // Every one of these used to raise `activePanel` as well, so in edit mode a
+  // single tap put a property card on the workspace whether or not you wanted
+  // one. Most of the time you do not: you tapped the thing to NUDGE it, and the
+  // rail already carries move, rotate, stretch, X-ray and delete. The card just
+  // stood in front of the model you were trying to watch, and there was no way
+  // to select anything without summoning it.
+  //
+  // Edit mode → the rail, and nothing else. The card is one deliberate tap away
+  // (openSelectionPanel, on the rail) for the things the rail cannot express:
+  // a door's swing, a board type, a stair's landing.
+  //
+  // Outside edit mode the card is still how you inspect what you tapped, which
+  // is the whole point of tapping when you are not editing.
+  selectObjectExclusive: (id) => set((s) => ({ activePanel: s.editMode ? null : 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'object', id } })),
+  selectWallExclusive: (i) => set((s) => ({ activePanel: s.editMode ? null : 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'wall', id: String(i) } })),
+  selectLineExclusive: (trade, id) => set((s) => ({ activePanel: s.editMode ? null : 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'line', id } })),
+  selectAreaExclusive: (kind, id) => set((s) => ({ activePanel: s.editMode ? null : 'area', selectedArea: { kind, id }, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null, editSelected: { kind, id } })),
+  /** Open the property card for whatever is currently selected — the deliberate
+   *  tap that replaces the card appearing on its own. Toggles, so the same mark
+   *  puts it away again. */
+  openSelectionPanel: () => set((s) => {
+    if (s.activePanel) return { activePanel: null }
+    const k = s.editSelected?.kind
+    return {
+      activePanel: k === 'object' ? 'object'
+        : k === 'wall' ? 'wall'
+        : k === 'line' ? 'line'
+        : k === 'floor' || k === 'roof' ? 'area'
+        : null,
+    }
+  }),
   armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, editSelected: null }),
   // Toggling the same panel closes it; opening a different one clears every
   // selection/floater so the single-panel rule holds across both UI systems.
@@ -488,11 +590,42 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
       : 'askDrawerOpen'
     return { ...base, [key]: open } as Partial<FloorplanLocalState>
   }),
-  startTutorial: () => set({ tutorialActive: true, tutorialStep: 0 }),
-  exitTutorial: () => set({ tutorialActive: false }),
+  // Opening it retracts the drawers, same rule as everything else that appears
+  // over the workspace: one surface at a time.
+  openUpgrade: (reason) => set({
+    upgradeReason: reason,
+    buildDrawerOpen: false,
+    settingsDrawerOpen: false,
+    placeDrawerOpen: false,
+    askDrawerOpen: false,
+  }),
+  closeUpgrade: () => set({ upgradeReason: null }),
+
+  // Same-value writes dropped: the coach re-measures on a poll and an identical
+  // number would re-shift the camera framing every tick.
+  setCoachBand: (px) => set((s) => (Math.abs(s.coachBand - px) < 2 ? {} : { coachBand: px })),
+
+  // Start CLEAN. Leaving a previous run's trace mode on meant the opening line
+  // played over a workspace the app still considered busy — which, among other
+  // things, suppresses the idle spin, so the first sentence ("this is a model")
+  // was delivered over a completely still picture.
+  startTutorial: () => set({
+    tutorialActive: true,
+    tutorialStep: 0,
+    traceMode: false,
+    tracePaused: false,
+    traceStart: null,
+    traceStroke: [],
+    placeObjectType: null,
+    activePanel: null,
+  }),
+  // And leave clean: a tour abandoned mid-trace should not strand the user in
+  // trace mode with no run to finish.
+  exitTutorial: () => set({ tutorialActive: false, traceMode: false, traceStart: null, traceStroke: [] }),
   setTutorialStep: (n) => set({ tutorialStep: Math.max(0, n) }),
   setGestureLock: (v) => set({ gestureLock: v }),
   setWallTrimArmed: (v) => set({ wallTrimArmed: v }),
+  setPlanView: (v) => set({ planView: v }),
   setEditMode: (v) => set(v
     // Entering: start clean — drop any open card/selection so edit mode owns it.
     ? { editMode: true, editHover: null, editSelected: null, activePanel: null, selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null }
@@ -502,6 +635,27 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
         editMode: false, editHover: null, editSelected: null, activePanel: null,
         selectedArea: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null,
       }),
+  setSelectionGranularity: (g) => set({
+    selectionGranularity: g,
+    // Never strand the user in an isolated view they can no longer get out of:
+    // the button that restores the model lives on the member selection, and
+    // changing grain drops that selection.
+    isolatedMemberId: null,
+    // Drop the current pick when the granularity changes. A wall selected as an
+    // assembly is not the same thing as a stud selected as a member, and
+    // carrying one over into the other mode leaves a selection whose verbs no
+    // longer match what is highlighted.
+    editHover: null,
+    editSelected: null,
+  }),
+  setIsolatedMember: (id) => set({ isolatedMemberId: id }),
+  selectMember: (id, label) => {
+    // Exclusive like every other pick: a member selection must clear the
+    // assembly ones or two things end up highlighted with two different sets
+    // of verbs offered for them.
+    get().closeAllPanels()
+    set({ editSelected: { kind: 'member', id }, selectedMemberLabel: label })
+  },
   setEditHover: (h) => set({ editHover: h }),
   // Routed through the exclusive setters so the canonical fields and
   // editSelected can never disagree. Callers in the layers still just say

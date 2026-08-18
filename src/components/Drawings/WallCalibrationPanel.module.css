@@ -113,3 +113,10 @@
   cursor: pointer;
 }
 .resetAllBtn:hover { background: #334155; color: #f1f5f9; }
+
+/* Inline form — no overlay, no surface of its own. Sits inside a drawer
+   section, so the drawer already provides the container and the padding. */
+.inline {
+  display: block;
+  padding: 2px 0 6px;
+}

@@ -88,28 +88,17 @@ Suggested screenshots:
 - Size: 1024×500 px
 - Add as `public/store-assets/feature-graphic.png`
 
-### Short description (≤80 chars)
-> Converts building drawings (PDF/image) into an interactive 3D model.
+### Store listing text
 
-### Full description
-```
-ThePrints3D turns your architectural drawing sets into an interactive 3D
-building model right on your device — no account, no cloud, no internet
-required.
+**The settled copy lives in [`play-store-listing.md`](./play-store-listing.md)** —
+app name, short description, full description, feature bullets, brand hexes and
+the asset checklist. Copy it from there.
 
-WHAT IT DOES
-• Upload PDF or image drawing sheets (floor plans, RCP, structural, MEP)
-• Auto-detects walls and infers floor levels from sheet naming
-• Builds a real-time 3D model with per-layer visibility toggles
-• Measure distances in the 3D view with a tap-to-measure tool
-• Save and reload projects using on-device storage
+> An earlier draft of the description used to be inlined here and had gone stale.
+> Don't re-draft the listing; there is one version and it is in that file.
 
-PRIVACY FIRST
-Everything stays on your device. Files are never uploaded to any server.
-
-SUPPORTED FILE TYPES
+### Supported file types
 PDF, PNG, JPG, TIFF, WebP
-```
 
 ### Content rating
 - Complete the IARC questionnaire in Play Console

@@ -1,18 +1,22 @@
 import { rasterizeFile } from './pdfRasterizer'
-import { detectWalls } from './wallDetector'
+import { detectWallsOffThread } from './detectOffThread'
 import { inferFloorNumber } from './sheetParser'
 import { deriveScaleFromNotation } from './scaleParser'
 import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
-import { classifyWallType, pxToMm, type DrywallConfig } from './wallTypeClassifier'
+import { classifyWallType, pxToMm, type DrywallConfig, type WallType } from './wallTypeClassifier'
 import { extractRooms } from './roomExtractor'
-import { detectOpenings } from './openingDetector'
+import { rejoinAcrossOpenings } from './openingDetector'
 import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
-import { inferScaleFromStructure } from './scaleInference'
+import { inferScaleFromPaper, inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
 import { filterWallsForNoisyPrint } from './noisyPrintFilter'
 import { inferCorners } from './wallTraceReducer'
 import { setInkBuffer } from './inkRaster'
+import { normalizeForDetection } from './rasterNormalize'
+import { ocrRaster, shouldOcr, groupIntoLines } from './ocr'
+import { statedAreaSqM, looksLikeRoomName } from './roomNames'
+import { scaleFromTotalArea, footprintAreaPx } from './scaleInference'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -29,6 +33,11 @@ export async function processDrawing(
   drawing: Drawing,
   onProgress: (pct: number) => void,
   drywall: DrywallConfig = 'single-layer',
+  pageOverride?: number,
+  /** What a wall IS when the thickness cannot be trusted to say. A house is
+   *  stud-framed unless the drawing proves otherwise — see the masonry note
+   *  in step 5. Mirrors config `defaultStudSize`. */
+  defaultStudType: WallType = 'stud-2x4',
 ): Promise<DrawingPatch> {
   try {
     let lastProgress = 0
@@ -38,11 +47,41 @@ export async function processDrawing(
       onProgress(next)
     }
 
-    // 1. Rasterize
-    const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8))
+    // 1. Rasterize. For a multi-page set this also PICKS the sheet — the floor
+    //    plan is rarely page 1 — unless the caller has named one.
+    const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8), pageOverride)
     // Cache a grayscale "ink" buffer so tracing can snap to the actual printed
     // line under the stroke — even on lines detection discarded as noise.
-    setInkBuffer(drawing.id, raster.imageData)
+    /**
+     * NORMALISE BEFORE ANYTHING LOOKS AT IT.
+     *
+     * Every stage below compares brightness against a fixed number —
+     * INK_THRESHOLD in inkRaster, WALL_GRAY_THRESHOLD in roomExtractor, and the
+     * ImageNet mean/std the wall model was trained with over clean synthetic
+     * plans. Those constants are right for a PDF render (near-white paper,
+     * near-black ink) and meaningless for a screenshot, whose paper sits around
+     * 200 and whose ink sits around 120 — lighter than both thresholds, so
+     * nothing reads as a wall at all.
+     *
+     * Stretching the print onto the full range first makes one set of constants
+     * correct for every source. A clean PDF is passed through untouched (see
+     * rasterNormalize) so this can only help the broken cases.
+     *
+     * The DISPLAY raster is deliberately left alone: `rasterUrl` below still
+     * points at the original render, because the user should see their drawing,
+     * not our corrected copy of it.
+     */
+    const norm = normalizeForDetection(raster.imageData)
+    let detectImage: ImageData = raster.imageData
+    if (norm.adjusted) {
+      // Copied into a freshly allocated buffer: ImageData will not take an
+      // array that might be backed by a SharedArrayBuffer.
+      const bytes = new Uint8ClampedArray(norm.image.data.length)
+      bytes.set(norm.image.data)
+      detectImage = new ImageData(bytes, norm.image.width, norm.image.height)
+    }
+
+    setInkBuffer(drawing.id, detectImage)
 
     // 2. Discipline gate — skip wall detection on M/E/P/C/L/F/T sheets where
     //    "thick parallels" are ducts/pipes/conduit, not walls.
@@ -60,6 +99,7 @@ export async function processDrawing(
         rasterWidth: raster.width,
         rasterHeight: raster.height,
         pageCount: raster.pageCount,
+        currentPage: raster.page,
         parsedWalls: [],
         parsedRooms: [],
         parsedOpenings: [],
@@ -74,68 +114,166 @@ export async function processDrawing(
       }
     }
 
-    // 3. Detect walls (runs in main thread — acceptable for most drawing sizes)
+    /**
+     * 3. Detect walls — OFF THE MAIN THREAD.
+     *
+     * This used to run inline, with a comment saying that was "acceptable for
+     * most drawing sizes". It is not, for a real sheet: ten megapixels, and up
+     * to THREE full passes over it when the strict one finds nothing. Measured,
+     * the smallest print in the corpus had not finished after ninety-five
+     * seconds and the tab was locked solid.
+     *
+     * The whole ladder now goes to a worker in one message — the fallbacks only
+     * fire when the previous pass came up empty, so sending them separately
+     * would mean up to three round trips and three copies of the image. Falls
+     * back to running inline wherever workers are unavailable, so behaviour is
+     * unchanged, just no longer on the thread that has to paint.
+     */
     setProgress(82)
     const isRasterPhoto = drawing.file.type.startsWith('image/')
-    let result = await detectWallsWithAI(raster.imageData)
+    let result = await detectWallsWithAI(detectImage)
     if (!result) {
-      result = detectWalls(raster.imageData, {
-        // Stricter defaults reduce annotation noise (text/dimension lines)
-        edgeThreshold: isRasterPhoto ? 30 : 34,
-        minWallLengthPx: isRasterPhoto ? 55 : 70,
-        minWallThicknessPx: 3,
-        maxWallThicknessPx: 60,
-        requirePairedEdges: true,
-        mergeGapPx: 4,
-      })
-    }
-    if (result.walls.length === 0) {
-      // Stricter defaults reduce annotation noise (text/dimension lines)
-      // Fallback pass for noisy scans/photos where strict pairing can miss walls.
-      result = detectWalls(raster.imageData, {
-        edgeThreshold: isRasterPhoto ? 26 : 30,
-        minWallLengthPx: isRasterPhoto ? 40 : 55,
-        minWallThicknessPx: 2,
-        maxWallThicknessPx: 72,
-        requirePairedEdges: false,
-        mergeGapPx: 6,
-      })
-    }
-    if (result.walls.length === 0) {
-      // Third pass: very lenient — targets heavily degraded scans, low-contrast
-      // prints, and hand-drawn sketches where normal edge magnitudes are low.
-      result = detectWalls(raster.imageData, {
-        edgeThreshold: isRasterPhoto ? 16 : 20,
-        minWallLengthPx: isRasterPhoto ? 28 : 38,
-        minWallThicknessPx: 2,
-        maxWallThicknessPx: 120,
-        requirePairedEdges: false,
-        mergeGapPx: 8,
-      })
+      const { result: detected } = await detectWallsOffThread(detectImage, [
+        // Strict: reduces annotation noise (text, dimension lines).
+        {
+          edgeThreshold: isRasterPhoto ? 30 : 34,
+          minWallLengthPx: isRasterPhoto ? 55 : 70,
+          minWallThicknessPx: 3,
+          maxWallThicknessPx: 60,
+          requirePairedEdges: true,
+          mergeGapPx: 4,
+        },
+        // Looser: noisy scans and photos, where strict pairing can miss walls.
+        {
+          edgeThreshold: isRasterPhoto ? 26 : 30,
+          minWallLengthPx: isRasterPhoto ? 40 : 55,
+          minWallThicknessPx: 2,
+          maxWallThicknessPx: 72,
+          requirePairedEdges: false,
+          mergeGapPx: 6,
+        },
+        // Very lenient: degraded scans, low-contrast prints, hand drawings.
+        {
+          edgeThreshold: isRasterPhoto ? 16 : 20,
+          minWallLengthPx: isRasterPhoto ? 28 : 38,
+          minWallThicknessPx: 2,
+          maxWallThicknessPx: 120,
+          requirePairedEdges: false,
+          mergeGapPx: 8,
+        },
+      ])
+      result = detected
     }
     const filtered = filterWallsForNoisyPrint({
       walls: result.walls,
       classified: result.classified,
       stats: result.stats,
-      imageWidth: raster.imageData.width,
-      imageHeight: raster.imageData.height,
+      imageWidth: detectImage.width,
+      imageHeight: detectImage.height,
       minWallLengthPx: isRasterPhoto ? 40 : 55,
     })
     const classificationStats = result.stats
     setProgress(92)
+
+    /**
+     * READ THE WORDS, IF NOBODY HAS.
+     *
+     * A PDF hands over its text layer for free and exactly positioned, so OCR
+     * is only ever a fallback for the rasters that have none — a screenshot, a
+     * photo, a scan. That is most of what people actually upload, and until now
+     * those arrived with no words at all: no room names, so nothing could be
+     * tiled or given a kitchen circuit, and no stated area, so scale had to be
+     * guessed from line weight and came out 3x wrong on the ADU capture.
+     *
+     * Phrases as well as words, because a room is usually named in several
+     * ("Kitchen & Dining Area") and the total area always is.
+     */
+    let textTokens = raster.textTokens
+    if (shouldOcr(textTokens)) {
+      const words = await ocrRaster(detectImage)
+      if (words.length) textTokens = groupIntoLines(words)
+    }
 
     // 4. Derive scale from notation if available
     let scaleMmPerPx: number | null = null
     if (raster.scaleNotation) {
       scaleMmPerPx = deriveScaleFromNotation(raster.scaleNotation)
     }
+    /**
+     * THE DRAWING USUALLY STATES ITS OWN SIZE.
+     *
+     * Every other route here guesses — a door is probably 813mm, a wall is
+     * probably 121mm — because the sheet did not say. But "TOTAL AREA = 71 m²"
+     * is printed on the ADU capture in data/test-prints/, and one stated area
+     * over a footprint we can measure in pixels gives mm/px as arithmetic, with
+     * no assumption about what anything is made of.
+     *
+     * Placed above the structural guess deliberately: this is READ, not
+     * inferred, and it is the only route that does not depend on line weight —
+     * which is what made the guess 3.1x too big on that very file.
+     */
+    let scaleFromStatedText = false
+    if (scaleMmPerPx == null) {
+      const stated = textTokens
+        .map((t) => ({ t, area: statedAreaSqM(t.text) }))
+        .filter((x): x is { t: typeof x.t; area: number } => x.area != null)
+      // Only an explicit TOTAL. Summing the room labels misses halls, walls and
+      // anything unlabelled, so it reads small and would skew the scale.
+      /**
+       * WHICH STATED AREA IS THE WHOLE BUILDING.
+       *
+       * Requiring the word "total" was too strict to survive OCR. The ADU
+       * capture prints "TOTAL AREA = 71 m2" and Tesseract returned that line
+       * broken as "AREA = 71 m?" - the figure read correctly, the qualifying
+       * word did not, and the one number that fixes the scale was discarded.
+       *
+       * So take an explicit total when it survives, and otherwise fall back on
+       * what makes a total a total: it is no smaller than the other stated
+       * areas put together. A label passing that test is the building; one
+       * failing it is a room, and a room's area cannot be paired with the
+       * whole footprint.
+       *
+       * Never sum the room labels instead. They miss halls, walls and anything
+       * unlabelled, so the sum reads small and the scale comes out short.
+       */
+      const largest = stated.length
+        ? stated.reduce((a, b) => (b.area > a.area ? b : a))
+        : null
+      const restSum = stated.reduce((s, x) => s + x.area, 0) - (largest?.area ?? 0)
+      const total =
+        stated.find((x) => /total/i.test(x.t.text)) ??
+        (largest && largest.area >= restSum && /area/i.test(largest.t.text)
+          ? largest
+          : undefined)
+      if (total) {
+        const candidate = scaleFromTotalArea(total.area, footprintAreaPx(filtered.walls))
+        if (candidate != null) {
+          scaleMmPerPx = candidate
+          scaleFromStatedText = true
+        }
+      }
+    }
     if (scaleMmPerPx == null && drawing.scaleMmPerPx == null) {
-      scaleMmPerPx = inferScaleFromStructure(result.walls, drywall)?.scaleMmPerPx ?? null
+      // Paper-anchored first. When the sheet states its own size the question
+      // collapses from "what is the scale" to "which of the standard scales",
+      // which is a far easier one to get right — the free-range version put the
+      // real 1-&-2-family set out by about 4×, calling every wall 600mm of
+      // masonry. Falls through to the unanchored guess for photos and images,
+      // where nothing says how big the paper was.
+      scaleMmPerPx =
+        (raster.pxPerPaperInch
+          ? inferScaleFromPaper(result.walls, raster.pxPerPaperInch, drywall)?.scaleMmPerPx
+          : null) ??
+        inferScaleFromStructure(result.walls, drywall)?.scaleMmPerPx ??
+        null
     }
     const effectiveScale = scaleMmPerPx ?? drawing.scaleMmPerPx
 
     // Determine confidence based on how the scale was sourced.
-    const scaleConfidence: ScaleConfidence = raster.scaleNotation
+    // A stated area counts as PARSED, not inferred: it was read off the sheet.
+    // That distinction has teeth — only a trusted scale is allowed to conclude
+    // masonry in step 5.
+    const scaleConfidence: ScaleConfidence = raster.scaleNotation || scaleFromStatedText
       ? 'parsed'
       : effectiveScale !== null
         ? 'inferred'
@@ -147,7 +285,7 @@ export async function processDrawing(
     //    meet get extended/trimmed to an exact intersection, so detected
     //    walls connect instead of floating as disjoint segments.
     const corneredWalls = inferCorners(filtered.walls)
-    const walls: ParsedWall[] = corneredWalls.map((w) => {
+    let walls: ParsedWall[] = corneredWalls.map((w) => {
       const finishedMm = pxToMm(w.thickness, effectiveScale)
       if (finishedMm === null) {
         return {
@@ -158,26 +296,66 @@ export async function processDrawing(
         }
       }
       const c = classifyWallType(finishedMm, drywall)
+      /**
+       * MASONRY IS NEVER A GUESS.
+       *
+       * The classifier buckets a thickness in MILLIMETRES, and those
+       * millimetres come from the scale. Get the scale wrong on the high side
+       * and every wall in the house measures far too thick — past 2x12, into
+       * the masonry bucket — so a timber-framed one-bed came out as CMU, brown
+       * and 300mm, with the takeoff and the model to match. The note in step 4
+       * records exactly this happening: a real 1-&-2-family set out by about
+       * 4x, "calling every wall 600mm of masonry".
+       *
+       * A residential plan is overwhelmingly stud-framed, so on a scale we only
+       * INFERRED, masonry is far more likely to be arithmetic than a material
+       * choice. Only a scale we actually READ off the drawing is allowed to
+       * reach that conclusion; otherwise the wall keeps the default framing the
+       * project is set to build in, which for a house is timber.
+       */
+      const trustedScale = scaleConfidence === 'parsed'
+      const type = c.type === 'masonry-thick' && !trustedScale ? defaultStudType : c.type
       return {
         ...w,
         source: w.source ?? 'auto',
         detectionConfidence: w.detectionConfidence ?? c.confidence,
-        wallType: c.type,
+        wallType: type,
         framingMm: c.framingMm,
         finishedMm: c.finishedMm,
-        typeConfidence: c.confidence,
+        // Say out loud that the type was defaulted rather than measured.
+        typeConfidence: type === c.type ? c.confidence : 0.3,
       }
     })
 
     // 6. Extract enclosed room regions from the rasterized image
-    const rooms = extractRooms(raster.imageData, {
+    const rooms = extractRooms(detectImage, {
       scaleMmPerPx: effectiveScale,
+      /**
+       * The drawing's own labels, as ground truth for the fill.
+       *
+       * Five room names means five rooms, so a fill that swallows two of them
+       * has escaped through a doorway and the extractor can widen its seal and
+       * try again. Only tokens that actually NAME a room are passed — a
+       * dimension or a title block is not an interior point, and seeding on one
+       * would ask the extractor to justify a room that is not there.
+       */
+      labels: textTokens
+        .filter((t) => looksLikeRoomName(t.text))
+        .map((t) => ({ x: t.x, y: t.y })),
     })
 
-    // 7. Detect door/window openings as gaps between co-linear wall segments
-    const openings = detectOpenings(walls, {
+    // 7. Detect door/window openings — and REJOIN the walls they interrupt.
+    //    In framing this hole is a ROUGH OPENING (R.O.): the studs stop, king
+    //    and jack studs frame the sides, a header spans it and the plate runs
+    //    over the top. It is a hole in a wall, not the end of one. The detector
+    //    was leaving two stub walls with a gap, so framing put a wall end where
+    //    a header belongs and anything routing inside the wall stopped at the
+    //    door.
+    const rejoined = rejoinAcrossOpenings(walls, {
       scaleMmPerPx: effectiveScale,
     })
+    walls = rejoined.walls
+    const openings = rejoined.openings
 
     // 8. Derive text/symbol/annotation semantics by combining detector outputs
     //    with the canonical symbol glossary.
@@ -186,7 +364,7 @@ export async function processDrawing(
       walls,
       openings,
       rooms,
-      textTokens: raster.textTokens,
+      textTokens,
     })
 
     // 9. Floor number from filename
@@ -200,8 +378,12 @@ export async function processDrawing(
       rasterWidth: raster.width,
       rasterHeight: raster.height,
       pageCount: raster.pageCount,
+      currentPage: raster.page,
       parsedWalls: walls,
-      parsedRooms: rooms,
+      // The NAMED rooms, not the bare geometric ones — see symbolDetection.
+      // A room that knows it is a bathroom is what makes wetWalls put tile
+      // backer on it and the electrical rules give a kitchen its circuits.
+      parsedRooms: semantic.rooms,
       parsedOpenings: openings,
       parsedText: semantic.text,
       parsedSymbols: semantic.symbols,

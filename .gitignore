@@ -36,3 +36,7 @@ ui-shots/
 data/cubicasa5k*
 checkpoints/
 data/synth*
+data/test-prints/
+__pycache__/
+*.pyc
+.venv-train/
