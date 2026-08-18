@@ -289,7 +289,10 @@ export async function processDrawing(
       pageCount: raster.pageCount,
       currentPage: raster.page,
       parsedWalls: walls,
-      parsedRooms: rooms,
+      // The NAMED rooms, not the bare geometric ones — see symbolDetection.
+      // A room that knows it is a bathroom is what makes wetWalls put tile
+      // backer on it and the electrical rules give a kitchen its circuits.
+      parsedRooms: semantic.rooms,
       parsedOpenings: openings,
       parsedText: semantic.text,
       parsedSymbols: semantic.symbols,
