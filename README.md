@@ -72,7 +72,7 @@ proxy/           optional Cloudflare Worker for Ask AI
 
 The Android application ID and Capacitor app ID are `com.theprints3d.app`. The app declares network access and Android 13+ image-read access for importing drawing images. It does not declare video-read access.
 
-`npm run build:android` builds the web application and runs `cap sync android`. For a signed release bundle, follow [`docs/play-store-release.md`](docs/play-store-release.md). The `Build Android AAB` workflow runs manually or for tags matching `v*`; it builds a signed AAB when the required Android keystore secrets are available and publishes the bundle as a workflow artifact. This repository does not confirm publication to a public app store.
+`npm run build:android` builds the web application and runs `cap sync android`. For a signed release bundle, follow [`docs/play-store-release.md`](docs/play-store-release.md). The `Build Android AAB` workflow runs manually or for tags matching `v*`; it builds a signed AAB when the required Android keystore secrets are available and publishes the bundle as a workflow artifact. The Android app is currently in Google Play closed testing; public availability is planned, and no public store listing is linked here.
 
 ## Web pages and deployment
 
