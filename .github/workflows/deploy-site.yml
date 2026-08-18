@@ -2,7 +2,7 @@ name: Deploy marketing site
 
 # Publishes the public marketing website to theprints3d.com (GitHub Pages).
 # The site is static — just the landing + privacy pages. The app itself is NOT
-# served here; it ships through the Play / Microsoft / Apple stores.
+# served here; Android delivery is configured through the Google Play build.
 
 on:
   push:
