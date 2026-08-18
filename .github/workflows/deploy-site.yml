@@ -1,8 +1,9 @@
-name: Deploy marketing site
+name: Deploy static companion pages
 
-# Publishes the public marketing website to theprints3d.com (GitHub Pages).
-# The site is static — just the landing + privacy pages. The app itself is NOT
-# served here; it ships through the Play / Microsoft / Apple stores.
+# Publishes legacy static companion pages to this repository's default GitHub
+# Pages URL. ThePrints3D---Site owns the production theprints3d.com domain.
+# The app itself is not served here; Android release artifacts are built through
+# the separate AAB workflow.
 
 on:
   push:
@@ -12,7 +13,6 @@ on:
       - 'public/privacy.html'
       - 'public/datasafety.html'
       - 'public/favicon.svg'
-      - 'public/CNAME'
       - '.github/workflows/deploy-site.yml'
   workflow_dispatch: {}
 
@@ -42,7 +42,6 @@ jobs:
           cp public/privacy.html     _site/privacy.html
           cp public/datasafety.html  _site/datasafety.html
           cp public/favicon.svg      _site/favicon.svg
-          cp public/CNAME         _site/CNAME
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
