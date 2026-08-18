@@ -590,3 +590,38 @@
 @media (max-width: 767px) {
   .zoomBtn { width: 44px; height: 44px; }
 }
+
+/* Context-lost notice — the only thing that can speak when the 3D cannot draw.
+   Perimeter-pinned and near-invisible like the rest of the chrome: the middle
+   of the workspace stays clear for the model we are waiting on. */
+.glLostNotice {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(92vw, 520px);
+  padding: 7px 10px 7px 12px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(0, 0, 0, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  backdrop-filter: blur(6px);
+  pointer-events: all;
+}
+.glLostNotice button {
+  flex: none;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.glLostNotice button:hover { background: rgba(255, 255, 255, 0.18); }

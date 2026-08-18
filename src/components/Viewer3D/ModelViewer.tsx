@@ -63,6 +63,59 @@ function DevSceneHandle() {
   return null
 }
 
+/**
+ * THE WORKSPACE GOING BLACK, AND STAYING BLACK.
+ *
+ * A WebGL context is not guaranteed. The GPU driver resets, the OS reclaims
+ * memory, an Android WebView is backgrounded and comes back — any of these fire
+ * `webglcontextlost` on the canvas. This app had no handler for it anywhere,
+ * and the default behaviour of that event is the trap:
+ *
+ *   UNLESS preventDefault() IS CALLED, THE CONTEXT IS NEVER RESTORABLE.
+ *
+ * So the canvas went black and stayed black. Every store still held the right
+ * data, every mesh was still in the scene, no error was thrown, and nothing on
+ * screen said what had happened — the DOM chrome kept painting perfectly,
+ * because only the 3D is WebGL. Nothing short of killing the app brought it
+ * back. That is a dead end in the most literal sense: the state is all there,
+ * and none of it can be drawn.
+ *
+ * Calling preventDefault() asks the browser to give the context back. Three
+ * re-uploads its own buffers and textures on `webglcontextrestored`, so the
+ * scene rebuilds itself and the workspace simply returns.
+ *
+ * Restoration is not promised either, though, so the second half matters as
+ * much as the first: while the context is down we say so, and offer the one
+ * action that always works. A black screen that explains itself and hands you
+ * a way out is a fault; a black screen that does neither is the app being
+ * broken with no way to tell.
+ */
+function WebGLContextGuard({ onLost, onRestored }: { onLost: () => void; onRestored: () => void }) {
+  const { gl, invalidate } = useThree()
+  useEffect(() => {
+    const canvas = gl.domElement
+    const lost = (e: Event) => {
+      // MUST be called, and must be called synchronously here, or the browser
+      // will not attempt to restore the context at all.
+      e.preventDefault()
+      onLost()
+    }
+    const restored = () => {
+      onRestored()
+      // Nudge the loop so the first frame after restore is drawn immediately
+      // rather than whenever something else happens to invalidate.
+      invalidate()
+    }
+    canvas.addEventListener('webglcontextlost', lost as EventListener)
+    canvas.addEventListener('webglcontextrestored', restored)
+    return () => {
+      canvas.removeEventListener('webglcontextlost', lost as EventListener)
+      canvas.removeEventListener('webglcontextrestored', restored)
+    }
+  }, [gl, invalidate, onLost, onRestored])
+  return null
+}
+
 function CameraRig() {
   const { camera } = useThree()
   const initialized = useRef(false)
@@ -591,6 +644,9 @@ export default function ModelViewer() {
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
   const [exportOpen, setExportOpen]     = useState(false)
   const [isDragOver, setIsDragOver]     = useState(false)
+  /** The GPU dropped the 3D context. Everything is still in memory; none of it
+   *  can be drawn until the browser hands the context back. */
+  const [glLost, setGlLost] = useState(false)
   const hasWalls      = drawings.some((d) => d.parsedWalls.length > 0)
 
   // UI reset: the old top toolbar + camera HUD are retired. Their actions live
@@ -922,6 +978,17 @@ export default function ModelViewer() {
         </>
       )}
 
+      {/* The 3D is gone and the DOM is not, so this is the one thing on screen
+          that can explain a black workspace. Pinned to the bottom edge like
+          every other notice — a full-screen apology would cover the very thing
+          we are hoping comes back. */}
+      {glLost && (
+        <div className={styles.glLostNotice} role="status">
+          <span>3D paused — the graphics context was dropped. It usually comes back on its own.</span>
+          <button onClick={() => window.location.reload()}>Reload</button>
+        </div>
+      )}
+
       {/* FloorplanPanel renders DOM controls (inputs, buttons) outside the
          Canvas so they stay in the react-dom reconciler. */}
       <div className={styles.floorplanPanelRoot}>
@@ -972,6 +1039,10 @@ export default function ModelViewer() {
         }}
       >
         {import.meta.env.DEV && <DevSceneHandle />}
+        <WebGLContextGuard
+          onLost={() => setGlLost(true)}
+          onRestored={() => setGlLost(false)}
+        />
         <CameraRig />
         <PrintAutoFrame />
         <DrawerRecenter />
