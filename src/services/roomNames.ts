@@ -110,5 +110,27 @@ export function statedAreaSqM(text: string): number | null {
     const v = parseFloat(imperial[1].replace(',', '.'))
     return Number.isFinite(v) && v > 0 ? v * 0.092903 : null
   }
+
+  /**
+   * OCR MANGLES SUPERSCRIPTS, AND THE UNIT IS A SUPERSCRIPT.
+   *
+   * Read off the ADU capture, "TOTAL AREA = 71 m²" comes back as
+   * "TOTAL AREA = 71 m?" — Tesseract turns the ² into a question mark. Every
+   * strict pattern above then fails, and the one number on the drawing that
+   * fixes the scale exactly is thrown away over one character.
+   *
+   * So a number followed by `m` and one piece of junk counts as square metres —
+   * but ONLY when the surrounding words say the figure is an area. That guard
+   * matters: "5,37 m" is also on that sheet, and it is a LENGTH along a
+   * dimension line. Reading it as 5.37 m² would put the scale out by a factor
+   * of four, which is worse than not reading it at all.
+   */
+  if (/\b(area|total)\b/i.test(text)) {
+    const loose = /(\d+(?:[.,]\d+)?)\s*m\s*[²2?*'"`^]?\s*$/i.exec(text.trim())
+    if (loose) {
+      const v = parseFloat(loose[1].replace(',', '.'))
+      return Number.isFinite(v) && v > 0 ? v : null
+    }
+  }
   return null
 }

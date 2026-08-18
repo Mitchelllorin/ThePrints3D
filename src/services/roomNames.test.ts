@@ -87,6 +87,21 @@ describe('statedAreaSqM', () => {
     expect(statedAreaSqM('KITCHEN 120 SF')!).toBeCloseTo(11.148, 2)
   })
 
+  it('survives OCR turning the superscript into junk', () => {
+    // Literally what Tesseract returns for the ADU capture's total line.
+    expect(statedAreaSqM('TOTAL AREA = 71 m?')).toBeCloseTo(71, 6)
+    expect(statedAreaSqM('TOTAL AREA = 71 m')).toBeCloseTo(71, 6)
+    expect(statedAreaSqM('Living Area 21,4 m*')).toBeCloseTo(21.4, 6)
+  })
+
+  it('does NOT read a bare length as an area', () => {
+    // "5,37 m" is a dimension along the bottom of the same drawing. Reading it
+    // as 5.37 m2 would put the scale out by a factor of four.
+    expect(statedAreaSqM('5,37 m')).toBeNull()
+    expect(statedAreaSqM('3,68 m')).toBeNull()
+    expect(statedAreaSqM('2.78 m')).toBeNull()
+  })
+
   it('returns null when no area is stated', () => {
     expect(statedAreaSqM('BEDROOM')).toBeNull()
     expect(statedAreaSqM('5,37 m')).toBeNull()

@@ -14,6 +14,9 @@ import { filterWallsForNoisyPrint } from './noisyPrintFilter'
 import { inferCorners } from './wallTraceReducer'
 import { setInkBuffer } from './inkRaster'
 import { normalizeForDetection } from './rasterNormalize'
+import { ocrRaster, shouldOcr, groupIntoLines } from './ocr'
+import { statedAreaSqM } from './roomNames'
+import { scaleFromTotalArea, footprintAreaPx } from './scaleInference'
 
 export type DrawingPatch = Partial<Drawing>
 
@@ -172,10 +175,83 @@ export async function processDrawing(
     const classificationStats = result.stats
     setProgress(92)
 
+    /**
+     * READ THE WORDS, IF NOBODY HAS.
+     *
+     * A PDF hands over its text layer for free and exactly positioned, so OCR
+     * is only ever a fallback for the rasters that have none — a screenshot, a
+     * photo, a scan. That is most of what people actually upload, and until now
+     * those arrived with no words at all: no room names, so nothing could be
+     * tiled or given a kitchen circuit, and no stated area, so scale had to be
+     * guessed from line weight and came out 3x wrong on the ADU capture.
+     *
+     * Phrases as well as words, because a room is usually named in several
+     * ("Kitchen & Dining Area") and the total area always is.
+     */
+    let textTokens = raster.textTokens
+    if (shouldOcr(textTokens)) {
+      const words = await ocrRaster(detectImage)
+      if (words.length) textTokens = groupIntoLines(words)
+    }
+
     // 4. Derive scale from notation if available
     let scaleMmPerPx: number | null = null
     if (raster.scaleNotation) {
       scaleMmPerPx = deriveScaleFromNotation(raster.scaleNotation)
+    }
+    /**
+     * THE DRAWING USUALLY STATES ITS OWN SIZE.
+     *
+     * Every other route here guesses — a door is probably 813mm, a wall is
+     * probably 121mm — because the sheet did not say. But "TOTAL AREA = 71 m²"
+     * is printed on the ADU capture in data/test-prints/, and one stated area
+     * over a footprint we can measure in pixels gives mm/px as arithmetic, with
+     * no assumption about what anything is made of.
+     *
+     * Placed above the structural guess deliberately: this is READ, not
+     * inferred, and it is the only route that does not depend on line weight —
+     * which is what made the guess 3.1x too big on that very file.
+     */
+    let scaleFromStatedText = false
+    if (scaleMmPerPx == null) {
+      const stated = textTokens
+        .map((t) => ({ t, area: statedAreaSqM(t.text) }))
+        .filter((x): x is { t: typeof x.t; area: number } => x.area != null)
+      // Only an explicit TOTAL. Summing the room labels misses halls, walls and
+      // anything unlabelled, so it reads small and would skew the scale.
+      /**
+       * WHICH STATED AREA IS THE WHOLE BUILDING.
+       *
+       * Requiring the word "total" was too strict to survive OCR. The ADU
+       * capture prints "TOTAL AREA = 71 m2" and Tesseract returned that line
+       * broken as "AREA = 71 m?" - the figure read correctly, the qualifying
+       * word did not, and the one number that fixes the scale was discarded.
+       *
+       * So take an explicit total when it survives, and otherwise fall back on
+       * what makes a total a total: it is no smaller than the other stated
+       * areas put together. A label passing that test is the building; one
+       * failing it is a room, and a room's area cannot be paired with the
+       * whole footprint.
+       *
+       * Never sum the room labels instead. They miss halls, walls and anything
+       * unlabelled, so the sum reads small and the scale comes out short.
+       */
+      const largest = stated.length
+        ? stated.reduce((a, b) => (b.area > a.area ? b : a))
+        : null
+      const restSum = stated.reduce((s, x) => s + x.area, 0) - (largest?.area ?? 0)
+      const total =
+        stated.find((x) => /total/i.test(x.t.text)) ??
+        (largest && largest.area >= restSum && /area/i.test(largest.t.text)
+          ? largest
+          : undefined)
+      if (total) {
+        const candidate = scaleFromTotalArea(total.area, footprintAreaPx(filtered.walls))
+        if (candidate != null) {
+          scaleMmPerPx = candidate
+          scaleFromStatedText = true
+        }
+      }
     }
     if (scaleMmPerPx == null && drawing.scaleMmPerPx == null) {
       // Paper-anchored first. When the sheet states its own size the question
@@ -194,7 +270,10 @@ export async function processDrawing(
     const effectiveScale = scaleMmPerPx ?? drawing.scaleMmPerPx
 
     // Determine confidence based on how the scale was sourced.
-    const scaleConfidence: ScaleConfidence = raster.scaleNotation
+    // A stated area counts as PARSED, not inferred: it was read off the sheet.
+    // That distinction has teeth — only a trusted scale is allowed to conclude
+    // masonry in step 5.
+    const scaleConfidence: ScaleConfidence = raster.scaleNotation || scaleFromStatedText
       ? 'parsed'
       : effectiveScale !== null
         ? 'inferred'
@@ -273,7 +352,7 @@ export async function processDrawing(
       walls,
       openings,
       rooms,
-      textTokens: raster.textTokens,
+      textTokens,
     })
 
     // 9. Floor number from filename
