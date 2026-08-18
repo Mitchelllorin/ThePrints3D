@@ -401,8 +401,20 @@ export default function FloorplanPanel() {
   const handleSmartRefine = async () => {
     if (!drawing) return
     setSeedProcessing(true)
-    await processWithSeeds(drawing.id)
-    setSeedProcessing(false)
+    try {
+      await processWithSeeds(drawing.id)
+    } catch (err) {
+      // A THROWN SEED PASS MUST NOT LATCH THE BUTTON.
+      //
+      // Without the finally, one rejection left seedProcessing true forever:
+      // the button reads "Finding…" and is disabled, so the run can never be
+      // retried and — since Find the rest is the reason to be on the trace bar
+      // at all — that corner of the UI is simply dead. It rasterises the file
+      // and runs the detector, either of which can fail on a bad image.
+      console.error('Find the rest failed:', err)
+    } finally {
+      setSeedProcessing(false)
+    }
   }
 
   // When non-null, the next file picked is imported AS the plan for this storey

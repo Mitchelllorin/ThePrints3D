@@ -205,11 +205,29 @@ export default function RailCascade() {
     }
   }
 
-  // Retract entirely while tracing — the workspace stays clear during an action.
-  if (traceMode) return null
-
+  /**
+   * THE RAIL STAYS WHILE TRACING, BECAUSE IT IS THE WAY OUT.
+   *
+   * This used to `return null` the moment trace mode began, and that quietly
+   * removed the only exit the app had. Follow the trail: the trace bar's "Done"
+   * was deleted on purpose — a permanent button in the corner of the workspace
+   * whose only job was to leave the mode you were in — on the grounds that
+   * Escape does it on a desktop and tapping the rail does it on a phone.
+   * selectSection above still implements exactly that, comment and all.
+   *
+   * It could never run. Unmounting the rail during a trace deleted the control
+   * that was supposed to be the answer, so on a phone — no Escape key — once
+   * you started tracing there was no way out at all. Trace some walls, press
+   * Find the rest, and you are stranded in a mode with every door removed.
+   *
+   * So it stays mounted, and stays out of the way instead: dimmed and narrowed
+   * to the edge, no cascade, no labels competing with the drawing. The
+   * workspace is still clear — the centre is untouched, which is what "clear"
+   * has to mean. Chrome you cannot see is not restraint if it takes the exit
+   * with it.
+   */
   return (
-    <div className={styles.wrap}>
+    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''}`}>
       <nav className={styles.rail} aria-label="Menus">
         {RAIL.map(({ id, icon, label }) => (
           <button

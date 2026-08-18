@@ -173,3 +173,17 @@
 }
 .rowLabel { flex: 1 1 auto; line-height: 1.25; }
 .chev { display: none; }
+
+/* MID-TRACE. The rail stays — it is the only way out of trace mode on a phone
+   (see the note in RailCascade) — but it steps back so the drawing owns the
+   screen: dimmed, and lifted back to full strength the moment you reach for it.
+   The centre of the workspace is untouched either way, which is what matters. */
+.wrap.tracing .rail {
+  opacity: 0.34;
+  transition: opacity 0.18s ease;
+}
+.wrap.tracing .rail:hover,
+.wrap.tracing .rail:focus-within,
+.wrap.tracing .rail:active {
+  opacity: 1;
+}
