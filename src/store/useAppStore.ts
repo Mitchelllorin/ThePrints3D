@@ -1243,7 +1243,9 @@ export const useAppStore = create<AppState>()(
           const d = s.drawings.find((d) => d.id === id)
           if (d) d.parseProgress = pct
         })
-      }, drywallCfg, pageOverride)
+      }, drywallCfg, pageOverride,
+        // A wall we cannot measure is built the way this project builds walls.
+        useConfigStore.getState().defaultStudSize === '2x6' ? 'stud-2x6' : 'stud-2x4')
 
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)

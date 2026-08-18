@@ -3,7 +3,7 @@ import { detectWallsOffThread } from './detectOffThread'
 import { inferFloorNumber } from './sheetParser'
 import { deriveScaleFromNotation } from './scaleParser'
 import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
-import { classifyWallType, pxToMm, type DrywallConfig } from './wallTypeClassifier'
+import { classifyWallType, pxToMm, type DrywallConfig, type WallType } from './wallTypeClassifier'
 import { extractRooms } from './roomExtractor'
 import { rejoinAcrossOpenings } from './openingDetector'
 import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
@@ -30,6 +30,10 @@ export async function processDrawing(
   onProgress: (pct: number) => void,
   drywall: DrywallConfig = 'single-layer',
   pageOverride?: number,
+  /** What a wall IS when the thickness cannot be trusted to say. A house is
+   *  stud-framed unless the drawing proves otherwise — see the masonry note
+   *  in step 5. Mirrors config `defaultStudSize`. */
+  defaultStudType: WallType = 'stud-2x4',
 ): Promise<DrawingPatch> {
   try {
     let lastProgress = 0
@@ -183,14 +187,34 @@ export async function processDrawing(
         }
       }
       const c = classifyWallType(finishedMm, drywall)
+      /**
+       * MASONRY IS NEVER A GUESS.
+       *
+       * The classifier buckets a thickness in MILLIMETRES, and those
+       * millimetres come from the scale. Get the scale wrong on the high side
+       * and every wall in the house measures far too thick — past 2x12, into
+       * the masonry bucket — so a timber-framed one-bed came out as CMU, brown
+       * and 300mm, with the takeoff and the model to match. The note in step 4
+       * records exactly this happening: a real 1-&-2-family set out by about
+       * 4x, "calling every wall 600mm of masonry".
+       *
+       * A residential plan is overwhelmingly stud-framed, so on a scale we only
+       * INFERRED, masonry is far more likely to be arithmetic than a material
+       * choice. Only a scale we actually READ off the drawing is allowed to
+       * reach that conclusion; otherwise the wall keeps the default framing the
+       * project is set to build in, which for a house is timber.
+       */
+      const trustedScale = scaleConfidence === 'parsed'
+      const type = c.type === 'masonry-thick' && !trustedScale ? defaultStudType : c.type
       return {
         ...w,
         source: w.source ?? 'auto',
         detectionConfidence: w.detectionConfidence ?? c.confidence,
-        wallType: c.type,
+        wallType: type,
         framingMm: c.framingMm,
         finishedMm: c.finishedMm,
-        typeConfidence: c.confidence,
+        // Say out loud that the type was defaulted rather than measured.
+        typeConfidence: type === c.type ? c.confidence : 0.3,
       }
     })
 

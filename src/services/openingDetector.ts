@@ -248,8 +248,43 @@ export function rejoinAcrossOpenings(
   const openings = detectOpenings(walls, options)
   if (openings.length === 0) return { walls, openings }
 
+  /**
+   * A DOORWAY IS STILL A DOORWAY WHEN NOBODY KNOWS THE SCALE.
+   *
+   * Welding used to require `type` to be door or window, and that type comes
+   * from `classifyByWidth`, which needs MILLIMETRES. No scale, no millimetres,
+   * so every gap classified as `unknown` and not one of them bridged. The gaps
+   * were found — they were simply all rejected.
+   *
+   * That is the "26 walls on a one-bed" report. A house has maybe eight or ten
+   * real runs; put a doorway in most of them and leave every doorway splitting
+   * its wall in two, and the count roughly doubles. Framing then puts a plate
+   * end and a pair of studs where a header belongs, at every door in the plan.
+   *
+   * A drawing does not need a scale to tell you a gap is a door, because the
+   * wall itself is the ruler: an opening is a few multiples of the thickness of
+   * the wall it sits in — a 900mm door in a 100mm wall is nine. That ratio is
+   * scale-free, so it still works on a photo, a screenshot, or any print whose
+   * scale we could not read. It is deliberately a WIDE band and only ever used
+   * when the metric answer is unavailable; a gap outside it is still left
+   * alone, because welding a corridor shut invents a wall that is not there.
+   */
+  const thicknesses = walls.map((w) => w.thickness).filter((t) => t > 0).sort((a, b) => a - b)
+  const medianThickness = thicknesses.length
+    ? thicknesses[Math.floor(thicknesses.length / 2)]
+    : 0
+  const OPENING_MIN_RATIO = 4
+  const OPENING_MAX_RATIO = 20
+  const plausibleForWallThickness = (o: ParsedOpening) =>
+    o.widthMm == null &&
+    medianThickness > 0 &&
+    o.widthPx >= medianThickness * OPENING_MIN_RATIO &&
+    o.widthPx <= medianThickness * OPENING_MAX_RATIO
+
   // Only real openings weld. See the note above.
-  const bridgeable = openings.filter((o) => o.type === 'door' || o.type === 'window')
+  const bridgeable = openings.filter(
+    (o) => o.type === 'door' || o.type === 'window' || plausibleForWallThickness(o),
+  )
 
   const out = walls.slice()
   const consumed = new Set<number>()

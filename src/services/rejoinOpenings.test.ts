@@ -80,3 +80,27 @@ describe('rejoining walls across their openings', () => {
     expect(out).toEqual(walls)
   })
 })
+
+describe('welding a doorway when the scale is unknown', () => {
+  // One interior wall with three doorways in it: 4 segments, 3 door-sized gaps.
+  const run = [h(0, 200, 100), h(238, 500, 100), h(538, 800, 100), h(838, 1100, 100)]
+
+  it('WITH scale: welds back to one wall', () => {
+    const { walls } = rejoinAcrossOpenings(run, { scaleMmPerPx: 23.5 })
+    expect(walls).toHaveLength(1)
+  })
+
+  it('WITHOUT scale: still welds, using the wall thickness as the ruler', () => {
+    const { walls, openings } = rejoinAcrossOpenings(run, {})
+    expect(openings.length).toBe(3)          // the gaps are found
+    expect(openings.every((o) => o.type === 'unknown')).toBe(true)  // still unclassified
+    expect(walls).toHaveLength(1)            // ...and bridged anyway
+  })
+
+  it('WITHOUT scale: does NOT weld a gap far too wide to be an opening', () => {
+    // 8px walls, 600px gap = 75x the thickness. A corridor, not a door.
+    const wide = [h(0, 200, 100), h(800, 1000, 100)]
+    const { walls } = rejoinAcrossOpenings(wide, { maxGapPx: 900 })
+    expect(walls).toHaveLength(2)
+  })
+})
