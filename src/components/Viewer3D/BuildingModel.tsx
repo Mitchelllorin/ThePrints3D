@@ -962,7 +962,7 @@ export default function BuildingModel({ layers }: Props) {
     const hasUserWalls = modelWalls(drawings).length > 0
 
     // User-placed doors/windows become real openings cut into the wall meshes.
-    const openingSpecs: OpeningSpec[] = placedObjects
+    const placedSpecs: OpeningSpec[] = placedObjects
       .filter((o) => o.type === 'door' || o.type === 'window')
       .map((o) => {
         const item = getCatalogItem(o.type)
@@ -974,6 +974,56 @@ export default function BuildingModel({ layers }: Props) {
           type: o.type as 'door' | 'window',
         }
       })
+
+    /**
+     * A DOORWAY OFF THE PRINT IS STILL A DOORWAY.
+     *
+     * The takeoff has always framed these: buildFraming is handed
+     * `parsedOpenings` alongside the placed ones, so the material list counts a
+     * header over every detected door. The MODEL was only ever handed the
+     * placed ones, so on a print you had not finished the shell of, a detected
+     * doorway came out as a bare hole in the wall with nothing over it — no
+     * header, no king, no jack, no cripples. The two paths disagreed, and the
+     * one you look at was the one that was wrong.
+     *
+     * Width comes from measuring the gap's own endpoints through the drawing
+     * transform rather than from `widthMm`, so it stays right when the scale is
+     * unknown and when the overlay has been moved or rotated.
+     */
+    const detectedSpecs: OpeningSpec[] = allParsed.flatMap((d) => {
+      const t = transforms.get(d.id)
+      if (!t) return []
+      return d.parsedOpenings.flatMap((op): OpeningSpec[] => {
+        if (op.type !== 'door' && op.type !== 'window') return []
+        const item = getCatalogItem(op.type)
+        const ang = op.angle ?? (op.orientation === 'vertical' ? Math.PI / 2 : 0)
+        const hx = (Math.cos(ang) * op.widthPx) / 2
+        const hy = (Math.sin(ang) * op.widthPx) / 2
+        const [ax, az] = t.toWorld(op.x - hx, op.y - hy)
+        const [bx, bz] = t.toWorld(op.x + hx, op.y + hy)
+        const [cxw, czw] = t.toWorld(op.x, op.y)
+        const width = Math.hypot(bx - ax, bz - az)
+        // A gap that measures to nothing is a detection artefact, not a door.
+        if (!(width > 0.3)) return []
+        return [{
+          x: cxw,
+          z: czw,
+          width,
+          height: item?.defaultH ?? (op.type === 'door' ? 2.03 : 1.2),
+          type: op.type,
+        }]
+      })
+    })
+
+    // Finishing the shell drops a real leaf into each detected opening, so the
+    // same doorway would arrive down both paths and get framed twice. The
+    // placed one wins — it carries the user's own size.
+    const openingSpecs: OpeningSpec[] = [
+      ...placedSpecs,
+      ...detectedSpecs.filter((det) => !placedSpecs.some(
+        (pl) => Math.hypot(pl.x - det.x, pl.z - det.z) < 0.45,
+      )),
+    ]
 
     // Skip the auto foundation slab when the user traced their own floor — it
     // sits in the joist zone and reads as a redundant slab under the joists.
