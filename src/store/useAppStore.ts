@@ -110,6 +110,44 @@ function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): Infe
   return null
 }
 import { defaultSmartProcessingState } from './smartProcessingSlice'
+import {
+  appendCorrection,
+  deriveLessons,
+  summarizeCorrections,
+  type CorrectionRecord,
+  type Lesson,
+} from '../services/correctionLedger'
+import type { DrywallConfig } from '../services/wallTypeClassifier'
+
+/**
+ * A wall the user traced is only a CORRECTION when we had already looked and
+ * missed it.
+ *
+ * On a sheet the detector found nothing on — or one the user is drawing from
+ * scratch — every stroke would otherwise read as "a wall the AI missed", and a
+ * dozen of them would have the ledger reporting a detector bias that is really
+ * just someone drawing. So a trace counts against us only where auto walls
+ * already exist: the detector ran, produced a reading, and this line was not in
+ * it.
+ */
+function tracedWallIsACorrection(autoWalls: readonly ParsedWall[]): boolean {
+  return autoWalls.length > 0
+}
+
+
+/**
+ * The drywall assumption in force, as the classifier understands it.
+ *
+ * Onboarding lets someone answer 'mixed', which the classifier has no bucket
+ * for; the processor already collapses that to single-layer before classifying,
+ * and anything reasoning about the result has to collapse it the same way or it
+ * will judge a mistake against an assumption that was never used.
+ */
+function activeDrywallConfig(): DrywallConfig {
+  const answer = loadOnboardingWizardState().meta.drywall
+  return answer === 'mixed' ? 'single-layer' : answer
+}
+
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
 import { readCachedPro } from '../services/billing'
@@ -329,6 +367,7 @@ interface WorkspaceHistorySnapshot {
   constructionDecisions: Decision[]
   detectedWallTypes: DetectedWallType[]
   correctionCount: number
+  corrections: CorrectionRecord[]
 }
 
 function deepCopy<T>(value: T): T {
@@ -393,6 +432,13 @@ interface AppState {
   projectWallTypes: WallType[]
   smartStageLabel: string
   correctionCount: number
+  /**
+   * Every time we were wrong, and what the user said instead — see
+   * `correctionLedger`. The count above only ever said HOW MANY; this says what,
+   * with the measurement behind it, which is what lets the app find the one
+   * systematic mistake sitting under a run of individual ones.
+   */
+  corrections: CorrectionRecord[]
   detectedWallTypes: DetectedWallType[]
   wallDetectionConfig: WallDetectionConfig
 
@@ -495,6 +541,8 @@ interface AppState {
   correctElement: (wallId: string, wallTypeId: string) => void
   setProjectWallTypes: (types: WallType[]) => void
   exportCorrectionDataset: () => string
+  /** The systematic mistakes the corrections add up to — see `correctionLedger`. */
+  correctionLessons: () => Lesson[]
   setWallDetectionConfig: (patch: Partial<WallDetectionConfig>) => void
   // Construction Engine
   buildForMe: () => void
@@ -654,6 +702,7 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     constructionDecisions: state.constructionDecisions,
     detectedWallTypes: state.detectedWallTypes,
     correctionCount: state.correctionCount,
+    corrections: state.corrections,
   })
 }
 
@@ -698,6 +747,7 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   state.constructionDecisions = deepCopy(snapshot.constructionDecisions)
   state.detectedWallTypes = deepCopy(snapshot.detectedWallTypes)
   state.correctionCount = snapshot.correctionCount
+  state.corrections = snapshot.corrections ?? []
   saveAnnotations(state.annotations)
   saveWizardState(state.wizardState)
 }
@@ -816,6 +866,7 @@ export const useAppStore = create<AppState>()(
     projectWallTypes: defaultSmartProcessingState.projectWallTypes,
     smartStageLabel: defaultSmartProcessingState.stageLabel,
     correctionCount: defaultSmartProcessingState.correctionCount,
+    corrections: [],
     detectedWallTypes: [],
     wallDetectionConfig: { ...DEFAULT_WALL_DETECTION_CONFIG },
 
@@ -963,11 +1014,28 @@ export const useAppStore = create<AppState>()(
       pushHistory()
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)
-        if (d) {
-          d.scaleMmPerPx = mmPerPx
-          d.scaleNotation = notation
-          d.scaleConfidence = 'parsed'
+        if (!d) return
+        // Calibrating by hand is the user telling us our scale was wrong. Record
+        // it before overwriting, with the old value, so the ledger can show how
+        // far off we tend to be and on what kind of sheet.
+        if (d.scaleMmPerPx != null && d.scaleMmPerPx !== mmPerPx) {
+          s.corrections = appendCorrection(s.corrections, {
+            id: `corr-scale-${id}-${s.corrections.length}`,
+            at: Date.now(),
+            kind: 'scale',
+            drawingId: id,
+            predicted: String(d.scaleMmPerPx),
+            actual: String(mmPerPx),
+            confidence: d.scaleConfidence === 'parsed' ? 0.9 : 0.4,
+            evidence: {
+              scaleMmPerPx: d.scaleMmPerPx,
+              scaleConfidence: d.scaleConfidence ?? null,
+            },
+          })
         }
+        d.scaleMmPerPx = mmPerPx
+        d.scaleNotation = notation
+        d.scaleConfidence = 'parsed'
       })
     },
 
@@ -987,6 +1055,23 @@ export const useAppStore = create<AppState>()(
         ]
         const userWalls = cornerInferEnabled ? inferCorners(combined, cornerTolerancePx) : combined
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+        if (tracedWallIsACorrection(autoWalls)) {
+          s.corrections = appendCorrection(s.corrections, {
+            id: `corr-add-${id}-${s.corrections.length}`,
+            at: Date.now(),
+            kind: 'wall-added',
+            drawingId: id,
+            predicted: null,
+            actual: activeWallType,
+            evidence: {
+              thicknessPx: wall.thickness,
+              scaleMmPerPx: d.scaleMmPerPx ?? null,
+              scaleConfidence: d.scaleConfidence ?? null,
+              x: wall.x1,
+              y: wall.y1,
+            },
+          })
+        }
         s.inferenceSuggestion = cornerSuggestionFor(d.parsedWalls, id)
       })
     },
@@ -1008,6 +1093,25 @@ export const useAppStore = create<AppState>()(
           ...walls.map((w) => ({ ...w, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole, interiorMaterial: 'drywall', exteriorMaterial })),
         ])
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+        if (tracedWallIsACorrection(autoWalls)) {
+          for (const w of walls) {
+            s.corrections = appendCorrection(s.corrections, {
+              id: `corr-add-${id}-${s.corrections.length}`,
+              at: Date.now(),
+              kind: 'wall-added',
+              drawingId: id,
+              predicted: null,
+              actual: activeWallType,
+              evidence: {
+                thicknessPx: w.thickness,
+                scaleMmPerPx: d.scaleMmPerPx ?? null,
+                scaleConfidence: d.scaleConfidence ?? null,
+                x: w.x1,
+                y: w.y1,
+              },
+            })
+          }
+        }
         s.inferenceSuggestion = cornerSuggestionFor(d.parsedWalls, id)
       })
     },
@@ -1824,10 +1928,67 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         s.correctionCount += 1
         const idx = s.detectedWallTypes.findIndex((d) => d.wallId === wallId)
-        if (idx !== -1) {
-          const newType = s.projectWallTypes.find((t) => t.id === wallTypeId)
-          if (newType) s.detectedWallTypes[idx] = { ...s.detectedWallTypes[idx], wallType: newType }
-        }
+        if (idx === -1) return
+        const previous = s.detectedWallTypes[idx]
+        const newType = s.projectWallTypes.find((t) => t.id === wallTypeId)
+        if (!newType) return
+
+        /**
+         * WRITE DOWN THAT WE WERE WRONG, BEFORE WE OVERWRITE IT.
+         *
+         * The line below used to be the whole action: take the right answer,
+         * paste it over our wrong one, bump a counter nobody read. The user's
+         * correction — the only ground truth this app ever gets for free — went
+         * straight in the bin.
+         *
+         * Keep the pixels, not just the verdict. `wallId` is "x1,y1", so the
+         * wall it came from can be found again on the drawing and its measured
+         * thickness recorded alongside what the user says it really is. That
+         * pair is a measurement of the scale, and three of them is a corrected
+         * scale for the whole sheet — see `correctionLedger`.
+         */
+        const drawing =
+          s.drawings.find((d) => d.id === s.selectedDrawingId) ?? s.drawings[0]
+        const wall = drawing?.parsedWalls.find(
+          (w) => `${w.x1},${w.y1}` === wallId,
+        )
+        s.corrections = appendCorrection(s.corrections, {
+          id: `corr-${s.correctionCount}-${wallId}`,
+          at: Date.now(),
+          kind: 'wall-type',
+          drawingId: drawing?.id ?? 'unknown',
+          predicted: previous.wallType?.id ?? null,
+          actual: newType.id,
+          confidence: previous.confidence,
+          evidence: {
+            thicknessPx: wall?.thickness,
+            measuredMm: wall?.finishedMm,
+            actualFinishedMm: newType.thicknessMm,
+            scaleMmPerPx: drawing?.scaleMmPerPx ?? null,
+            scaleConfidence: drawing?.scaleConfidence ?? null,
+            x: wall?.x1,
+            y: wall?.y1,
+          },
+        })
+
+        s.detectedWallTypes[idx] = { ...previous, wallType: newType }
+      })
+    },
+
+    /**
+     * The one systematic mistake worth acting on, or null while the read looks
+     * sound. Ranked the way `detectionReview` ranks doubts — the UI shows the
+     * top one, because two suggestions at once is how you lose someone.
+     */
+    correctionLessons: (): Lesson[] => {
+      const s = get()
+      const drawing =
+        s.drawings.find((d) => d.id === s.selectedDrawingId) ?? s.drawings[0]
+      return deriveLessons(s.corrections, {
+        scaleMmPerPx: drawing?.scaleMmPerPx ?? null,
+        // Same source the processor classified against, so a lesson is measured
+        // against the assumption that actually produced the mistake.
+        drywall: activeDrywallConfig(),
       })
     },
 
@@ -1844,16 +2005,23 @@ export const useAppStore = create<AppState>()(
       })
     },
 
+    /**
+     * The corrections, as a dataset something can actually learn from.
+     *
+     * This used to export `detectedWallTypes` — the app's CURRENT answers, after
+     * the user had already fixed them. Every row said the right thing and none
+     * of them recorded a mistake, so the file was useless as training data: it
+     * was our output, relabelled, with the error erased.
+     *
+     * What a trainer needs is the pair. What we predicted, what the user said
+     * instead, and the pixels we were looking at when we got it wrong.
+     */
     exportCorrectionDataset: () => {
       const state = get()
       return JSON.stringify({
-        corrections: state.detectedWallTypes.map((d) => ({
-          wallId: d.wallId,
-          typeId: d.wallType.id,
-          confidence: d.confidence,
-          fromSeed: d.fromSeed,
-        })),
-        correctionCount: state.correctionCount,
+        version: 2,
+        summary: summarizeCorrections(state.corrections),
+        corrections: state.corrections,
       }, null, 2)
     },
 

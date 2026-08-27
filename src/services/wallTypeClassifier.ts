@@ -134,3 +134,30 @@ export function classifyWallType(
   const confidence = Math.max(0, 1 - bestDist / BUCKET_TOLERANCE_MM)
   return { type: best, framingMm: framing, finishedMm, confidence }
 }
+
+/**
+ * The inverse of `classifyWallType`: what this wall type SHOULD measure on the
+ * print, finished, in millimetres.
+ *
+ * Classification throws information away — a range of thicknesses all land in
+ * the 2x4 bucket — so it cannot be run backwards to recover the exact number.
+ * But the bucket's nominal centre is what the drawing was drawn to, and that is
+ * the number a correction gives us: when the user says "that's a 2x6", they
+ * have told us the line they are pointing at is 172mm finished. Paired with the
+ * pixels we measured, that is an arithmetic scale — which is the whole point of
+ * `correctionLedger`.
+ *
+ * Returns null for 'unknown', which has no nominal size to be.
+ */
+export function expectedFinishedMm(
+  type: WallType,
+  drywall: DrywallConfig = 'single-layer',
+): number | null {
+  if (type === 'unknown') return null
+  return FRAMING_MM[type] + DRYWALL_MM[drywall]
+}
+
+/** Drywall added to both faces, in mm, for each configuration. */
+export function drywallAllowanceMm(drywall: DrywallConfig): number {
+  return DRYWALL_MM[drywall]
+}
