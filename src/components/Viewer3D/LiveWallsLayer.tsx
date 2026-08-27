@@ -281,8 +281,49 @@ export default function LiveWallsLayer() {
       if (best < 0) continue
       out[best].push({ t, widthM, type: 'door', sillM: 0, heightM: (item?.defaultH ?? 2.4) * o.scaleY })
     }
+    // A DOORWAY OFF THE PRINT IS STILL A DOORWAY.
+    //
+    // Same half-finished story as the walls above: detection reads the doors and
+    // windows, the takeoff frames every one of them (headers, kings, jacks,
+    // cripples all land in the material list), and the framing you actually look
+    // at was built from `placedObjects` alone. So a door that came off the
+    // drawing was cut into nothing — the studs ran straight through it and no
+    // header ever appeared. Detect thirteen openings, watch the model not change
+    // by a single member.
+    //
+    // Width is measured from the gap's own endpoints THROUGH the transform
+    // rather than taken from `widthMm`, so it stays right when the scale is
+    // unknown and when the overlay has been moved or rotated.
+    for (const d of drawings) {
+      for (const op of d.parsedOpenings) {
+        if (op.type !== 'door' && op.type !== 'window') continue
+        const ang = op.angle ?? (op.orientation === 'vertical' ? Math.PI / 2 : 0)
+        const hx = (Math.cos(ang) * op.widthPx) / 2
+        const hy = (Math.sin(ang) * op.widthPx) / 2
+        const a = pixelToWorld(op.x - hx, op.y - hy)
+        const b = pixelToWorld(op.x + hx, op.y + hy)
+        const c = pixelToWorld(op.x, op.y)
+        const widthM = Math.hypot(b.x - a.x, b.z - a.z)
+        // A gap that measures to nothing is a detection artefact, not a door.
+        if (!(widthM > 0.3)) continue
+        // Finishing the shell drops a real leaf into a detected opening, so the
+        // same doorway would arrive down both paths and get framed twice. The
+        // placed one wins — it carries the user's own size.
+        if (placedObjects.some((p) => (p.type === 'door' || p.type === 'window')
+          && Math.hypot(p.x - c.x, p.z - c.z) < 0.45)) continue
+        const { best, t } = nearestWall(c.x, c.z, 0, 0, d.floorNumber ?? 0)
+        if (best < 0) continue
+        const item = getCatalogItem(op.type)
+        out[best].push({
+          t,
+          widthM,
+          type: op.type,
+          heightM: item?.defaultH ?? (op.type === 'door' ? 2.06 : 1.13),
+        })
+      }
+    }
     return out
-  }, [userWalls, placedObjects, pixelToWorld, overlayW, overlayD, imageWidth, imageHeight])
+  }, [userWalls, drawings, placedObjects, pixelToWorld, overlayW, overlayD, imageWidth, imageHeight])
 
   // The traced walls ARE the build: instead of BuildingModel re-rendering them
   // through a different (engine) path that drops detail, the ghost walls persist
