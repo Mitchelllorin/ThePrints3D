@@ -248,6 +248,7 @@ export default function FloorplanOverlay() {
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const tracePaused = useFloorplanLocalStore((s) => s.tracePaused)
   const setTracePaused = useFloorplanLocalStore((s) => s.setTracePaused)
+  const setTraceMode = useFloorplanLocalStore((s) => s.setTraceMode)
   const traceStyle = useFloorplanLocalStore((s) => s.traceStyle)
   const traceStart = useFloorplanLocalStore((s) => s.traceStart)
   const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
@@ -709,6 +710,25 @@ export default function FloorplanOverlay() {
       // Area layers (floors / roof): tap one corner, tap the opposite corner —
       // the rectangle becomes a joist field or a gable roof. No chaining; each
       // tap-pair is a separate area.
+      /**
+       * ONE PULL IS THE WHOLE ACTION.
+       *
+       * A wall trace chains — B becomes the next A — and it has two ways out: a
+       * double-tap, or a tap off the drawing. An area has neither. It used to
+       * just null the start point and stay armed, so there was no way out of
+       * floors from the canvas at all: every further pair of taps dropped
+       * another deck, and taps landing near each other dropped tiny ones. You
+       * got out by hammering undo.
+       *
+       * A floor is not a run of segments though. One corner to the opposite
+       * corner IS the finished thing, so finishing it ends the action and hands
+       * the workspace back — pull another by arming the layer again, which is
+       * one deliberate tap rather than an accident waiting on every touch.
+       *
+       * The wall's other escape — a tap outside the drawing cancels — is
+       * deliberately NOT copied here: the tap-catcher is oversized precisely so
+       * a deck can be pulled past the printed edge.
+       */
       if (activeTraceLayer === 'floors' || activeTraceLayer === 'roof') {
         // Snap each corner to the building's wall corners (endpoints) so a floor
         // pulled along the walls lands ON the footprint — not a tap-projection
@@ -725,11 +745,18 @@ export default function FloorplanOverlay() {
         if (!traceStart) { const s = snapCorner(pixel); setTraceStart(s); setHoverPixel(s); return }
         const a = traceStart
         const end = snapCorner(pixel)
-        if (Math.hypot(end[0] - a[0], end[1] - a[1]) < 6) { setTraceStart(null); return }
+        // Too small to be a deck — that is a mis-tap, not a floor. Measured
+        // against the drawing rather than in flat pixels so the guard means the
+        // same thing on a phone-sized raster and a full sheet.
+        const minPull = Math.max(6, (drawing.rasterWidth ?? 1400) * 0.02)
+        if (Math.hypot(end[0] - a[0], end[1] - a[1]) < minPull) { setTraceStart(null); return }
         const area = { id: genLineId(), x1: a[0], y1: a[1], x2: end[0], y2: end[1], material: '', level: activeLevel }
         if (activeTraceLayer === 'floors') addFloorsAreas([{ ...area, elementType: floorsElement, size: floorsSize }])
         else addRoofAreas([{ ...area, elementType: roofElement, size: roofSize }])
-        setTraceStart(null)
+        // Done — hand the workspace back rather than staying armed for a deck
+        // nobody asked for. setTraceMode(false) clears traceStart/hover with it.
+        setTraceMode(false)
+        setHoverPixel(null)
         return
       }
 
