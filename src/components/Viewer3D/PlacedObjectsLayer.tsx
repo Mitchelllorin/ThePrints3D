@@ -122,8 +122,14 @@ export default function PlacedObjectsLayer() {
    *
    * They are annotations for the drawing, so they live and die with it. Turning
    * the print off in the layer list takes them with it.
+   *
+   * And a STANDING BUILDING takes them with it too. Once walls are up, a door
+   * is a real hole in real framing that you can see from any angle — the marks
+   * stop being a reading aid and become litter round the base of every opening.
+   * So they belong to the phase where the print is the model, not to the model.
    */
-  const planSymbolsOn = useAppStore((s) => s.floorplanOverlay.visible)
+  const modelReadyForPlan = useAppStore((s) => s.model.status === 'ready')
+  const planSymbolsOn = useAppStore((s) => s.floorplanOverlay.visible) && !modelReadyForPlan
 
   const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
   // Same storey-to-storey rise the walls/decks use, so an object placed on an
@@ -282,6 +288,20 @@ export default function PlacedObjectsLayer() {
          * to pick and nothing to migrate.
          */
         const isOverheadDoor = obj.type === 'door' && w >= 2.1
+        /**
+         * A FIVE-FOOT OPENING IS NOT A FIVE-FOOT DOOR.
+         *
+         * The widest single leaf anyone hangs is 36in — past that the opening
+         * takes a PAIR, hinged at opposite jambs and meeting at a reveal down
+         * the middle. Detection happily reports doors up to 1800mm, and every
+         * one of those was being drawn as one enormous slab: a thing that does
+         * not exist in a house, sitting in the middle of the finished model.
+         *
+         * Keyed off width for the same reason the overhead is: width is what
+         * actually decides it on site, so wide openings already in a plan fix
+         * themselves with no new type to pick.
+         */
+        const isDoubleDoor = obj.type === 'door' && !isOverheadDoor && w >= 1.0
         const boxD = isOpening ? 0.06 : d
         // Windows sit at their sill height; electrical devices mount on the
         // wall/ceiling at a standard height; everything else sits on the floor.
@@ -345,6 +365,23 @@ export default function PlacedObjectsLayer() {
                         </mesh>
                       )
                     })
+                  ) : isDoubleDoor ? (
+                    // Two leaves, each half the opening, with a reveal where
+                    // they meet — the pair reads as a pair from any angle.
+                    [-1, 1].map((side) => (
+                      <mesh key={side} position={[(side * w) / 4, 0, 0]}>
+                        <boxGeometry args={[w / 2 - 0.012, h, boxD]} />
+                        <meshStandardMaterial
+                          color={color}
+                          roughness={0.6}
+                          metalness={0.05}
+                          transparent
+                          opacity={obj.transparent ? 0.18 : 0.8}
+                          depthWrite={!obj.transparent}
+                        />
+                        {!obj.transparent && <Edges color={color} lineWidth={2.5} />}
+                      </mesh>
+                    ))
                   ) : (
                     <mesh castShadow={!isOpening} receiveShadow={!isOpening}>
                       <boxGeometry args={[w, h, boxD]} />
@@ -437,25 +474,43 @@ export default function PlacedObjectsLayer() {
             })()}
 
             {planSymbolsOn && obj.type === 'door' && !isOverheadDoor && (() => {
-              const swing = obj.swing ?? 'left'
-              const hinge = swing === 'left' ? -w / 2 : w / 2
-              const sign = swing === 'left' ? 1 : -1
               const y = 0.07
               const N = 20
-              const arc: [number, number, number][] = []
-              for (let i = 0; i <= N; i++) {
-                const t = (i / N) * (Math.PI / 2)
-                arc.push([hinge + sign * w * Math.cos(t), y, w * Math.sin(t)])
+              // One leaf: hinge post, the leaf swung open, and the arc it
+              // sweeps. A pair is just this twice, mirrored, at half the reach.
+              const leafAt = (hinge: number, sign: number, reach: number) => {
+                const arc: [number, number, number][] = []
+                for (let i = 0; i <= N; i++) {
+                  const t = (i / N) * (Math.PI / 2)
+                  arc.push([hinge + sign * reach * Math.cos(t), y, reach * Math.sin(t)])
+                }
+                return {
+                  arc,
+                  leaf: [[hinge, y, 0], [hinge, y, reach]] as [number, number, number][],
+                }
               }
-              const leaf: [number, number, number][] = [[hinge, y, 0], [hinge, y, w]]
+              // A pair hinges at BOTH jambs and each leaf covers half the
+              // opening — drawing one big arc across a double door is the plan
+              // symbol equivalent of hanging one big slab.
+              const leaves = isDoubleDoor
+                ? [leafAt(-w / 2, 1, w / 2), leafAt(w / 2, -1, w / 2)]
+                : [leafAt(
+                    (obj.swing ?? 'left') === 'left' ? -w / 2 : w / 2,
+                    (obj.swing ?? 'left') === 'left' ? 1 : -1,
+                    w,
+                  )]
               const jambL: [number, number, number][] = [[-w / 2, y, -0.09], [-w / 2, y, 0.09]]
               const jambR: [number, number, number][] = [[w / 2, y, -0.09], [w / 2, y, 0.09]]
               return (
                 <>
                   <Line points={jambL} color={color} lineWidth={4} />
                   <Line points={jambR} color={color} lineWidth={4} />
-                  <Line points={leaf} color={color} lineWidth={4} />
-                  <Line points={arc} color={color} lineWidth={3} />
+                  {leaves.map((l, i) => (
+                    <group key={i}>
+                      <Line points={l.leaf} color={color} lineWidth={4} />
+                      <Line points={l.arc} color={color} lineWidth={3} />
+                    </group>
+                  ))}
                 </>
               )
             })()}
