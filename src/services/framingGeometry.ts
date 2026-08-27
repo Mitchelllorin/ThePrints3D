@@ -174,14 +174,25 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   })
   const depth = Math.max(STUD_WIDTH_M, thickness)
   const sizeLabel = thickness >= 0.18 ? '2×8' : thickness >= 0.13 ? '2×6' : '2×4'
-  const framingInfo = steel ? `${steelGauge}ga steel stud` : `${sizeLabel} wood stud`
-  const add = (geo: THREE.BufferGeometry, x: number, y: number, z = 0) => {
+  // EVERY MEMBER IN A WALL IS NOT A STUD.
+  //
+  // This label is what the hover nameplate reads out and what the takeoff
+  // tallies by, and for a long time it said "2×4 wood stud" on every last mesh
+  // in the wall — top plates, blocking, headers, jacks, cripples, and on a steel
+  // wall the TRACK. Point at a header, get told it is a stud. Export the takeoff
+  // and get one line, "2×4 wood stud × 396", which is not a list anybody can
+  // order from. Naming each member costs nothing and is the whole difference
+  // between a picture of a wall and a wall you can price.
+  const memberInfo = (member: string) =>
+    steel ? `${steelGauge}ga steel ${member}` : `${sizeLabel} ${member}`
+  const framingInfo = steel ? memberInfo('stud') : `${sizeLabel} wood stud`
+  const add = (geo: THREE.BufferGeometry, x: number, y: number, z = 0, info: string = framingInfo) => {
     const m = new THREE.Mesh(geo, mat)
     m.position.set(x, y, z)
     m.castShadow = true
     m.receiveShadow = true
     m.userData.layer = 'framing'
-    m.userData.info = framingInfo
+    m.userData.info = info
     group.add(m)
   }
 
@@ -201,22 +212,22 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       : 0.064                                  // standard deep-leg track
     const legZ = depth / 2 - SHEET_T / 2
     // Bottom track — web on the floor, two legs rising (channel opens up).
-    add(new THREE.BoxGeometry(length, SHEET_T, depth), 0, SHEET_T / 2, 0)
-    add(new THREE.BoxGeometry(length, botLegH, SHEET_T), 0, SHEET_T + botLegH / 2, legZ)
-    add(new THREE.BoxGeometry(length, botLegH, SHEET_T), 0, SHEET_T + botLegH / 2, -legZ)
+    add(new THREE.BoxGeometry(length, SHEET_T, depth), 0, SHEET_T / 2, 0, memberInfo('floor track'))
+    add(new THREE.BoxGeometry(length, botLegH, SHEET_T), 0, SHEET_T + botLegH / 2, legZ, memberInfo('floor track'))
+    add(new THREE.BoxGeometry(length, botLegH, SHEET_T), 0, SHEET_T + botLegH / 2, -legZ, memberInfo('floor track'))
     // Top track — web at the ceiling, two legs descending (channel opens down).
-    add(new THREE.BoxGeometry(length, SHEET_T, depth), 0, height - SHEET_T / 2, 0)
-    add(new THREE.BoxGeometry(length, topLegH, SHEET_T), 0, height - SHEET_T - topLegH / 2, legZ)
-    add(new THREE.BoxGeometry(length, topLegH, SHEET_T), 0, height - SHEET_T - topLegH / 2, -legZ)
+    add(new THREE.BoxGeometry(length, SHEET_T, depth), 0, height - SHEET_T / 2, 0, memberInfo('top track'))
+    add(new THREE.BoxGeometry(length, topLegH, SHEET_T), 0, height - SHEET_T - topLegH / 2, legZ, memberInfo('top track'))
+    add(new THREE.BoxGeometry(length, topLegH, SHEET_T), 0, height - SHEET_T - topLegH / 2, -legZ, memberInfo('top track'))
     // Studs seat on the bottom-track web and rise to just under the top-track
     // web; a slotted track leaves a deflection gap so the stud isn't pinned.
     studBottom = SHEET_T
     studTop = height - SHEET_T - deflectionGapMm / 1000
   } else {
     const plateGeo = new THREE.BoxGeometry(length, PLATE_H_M, depth)
-    add(plateGeo, 0, PLATE_H_M / 2, 0)            // sole plate
-    add(plateGeo, 0, PLATE_H_M * 1.5, 0)          // 2nd bottom plate
-    add(plateGeo, 0, height - PLATE_H_M * 1.5, 0) // lower top plate (butts at corner)
+    add(plateGeo, 0, PLATE_H_M / 2, 0, memberInfo('bottom plate'))            // sole plate
+    add(plateGeo, 0, PLATE_H_M * 1.5, 0, memberInfo('bottom plate'))          // 2nd bottom plate
+    add(plateGeo, 0, height - PLATE_H_M * 1.5, 0, memberInfo('top plate')) // lower top plate (butts at corner)
     // Upper (cap) plate — ties the corner. One wall's cap runs long enough to
     // cross its neighbour and land FLUSH with that neighbour's outer face; the
     // mating wall's cap stops one framing-member width short, leaving the pocket
@@ -238,7 +249,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     if (capLap?.start === 'back') capL += capLapAmt
     if (capLap?.end === 'back') capR -= capLapAmt
     const capLen = Math.max(0.02, capR - capL)
-    add(new THREE.BoxGeometry(capLen, PLATE_H_M, depth), (capL + capR) / 2, height - PLATE_H_M / 2, 0)
+    add(new THREE.BoxGeometry(capLen, PLATE_H_M, depth), (capL + capR) / 2, height - PLATE_H_M / 2, 0, memberInfo('cap plate'))
   }
 
   const studH = Math.max(0.02, studTop - studBottom)
@@ -280,7 +291,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       const bx = endX + sign * (endInset * 0.5)
       add(
         new THREE.BoxGeometry(studW, studH, studW),
-        bx, studY, (studDepth - studW) / 2,
+        bx, studY, (studDepth - studW) / 2, memberInfo('corner backer'),
       )
     }
   }
@@ -320,7 +331,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     if (heavyDuty) {
       // Cold-rolled carrying channel runs through the knockouts at 4' and 8'.
       for (const h of [1.219, 2.438].filter((y) => y > studBottom + 0.05 && y < studTop - 0.05)) {
-        add(new THREE.BoxGeometry(length, studW * 0.7, studDepth * 0.55), 0, h, 0)
+        add(new THREE.BoxGeometry(length, studW * 0.7, studDepth * 0.55), 0, h, 0, memberInfo('carrying channel'))
       }
     }
   } else {
@@ -331,7 +342,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       if (span < 0.04) continue
       const mid = (ordered[i] + ordered[i + 1]) / 2
       if (inClear(mid)) continue   // no blocking across a rough opening
-      add(new THREE.BoxGeometry(span, STUD_WIDTH_M, depth), mid, midY)
+      add(new THREE.BoxGeometry(span, STUD_WIDTH_M, depth), mid, midY, 0, memberInfo('blocking'))
     }
   }
 
@@ -351,31 +362,32 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     const headerDepth = steel ? 0.18 : 0.235
 
     // King studs — full height, just outside the opening.
-    for (const s of [-1, 1]) add(studGeo, op.x + s * (hw + studW * 1.5), studY)
+    for (const s of [-1, 1]) add(studGeo, op.x + s * (hw + studW * 1.5), studY, 0, memberInfo('king stud'))
 
     // Jack studs — carry the header, from the floor up to the header.
     const jackH = Math.max(0.05, roTop - studBottom)
     const jackGeo = new THREE.BoxGeometry(studW, jackH, studDepth)
-    for (const s of [-1, 1]) add(jackGeo, op.x + s * (hw + studW * 0.5), studBottom + jackH / 2)
+    for (const s of [-1, 1]) add(jackGeo, op.x + s * (hw + studW * 0.5), studBottom + jackH / 2, 0, memberInfo('jack stud'))
 
     // Header spanning the opening, sitting on the jacks.
-    add(new THREE.BoxGeometry(op.w + studW * 2, headerDepth, studDepth), op.x, roTop + headerDepth / 2)
+    add(new THREE.BoxGeometry(op.w + studW * 2, headerDepth, studDepth), op.x, roTop + headerDepth / 2, 0,
+      steel ? memberInfo('box-beam header') : 'LVL header')
 
     // Cripple studs above the header up to the top plate/track.
     const cripBot = roTop + headerDepth
     if (studTop - cripBot > 0.05) {
       const ch = studTop - cripBot
       const cripGeo = new THREE.BoxGeometry(studW, ch, studDepth)
-      for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(cripGeo, cx, cripBot + ch / 2)
+      for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(cripGeo, cx, cripBot + ch / 2, 0, memberInfo('cripple stud'))
     }
 
     // Windows also get a sill + cripples down to the bottom plate.
     if (!isDoor) {
-      add(new THREE.BoxGeometry(op.w + studW * 2, studW, studDepth), op.x, roBot - studW / 2)
+      add(new THREE.BoxGeometry(op.w + studW * 2, studW, studDepth), op.x, roBot - studW / 2, 0, memberInfo('sill plate'))
       const sbH = roBot - studW - studBottom
       if (sbH > 0.05) {
         const sillGeo = new THREE.BoxGeometry(studW, sbH, studDepth)
-        for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(sillGeo, cx, studBottom + sbH / 2)
+        for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(sillGeo, cx, studBottom + sbH / 2, 0, memberInfo('sill cripple'))
       }
     }
   }
