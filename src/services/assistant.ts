@@ -9,6 +9,8 @@
  * at a time, and it goes quiet the moment the user is actually working.
  */
 
+import { reviewDetection, type DetectionReviewInput } from './detectionReview'
+
 export type AssistantTone = 'idle' | 'progress' | 'success'
 
 /** Maps 1:1 to a real action the bubble can run on the user's behalf. */
@@ -43,6 +45,12 @@ export interface AssistantContext {
   traceMode: boolean
   tracePaused: boolean
   activePanel: string | null
+  /**
+   * What the detector produced, for `detectionReview` to second-guess. Optional
+   * only so older callers keep compiling; without it the coach behaves exactly
+   * as it did — confidently.
+   */
+  detection?: DetectionReviewInput | null
 }
 
 /** Panels that mean "the user is mid-action" — stay silent so we're not pushy. */
@@ -141,6 +149,38 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
     }
   }
   if (ctx.hasWalls) {
+    /**
+     * SAY WHAT WE ARE UNSURE OF BEFORE OFFERING TO BUILD ON IT.
+     *
+     * The line below is the one `detectionReview` was written against: happy to
+     * report "72 walls" and offer to build the whole model from them, with no
+     * hint that 72 walls across 18 rooms is four to a room and almost certainly
+     * a raster full of hatching, dimension strings and lettering read as
+     * framing. It was confidently wrong, and the user only found out by looking
+     * at a pile of stubs standing where a house should be.
+     *
+     * That module has sat here finished and wired to nothing ever since. So when
+     * the read looks shaky, raise the doubt INSTEAD of the offer — one question,
+     * the highest-leverage one, in place of a confident claim we cannot support.
+     * When it looks sound, nothing changes and the offer stands as before.
+     *
+     * The scale doubt is dropped on purpose: the calibrate step above owns
+     * scale entirely and has already had its turn, so repeating it here would
+     * only be nagging about a question the user has already answered or waved
+     * off.
+     */
+    const doubt = ctx.detection
+      ? reviewDetection(ctx.detection).find((d) => d.id !== 'doubt-scale')
+      : undefined
+    if (doubt) {
+      return {
+        id: doubt.id,
+        message: doubt.message,
+        actionLabel: doubt.actionLabel,
+        actionKind: doubt.actionFix,
+        tone: 'idle',
+      }
+    }
     return {
       id: 'autoBuild',
       message: `I found ${ctx.detectedWallCount} wall${ctx.detectedWallCount === 1 ? '' : 's'} in the plan. Want me to build the whole 3D from them?`,

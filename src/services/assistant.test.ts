@@ -90,3 +90,94 @@ describe('nextSuggestion — decision tree (first match wins)', () => {
     expect(nextSuggestion(ctx({ hasWalls: true, userWallCount: 1 }))?.message).toContain('1 wall traced')
   })
 })
+
+/**
+ * A clean run of walls, all roughly the same order of length — a believable
+ * reading of a real plan.
+ */
+function cleanWalls(n = 12) {
+  return Array.from({ length: n }, (_, i) => ({
+    x1: 0, y1: i * 10, x2: 400, y2: i * 10,
+    detectionConfidence: 0.9, source: 'auto' as const,
+  }))
+}
+
+/** Scraps: far shorter than the median, the way lettering and tick marks read. */
+function stubs(n: number) {
+  return Array.from({ length: n }, (_, i) => ({
+    x1: 0, y1: i * 3, x2: 6, y2: i * 3,
+    detectionConfidence: 0.9, source: 'auto' as const,
+  }))
+}
+
+const soundRead = {
+  scaleConfidence: 'parsed' as const,
+  scaleMmPerPx: 12.7,
+  walls: cleanWalls(),
+  roomCount: 6,
+  openingCount: 9,
+}
+
+describe('the coach raises its doubts before offering to build', () => {
+  it('offers the build when the reading looks sound', () => {
+    const s = nextSuggestion(ctx({ hasWalls: true, detectedWallCount: 12, detection: soundRead }))
+    expect(s?.id).toBe('autoBuild')
+  })
+
+  it('behaves exactly as before when no reading is supplied', () => {
+    const s = nextSuggestion(ctx({ hasWalls: true, detectedWallCount: 12 }))
+    expect(s?.id).toBe('autoBuild')
+  })
+
+  it('raises the doubt instead of the offer when the read is a pile of scraps', () => {
+    const walls = [...cleanWalls(10), ...stubs(10)]
+    const s = nextSuggestion(
+      ctx({
+        hasWalls: true,
+        detectedWallCount: walls.length,
+        detection: { ...soundRead, walls, roomCount: 4 },
+      }),
+    )
+    expect(s?.id).toBe('doubt-fragmented')
+    // And it offers the corrective, not a build button.
+    expect(s?.actionKind).toBe('trace')
+  })
+
+  it('raises the doubt when the detector itself is unsure', () => {
+    const walls = cleanWalls(12).map((w, i) => ({
+      ...w,
+      detectionConfidence: i < 6 ? 0.2 : 0.9,
+    }))
+    const s = nextSuggestion(
+      ctx({ hasWalls: true, detectedWallCount: walls.length, detection: { ...soundRead, walls } }),
+    )
+    expect(s?.id).toBe('doubt-confidence')
+  })
+
+  it('does not re-ask about scale — the calibrate step above owns that', () => {
+    const s = nextSuggestion(
+      ctx({
+        hasWalls: true,
+        detectedWallCount: 12,
+        // Calibration already waved off, but the scale is still only a guess.
+        calibrationCleared: true,
+        detection: { ...soundRead, scaleConfidence: 'fallback', scaleMmPerPx: null },
+      }),
+    )
+    expect(s?.id).not.toBe('doubt-scale')
+    expect(s?.id).toBe('autoBuild')
+  })
+
+  it('still lets a traced wall take priority — the user is already working', () => {
+    const walls = [...cleanWalls(10), ...stubs(10)]
+    const s = nextSuggestion(
+      ctx({
+        hasWalls: true,
+        userWallCount: 1,
+        detectedWallCount: walls.length,
+        detection: { ...soundRead, walls },
+      }),
+    )
+    expect(s?.id).toBe('findRest')
+  })
+})

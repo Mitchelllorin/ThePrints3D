@@ -97,6 +97,19 @@ export default function AssistantBubble() {
     traceMode,
     tracePaused,
     activePanel,
+    /**
+     * The reading itself, so the coach can second-guess it before offering to
+     * build a house on top of it — see the doubt branch in `assistant`.
+     */
+    detection: drawing
+      ? {
+          scaleConfidence: drawing.scaleConfidence ?? null,
+          scaleMmPerPx: drawing.scaleMmPerPx,
+          walls: drawing.parsedWalls,
+          roomCount: drawing.parsedRooms.length,
+          openingCount: drawing.parsedOpenings.length,
+        }
+      : null,
   }
 
   const suggestion = tutorialActive || aMenuIsOpen ? null : nextSuggestion(ctx)
