@@ -20,7 +20,7 @@
 import { chromium } from 'playwright'
 
 const URL_ = process.env.APP_URL ?? 'http://127.0.0.1:5180/'
-const SHOTS = ['screenshot-adu-71sqm.png', 'screenshot-studio-1bed.png']
+const SHOTS = process.env.SHOT ? [process.env.SHOT] : ['screenshot-adu-71sqm.png', 'screenshot-studio-1bed.png']
 
 const browser = await chromium.launch({ timeout: 60000 })
 const page = await browser.newPage({ viewport: { width: 1200, height: 900 } })

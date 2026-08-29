@@ -28,22 +28,27 @@ const out = await page.evaluate(async () => {
   c.getContext('2d').drawImage(bmp, 0, 0)
   const img = c.getContext('2d').getImageData(0, 0, bmp.width, bmp.height)
 
-  // 1. the app's own wrapper (swallows errors)
-  const { ocrRaster } = await import('/src/services/ocr.ts')
-  let viaApp = null, appErr = null
-  try { viaApp = (await ocrRaster(img)).length } catch (e) { appErr = String(e.message || e) }
-
-  // 2. how long does the reader itself take, against its own 25s timeout?
+  // The worker path — what the pipeline now uses.
+  const { ocrRasterOffThread } = await import('/src/services/ocrOffThread.ts')
   const t1 = performance.now()
-  const second = (await ocrRaster(img)).length
+  let viaApp = null, appErr = null, offThread = null
+  try {
+    const r = await ocrRasterOffThread(img)
+    viaApp = r.tokens.length; offThread = r.offThread
+  } catch (e) { appErr = String(e.message || e) }
   const ocrMs = Math.round(performance.now() - t1)
 
-  return { size: bmp.width + 'x' + bmp.height, viaApp, appErr, second, ocrMs, ms: Math.round(performance.now() - t0) }
+  // Warm run — the language model is cached by now, which is the steady state.
+  const t2 = performance.now()
+  const second = (await ocrRasterOffThread(img)).tokens.length
+  const warmMs = Math.round(performance.now() - t2)
+
+  return { size: bmp.width + 'x' + bmp.height, viaApp, appErr, offThread, ocrMs, second, warmMs, ms: Math.round(performance.now() - t0) }
 })
 
 console.log('image                ', out.size, `(${out.ms} ms total)`)
-console.log('words via ocrRaster  ', out.viaApp, out.appErr ? '  ERR: ' + out.appErr : '')
-console.log('warm re-read         ', out.second, 'words in', out.ocrMs, 'ms   (its own timeout is 25000 ms)')
+console.log('cold read            ', out.viaApp, 'words in', out.ocrMs, 'ms   offThread=' + out.offThread, out.appErr ? ' ERR: ' + out.appErr : '')
+console.log('warm read            ', out.second, 'words in', out.warmMs, 'ms')
 console.log('\n--- network / console ---')
 console.log(net.length ? [...new Set(net)].join('\n') : '(clean)')
 await browser.close()

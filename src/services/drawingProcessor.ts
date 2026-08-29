@@ -14,7 +14,8 @@ import { filterWallsForNoisyPrint } from './noisyPrintFilter'
 import { inferCorners } from './wallTraceReducer'
 import { setInkBuffer } from './inkRaster'
 import { normalizeForDetection } from './rasterNormalize'
-import { ocrRaster, shouldOcr, groupIntoLines } from './ocr'
+import { shouldOcr, groupIntoLines, type SizedTextToken } from './ocr'
+import { ocrRasterOffThread } from './ocrOffThread'
 import { statedAreaSqM, looksLikeRoomName } from './roomNames'
 import { scaleFromTotalArea, footprintAreaPx } from './scaleInference'
 
@@ -82,6 +83,30 @@ export async function processDrawing(
     }
 
     setInkBuffer(drawing.id, detectImage)
+
+    /**
+     * START READING THE WORDS NOW, NOT AFTER THE WALLS.
+     *
+     * OCR used to be awaited down at step 3, after detection and filtering had
+     * both finished, on the same thread they ran on. That made it the last
+     * thing to start and the first thing to starve — measured on the 759x622
+     * screenshot in data/test-prints/, it read 35 words on one run and zero on
+     * the next, taking 42 seconds against a 25 second budget it could not see
+     * it was losing.
+     *
+     * Now that it lives in a worker (`ocrRasterOffThread`) it costs the main
+     * thread nothing to have it already running, so it is kicked off here — the
+     * moment there are pixels to read — and collected below. By the time the
+     * walls are detected the words are usually sitting there waiting.
+     *
+     * Not awaited, deliberately. A rejected promise nobody is holding yet is an
+     * unhandled rejection, so the catch is attached at the point of creation and
+     * the failure is turned into "no words", which is what the caller does with
+     * it anyway.
+     */
+    const wordsPromise: Promise<SizedTextToken[]> = shouldOcr(raster.textTokens)
+      ? ocrRasterOffThread(detectImage).then((r) => r.tokens).catch(() => [])
+      : Promise.resolve([])
 
     // 2. Discipline gate — skip wall detection on M/E/P/C/L/F/T sheets where
     //    "thick parallels" are ducts/pipes/conduit, not walls.
@@ -190,7 +215,9 @@ export async function processDrawing(
      */
     let textTokens = raster.textTokens
     if (shouldOcr(textTokens)) {
-      const words = await ocrRaster(detectImage)
+      // Started back at step 1, in parallel with detection — this is the
+      // collection point, not the beginning of the work.
+      const words = await wordsPromise
       if (words.length) textTokens = groupIntoLines(words)
     }
 

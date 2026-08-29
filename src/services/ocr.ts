@@ -106,27 +106,7 @@ export async function ocrRaster(
       const result = await withTimeout(run, timeoutMs)
       if (!result) return []
 
-      const words = wordsOf(result.data as OcrPage)
-      const tokens: SizedTextToken[] = []
-      for (const w of words) {
-        const text = (w.text ?? '').trim()
-        if (!text) continue
-        if ((w.confidence ?? 0) < minConfidence) continue
-        const b = w.bbox
-        if (!b) continue
-        tokens.push({
-          text,
-          // Centre of the word, matching how PDF text tokens are positioned and
-          // how symbolDetection tests a label against a room's bounding box.
-          x: Math.round((b.x0 + b.x1) / 2),
-          y: Math.round((b.y0 + b.y1) / 2),
-          // Normalised to the 0-1 the rest of the app uses.
-          confidence: Math.max(0, Math.min(1, (w.confidence ?? 0) / 100)),
-          w: Math.abs(b.x1 - b.x0),
-          h: Math.abs(b.y1 - b.y0),
-        })
-      }
-      return tokens
+      return tokensFromPage(result.data as OcrPage, minConfidence)
     } finally {
       await worker.terminate().catch(() => {})
     }
@@ -146,8 +126,38 @@ interface OcrWord {
 }
 
 /** Only the parts of the result we read — blocks may be absent or null. */
-interface OcrPage {
+export interface OcrPage {
   blocks?: { paragraphs?: { lines?: { words?: OcrWord[] }[] }[] }[] | null
+}
+
+/**
+ * A recogniser page, turned into the tokens the rest of the app speaks.
+ *
+ * Exported and pure so the worker and the main-thread fallback cannot drift:
+ * two copies of "where is the centre of this word" is exactly the sort of thing
+ * that gets fixed in one of them.
+ */
+export function tokensFromPage(page: OcrPage, minConfidence: number): SizedTextToken[] {
+  const tokens: SizedTextToken[] = []
+  for (const w of wordsOf(page)) {
+    const text = (w.text ?? '').trim()
+    if (!text) continue
+    if ((w.confidence ?? 0) < minConfidence) continue
+    const b = w.bbox
+    if (!b) continue
+    tokens.push({
+      text,
+      // Centre of the word, matching how PDF text tokens are positioned and
+      // how symbolDetection tests a label against a room's bounding box.
+      x: Math.round((b.x0 + b.x1) / 2),
+      y: Math.round((b.y0 + b.y1) / 2),
+      // Normalised to the 0-1 the rest of the app uses.
+      confidence: Math.max(0, Math.min(1, (w.confidence ?? 0) / 100)),
+      w: Math.abs(b.x1 - b.x0),
+      h: Math.abs(b.y1 - b.y0),
+    })
+  }
+  return tokens
 }
 
 /** Flatten the block/paragraph/line tree down to the words. */
