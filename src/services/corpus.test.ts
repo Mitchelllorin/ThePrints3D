@@ -92,7 +92,20 @@ describe('storage that is not there takes nothing down with it', () => {
 
   it('reports an empty corpus rather than an error', async () => {
     await expect(listSheets()).resolves.toEqual([])
-    await expect(corpusStats()).resolves.toEqual({ sheets: 0, corrections: 0, bytes: 0 })
+    await expect(corpusStats()).resolves.toEqual({
+      sheets: 0, corrections: 0, bytes: 0, withPixels: 0, budgetBytes: 64 * 1024 * 1024,
+    })
+  })
+
+  /**
+   * The budget has to be reportable even when there is nowhere to write, because
+   * the panel that shows it renders on every device, including the ones with no
+   * IndexedDB at all. A zero there would read as "no limit", which is a lie.
+   */
+  it('still knows what the ceiling on pixels is', async () => {
+    const s = await corpusStats()
+    expect(s.budgetBytes).toBeGreaterThan(0)
+    expect(s.withPixels).toBeLessThanOrEqual(s.sheets)
   })
 
   it('still exports a well-formed, empty file', async () => {

@@ -44,6 +44,54 @@ const DB_VERSION = 1
 const SHEETS = 'sheets'
 const CORRECTIONS = 'corrections'
 
+/**
+ * NOT EVERY BYTE IS WORTH THE SAME.
+ * ---------------------------------
+ * "Keep it all" was the right instinct and the wrong storage policy. Weighed on
+ * a phone, what the corpus holds falls into three very different piles:
+ *
+ *   the labelled half   what we read, and what we were told was wrong about it.
+ *                       KILOBYTES. Cannot be re-obtained at any price — it only
+ *                       exists because a tradesperson tapped a wall and said no.
+ *                       Never dropped, for any reason, ever.
+ *
+ *   the pixels          the raster the reading was measured from. MEGABYTES.
+ *                       Needed, because a label with no image is not an example
+ *                       — but needed at reading size, not at the ~10MP the
+ *                       detector rasterises to. Kept under a budget.
+ *
+ *   the source file     the PDF the user handed over. MEGABYTES, and the one
+ *                       thing here they already have a copy of, on the same
+ *                       phone, in their own downloads. Nothing measures it.
+ *                       First to go, always.
+ *
+ * So the rule is: the cheap half is permanent and the expensive half is
+ * budgeted, oldest and least-taught first. A sheet nobody has corrected is a
+ * picture of a drawing; a sheet with twelve corrections on it is the asset.
+ * When space runs out, the pictures go and the assets stay.
+ */
+
+/**
+ * The long edge the raster is stored at.
+ *
+ * Detection rasterises at RASTER_SCALE 1.5 — around 3900px across a 36" sheet —
+ * because thresholds all over the detector are tuned in those pixels. That is a
+ * working resolution, not an archival one. At 2048 a 1/4"=1' wall line is still
+ * about three pixels wide, which is enough to see and to learn from, for roughly
+ * a third of the bytes. Nothing in the live pipeline reads this: detection has
+ * already run and finished by the time the corpus sees anything.
+ */
+const RASTER_MAX_EDGE = 2048
+
+/**
+ * What the pixels are allowed to occupy in total.
+ *
+ * Deliberately a soft internal ceiling rather than a quota negotiation: hitting
+ * the browser's real limit means a failed write in the middle of somebody's job,
+ * and this is the module that promised never to interrupt the work.
+ */
+const BUDGET_BYTES = 64 * 1024 * 1024
+
 /** What we read off a sheet — our answer, kept so it can be judged later. */
 export interface CorpusReading {
   scaleMmPerPx: number | null
@@ -85,15 +133,25 @@ export interface CorpusSheet {
   lastSeenAt: number
   /** How many separate times this print has come through the app. */
   seenCount: number
-  /** The rasterized page — the pixels every measurement was taken from. */
+  /**
+   * The rasterized page, stored at reading size rather than detection size —
+   * see `shrinkRaster`. Null once the pixels have been let go for space; the
+   * record itself survives that, because the record is the part that matters.
+   */
   raster: Blob | null
-  /** The file the user actually handed us (PDF, JPG, PNG). */
+  /** The file the user actually handed us (PDF, JPG, PNG). First to go. */
   source: Blob | null
   sourceName: string
   sourceType: string
-  /** Pixel size of the raster, so a stored correction's x/y mean something. */
+  /**
+   * Pixel size the reading was MEASURED at — the coordinate space every stored
+   * correction's x/y lives in. Not necessarily the size of the blob above.
+   */
   width: number
   height: number
+  /** Pixel size of the raster as actually stored, if one is stored. */
+  rasterWidth?: number
+  rasterHeight?: number
   read: CorpusReading
   /** The first reading in full — see `CorpusDetection`. */
   detected?: CorpusDetection
@@ -110,6 +168,10 @@ export interface CorpusStats {
   corrections: number
   /** Bytes of raster + source held, as far as the browser will tell us. */
   bytes: number
+  /** How many of those sheets still have their pixels. */
+  withPixels: number
+  /** The ceiling the pixels are kept under, so a UI can show the headroom. */
+  budgetBytes: number
 }
 
 // ─── availability ────────────────────────────────────────────────────────────
@@ -199,6 +261,113 @@ export interface SheetCapture {
   detected?: CorpusDetection
 }
 
+/** What actually gets written for the pixels, once they have been cut down. */
+interface StoredRaster {
+  blob: Blob | null
+  width: number
+  height: number
+}
+
+/**
+ * Cut the raster down to reading size before it is written.
+ *
+ * The id is hashed from the ORIGINAL bytes, upstream of this, and must stay that
+ * way: resampling is only deterministic within one browser build, so a sheet
+ * keyed off a resized copy would stop recognising itself after an update. The
+ * hash identifies the print; this only decides how much of it we keep.
+ *
+ * Every failure here returns the raster untouched. Storing a big image is a cost;
+ * storing no image is a loss.
+ */
+async function shrinkRaster(
+  blob: Blob | null,
+  width: number,
+  height: number,
+): Promise<StoredRaster> {
+  if (!blob) return { blob: null, width: 0, height: 0 }
+  const longEdge = Math.max(width, height)
+  if (!longEdge || longEdge <= RASTER_MAX_EDGE) {
+    return { blob, width, height }
+  }
+  try {
+    if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas === 'undefined') {
+      return { blob, width, height }
+    }
+    const scale = RASTER_MAX_EDGE / longEdge
+    const w = Math.max(1, Math.round(width * scale))
+    const h = Math.max(1, Math.round(height * scale))
+    const bmp = await createImageBitmap(blob, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' })
+    const canvas = new OffscreenCanvas(w, h)
+    const ctx = canvas.getContext('2d')
+    if (!ctx) {
+      bmp.close?.()
+      return { blob, width, height }
+    }
+    ctx.drawImage(bmp, 0, 0)
+    bmp.close?.()
+    // PNG, not JPEG or lossy WebP: this is line art, and the artefacts those
+    // leave around a thin wall line are exactly the detail being kept.
+    const out = await canvas.convertToBlob({ type: 'image/png' })
+    // A resize that came back bigger has done nothing but cost time.
+    return out.size < blob.size ? { blob: out, width: w, height: h } : { blob, width, height }
+  } catch {
+    return { blob, width, height }
+  }
+}
+
+/**
+ * Bring the pixels back under the budget, cheapest thing first.
+ *
+ * Order is by what the bytes buy, not by age alone: every source file goes
+ * before any raster does, and among rasters the least-taught sheet loses its
+ * pixels first — a sheet with no corrections against it is a picture, a sheet
+ * with a dozen is a labelled example.
+ *
+ * NOTHING IS EVER DELETED HERE. The record, the reading and every correction
+ * stay exactly where they are; a pruned sheet is one that still knows what it
+ * was read as and what it got wrong, and no longer carries the image.
+ */
+async function pruneToBudget(): Promise<void> {
+  if (!corpusAvailable()) return
+  try {
+    const d = await db()
+    const sheets = (await d.getAll(SHEETS)) as CorpusSheet[]
+    let total = sheets.reduce((n, s) => n + (s.raster?.size ?? 0) + (s.source?.size ?? 0), 0)
+    if (total <= BUDGET_BYTES) return
+
+    const taught = new Map<string, number>()
+    for (const c of (await d.getAll(CORRECTIONS)) as CorpusCorrection[]) {
+      taught.set(c.sheetId, (taught.get(c.sheetId) ?? 0) + 1)
+    }
+    /** Least taught first; between equals, the one seen longest ago. */
+    const byValue = [...sheets].sort(
+      (a, b) =>
+        (taught.get(a.id) ?? 0) - (taught.get(b.id) ?? 0) ||
+        a.lastSeenAt - b.lastSeenAt,
+    )
+
+    const shed = async (pick: (s: CorpusSheet) => Blob | null, drop: (s: CorpusSheet) => CorpusSheet) => {
+      for (const s of byValue) {
+        if (total <= BUDGET_BYTES) return
+        const blob = pick(s)
+        if (!blob) continue
+        total -= blob.size
+        await d.put(SHEETS, drop(s))
+      }
+    }
+
+    // Pass one: the user's own files, which the user already has.
+    await shed((s) => s.source, (s) => ({ ...s, source: null }))
+    // Pass two, only if that was not enough: pixels, least-taught sheet first.
+    await shed(
+      (s) => s.raster,
+      (s) => ({ ...s, raster: null, rasterWidth: undefined, rasterHeight: undefined }),
+    )
+  } catch {
+    // Over budget is a worse state than the one we were in, not a broken one.
+  }
+}
+
 /**
  * Put a sheet in the corpus, or recognise one already there.
  *
@@ -224,12 +393,20 @@ export async function captureSheet(input: SheetCapture): Promise<string | null> 
     const d = await db()
     const existing = (await d.get(SHEETS, id)) as CorpusSheet | undefined
     if (existing) {
+      // Only pay for the resize if there is actually a gap to fill. A sheet that
+      // already has its pixels — or that had them pruned on purpose — is left be.
+      const fill = !existing.raster && existing.rasterWidth === undefined
+      const px = fill
+        ? await shrinkRaster(input.raster, input.width, input.height)
+        : { blob: existing.raster, width: existing.rasterWidth ?? 0, height: existing.rasterHeight ?? 0 }
       await d.put(SHEETS, {
         ...existing,
         lastSeenAt: Date.now(),
         seenCount: (existing.seenCount ?? 1) + 1,
         // A sheet captured before the raster was ready gets its pixels now.
-        raster: existing.raster ?? input.raster,
+        raster: px.blob,
+        rasterWidth: px.blob ? px.width : existing.rasterWidth,
+        rasterHeight: px.blob ? px.height : existing.rasterHeight,
         source: existing.source ?? input.source,
         // Likewise a sheet stored before we kept the full reading — but a
         // reading already on record is never replaced, because comparing the
@@ -237,25 +414,32 @@ export async function captureSheet(input: SheetCapture): Promise<string | null> 
         // better rather than just different.
         detected: existing.detected ?? input.detected,
       })
+      await pruneToBudget()
       return id
     }
 
+    const px = await shrinkRaster(input.raster, input.width, input.height)
     const sheet: CorpusSheet = {
       id,
       name: input.name,
       capturedAt: Date.now(),
       lastSeenAt: Date.now(),
       seenCount: 1,
-      raster: input.raster,
+      raster: px.blob,
+      rasterWidth: px.blob ? px.width : undefined,
+      rasterHeight: px.blob ? px.height : undefined,
       source: input.source,
       sourceName: input.sourceName,
       sourceType: input.source?.type ?? '',
+      // The size the reading was measured at, which is what a correction's
+      // coordinates mean — never the size the blob was cut down to.
       width: input.width,
       height: input.height,
       read: input.read,
       detected: input.detected,
     }
     await d.put(SHEETS, sheet)
+    await pruneToBudget()
     return id
   } catch {
     // Quota, a locked database, a revoked blob URL — the job carries on.
@@ -333,7 +517,10 @@ export async function listSheets(): Promise<CorpusSheet[]> {
 
 /** How much the corpus is actually worth, in the only terms it can count itself. */
 export async function corpusStats(): Promise<CorpusStats> {
-  if (!corpusAvailable()) return { sheets: 0, corrections: 0, bytes: 0 }
+  const empty: CorpusStats = {
+    sheets: 0, corrections: 0, bytes: 0, withPixels: 0, budgetBytes: BUDGET_BYTES,
+  }
+  if (!corpusAvailable()) return empty
   try {
     const d = await db()
     const sheets = (await d.getAll(SHEETS)) as CorpusSheet[]
@@ -345,9 +532,11 @@ export async function corpusStats(): Promise<CorpusStats> {
       sheets: sheets.length,
       corrections: await d.count(CORRECTIONS),
       bytes,
+      withPixels: sheets.filter((s) => !!s.raster).length,
+      budgetBytes: BUDGET_BYTES,
     }
   } catch {
-    return { sheets: 0, corrections: 0, bytes: 0 }
+    return empty
   }
 }
 
