@@ -81,6 +81,18 @@ async function captureDrawing(drawingId: string): Promise<void> {
       symbolCount: d.parsedSymbols?.length ?? 0,
       textCount: d.parsedText?.length ?? 0,
     },
+    /**
+     * The reading itself, not just its size. Counts say how the detector did;
+     * only the segments, symbols and words it produced can be put next to a
+     * correction and turned into an example to learn from.
+     */
+    detected: {
+      walls: d.parsedWalls ?? [],
+      rooms: d.parsedRooms ?? [],
+      openings: d.parsedOpenings ?? [],
+      symbols: d.parsedSymbols ?? [],
+      text: d.parsedText ?? [],
+    },
   })
   if (!sheetId) return
   sheetIdByDrawing.set(drawingId, sheetId)

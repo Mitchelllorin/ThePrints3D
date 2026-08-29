@@ -55,6 +55,28 @@ export interface CorpusReading {
   textCount: number
 }
 
+/**
+ * What the detector actually produced, not how much of it.
+ *
+ * A count is a score, and a score cannot train anything. The pixels plus the
+ * segments, symbols and words we pulled off them — against the corrections that
+ * say which of those were wrong — is a labelled example. This is geometry and
+ * short strings, kilobytes next to a raster's megabytes, and it is the half of
+ * the pair that makes the raster worth keeping.
+ *
+ * Stored as `unknown[]` on purpose: the shapes of `ParsedWall`, `ParsedSymbol`
+ * and the rest belong to the app and will keep changing, and a record written
+ * two versions ago must still load. What is on disk is a snapshot of what the
+ * detector said on the day, not a live type.
+ */
+export interface CorpusDetection {
+  walls: unknown[]
+  rooms: unknown[]
+  openings: unknown[]
+  symbols: unknown[]
+  text: unknown[]
+}
+
 export interface CorpusSheet {
   /** Content hash of the raster. The same print twice is one sheet. */
   id: string
@@ -73,6 +95,8 @@ export interface CorpusSheet {
   width: number
   height: number
   read: CorpusReading
+  /** The first reading in full — see `CorpusDetection`. */
+  detected?: CorpusDetection
 }
 
 /** A correction, tied to the pixels it was made against. */
@@ -172,6 +196,7 @@ export interface SheetCapture {
   width: number
   height: number
   read: CorpusReading
+  detected?: CorpusDetection
 }
 
 /**
@@ -206,6 +231,11 @@ export async function captureSheet(input: SheetCapture): Promise<string | null> 
         // A sheet captured before the raster was ready gets its pixels now.
         raster: existing.raster ?? input.raster,
         source: existing.source ?? input.source,
+        // Likewise a sheet stored before we kept the full reading — but a
+        // reading already on record is never replaced, because comparing the
+        // first one against a later one is how we will know the detector got
+        // better rather than just different.
+        detected: existing.detected ?? input.detected,
       })
       return id
     }
@@ -223,6 +253,7 @@ export async function captureSheet(input: SheetCapture): Promise<string | null> 
       width: input.width,
       height: input.height,
       read: input.read,
+      detected: input.detected,
     }
     await d.put(SHEETS, sheet)
     return id
