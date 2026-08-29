@@ -43,6 +43,15 @@ function runAction(kind: AssistantActionKind) {
       if (d) void app.processWithSeeds(d.id)
       break
     }
+    /**
+     * Re-read at click time rather than carrying the lesson through the
+     * suggestion. The ledger derives lessons from state, so the store's own copy
+     * is the current one by definition, and a lesson captured at render could
+     * only ever be staler than it.
+     */
+    case 'applyLesson':
+      app.applyTopLesson()
+      break
   }
 }
 
@@ -77,6 +86,14 @@ export default function AssistantBubble() {
   // The guided tutorial owns the coaching while it runs — don't double up.
   const tutorialActive = useFloorplanLocalStore((s) => s.tutorialActive)
 
+  /**
+   * The corrections themselves, so a new one re-renders this and the lesson
+   * below is re-derived. `correctionLessons` is an action, not a slice, so
+   * calling it alone would subscribe to nothing and the coach would sit there
+   * with the third correction already in the ledger and nothing to show for it.
+   */
+  const corrections = useAppStore((s) => s.corrections)
+
   const [dismissedId, setDismissedId] = useState<string | null>(null)
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
@@ -97,6 +114,11 @@ export default function AssistantBubble() {
     traceMode,
     tracePaused,
     activePanel,
+    /**
+     * What the corrections have taught us about this sheet — the one thing in
+     * this context the app could not have worked out on its own.
+     */
+    lesson: corrections.length ? useAppStore.getState().correctionLessons()[0] ?? null : null,
     /**
      * The reading itself, so the coach can second-guess it before offering to
      * build a house on top of it — see the doubt branch in `assistant`.

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { nextSuggestion, type AssistantContext } from './assistant'
+import type { Lesson } from './correctionLedger'
 
 const base: AssistantContext = {
   hasPlan: true,
@@ -117,6 +118,59 @@ const soundRead = {
   roomCount: 6,
   openingCount: 9,
 }
+
+/**
+ * A lesson is the only thing in the coach's context the app could not have
+ * worked out for itself — it is there because the user taught it, three
+ * corrections ago. It is worth more than any step in the sequence below it.
+ */
+describe('the coach says what it has been taught', () => {
+  const scaleLesson: Lesson = {
+    id: 'lesson-scale',
+    message: 'The whole sheet is reading small by about 50%.',
+    actionLabel: 'Fix the scale',
+    leverage: 100,
+    body: { kind: 'scale', scaleMmPerPx: 10, factor: 2, samples: 3, agreement: 0.9 },
+  }
+
+  it('relays the lesson in the words the ledger wrote, with a button', () => {
+    const s = nextSuggestion(ctx({ hasWalls: true, detectedWallCount: 40, lesson: scaleLesson }))
+    expect(s?.id).toBe('lesson-scale')
+    expect(s?.message).toBe(scaleLesson.message)
+    expect(s?.actionKind).toBe('applyLesson')
+  })
+
+  it('outranks "your model is standing" — it is standing at the wrong size', () => {
+    const s = nextSuggestion(ctx({ built: true, hasWalls: true, lesson: scaleLesson }))
+    expect(s?.id).toBe('lesson-scale')
+  })
+
+  it('outranks the offer to build from walls we now know we misread', () => {
+    const s = nextSuggestion(ctx({ hasWalls: true, detectedWallCount: 40, lesson: scaleLesson }))
+    expect(s?.id).not.toBe('autoBuild')
+  })
+
+  it('a lesson with nothing to act on is still said, but gets no button', () => {
+    const bias: Lesson = {
+      id: 'lesson-detector-bias',
+      message: "You've deleted 5 walls I found — I'll be stricter on the next sheet.",
+      leverage: 50,
+      body: { kind: 'detector-bias', bias: 'loose', added: 1, removed: 5 },
+    }
+    const s = nextSuggestion(ctx({ hasWalls: true, lesson: bias }))
+    expect(s?.id).toBe('lesson-detector-bias')
+    expect(s?.actionKind).toBeUndefined()
+  })
+
+  it('still says nothing at all while the user is working', () => {
+    expect(nextSuggestion(ctx({ traceMode: true, lesson: scaleLesson }))).toBeNull()
+  })
+
+  it('leaves the scale question to the calibrate step, which comes first', () => {
+    const s = nextSuggestion(ctx({ calibrationCleared: false, lesson: scaleLesson }))
+    expect(s?.id).toBe('calibrate')
+  })
+})
 
 describe('the coach raises its doubts before offering to build', () => {
   it('offers the build when the reading looks sound', () => {

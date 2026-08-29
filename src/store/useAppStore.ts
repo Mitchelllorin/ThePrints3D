@@ -117,7 +117,11 @@ import {
   type CorrectionRecord,
   type Lesson,
 } from '../services/correctionLedger'
-import type { DrywallConfig } from '../services/wallTypeClassifier'
+import {
+  classifyWallType,
+  pxToMm,
+  type DrywallConfig,
+} from '../services/wallTypeClassifier'
 
 /**
  * A wall the user traced is only a CORRECTION when we had already looked and
@@ -162,7 +166,11 @@ import {
   setWizardCurrentGroup,
   type ProjectContextWizardState,
 } from '../components/ProjectContext/wizardState'
-import { loadWizardState as loadOnboardingWizardState } from '../onboarding/storage'
+import {
+  loadWizardState as loadOnboardingWizardState,
+  saveWizardState as saveOnboardingWizardState,
+  mergeMeta as mergeOnboardingMeta,
+} from '../onboarding/storage'
 
 // ─── Camera Presets ────────────────────────────────────────────────────────────
 export interface CameraPreset {
@@ -543,6 +551,10 @@ interface AppState {
   exportCorrectionDataset: () => string
   /** The systematic mistakes the corrections add up to — see `correctionLedger`. */
   correctionLessons: () => Lesson[]
+  /** Act on the top lesson: fix the scale, or re-read the sheet at the drywall
+   *  allowance it is really drawn to, then re-classify every wall from its
+   *  pixels under the corrected assumption. Returns what it applied, or null. */
+  applyTopLesson: () => Lesson | null
   setWallDetectionConfig: (patch: Partial<WallDetectionConfig>) => void
   // Construction Engine
   buildForMe: () => void
@@ -1990,6 +2002,88 @@ export const useAppStore = create<AppState>()(
         // against the assumption that actually produced the mistake.
         drywall: activeDrywallConfig(),
       })
+    },
+
+    /**
+     * ACT ON THE LESSON, OR IT IS JUST A NICER WAY OF BEING WRONG.
+     *
+     * `correctionLessons` has been able to say "the whole sheet is reading small
+     * by 47%" for as long as it has existed, and the only thing that could be
+     * done about it was to say it. A coach that tells you the scale is out and
+     * leaves you to go and fix it by hand has not used the corrections you gave
+     * it — it has only summarised them back at you.
+     *
+     * So this is the other half: one call that takes the top lesson and puts it
+     * into force on the sheet it was learned from.
+     *
+     * IT DOES NOT GO THROUGH `setDrawingScale`. That action records a correction
+     * before it overwrites — correctly, because a hand calibration IS the user
+     * telling us we were wrong. This is not: it is the app acting on what the
+     * user already told it. Writing a correction here would have the ledger
+     * marking its own homework, deriving the next lesson partly from its own
+     * inference, and the loop would tighten around whatever it first believed.
+     *
+     * AND IT RE-READS THE WALLS. Setting `scaleMmPerPx` alone changes the number
+     * without changing a single wall: `wallType`, `finishedMm` and `framingMm`
+     * were all decided at process time under the assumption we now know was
+     * wrong, and the model, the takeoff and the material list read those fields,
+     * not the scale. The lesson promises "every wall on the print lands right,
+     * not just the ones you tapped", and that promise is kept here or nowhere.
+     */
+    applyTopLesson: (): Lesson | null => {
+      const lesson = get().correctionLessons()[0] ?? null
+      if (!lesson) return null
+      const body = lesson.body
+      // The bias lesson is a note to the detector about the NEXT sheet — it
+      // carries no action label and there is nothing on this one to change.
+      if (body.kind === 'detector-bias') return null
+
+      /**
+       * The drywall assumption does not live in this store. It is an onboarding
+       * answer, and `activeDrywallConfig` reads it back from there every time it
+       * classifies — so it is written where the classifier will actually look.
+       */
+      if (body.kind === 'drywall') {
+        const wizard = loadOnboardingWizardState()
+        saveOnboardingWizardState({
+          ...wizard,
+          meta: mergeOnboardingMeta(wizard.meta, { drywall: body.suggested }),
+        })
+      }
+
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === s.selectedDrawingId) ?? s.drawings[0]
+        if (!d) return
+        if (body.kind === 'scale') {
+          d.scaleMmPerPx = body.scaleMmPerPx
+          /**
+           * A scale worked out from three of the user's own corrections is not
+           * an inference we are hedging on — it is arithmetic on ground truth,
+           * and stronger evidence than a scale note read off the paper.
+           */
+          d.scaleConfidence = 'parsed'
+        }
+        const drywall: DrywallConfig =
+          body.kind === 'drywall' ? body.suggested : activeDrywallConfig()
+        for (const w of d.parsedWalls) {
+          /**
+           * A wall the user traced is theirs. Its type came from the picker, not
+           * from us measuring pixels, so there is no mistake of ours in it to
+           * correct — and re-reading it here would quietly overwrite an answer
+           * they gave on purpose.
+           */
+          if (w.source === 'user') continue
+          const finishedMm = pxToMm(w.thickness, d.scaleMmPerPx)
+          if (finishedMm === null) continue
+          const c = classifyWallType(finishedMm, drywall)
+          w.finishedMm = c.finishedMm
+          w.framingMm = c.framingMm
+          w.wallType = c.type
+          w.typeConfidence = c.confidence
+        }
+      })
+      return lesson
     },
 
     setProjectWallTypes: (types) => {

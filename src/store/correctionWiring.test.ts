@@ -157,6 +157,99 @@ describe('setDrawingScale writes the mistake down', () => {
   })
 })
 
+/**
+ * The lesson was always only half the job: the app could say "the whole sheet is
+ * reading small by 50%" and then leave the user to go and fix it themselves. So
+ * these drive the other half — the tap that puts the lesson into force.
+ */
+describe('applyTopLesson acts on what the corrections taught it', () => {
+  /** Three fixes on three different walls: a scale error, not three mistakes. */
+  function teachIt() {
+    s().correctElement('10,0', 'EXT')
+    s().correctElement('20,0', 'INT')
+    s().correctElement('30,0', 'PT')
+  }
+
+  it('puts the corrected scale on the drawing', () => {
+    teachIt()
+    const applied = s().applyTopLesson()
+
+    expect(applied?.body.kind).toBe('scale')
+    expect(s().drawings[0].scaleMmPerPx).toBeCloseTo(SCALE_IN_FORCE * TRUE_FACTOR, 2)
+    // Arithmetic on the user's own answers outranks a scale note read off paper.
+    expect(s().drawings[0].scaleConfidence).toBe('parsed')
+  })
+
+  it('re-reads every wall on the sheet, not just the ones they tapped', () => {
+    teachIt()
+    // Half size, so the 250mm exterior wall was being called a 2x4.
+    expect(s().drawings[0].parsedWalls[0].finishedMm).toBeCloseTo(125, 1)
+
+    s().applyTopLesson()
+
+    const [ext, int, pt] = s().drawings[0].parsedWalls
+    expect(ext.finishedMm).toBeCloseTo(250, 1)
+    expect(ext.wallType).toBe('stud-2x10')
+    expect(int.finishedMm).toBeCloseTo(120, 1)
+    expect(int.wallType).toBe('stud-2x4')
+    expect(pt.wallType).toBe('partition-thin')
+  })
+
+  it('does not write a correction of its own', () => {
+    teachIt()
+    expect(s().corrections).toHaveLength(3)
+
+    s().applyTopLesson()
+
+    // Going through `setDrawingScale` here would log a fourth correction — the
+    // app marking its own homework, and the next lesson derived partly from its
+    // own inference.
+    expect(s().corrections).toHaveLength(3)
+    expect(s().corrections.every((c) => c.kind === 'wall-type')).toBe(true)
+  })
+
+  it('leaves a wall the user traced exactly as they drew it', () => {
+    useAppStore.setState((st) => {
+      const d = st.drawings[0]
+      return {
+        drawings: [
+          {
+            ...d,
+            parsedWalls: [
+              ...d.parsedWalls,
+              { ...wallFor(EXT, 40), source: 'user' as const, wallType: 'stud-2x6' as const },
+            ],
+          },
+        ],
+      }
+    })
+    teachIt()
+
+    s().applyTopLesson()
+
+    const traced = s().drawings[0].parsedWalls[3]
+    expect(traced.source).toBe('user')
+    expect(traced.wallType).toBe('stud-2x6')
+    expect(traced.finishedMm).toBeCloseTo(125, 1)
+  })
+
+  it('goes quiet once the lesson is in force', () => {
+    teachIt()
+    expect(s().correctionLessons()).not.toEqual([])
+
+    s().applyTopLesson()
+
+    // Nothing marks it "done": the corrections now agree with the scale in
+    // force, so there is no systematic error left to find.
+    expect(s().correctionLessons()).toEqual([])
+  })
+
+  it('says nothing to apply when there is no lesson', () => {
+    expect(s().applyTopLesson()).toBeNull()
+    expect(s().drawings[0].scaleMmPerPx).toBe(SCALE_IN_FORCE)
+  })
+})
+
 describe('exportCorrectionDataset exports the pairs, not our own answers', () => {
   it('carries predicted-vs-actual through to the file', () => {
     s().correctElement('10,0', 'EXT')

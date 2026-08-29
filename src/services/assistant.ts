@@ -10,6 +10,7 @@
  */
 
 import { reviewDetection, type DetectionReviewInput } from './detectionReview'
+import type { Lesson } from './correctionLedger'
 
 export type AssistantTone = 'idle' | 'progress' | 'success'
 
@@ -21,6 +22,8 @@ export type AssistantActionKind =
   | 'autoBuild'
   | 'findRest'
   | 'trace'
+  /** Put the top lesson from the correction ledger into force on this sheet. */
+  | 'applyLesson'
 
 export interface Suggestion {
   /** Stable per logical step — drives "don't nag the same step" dismiss memory. */
@@ -51,6 +54,13 @@ export interface AssistantContext {
    * as it did — confidently.
    */
   detection?: DetectionReviewInput | null
+  /**
+   * The systematic mistake the user's corrections add up to, if they add up to
+   * one yet — see `correctionLedger`. Optional, and null on almost every render:
+   * it takes three corrections pointing the same way before there is anything
+   * here to say.
+   */
+  lesson?: Lesson | null
 }
 
 /** Panels that mean "the user is mid-action" — stay silent so we're not pushy. */
@@ -94,6 +104,33 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
       message: "Let's lock in the scale first so every measurement is right — tap two points you know the distance between.",
       actionLabel: 'Set the scale',
       actionKind: 'calibrate',
+      tone: 'idle',
+    }
+  }
+
+  /**
+   * WHAT THEY HAVE ALREADY TAUGHT US OUTRANKS WHAT WE WERE GOING TO SAY NEXT.
+   *
+   * A lesson only exists once three corrections have pointed the same way, and
+   * what it says is that the reading underneath everything below is out — the
+   * scale, or the drywall allowance every thickness was measured against. Every
+   * suggestion after this one is built on that reading: "your model's standing"
+   * is standing at the wrong size, "build the whole 3D from them" builds a house
+   * from walls we have evidence are misread, and "find the rest" goes looking
+   * for more of the same mistake.
+   *
+   * So it goes ahead of the terminal step, not after it. The user is being told
+   * the most useful thing the app knows at that moment, and it is a thing only
+   * they could have taught it.
+   */
+  if (ctx.lesson) {
+    return {
+      id: ctx.lesson.id,
+      message: ctx.lesson.message,
+      actionLabel: ctx.lesson.actionLabel,
+      // A lesson with nothing to act on (the detector-bias note, which is about
+      // the NEXT sheet) is still worth saying — it just gets no button.
+      actionKind: ctx.lesson.actionLabel ? 'applyLesson' : undefined,
       tone: 'idle',
     }
   }
