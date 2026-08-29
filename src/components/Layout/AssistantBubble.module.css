@@ -96,9 +96,23 @@
 
 @media (max-width: 767px), (max-height: 600px) {
   .message { font-size: 12px; }
-  /* Leave the right edge tab unobstructed now that its hit target is 44px. */
+  /*
+   * SIT BETWEEN THE RAILS, NOT ON TOP OF THEM.
+   *
+   * Centring on the viewport and capping the width worked while the coach said
+   * one short line. Measured on a 412px phone with a longer message it came out
+   * 324px wide starting at x=20 — straight over the BUILD, ASK and SETTINGS
+   * buttons, which live at x=2..46. And `.bubble` takes pointer events, so it
+   * was not just crowding those controls, it was swallowing taps meant for them.
+   *
+   * So the column is pinned INSIDE both edge rails rather than centred and
+   * trimmed. It cannot reach them however long the message gets.
+   */
   .wrap {
-    left: calc(50% - 24px);
-    max-width: calc(100vw - 88px);
+    left: 56px;
+    right: 56px;
+    transform: none;
+    width: auto;
+    max-width: none;
   }
 }

@@ -276,6 +276,12 @@ export type LessonBody = ScaleLesson | DrywallLesson | DetectorBiasLesson
 /**
  * A lesson, said the way the assistant would say it.
  *
+ * SAID IN ONE BREATH. These messages were written while nothing displayed them,
+ * and they read like it — the scale one ran to seven lines in the coach's bubble
+ * on a phone, a paragraph of explanation standing over the model. The rule now
+ * is a sentence and a bit: what is wrong, and what one tap will do about it. The
+ * reasoning belongs in this file, where it already is.
+ *
  * `leverage` orders them the way `detectionReview` orders doubts, and for the
  * same reason: two suggestions at once is how you lose someone. Show the top one.
  */
@@ -350,11 +356,11 @@ export function deriveLessons(
       if (suggested !== ctx.drywall) {
         lessons.push({
           id: 'lesson-drywall',
-          message: `Every wall you've fixed was out by about the same ${Math.round(
+          message: `Every wall you've fixed is out by the same ${Math.round(
             Math.abs(c),
-          )}mm — that's a drywall allowance, not a bad scale. This sheet looks like it's drawn ${drywallPhrase(
+          )}mm — that's a drywall allowance, not the scale. This sheet is drawn ${drywallPhrase(
             suggested,
-          )}. Want me to re-read it that way?`,
+          )}.`,
           actionLabel: 'Re-read the walls',
           leverage: 85,
           body: {
@@ -371,9 +377,9 @@ export function deriveLessons(
       if (Math.abs(factor - 1) >= MIN_SCALE_ERROR) {
         lessons.push({
           id: 'lesson-scale',
-          message: `Those ${p.length} corrections all point the same way: the whole sheet is reading ${
+          message: `Those ${p.length} fixes all point one way — the sheet reads ${
             factor > 1 ? 'small' : 'big'
-          } by about ${Math.round(Math.abs(factor - 1) * 100)}%. Fix the scale once and every wall on the print lands right, not just the ones you tapped.`,
+          } by about ${Math.round(Math.abs(factor - 1) * 100)}%. Fix it once and every wall lands right.`,
           actionLabel: 'Fix the scale',
           leverage: 100,
           body: {
@@ -396,8 +402,8 @@ export function deriveLessons(
     lessons.push({
       id: 'lesson-detector-bias',
       message: loose
-        ? `You've deleted ${removed} walls I found. I'm reading dimension lines and hatching as framing on this print — I'll be stricter on the next sheet.`
-        : `You've traced in ${added} walls I missed. This print is lighter than I expect — I'll look harder on the next sheet.`,
+        ? `You've deleted ${removed} walls I found — I'm reading hatching as framing here. I'll be stricter next sheet.`
+        : `You've traced in ${added} walls I missed — this print is lighter than I expect. I'll look harder next sheet.`,
       leverage: 50,
       body: { kind: 'detector-bias', bias: loose ? 'loose' : 'strict', added, removed },
     })
