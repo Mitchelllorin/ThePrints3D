@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextSuggestion, type GCContext } from './generalContractor'
+import { nextSuggestion, type GCContext, type GCStorey } from './generalContractor'
 import type { Lesson } from './correctionLedger'
 
 const base: GCContext = {
@@ -233,5 +233,88 @@ describe('the G.C. raises its doubts before offering to build', () => {
       }),
     )
     expect(s?.id).toBe('findRest')
+  })
+})
+
+/**
+ * Once the model is standing, the G.C. has to look at IT — not keep describing
+ * the drawing. Before this it said one fixed sentence forever, however wrong the
+ * thing on screen was.
+ */
+describe('nextSuggestion — build-aware walk', () => {
+  const standing = (storeys: GCStorey[], doorCount = 1) =>
+    ctx({ built: true, hasWalls: true, userWallCount: 4, storeys, doorCount })
+
+  it('an upper storey with walls and no deck → lay the floor', () => {
+    const s = nextSuggestion(standing([
+      { level: 0, walls: 8, floors: 1, roofs: 1 },
+      { level: 1, walls: 6, floors: 0, roofs: 0 },
+    ]))
+    expect(s?.id).toBe('build-nofloor-1')
+    expect(s?.actionKind).toBe('layFloor')
+    // Named by the storey the tradesperson would call it, not its index.
+    expect(s?.message).toContain('Level 2')
+  })
+
+  it('never says the GROUND floor has no deck — building lays a slab', () => {
+    const s = nextSuggestion(standing([{ level: 0, walls: 8, floors: 0, roofs: 1 }]))
+    expect(s?.id).not.toContain('nofloor')
+  })
+
+  it('a deck with nothing standing on it → trace the walls', () => {
+    const s = nextSuggestion(standing([
+      { level: 0, walls: 8, floors: 1, roofs: 1 },
+      { level: 1, walls: 0, floors: 2, roofs: 0 },
+    ]))
+    expect(s?.id).toBe('build-nowalls-1')
+    expect(s?.actionKind).toBe('trace')
+  })
+
+  it('walls up and no roof anywhere → pull a roof', () => {
+    const s = nextSuggestion(standing([{ level: 0, walls: 8, floors: 1, roofs: 0 }]))
+    expect(s?.id).toBe('build-noroof')
+    expect(s?.actionKind).toBe('layRoof')
+  })
+
+  it('a closed shell with no door → place one', () => {
+    const s = nextSuggestion(standing([{ level: 0, walls: 8, floors: 1, roofs: 1 }], 0))
+    expect(s?.id).toBe('build-nodoor')
+    expect(s?.actionKind).toBe('place')
+  })
+
+  /**
+   * A missing doorway mid-trace is work not done yet, not a mistake. Saying so
+   * before the shell closes is the checklist behaviour this module deletes.
+   */
+  it('says nothing about a door while the shell is still open', () => {
+    const s = nextSuggestion(standing([{ level: 0, walls: 8, floors: 1, roofs: 0 }], 0))
+    expect(s?.id).toBe('build-noroof')
+  })
+
+  it('a sound model still gets the terminal, and no action button', () => {
+    const s = nextSuggestion(standing([{ level: 0, walls: 8, floors: 1, roofs: 1 }], 2))
+    expect(s?.id).toBe('built')
+    expect(s?.tone).toBe('success')
+    expect(s?.actionKind).toBeUndefined()
+  })
+
+  /**
+   * The fields are optional so a caller that has not been updated keeps working.
+   * With nothing to look at there is nothing to report, and the old terminal —
+   * the branch every session used to end on — has to survive untouched.
+   */
+  it('with no model data at all, behaves exactly as it did before', () => {
+    expect(nextSuggestion(ctx({ built: true, hasWalls: true }))?.id).toBe('built')
+  })
+
+  /** The lesson still outranks all of it — see the ordering note in the module. */
+  it('a lesson still comes before anything the walk found', () => {
+    const s = nextSuggestion(standing([{ level: 0, walls: 8, floors: 1, roofs: 0 }], 0))
+    expect(s?.id).toBe('build-noroof')
+    const withLesson = nextSuggestion({
+      ...standing([{ level: 0, walls: 8, floors: 1, roofs: 0 }], 0),
+      lesson: { id: 'lesson-scale', message: 'Scale looks half', actionLabel: 'Fix it' } as Lesson,
+    })
+    expect(withLesson?.id).toBe('lesson-scale')
   })
 })

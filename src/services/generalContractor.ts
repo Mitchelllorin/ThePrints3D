@@ -26,9 +26,12 @@ export type GCActionKind =
   | 'calibrate'
   | 'useDetectedScale'
   | 'layFloor'
+  | 'layRoof'
   | 'autoBuild'
   | 'findRest'
   | 'trace'
+  /** Open the Place drawer — doors, windows and fixtures live there. */
+  | 'place'
   /** Put the top lesson from the correction ledger into force on this sheet. */
   | 'applyLesson'
 
@@ -39,6 +42,22 @@ export interface Suggestion {
   actionLabel?: string
   actionKind?: GCActionKind
   tone: GCTone
+}
+
+/**
+ * What is actually standing on one storey — the G.C.'s equivalent of walking up
+ * and looking at it. Counts, not geometry: every question below is "is there any
+ * X on this level", and hauling wall segments in here would be handing a pure
+ * decision module a pile of coordinates it has no business reading.
+ */
+export interface GCStorey {
+  /** 0 = ground. */
+  level: number
+  walls: number
+  /** Floor/deck areas laid at this level. */
+  floors: number
+  /** Roof areas whose level is this one. */
+  roofs: number
 }
 
 export interface GCContext {
@@ -68,10 +87,134 @@ export interface GCContext {
    * here to say.
    */
   lesson?: Lesson | null
+  /**
+   * WHAT IS ACTUALLY STANDING, storey by storey — the half of the job the G.C.
+   * was blind to. Everything above describes the DRAWING and the reading taken
+   * off it; this describes the model the user is looking at.
+   *
+   * Optional, like the two fields above it, so a caller that has not been
+   * updated still compiles and still gets exactly the old behaviour: with no
+   * storeys the post-build walk finds nothing to say and falls straight through
+   * to the terminal it always ended on.
+   */
+  storeys?: GCStorey[]
+  /** Doors in the model — detected off the print plus placed by hand. */
+  doorCount?: number
 }
 
 /** Panels that mean "the user is mid-action" — stay silent so we're not pushy. */
 const BUSY_PANELS = new Set(['picker', 'object', 'wall', 'line', 'panelBoard'])
+
+/**
+ * ONCE IT IS STANDING, LOOK AT IT.
+ *
+ * Every branch above this one reads the DRAWING — the scale, the reading, what
+ * the corrections taught us about the sheet. None of them had ever looked at the
+ * model, which meant the moment a build existed the G.C. said one fixed sentence
+ * ("your model's standing, tap a wall to tweak it") and had nothing further to
+ * offer for the rest of the session, however wrong the thing on screen was. A
+ * general contractor who stops talking the moment the walls go up is not a
+ * general contractor.
+ *
+ * So: walk the job the way it gets built. `traceLayers.ts` already orders the
+ * trades for exactly this reason — deck, then framing on top of it, then the
+ * roof over that — and this walks the same order rather than inventing a second
+ * one. First real gap wins, same as everywhere else in this module.
+ *
+ * WHAT IT WILL AND WILL NOT SAY
+ * -----------------------------
+ * It names things that are WRONG, never things that are merely absent. A model
+ * with no roof is wrong — you can see the sky through it. A model with no wiring
+ * drawn is a choice, and a G.C. that opens with "you haven't run any circuits"
+ * on a shell nobody has framed yet is the nagging three-step wizard this app
+ * deliberately deleted. So the MEP layers are not checked here at all, and the
+ * door check waits until the shell is closed, because a doorway is a legitimate
+ * thing to still be missing while you are mid-trace.
+ *
+ * And when nothing is wrong it says so and stops, which is the branch that was
+ * here before and is still the one most sessions end on.
+ */
+function inspectBuild(ctx: GCContext): Suggestion {
+  const storeys = (ctx.storeys ?? []).filter((s) => s.walls > 0 || s.floors > 0 || s.roofs > 0)
+
+  /**
+   * WALLS ON NOTHING.
+   *
+   * The ground storey is not checked: building lays a slab, so level 0 always
+   * has something under it and flagging it would fire on every model ever made.
+   * Upper storeys are the real case, and one the user has actually hit — walls
+   * carried up to a second floor that has no deck under them, which reads in 3D
+   * as a storey floating in mid-air.
+   */
+  const unfloored = storeys.find((s) => s.level > 0 && s.walls > 0 && s.floors === 0)
+  if (unfloored) {
+    return {
+      id: `build-nofloor-${unfloored.level}`,
+      message: `Level ${unfloored.level + 1} has walls with no deck under them — want to lay the floor?`,
+      actionLabel: 'Lay the floor',
+      actionKind: 'layFloor',
+      tone: 'idle',
+    }
+  }
+
+  /**
+   * A DECK WITH NOTHING ON IT. The other half of the same mistake: the floor
+   * went in, the walls never followed. Ground level counts here — an empty slab
+   * is only ever a job half started.
+   */
+  const unframed = storeys.find((s) => s.floors > 0 && s.walls === 0)
+  if (unframed) {
+    return {
+      id: `build-nowalls-${unframed.level}`,
+      message:
+        unframed.level > 0
+          ? `Level ${unframed.level + 1}'s deck is down with nothing standing on it. Trace its walls?`
+          : "The deck's down with nothing standing on it. Trace the walls?",
+      actionLabel: 'Trace walls',
+      actionKind: 'trace',
+      tone: 'idle',
+    }
+  }
+
+  /** OPEN TO THE SKY. Walls up anywhere and not one roof area in the model. */
+  if (storeys.some((s) => s.walls > 0) && storeys.every((s) => s.roofs === 0)) {
+    return {
+      id: 'build-noroof',
+      message: "Walls are up and it's still open to the sky. Want to pull a roof over it?",
+      actionLabel: 'Pull a roof',
+      actionKind: 'layRoof',
+      tone: 'idle',
+    }
+  }
+
+  /**
+   * NO WAY IN.
+   *
+   * Last, and only once the shell is actually closed — deck, walls and roof all
+   * present. Before that a missing doorway is just work not done yet, and saying
+   * so would be the checklist behaviour this module exists to avoid. After it,
+   * a building with no door is simply wrong, and worth one sentence.
+   */
+  const shellClosed =
+    storeys.some((s) => s.walls > 0) &&
+    storeys.some((s) => s.floors > 0) &&
+    storeys.some((s) => s.roofs > 0)
+  if (shellClosed && ctx.doorCount === 0) {
+    return {
+      id: 'build-nodoor',
+      message: "It's closed in, but there's no door in it yet. Place one?",
+      actionLabel: 'Place a door',
+      actionKind: 'place',
+      tone: 'idle',
+    }
+  }
+
+  return {
+    id: 'built',
+    message: "Your model's standing. Tap a wall to tweak it, or add doors, windows and fixtures from Place.",
+    tone: 'success',
+  }
+}
 
 /**
  * The next thing worth saying — or null to stay quiet. First match wins, so the
@@ -165,11 +308,7 @@ export function nextSuggestion(ctx: GCContext): Suggestion | null {
   // keeps the G.C. in step: floor → walls → build → done.
   const hasRealWalls = ctx.userWallCount > 0 || ctx.hasWalls
   if (ctx.built && hasRealWalls) {
-    return {
-      id: 'built',
-      message: "Your model's standing. Tap a wall to tweak it, or add doors, windows and fixtures from Place.",
-      tone: 'success',
-    }
+    return inspectBuild(ctx)
   }
 
   /**
