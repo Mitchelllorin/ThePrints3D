@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { modelWalls, tracedWallCount, autoWallIsReal, MIN_AUTO_WALL_PX } from './modelWalls'
+import { modelWalls, tracedWallCount, autoWallIsReal, isAttachedReturn, MIN_AUTO_WALL_PX } from './modelWalls'
 import type { ParsedWall, Drawing } from '../types'
 
 const wall = (x1: number, y1: number, x2: number, y2: number, source: 'user' | 'auto'): ParsedWall =>
@@ -70,5 +70,61 @@ describe('the walls the model is built from', () => {
 
   it('returns nothing for a drawing with no walls', () => {
     expect(modelWalls([drawing([])])).toEqual([])
+  })
+})
+
+/**
+ * A tradesperson named the thing the length gate was deleting: a RETURN — the
+ * short leg where a wall turns back on itself, beside a window or an entry
+ * recess. Those run 4 to 24 inches, which is well under MIN_AUTO_WALL_PX at
+ * screenshot scale, and they live on the perimeter — which is why it was the
+ * outside walls that kept coming up missing.
+ */
+describe('returns — a short wall that is attached is not annotation', () => {
+  const anchor = wall(0, 0, 400, 0, 'auto')   // a long, unambiguous wall
+
+  it('keeps a short segment that corners off a real wall', () => {
+    const ret = wall(400, 0, 400, 14, 'auto')  // 14px return off the anchor's end
+    expect(autoWallIsReal(ret)).toBe(false)    // the old gate threw this away
+    expect(isAttachedReturn(ret, [anchor])).toBe(true)
+  })
+
+  it('keeps one that TEES into the middle of a wall, not just at a corner', () => {
+    expect(isAttachedReturn(wall(200, 0, 200, 15, 'auto'), [anchor])).toBe(true)
+  })
+
+  it('still throws away a short line floating in the middle of a room', () => {
+    // Lettering and dimension ticks touch nothing. That is the whole difference.
+    expect(isAttachedReturn(wall(200, 300, 214, 300, 'auto'), [anchor])).toBe(false)
+  })
+
+  it('will not let a return vouch for another return', () => {
+    // Otherwise a row of lettering walks itself in one serif at a time: each
+    // tick is "attached" to the one before it. Anchors are long walls only, so
+    // a stub hanging off a stub is measured against the wall and comes up short.
+    expect(isAttachedReturn(wall(400, 14, 400, 28, 'auto'), [anchor])).toBe(false)
+  })
+
+  /**
+   * A return TURNS. A short piece lying along the wall it touches is a fragment
+   * — detection splitting one run, or the far edge of a thick wall — and
+   * keeping those re-inflates the wall count with bits of walls already built.
+   */
+  it('rejects a collinear stub lying along the wall', () => {
+    expect(isAttachedReturn(wall(0, 0, 14, 0, 'auto'), [anchor])).toBe(false)
+  })
+
+  it('rejects a segment shorter than the wall is thick', () => {
+    // You cannot have a leg of wall shorter than the wall's own depth.
+    const stub = { ...wall(400, 0, 400, 7, 'auto'), thickness: 12 }
+    expect(isAttachedReturn(stub, [anchor])).toBe(false)
+  })
+
+  it('rescues returns through modelWalls, appended so indices stay put', () => {
+    const d = drawing([anchor, wall(400, 0, 400, 14, 'auto'), wall(9, 300, 20, 300, 'auto')])
+    const out = modelWalls([d])
+    expect(out.length).toBe(2)               // anchor + the return; the floater is gone
+    expect(out[0].wall).toBe(anchor)         // the long wall keeps index 0
+    expect(out[1].wall.y2).toBe(14)          // the return lands after it
   })
 })

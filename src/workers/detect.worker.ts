@@ -37,6 +37,8 @@ export interface DetectPass {
   maxWallThicknessPx: number
   requirePairedEdges: boolean
   mergeGapPx: number
+  /** Optional; see the note on `detectWalls`. Undefined keeps the classifier's own 40. */
+  leaderMaxLengthPx?: number
 }
 
 export interface DetectRequest {
@@ -107,6 +109,10 @@ function scalePass(p: DetectPass, k: number): DetectPass {
     maxWallThicknessPx: Math.max(2, Math.round(p.maxWallThicknessPx / k)),
     requirePairedEdges: p.requirePairedEdges,
     mergeGapPx: Math.max(1, Math.round(p.mergeGapPx / k)),
+    // A distance like the rest — restate it in the smaller image's units, or a
+    // halved sheet's returns fall back under the limit they were exempted from.
+    leaderMaxLengthPx:
+      p.leaderMaxLengthPx == null ? undefined : Math.max(2, Math.round(p.leaderMaxLengthPx / k)),
   }
 }
 

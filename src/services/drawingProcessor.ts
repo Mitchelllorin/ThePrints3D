@@ -11,6 +11,7 @@ import { detectWallsWithAI } from './aiWallDetector'
 import { inferScaleFromPaper, inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
 import { filterWallsForNoisyPrint } from './noisyPrintFilter'
+import { findWallReturns } from './wallReturns'
 import { inferCorners } from './wallTraceReducer'
 import { setInkBuffer } from './inkRaster'
 import { normalizeForDetection } from './rasterNormalize'
@@ -197,6 +198,30 @@ export async function processDrawing(
       imageHeight: detectImage.height,
       minWallLengthPx: isRasterPhoto ? 40 : 55,
     })
+    /**
+     * AND NOW THE RETURNS — see `wallReturns`.
+     *
+     * The ladder above cannot find them: its shortest pass demands 55px on a
+     * screenshot, which on the sheet this was measured against is 806mm, and a
+     * wall return is 4 to 24 inches. So every one of them is shorter than the
+     * smallest thing the detector is permitted to call a wall.
+     *
+     * Strictly additive: `filtered.walls` is untouched, and what comes back is
+     * only ever short segments that are attached to one of those walls and turn
+     * away from it. A print with no returns gets nothing and loses nothing.
+     *
+     * WHERE THEY END UP IS NOT ALWAYS AS THEIR OWN WALL. On the ADU screenshot
+     * the one return found is the jamb piece past the bathroom door, and step 7
+     * welds it into the wall run it is collinear with, recording the doorway
+     * between them. That is the right answer and the point of finding it: the
+     * wall now reaches the far jamb instead of stopping short at the opening,
+     * which is the shape of the complaint. So a build can gain a return without
+     * gaining a wall, and counting `isReturn` in the finished model understates
+     * what this did — see scripts/returns-overlay.mjs.
+     */
+    const returns = await findWallReturns(detectImage, filtered.walls, isRasterPhoto)
+    if (returns.length) filtered.walls = [...filtered.walls, ...returns]
+
     const classificationStats = result.stats
     setProgress(92)
 

@@ -50,6 +50,13 @@ const run = `async (name) => {
   let patch, err = null
   try { patch = await processDrawing(drawing, () => {}) } catch (e) { err = String(e && e.message || e); patch = {} }
   const walls = patch.parsedWalls || []
+  // What the MODEL actually builds — the length gate plus the returns sweep.
+  const { modelWalls } = await import('/src/services/modelWalls.ts')
+  const built = modelWalls([{ ...drawing, ...patch }])
+  // Marked at the source, not guessed from length: a rescued return can be
+  // longer than MIN_AUTO_WALL_PX and still be one the main ladder never saw.
+  const rescued = built.filter(m => m.wall.isReturn)
+  const retLens = rescued.map(m => Math.round(Math.hypot(m.wall.x2-m.wall.x1, m.wall.y2-m.wall.y1)))
   const text = patch.parsedText || []
   const openings = patch.parsedOpenings || []
 
@@ -76,6 +83,10 @@ const run = `async (name) => {
     openings: openings.length,
     openingKinds: openings.reduce((a,o)=>{a[o.type||'?']=(a[o.type||'?']||0)+1;return a},{}),
     symbols: (patch.parsedSymbols||[]).length,
+    builtWalls: built.length,
+    returns: rescued.length,
+    returnLenPx: retLens.sort((a,b)=>a-b),
+    returnLenMm: patch.scaleMmPerPx ? retLens.map(l => Math.round(l * patch.scaleMmPerPx)) : [],
   }
 }`
 
@@ -94,6 +105,8 @@ for (const name of SHOTS) {
   console.log(`  thickness mm    min ${r.thicknessMm?.min}  max ${r.thicknessMm?.max}  distinct buckets: ${r.thicknessMm?.distinct}`)
   console.log(`  spread          ${JSON.stringify(r.thicknessMm?.buckets)}`)
   console.log(`  classified as   ${JSON.stringify(r.roles)}`)
+  console.log(`BUILT walls       ${r.builtWalls}   of which RETURNS: ${r.returns}   (see scripts/returns-overlay.mjs to look at them)`)
+  console.log(`  return lengths  ${JSON.stringify(r.returnLenPx)} px  =  ${JSON.stringify(r.returnLenMm)} mm`)
   console.log(`OPENINGS          ${r.openings}  ${JSON.stringify(r.openingKinds)}`)
   console.log(`symbols           ${r.symbols}`)
 }

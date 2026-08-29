@@ -40,19 +40,132 @@ export function autoWallIsReal(w: ParsedWall): boolean {
 }
 
 /**
+ * A RETURN IS A SHORT WALL, AND THIS USED TO THROW ALL OF THEM AWAY.
+ *
+ * The length gate above exists for a real reason — detection on a real sheet
+ * reports the title block's rule lines, dimension ticks and lettering as walls,
+ * and those are short. But the assumption written next to it, that "a wall you
+ * would frame is not" short, is wrong, and a tradesperson named the exact thing
+ * it was deleting: a RETURN. The short leg where a wall turns back on itself —
+ * the stub beside a window or an entry recess, the bit that comes back off a
+ * bay or an offset. Those run 4 to 24 inches, which at the scale of a phone
+ * screenshot is 10 to 40 pixels, so `MIN_AUTO_WALL_PX` of 24 was cutting
+ * straight through the middle of the range. Returns live on the perimeter,
+ * which is why it was the OUTSIDE walls that kept coming up missing.
+ *
+ * Lowering the threshold is the wrong fix: it lets the lettering back in, which
+ * is the "72 walls across 18 rooms" failure this gate was added to stop.
+ *
+ * WHAT ACTUALLY SEPARATES THEM IS NOT LENGTH, IT IS ATTACHMENT. A return is
+ * joined to the wall it returns from — that is what makes it a return rather
+ * than a line. Lettering, hatching and dimension ticks float in the middle of a
+ * room touching nothing. So a short segment is kept when one of its ends lands
+ * on a wall we already believe in, and dropped when it does not.
+ *
+ * Strictly additive: every wall kept before is still kept, and this only ever
+ * rescues ones that were being discarded.
+ */
+
+/**
+ * Below this a segment cannot be a wall at any scale — it is a tick or a serif.
+ * A return is also never shorter than the wall is thick: you cannot have a leg
+ * of wall shorter than the wall's own depth, so the thickness is the better
+ * ruler wherever it is known. Same "the wall itself is the ruler" reasoning as
+ * `rejoinAcrossOpenings`, and scale-free for the same reason.
+ */
+const MIN_RETURN_PX = 6
+
+/** Distance from a point to a segment — a return may tee in as well as corner. */
+function pointToSegment(px: number, py: number, w: ParsedWall): number {
+  const dx = w.x2 - w.x1, dy = w.y2 - w.y1
+  const len2 = dx * dx + dy * dy
+  if (len2 < 1e-9) return Math.hypot(px - w.x1, py - w.y1)
+  const t = Math.max(0, Math.min(1, ((px - w.x1) * dx + (py - w.y1) * dy) / len2))
+  return Math.hypot(px - (w.x1 + t * dx), py - (w.y1 + t * dy))
+}
+
+/**
+ * Is this short segment a return off one of the walls we already trust?
+ *
+ * `anchors` are the walls that passed the length gate on their own. A return
+ * cannot vouch for another return — otherwise a chain of lettering could walk
+ * itself in one serif at a time.
+ */
+export function isAttachedReturn(w: ParsedWall, anchors: readonly ParsedWall[]): boolean {
+  return attachedReturnAnchor(w, anchors) !== null
+}
+
+/**
+ * The wall it returns from, or null if it does not return from one.
+ *
+ * Same test as `isAttachedReturn`, but handing back WHICH wall — the caller
+ * that has the pixels needs it, to ask whether this segment is drawn with that
+ * wall's weight of ink or with a chair's.
+ */
+export function attachedReturnAnchor(
+  w: ParsedWall,
+  anchors: readonly ParsedWall[],
+): ParsedWall | null {
+  const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1)
+  if (len < Math.max(MIN_RETURN_PX, w.thickness || 0)) return null
+  // Generous enough to survive raster skew and a corner drawn with its lines
+  // crossing, tight enough that a word sitting near a wall does not qualify.
+  const tol = Math.max(6, (w.thickness || 0) * 1.5)
+  const dx = (w.x2 - w.x1) / len, dy = (w.y2 - w.y1) / len
+  for (const a of anchors) {
+    const touches =
+      pointToSegment(w.x1, w.y1, a) <= tol || pointToSegment(w.x2, w.y2, a) <= tol
+    if (!touches) continue
+    /**
+     * A RETURN TURNS. That is what the word means — the wall comes back on
+     * itself — so a short segment lying ALONG the wall it touches is not one.
+     * It is a fragment: detection breaking a single run into a long piece and a
+     * stub, or the second edge line of a thick wall. Keeping those re-inflates
+     * the wall count with pieces of walls already in the model, which is the
+     * failure the length gate was protecting against in the first place.
+     */
+    const alen = Math.hypot(a.x2 - a.x1, a.y2 - a.y1)
+    if (alen < 1e-9) continue
+    const ax = (a.x2 - a.x1) / alen, ay = (a.y2 - a.y1) / alen
+    // |sin| between the two directions. 0.34 is about 20 degrees — well clear of
+    // raster skew on a line that is meant to be square, and far below the 90
+    // that a real return makes.
+    if (Math.abs(dx * ay - dy * ax) > 0.34) return a
+  }
+  return null
+}
+
+/**
  * The walls to build, across every drawing: traced ones first (index-stable),
  * then the detected ones worth showing.
  */
 export function modelWalls(drawings: Drawing[]): ModelWall[] {
   const traced: ModelWall[] = []
   const detected: ModelWall[] = []
+  /** Too short to stand on their own — candidates for the return rescue below. */
+  const shortlisted: ModelWall[] = []
   for (const d of drawings) {
     for (const w of d.parsedWalls) {
       if (w.source === 'user') traced.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
       else if (autoWallIsReal(w)) detected.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
+      else shortlisted.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
     }
   }
-  return [...traced, ...detected]
+  /**
+   * Now rescue the returns — see `isAttachedReturn`. Anchored against the walls
+   * that earned their place on length, plus anything the user traced by hand,
+   * which is the strongest evidence there is that a wall exists.
+   *
+   * APPENDED AT THE END, deliberately. This function's contract is that indices
+   * stay pointing at the same wall they did before (see the note at the top of
+   * the file); inserting rescued walls among the detected ones would re-target
+   * every edit made against a higher index.
+   */
+  const anchors = [...traced, ...detected].map((m) => m.wall)
+  const returns = anchors.length
+    ? shortlisted.filter((m) => isAttachedReturn(m.wall, anchors))
+    : []
+  return [...traced, ...detected, ...returns]
 }
 
 /** How many of those are traced — i.e. the index range that is still editable. */

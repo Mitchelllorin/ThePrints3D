@@ -318,6 +318,16 @@ export function detectWalls(
     maxWallThicknessPx?: number
     requirePairedEdges?: boolean
     mergeGapPx?: number
+    /**
+     * Below this a line is called a 'leader' before any other test runs — see
+     * `classifyLine`. It has always defaulted to 40px and no caller could reach
+     * it, which made every segment under 40px unclassifiable as a wall no
+     * matter what `minWallLengthPx` said. That is fine for the main ladder,
+     * whose shortest pass asks for 28px anyway. It is not fine for the returns
+     * pass, whose whole subject is the 10-40px band. Left undefined here so the
+     * classifier's own 40 still applies everywhere it did before.
+     */
+    leaderMaxLengthPx?: number
   } = {}
 ): DetectWallsResult {
   const { width, height, data } = imageData
@@ -328,6 +338,7 @@ export function detectWalls(
     maxWallThicknessPx = 64,
     requirePairedEdges = true,
     mergeGapPx = 4,
+    leaderMaxLengthPx,
   } = options
 
   const gray = toGrayscale(data, width, height)
@@ -364,8 +375,9 @@ export function detectWalls(
     if (seg.centerX != null) return { ...c, x1: seg.centerX, x2: seg.centerX }
     return c
   })
-  const faceClass = classifyLines(imageData, candidates, { minWallLengthPx, minWallThicknessPx }).classified
-  const centreClass = classifyLines(imageData, centreCands, { minWallLengthPx, minWallThicknessPx }).classified
+  const classifyOpts = { minWallLengthPx, minWallThicknessPx, leaderMaxLengthPx }
+  const faceClass = classifyLines(imageData, candidates, classifyOpts).classified
+  const centreClass = classifyLines(imageData, centreCands, classifyOpts).classified
 
   const walls: ParsedWall[] = []
   const classified: ClassifiedLine[] = candidates.map((cand, k) => {

@@ -46,6 +46,14 @@ export interface ParsedWall {
   source?: 'auto' | 'user'
   /** 0..1 confidence from detection/classification stage */
   detectionConfidence?: number
+  /**
+   * Found by the returns sweep rather than the main ladder — the short leg
+   * where a wall turns back on itself, beside a window or an entry recess.
+   * Every other wall is found by being long enough to be obvious; these are
+   * found by being attached to one that was, so it is worth being able to tell
+   * them apart when measuring what a print gave up (see `wallReturns`).
+   */
+  isReturn?: boolean
   /** Structural classification (filled by wallTypeClassifier, may be 'unknown' before scale calibration) */
   wallType?: import('../services/wallTypeClassifier').WallType
   /** Estimated structural framing thickness in mm */
