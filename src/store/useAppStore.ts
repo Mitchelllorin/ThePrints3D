@@ -551,6 +551,9 @@ interface AppState {
   exportCorrectionDataset: () => string
   /** The systematic mistakes the corrections add up to — see `correctionLedger`. */
   correctionLessons: () => Lesson[]
+  /** Take back corrections kept from a previous session on this same sheet —
+   *  see `corpus`. Returns how many were new. */
+  mergeCorrections: (records: readonly CorrectionRecord[], drawingId: string) => number
   /** Act on the top lesson: fix the scale, or re-read the sheet at the drywall
    *  allowance it is really drawn to, then re-classify every wall from its
    *  pixels under the corrected assumption. Returns what it applied, or null. */
@@ -1997,6 +2000,7 @@ export const useAppStore = create<AppState>()(
       const drawing =
         s.drawings.find((d) => d.id === s.selectedDrawingId) ?? s.drawings[0]
       return deriveLessons(s.corrections, {
+        drawingId: drawing?.id ?? null,
         scaleMmPerPx: drawing?.scaleMmPerPx ?? null,
         // Same source the processor classified against, so a lesson is measured
         // against the assumption that actually produced the mistake.
@@ -2030,6 +2034,31 @@ export const useAppStore = create<AppState>()(
      * not the scale. The lesson promises "every wall on the print lands right,
      * not just the ones you tapped", and that promise is kept here or nowhere.
      */
+    /**
+     * WHAT YOU TAUGHT IT LAST TIME IS STILL TRUE.
+     *
+     * A sheet in the corpus is keyed by the hash of its own pixels, so opening
+     * the same print again is recognisably the same print — and the corrections
+     * made on it the last time are still the right answers. They come back in
+     * here, restamped with the id THIS session gave the drawing, because the
+     * measurement lessons read only the sheet in force and a record still
+     * carrying last week's drawing id would be filtered straight back out.
+     *
+     * Ids already present are skipped, so this can be called with the whole
+     * stored set as many times as it likes.
+     */
+    mergeCorrections: (records, drawingId) => {
+      const seen = new Set(get().corrections.map((c) => c.id))
+      const fresh = records.filter((r) => !seen.has(r.id))
+      if (fresh.length === 0) return 0
+      set((s) => {
+        for (const r of fresh) {
+          s.corrections = appendCorrection(s.corrections, { ...r, drawingId })
+        }
+      })
+      return fresh.length
+    },
+
     applyTopLesson: (): Lesson | null => {
       const lesson = get().correctionLessons()[0] ?? null
       if (!lesson) return null

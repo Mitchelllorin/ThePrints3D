@@ -219,13 +219,28 @@ interface Paired {
   saidMm: number | null
 }
 
+/**
+ * A SCALE IS A PROPERTY OF ONE SHEET, NOT OF THE USER.
+ *
+ * While the ledger lived only in memory this did not matter much: a session had
+ * one drawing in it and the records died with the tab. Now that corrections are
+ * kept — which is the whole point of keeping them — the ledger holds work from
+ * every print the user has ever corrected, drawn at every scale there is. Mixing
+ * those would have a plan you fixed last week deciding how this morning's plan
+ * is measured, and the fit would be nonsense in both directions.
+ *
+ * So the measurement lessons read only the sheet in force. Pass no id and it
+ * behaves as it always did, over everything.
+ */
 function pairs(
   records: readonly CorrectionRecord[],
   drywall: DrywallConfig,
+  drawingId?: string | null,
 ): Paired[] {
   const out: Paired[] = []
   for (const r of records) {
     if (r.kind !== 'wall-type') continue
+    if (drawingId && r.drawingId !== drawingId) continue
     const px = r.evidence?.thicknessPx
     if (!px || !Number.isFinite(px) || px <= 0) continue
     // The caller's own figure wins: it knows what the user actually picked.
@@ -299,6 +314,13 @@ export interface LessonContext {
   scaleMmPerPx: number | null
   /** The drywall assumption currently in force. */
   drywall: DrywallConfig
+  /**
+   * The sheet being read. The scale and drywall lessons are measurements OF
+   * this print and are fitted only from corrections made on it; omit the id and
+   * they fall back to reading every record, as they did before the ledger was
+   * persisted. The detector-bias lesson deliberately ignores this — see below.
+   */
+  drawingId?: string | null
 }
 
 /**
@@ -321,7 +343,7 @@ export function deriveLessons(
   ctx: LessonContext,
 ): Lesson[] {
   const lessons: Lesson[] = []
-  const p = pairs(records, ctx.drywall)
+  const p = pairs(records, ctx.drywall, ctx.drawingId)
 
   if (p.length >= MIN_SAMPLES) {
     // Ratio model: mm ≈ k · px. k IS the corrected scale, in mm per pixel.
@@ -394,7 +416,14 @@ export function deriveLessons(
     }
   }
 
-  // ── The detector's own bias, from what got added and deleted. ──
+  /**
+    * ── The detector's own bias, from what got added and deleted. ──
+    *
+    * Read across EVERY sheet on purpose, unlike the two above. A bad scale
+    * belongs to one print; a habit of reading hatching as framing belongs to the
+    * detector, and the whole value of noticing it is that it carries to the next
+    * print. That is also exactly what the message promises.
+    */
   const added = records.filter((r) => r.kind === 'wall-added').length
   const removed = records.filter((r) => r.kind === 'wall-removed').length
   if (added + removed >= MIN_SAMPLES && added !== removed) {

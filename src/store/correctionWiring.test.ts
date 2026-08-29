@@ -162,6 +162,86 @@ describe('setDrawingScale writes the mistake down', () => {
  * reading small by 50%" and then leave the user to go and fix it themselves. So
  * these drive the other half — the tap that puts the lesson into force.
  */
+/**
+ * The ledger used to die with the tab, so every record in it was from the sheet
+ * on screen. Now that corrections are kept across sessions (see `corpus`) the
+ * store holds work from every print the user has ever corrected, and a scale
+ * fitted across all of them is a scale belonging to none of them.
+ */
+describe('a lesson is about one sheet', () => {
+  /** A second print, drawn at a scale that has nothing to do with the first. */
+  function addSecondSheet() {
+    useAppStore.setState((st) => ({
+      drawings: [
+        ...st.drawings,
+        { ...st.drawings[0], id: 'd2', name: 'other.pdf', scaleMmPerPx: 40 },
+      ],
+    }))
+  }
+
+  it('ignores corrections made on a different print', () => {
+    addSecondSheet()
+    // Three corrections, all on the OTHER sheet.
+    useAppStore.setState({ selectedDrawingId: 'd2' })
+    s().correctElement('10,0', 'EXT')
+    s().correctElement('20,0', 'INT')
+    s().correctElement('30,0', 'PT')
+    expect(s().corrections).toHaveLength(3)
+    expect(s().corrections.every((c) => c.drawingId === 'd2')).toBe(true)
+
+    // Back on the first sheet, which nobody has corrected: nothing to say.
+    useAppStore.setState({ selectedDrawingId: 'd1' })
+    expect(s().correctionLessons()).toEqual([])
+  })
+
+  it('still counts the detector bias across every sheet', () => {
+    // Being loose with hatching is a habit of the detector, not a property of
+    // one print, and the message promises to carry it to the next sheet.
+    useAppStore.setState({
+      corrections: [
+        { id: 'r1', at: 1, kind: 'wall-removed', drawingId: 'd2', predicted: 'stud-2x4', actual: 'none', confidence: 0.5 },
+        { id: 'r2', at: 2, kind: 'wall-removed', drawingId: 'd2', predicted: 'stud-2x4', actual: 'none', confidence: 0.5 },
+        { id: 'r3', at: 3, kind: 'wall-removed', drawingId: 'd9', predicted: 'stud-2x4', actual: 'none', confidence: 0.5 },
+      ],
+    })
+    const lesson = s().correctionLessons()[0]
+    expect(lesson?.body.kind).toBe('detector-bias')
+  })
+})
+
+describe('mergeCorrections takes back what the sheet already taught us', () => {
+  /** What the corpus hands back: the right answers, under LAST session's ids. */
+  const stored = [
+    { id: 'old-1', at: 1, kind: 'wall-type' as const, drawingId: 'gone-2151', predicted: 'PT', actual: 'EXT', confidence: 0.8,
+      evidence: { thicknessPx: 25, actualFinishedMm: 250 } },
+    { id: 'old-2', at: 2, kind: 'wall-type' as const, drawingId: 'gone-2151', predicted: 'PT', actual: 'INT', confidence: 0.8,
+      evidence: { thicknessPx: 12, actualFinishedMm: 120 } },
+    { id: 'old-3', at: 3, kind: 'wall-type' as const, drawingId: 'gone-2151', predicted: 'PT', actual: 'PT', confidence: 0.8,
+      evidence: { thicknessPx: 7.5, actualFinishedMm: 75 } },
+  ]
+
+  it('restamps them onto the drawing this session is calling it', () => {
+    expect(s().mergeCorrections(stored, 'd1')).toBe(3)
+    expect(s().corrections.every((c) => c.drawingId === 'd1')).toBe(true)
+  })
+
+  it('teaches the lesson again without the user tapping anything', () => {
+    s().mergeCorrections(stored, 'd1')
+    const lesson = s().correctionLessons()[0]
+    // Same half-scale sheet, same conclusion — from a previous session's work.
+    expect(lesson?.body.kind).toBe('scale')
+    if (lesson?.body.kind !== 'scale') throw new Error('expected a scale lesson')
+    expect(lesson.body.factor).toBeCloseTo(TRUE_FACTOR, 2)
+  })
+
+  it('can be handed the same set repeatedly without stacking it up', () => {
+    s().mergeCorrections(stored, 'd1')
+    s().mergeCorrections(stored, 'd1')
+    s().mergeCorrections(stored, 'd1')
+    expect(s().corrections).toHaveLength(3)
+  })
+})
+
 describe('applyTopLesson acts on what the corrections taught it', () => {
   /** Three fixes on three different walls: a scale error, not three mistakes. */
   function teachIt() {

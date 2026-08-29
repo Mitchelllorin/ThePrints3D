@@ -8,6 +8,7 @@ import App from './App.tsx'
 import { useAppStore } from './store/useAppStore'
 import { useFloorplanLocalStore } from './store/useFloorplanLocalStore'
 import { useUISettingsStore } from './store/useUISettingsStore'
+import { startCorpusCapture } from './services/corpusWiring'
 
 // Dev-only: expose the stores so verification scripts can inject state (e.g. a
 // roof area) and read it back without driving the full trace UI. Stripped in prod.
@@ -42,6 +43,16 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 // This registers the entire THREE namespace so elements like <mesh>,
 // <boxGeometry>, <meshStandardMaterial>, etc. are recognised by the reconciler.
 extend(THREE as any) // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/**
+ * KEEP EVERY PRINT AND EVERY CORRECTION.
+ *
+ * Started before render, so a drawing that is already on screen when the app
+ * comes back — or one dropped in the first second — is captured too. It only
+ * ever watches the store; it changes nothing, and every failure inside it is
+ * swallowed, so it cannot delay or break the workspace. See `corpus`.
+ */
+startCorpusCapture()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
