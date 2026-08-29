@@ -16,6 +16,7 @@ import TutorialCoach from './TutorialCoach'
 import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
+import CorpusPanel from './CorpusPanel'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import UpgradeSheet from '../Pro/UpgradeSheet'
 import ProSection from '../Pro/ProSection'
@@ -222,6 +223,13 @@ function SettingsContent() {
         <Select label="Stud spacing" val={String(cfg.studSpacingIn)} options={[{ value: '16', label: '16" OC' }, { value: '24', label: '24" OC' }]} onChange={(v) => setCfg({ studSpacingIn: Number(v) as 16 | 24 })} />
         <Select label="Wall depth" val={cfg.defaultStudSize} options={[{ value: '2x4', label: '2×4 (3-1/2")' }, { value: '2x6', label: '2×6 (5-1/2")' }]} onChange={(v) => setCfg({ defaultStudSize: v as '2x4' | '2x6' })} />
         <Select label="Corner" val={cfg.cornerType} options={[{ value: 'three-stud', label: 'Three-stud' }, { value: 'california', label: 'California (2-stud)' }]} onChange={(v) => setCfg({ cornerType: v as 'three-stud' | 'california' })} />
+      </CollapsibleSection>
+
+      {/* The corpus has been recording since it was built and had no surface at
+          all — including no way to reach `forgetEverything`. A delete you can
+          only perform by editing the source is not a delete. */}
+      <CollapsibleSection id="kept" title="What this app keeps" openId={openId} setOpenId={setOpenId}>
+        <CorpusPanel />
       </CollapsibleSection>
 
       <CollapsibleSection id="roof" title="Roof" openId={openId} setOpenId={setOpenId}>
