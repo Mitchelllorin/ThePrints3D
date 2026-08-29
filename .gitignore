@@ -40,3 +40,6 @@ data/test-prints/
 __pycache__/
 *.pyc
 .venv-train/
+
+# Detached dev-server log (kept running for phone testing over the LAN)
+vite-dev.log
