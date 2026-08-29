@@ -1,21 +1,28 @@
 /**
- * The assistant — a deterministic, on-device "coach" that watches the workspace
- * and surfaces ONE friendly next-step suggestion at a time. Pure + side-effect
- * free so it's trivially testable; the UI (AssistantBubble) feeds it a context
- * snapshot and dispatches the chosen action. This is the substrate a future
- * LLM/vision layer plugs into — for now it's rules, instant and free.
+ * THE G.C. — the general contractor standing over your shoulder.
  *
- * Tone: omnipresent but never pushy — helpful, friendly, professional. One CTA
- * at a time, and it goes quiet the moment the user is actually working.
+ * This was called "the assistant", and before that "the coach", and neither
+ * name said what it is. It is the G.C.: the one on site who knows the drawing,
+ * the trade and the order of work, says the one thing worth saying, and then
+ * gets out of the way. Everything it knows is on-device and free — rules and
+ * arithmetic today, a vision layer later, plugged into this same substrate.
+ *
+ * Deterministic and side-effect free, so it is trivially testable: the UI
+ * (GCBubble) hands it a snapshot of the workspace and dispatches whatever it
+ * decides. It speaks in ONE suggestion at a time, and goes quiet the moment the
+ * user is actually working.
+ *
+ * WHAT MAKES IT MORE THAN A CHECKLIST is `lesson` — what the user's own
+ * corrections have taught the app about THIS sheet. See `correctionLedger`.
  */
 
 import { reviewDetection, type DetectionReviewInput } from './detectionReview'
 import type { Lesson } from './correctionLedger'
 
-export type AssistantTone = 'idle' | 'progress' | 'success'
+export type GCTone = 'idle' | 'progress' | 'success'
 
 /** Maps 1:1 to a real action the bubble can run on the user's behalf. */
-export type AssistantActionKind =
+export type GCActionKind =
   | 'calibrate'
   | 'useDetectedScale'
   | 'layFloor'
@@ -30,11 +37,11 @@ export interface Suggestion {
   id: string
   message: string
   actionLabel?: string
-  actionKind?: AssistantActionKind
-  tone: AssistantTone
+  actionKind?: GCActionKind
+  tone: GCTone
 }
 
-export interface AssistantContext {
+export interface GCContext {
   hasPlan: boolean
   status: 'pending' | 'processing' | 'ready' | 'error' | null
   calibrationCleared: boolean
@@ -50,7 +57,7 @@ export interface AssistantContext {
   activePanel: string | null
   /**
    * What the detector produced, for `detectionReview` to second-guess. Optional
-   * only so older callers keep compiling; without it the coach behaves exactly
+   * only so older callers keep compiling; without it the G.C. behaves exactly
    * as it did — confidently.
    */
   detection?: DetectionReviewInput | null
@@ -70,7 +77,7 @@ const BUSY_PANELS = new Set(['picker', 'object', 'wall', 'line', 'panelBoard'])
  * The next thing worth saying — or null to stay quiet. First match wins, so the
  * order encodes the build sequence (calibrate → floor → walls → build).
  */
-export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
+export function nextSuggestion(ctx: GCContext): Suggestion | null {
   // No plan yet — the onboarding card already guides this; don't double up.
   if (!ctx.hasPlan) return null
 
@@ -141,7 +148,7 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
    * This was the last surviving piece of the old three-step wizard: load a
    * preset and a card came across the top of the workspace telling you to lay a
    * floor, in the same voice, before you had looked at the plan. The wizard it
-   * belonged to is gone from the Build drawer, and a coach that opens by handing
+   * belonged to is gone from the Build drawer, and a G.C. that opens by handing
    * out the first chore is the thing this app is supposed to not be.
    *
    * The suggestions BELOW earn their place — they offer something the user could
@@ -153,9 +160,9 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
   // "Model's standing" is the TERMINAL step — only declare it once there are real
   // WALLS in the model. `ctx.built` is sticky (a fresh auto-build on load, or
   // building right after laying a floor, flips it true), so gating the terminal
-  // on build status alone made the coach jump straight to "your model's ready"
+  // on build status alone made the G.C. jump straight to "your model's ready"
   // out of sequence — right after a floor, before any walls. Requiring walls
-  // keeps the coach in step: floor → walls → build → done.
+  // keeps the G.C. in step: floor → walls → build → done.
   const hasRealWalls = ctx.userWallCount > 0 || ctx.hasWalls
   if (ctx.built && hasRealWalls) {
     return {
@@ -170,7 +177,7 @@ export function nextSuggestion(ctx: AssistantContext): Suggestion | null {
    *
    * This used to say "Ready to see it in 3D?" with a Build 3D button. There is
    * no such button any more, and there is nothing to build: the walls stand up
-   * as they are traced. So the coach was offering a step that had already
+   * as they are traced. So the G.C. was offering a step that had already
    * happened, by way of a control that no longer exists.
    *
    * What is genuinely worth offering at that exact moment is the thing the app

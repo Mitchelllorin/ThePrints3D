@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
 import ProjectLibrary from '../Projects/ProjectLibrary'
-import AssistantBubble from './AssistantBubble'
+import GCBubble from './GCBubble'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -914,11 +914,11 @@ export default function WorkspaceLayout() {
       )}
 
       {/* 3D Viewport — fills the whole screen at all times.
-          It briefly shrank while the tour was running, to hand the coach its
+          It briefly shrank while the tour was running, to hand the tutorial coach its
           own band. That was the wrong trade: the print ended up small and shoved
           to the top of the screen, which is a bigger insult to the drawing than
           a line of text near its bottom edge ever was. The answer was to make
-          the coach small, not to make the workspace smaller. */}
+          the tutorial coach small, not to make the workspace smaller. */}
       <div className={styles.viewport}>
         <ModelViewer />
       </div>
@@ -1423,12 +1423,12 @@ export default function WorkspaceLayout() {
       {/* THE NEXT-STEP COACH, back — because with it gone there was no guidance
           at all. It was pulled for two fair reasons: it floated over other
           menus, and its suggestion order was wrong. Both are fixed rather than
-          waved away — assistant.ts now requires real walls before it declares
+          waved away — generalContractor.ts now requires real walls before it declares
           the model finished (floor → walls → build → done, in step), and the
           bubble goes silent whenever a drawer is open, on the same principle as
           its existing busy gate: if the user is doing something, say nothing.
           One line at a time, dismissible, with a button that does the step. */}
-      <AssistantBubble />
+      <GCBubble />
 
       {/* The guided "build a whole house" walkthrough (its own persistent card). */}
       <TutorialCoach />

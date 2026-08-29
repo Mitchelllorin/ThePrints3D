@@ -277,7 +277,7 @@ export type LessonBody = ScaleLesson | DrywallLesson | DetectorBiasLesson
  * A lesson, said the way the assistant would say it.
  *
  * SAID IN ONE BREATH. These messages were written while nothing displayed them,
- * and they read like it — the scale one ran to seven lines in the coach's bubble
+ * and they read like it — the scale one ran to seven lines in the G.C.'s bubble
  * on a phone, a paragraph of explanation standing over the model. The rule now
  * is a sentence and a bit: what is wrong, and what one tap will do about it. The
  * reasoning belongs in this file, where it already is.

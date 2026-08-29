@@ -1,4 +1,4 @@
-/* Top-centre coach bubble. The wrap is click-through; only .bubble captures
+/* Top-centre G.C. bubble. The wrap is click-through; only .bubble captures
    input so it never blocks orbiting the workspace. It only ever shows when the
    trace HUDs (measureHud/offPrintToast) are hidden, so they never collide. */
 .wrap {
@@ -14,7 +14,7 @@
   max-width: min(86vw, 420px);
 }
 
-/* No box — the coach's words float over the model, next to its living dot. */
+/* No box — the G.C.'s words float over the model, next to its living dot. */
 .bubble {
   pointer-events: auto;
   display: flex;
@@ -99,7 +99,7 @@
   /*
    * SIT BETWEEN THE RAILS, NOT ON TOP OF THEM.
    *
-   * Centring on the viewport and capping the width worked while the coach said
+   * Centring on the viewport and capping the width worked while the G.C. said
    * one short line. Measured on a 412px phone with a longer message it came out
    * 324px wide starting at x=20 — straight over the BUILD, ASK and SETTINGS
    * buttons, which live at x=2..46. And `.bubble` takes pointer events, so it

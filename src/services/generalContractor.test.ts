@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { nextSuggestion, type AssistantContext } from './assistant'
+import { nextSuggestion, type GCContext } from './generalContractor'
 import type { Lesson } from './correctionLedger'
 
-const base: AssistantContext = {
+const base: GCContext = {
   hasPlan: true,
   status: 'ready',
   calibrationCleared: true,
@@ -17,7 +17,7 @@ const base: AssistantContext = {
   tracePaused: false,
   activePanel: null,
 }
-const ctx = (over: Partial<AssistantContext>): AssistantContext => ({ ...base, ...over })
+const ctx = (over: Partial<GCContext>): GCContext => ({ ...base, ...over })
 
 describe('nextSuggestion — busy gate (non-pushy)', () => {
   it('stays quiet with no plan', () => {
@@ -60,7 +60,7 @@ describe('nextSuggestion — decision tree (first match wins)', () => {
     // The old three-step wizard is gone, and this suggestion was its last piece:
     // load a preset and a card came across the workspace assigning you a floor
     // before you had looked at the plan. The rail names that gesture in the
-    // section that performs it, so the coach stays out of it.
+    // section that performs it, so the G.C. stays out of it.
     const s = nextSuggestion(ctx({ hasFloor: false }))
     expect(s?.id).not.toBe('floor')
     expect(s?.actionKind).not.toBe('layFloor')
@@ -120,11 +120,11 @@ const soundRead = {
 }
 
 /**
- * A lesson is the only thing in the coach's context the app could not have
+ * A lesson is the only thing in the G.C.'s context the app could not have
  * worked out for itself — it is there because the user taught it, three
  * corrections ago. It is worth more than any step in the sequence below it.
  */
-describe('the coach says what it has been taught', () => {
+describe('the G.C. says what it has been taught', () => {
   const scaleLesson: Lesson = {
     id: 'lesson-scale',
     message: 'The whole sheet is reading small by about 50%.',
@@ -172,7 +172,7 @@ describe('the coach says what it has been taught', () => {
   })
 })
 
-describe('the coach raises its doubts before offering to build', () => {
+describe('the G.C. raises its doubts before offering to build', () => {
   it('offers the build when the reading looks sound', () => {
     const s = nextSuggestion(ctx({ hasWalls: true, detectedWallCount: 12, detection: soundRead }))
     expect(s?.id).toBe('autoBuild')

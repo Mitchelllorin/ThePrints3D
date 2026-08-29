@@ -1,17 +1,17 @@
 /**
- * AssistantBubble — the omnipresent coach, surfaced as one small top-centre
- * bubble. Reads a context snapshot from the stores, asks the pure `assistant`
+ * GCBubble — the omnipresent G.C., surfaced as one small top-centre
+ * bubble. Reads a context snapshot from the stores, asks the pure `generalContractor`
  * module what to say, and (optionally) does the next step for the user. Friendly,
  * alive, never pushy: one suggestion at a time, dismissible, and silent while the
- * user is actually working (the busy gate lives in the assistant module).
+ * user is actually working (the busy gate lives in the G.C. module).
  */
 import { useEffect, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { nextSuggestion, type AssistantActionKind, type AssistantContext } from '../../services/assistant'
-import styles from './AssistantBubble.module.css'
+import { nextSuggestion, type GCActionKind, type GCContext } from '../../services/generalContractor'
+import styles from './GCBubble.module.css'
 
-function runAction(kind: AssistantActionKind) {
+function runAction(kind: GCActionKind) {
   const app = useAppStore.getState()
   const fp = useFloorplanLocalStore.getState()
   const drawing = app.drawings.find((d) => d.id === app.floorplanOverlay.drawingId) ?? app.drawings[0] ?? null
@@ -55,7 +55,7 @@ function runAction(kind: AssistantActionKind) {
   }
 }
 
-export default function AssistantBubble() {
+export default function GCBubble() {
   const drawings = useAppStore((s) => s.drawings)
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const floorsAreas = useAppStore((s) => s.floorsAreas)
@@ -68,7 +68,7 @@ export default function AssistantBubble() {
   /**
    * SILENT WHENEVER A MENU IS OPEN.
    *
-   * This coach was pulled once for floating over other menus, and that was a
+   * This G.C. was pulled once for floating over other menus, and that was a
    * fair complaint — a suggestion card sitting on top of the drawer you just
    * opened is in the way of the thing you already decided to do. It has nothing
    * useful to say at that moment anyway: you are mid-action, not looking for
@@ -83,13 +83,13 @@ export default function AssistantBubble() {
   const askOpen = useFloorplanLocalStore((s) => s.askDrawerOpen)
   const settingsOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
   const aMenuIsOpen = buildOpen || askOpen || settingsOpen
-  // The guided tutorial owns the coaching while it runs — don't double up.
+  // The guided tutorial owns the the G.C. while it runs — don't double up.
   const tutorialActive = useFloorplanLocalStore((s) => s.tutorialActive)
 
   /**
    * The corrections themselves, so a new one re-renders this and the lesson
    * below is re-derived. `correctionLessons` is an action, not a slice, so
-   * calling it alone would subscribe to nothing and the coach would sit there
+   * calling it alone would subscribe to nothing and the G.C. would sit there
    * with the third correction already in the ledger and nothing to show for it.
    */
   const corrections = useAppStore((s) => s.corrections)
@@ -100,7 +100,7 @@ export default function AssistantBubble() {
   const isCalibrated = !!drawing && drawing.scaleMmPerPx !== null && drawing.scaleConfidence !== 'fallback'
   const calibrationHandled = !!drawing && calibrationHandledIds.includes(drawing.id)
 
-  const ctx: AssistantContext = {
+  const ctx: GCContext = {
     hasPlan: !!drawing,
     status: drawing?.status ?? null,
     calibrationCleared: isCalibrated || calibrationHandled,
@@ -120,8 +120,8 @@ export default function AssistantBubble() {
      */
     lesson: corrections.length ? useAppStore.getState().correctionLessons()[0] ?? null : null,
     /**
-     * The reading itself, so the coach can second-guess it before offering to
-     * build a house on top of it — see the doubt branch in `assistant`.
+     * The reading itself, so the G.C. can second-guess it before offering to
+     * build a house on top of it — see the doubt branch in `generalContractor`.
      */
     detection: drawing
       ? {
@@ -157,7 +157,7 @@ export default function AssistantBubble() {
         {suggestion.actionKind && suggestion.actionLabel && (
           <button
             className={styles.action}
-            onClick={() => runAction(suggestion.actionKind as AssistantActionKind)}
+            onClick={() => runAction(suggestion.actionKind as GCActionKind)}
           >
             {suggestion.actionLabel}
           </button>
