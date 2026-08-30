@@ -265,7 +265,7 @@ export function nextSuggestion(ctx: GCContext): Suggestion | null {
    * what it says is that the reading underneath everything below is out — the
    * scale, or the drywall allowance every thickness was measured against. Every
    * suggestion after this one is built on that reading: "your model's standing"
-   * is standing at the wrong size, "build the whole 3D from them" builds a house
+   * is standing at the wrong size, "stand them up" stands a house
    * from walls we have evidence are misread, and "find the rest" goes looking
    * for more of the same mistake.
    *
@@ -366,7 +366,10 @@ export function nextSuggestion(ctx: GCContext): Suggestion | null {
     }
     return {
       id: 'autoBuild',
-      message: `I found ${ctx.detectedWallCount} wall${ctx.detectedWallCount === 1 ? '' : 's'} in the plan. Want me to build the whole 3D from them?`,
+      // "Build the whole 3D from them" was the one line in here nobody says out
+      // loud — "a 3D" isn't a noun on a site. Walls get STOOD UP, which is also
+      // the word the finished state already uses ("Your model's standing").
+      message: `I found ${ctx.detectedWallCount} wall${ctx.detectedWallCount === 1 ? '' : 's'} in the plan. Want me to stand them up?`,
       actionLabel: 'Build it for me',
       actionKind: 'autoBuild',
       tone: 'idle',
