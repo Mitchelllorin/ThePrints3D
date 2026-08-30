@@ -113,7 +113,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     // carries its scale, so this pull is purely a demonstration; it is the only
     // chance to show the mechanic before a real upload demands it.
     title: 'It starts with calibration',
-    body: 'There are a few ways ThePrints3D creates 3D walls. They all begin with *calibration*: we need a *known, measured distance* marked, so we know how big or small things are.',
+    body: 'There are a few ways to get walls up. They all begin with *calibration*: we need a *known, measured distance* marked, so we know how big or small things are.',
     demo: 'calibrate',
     autoAdvanceMs: 12000,
     done: () => false,
@@ -190,7 +190,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   {
     id: 'done',
     title: 'That’s the basics',
-    body: 'Trace what you need and let it *find the rest* — the model builds as you go. Have a pull at the floor and the walls.',
+    body: 'Trace what you need and let it *find the rest* — the model builds as you go. Pull the floor, then get the walls up.',
     // Terminal: the coach shows Finish rather than Next.
     done: () => false,
   },

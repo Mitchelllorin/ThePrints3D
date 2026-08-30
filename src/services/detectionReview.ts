@@ -113,7 +113,7 @@ export function reviewDetection(input: DetectionReviewInput): DetectionDoubt[] {
         id: 'doubt-fragmented',
         message: `${auto.length} walls${
           input.roomCount > 0 ? ` across ${input.roomCount} rooms` : ''
-        } — but ${stubs} are tiny offcuts, so I've likely read dimension lines and lettering as framing. Trace the outside wall and I'll take the rest from inside it.`,
+        } — but ${stubs} are tiny offcuts, so I've likely read dimension lines and lettering as framing. Trace the exterior wall and I'll take the rest from inside it.`,
         actionLabel: 'Trace the outline',
         actionFix: 'trace',
         leverage: 80,

@@ -370,7 +370,7 @@ export function nextSuggestion(ctx: GCContext): Suggestion | null {
       // loud — "a 3D" isn't a noun on a site. Walls get STOOD UP, which is also
       // the word the finished state already uses ("Your model's standing").
       message: `I found ${ctx.detectedWallCount} wall${ctx.detectedWallCount === 1 ? '' : 's'} in the plan. Want me to stand them up?`,
-      actionLabel: 'Build it for me',
+      actionLabel: 'Stand them up',
       actionKind: 'autoBuild',
       tone: 'idle',
     }

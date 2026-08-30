@@ -130,7 +130,7 @@ export function planIntake(state: IntakeState): IntakeQuestion[] {
   if (state.fragmented) {
     questions.push({
       id: 'intake-outline',
-      prompt: 'Trace round the outside wall for me',
+      prompt: 'Trace around the exterior wall for me',
       because: "This print came back noisy. Your outline tells me what's building and what's dimension lines.",
       kind: 'choice',
       options: [
