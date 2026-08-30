@@ -17,6 +17,7 @@ import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
 import CorpusPanel from './CorpusPanel'
+import StudioCredit from './StudioCredit'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import UpgradeSheet from '../Pro/UpgradeSheet'
 import ProSection from '../Pro/ProSection'
@@ -366,6 +367,11 @@ function SettingsContent() {
           Build drawer with Floors, Framing and Roof. See FinishesPanel. */}
 
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>
+
+      {/* The website + sibling apps. Last thing in the drawer on purpose: in
+          the Play build there is no URL bar, so this is the only route out to
+          the sites, but it must never sit above the controls people came for. */}
+      <StudioCredit />
     </div>
   )
 }
