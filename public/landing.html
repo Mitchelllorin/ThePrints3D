@@ -20,13 +20,17 @@
       --bg-card:     #111827;
       --bg-card-alt: #0f172a;
       --border:      #1e2d45;
-      --purple:      #863bff;
-      --purple-dim:  #5b21b6;
-      --purple-glow: rgba(134,59,255,0.18);
-      --sky:         #38bdf8;
+      /* Brand, from docs/play-store-listing.md. These are the STORE hexes and
+         they differ from the in-app logo hexes on purpose — don't unify them. */
+      --blue:        #2563EB;
+      --blue-dim:    #1d4ed8;
+      --blue-glow:   rgba(37,99,235,0.18);
+      --orange:      #F97316;
+      --green:       #1FA65A;
+      --sky:         #60a5fa;
       --text:        #f1f5f9;
       --muted:       #94a3b8;
-      --accent-bg:   rgba(134,59,255,0.10);
+      --accent-bg:   rgba(37,99,235,0.10);
       --radius:      12px;
       --radius-lg:   20px;
     }
@@ -53,6 +57,12 @@
       backdrop-filter: blur(12px);
     }
     .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+    /* The wordmark, in its three brand colours. Same lockup as the app:
+       The (blue, regular) · Prints (orange, italic) · 3D (green, upright). */
+    .wm { font-weight: 800; letter-spacing: -0.02em; }
+    .wm-the    { color: var(--blue); }
+    .wm-prints { color: var(--orange); font-style: italic; }
+    .wm-3d     { color: var(--green); }
     .nav-brand {
       display: flex; align-items: center; gap: 10px;
       font-weight: 700; font-size: 1.1rem; letter-spacing: -0.01em;
@@ -65,7 +75,7 @@
     }
     .nav-link:hover { color: var(--text); background: var(--border); }
     .nav-cta {
-      background: var(--purple); color: #fff;
+      background: var(--blue); color: #fff;
       font-size: 0.875rem; font-weight: 600; padding: 8px 18px;
       border-radius: 8px; transition: background 0.15s, transform 0.1s;
     }
@@ -79,15 +89,15 @@
     .hero::before {
       content: ''; position: absolute; top: -200px; left: 50%;
       transform: translateX(-50%); width: 900px; height: 600px;
-      background: radial-gradient(ellipse at center, rgba(134,59,255,0.22) 0%, transparent 70%);
+      background: radial-gradient(ellipse at center, rgba(37,99,235,0.22) 0%, transparent 70%);
       pointer-events: none;
     }
     .hero-badge {
       display: inline-flex; align-items: center; gap: 6px;
       background: var(--accent-bg);
-      border: 1px solid rgba(134,59,255,0.35);
+      border: 1px solid rgba(37,99,235,0.35);
       border-radius: 99px; padding: 5px 14px;
-      font-size: 0.8rem; font-weight: 600; color: #c084fc;
+      font-size: 0.8rem; font-weight: 600; color: #60a5fa;
       letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 28px;
     }
     .hero h1 {
@@ -96,7 +106,7 @@
       max-width: 760px; margin: 0 auto 20px;
     }
     .hero h1 .grad {
-      background: linear-gradient(135deg, #c084fc 0%, #863bff 40%, #38bdf8 100%);
+      background: linear-gradient(135deg, #60a5fa 0%, #2563EB 45%, #1FA65A 100%);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
     .hero-sub {
@@ -109,13 +119,13 @@
     }
     .btn-primary {
       display: inline-flex; align-items: center; gap: 8px;
-      background: var(--purple); color: #fff;
+      background: var(--blue); color: #fff;
       font-size: 1rem; font-weight: 700; padding: 14px 28px;
       border-radius: var(--radius);
       transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
-      box-shadow: 0 0 32px rgba(134,59,255,0.4);
+      box-shadow: 0 0 32px rgba(37,99,235,0.4);
     }
-    .btn-primary:hover { background: #7c34e8; transform: translateY(-2px); box-shadow: 0 0 48px rgba(134,59,255,0.55); }
+    .btn-primary:hover { background: #7c34e8; transform: translateY(-2px); box-shadow: 0 0 48px rgba(37,99,235,0.55); }
     .btn-secondary {
       display: inline-flex; align-items: center; gap: 8px;
       background: transparent; color: var(--text);
@@ -123,7 +133,7 @@
       border-radius: var(--radius); border: 1px solid var(--border);
       transition: border-color 0.15s, background 0.15s, transform 0.1s;
     }
-    .btn-secondary:hover { border-color: rgba(134,59,255,0.5); background: var(--accent-bg); transform: translateY(-2px); }
+    .btn-secondary:hover { border-color: rgba(37,99,235,0.5); background: var(--accent-bg); transform: translateY(-2px); }
 
     /* ── MODE PILLS ── */
     .mode-strip {
@@ -133,11 +143,11 @@
       padding: 5px 16px; border-radius: 99px;
       font-size: 0.78rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
     }
-    .pill-upload  { background: rgba(134,59,255,0.15); color: #c084fc; }
+    .pill-upload  { background: rgba(37,99,235,0.15); color: #60a5fa; }
     .pill-detect  { background: rgba(56,189,248,0.15);  color: var(--sky); }
-    .pill-explore { background: rgba(134,59,255,0.12); color: #a78bfa; }
+    .pill-explore { background: rgba(37,99,235,0.12); color: #a78bfa; }
     .pill-measure { background: rgba(56,189,248,0.12);  color: #7dd3fc; }
-    .pill-annotate{ background: rgba(134,59,255,0.10); color: #c084fc; }
+    .pill-annotate{ background: rgba(37,99,235,0.10); color: #60a5fa; }
 
     /* ── STATS STRIP ── */
     .stats-strip {
@@ -149,7 +159,7 @@
       margin: 40px 0;
     }
     .stat-cell { background: var(--bg-card); padding: 24px 20px; text-align: center; }
-    .stat-num  { font-size: 2rem; font-weight: 800; color: var(--purple); display: block; }
+    .stat-num  { font-size: 2rem; font-weight: 800; color: var(--blue); display: block; }
     .stat-label { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
 
     /* ── HERO VISUAL ── */
@@ -157,7 +167,7 @@
     .hero-window {
       background: var(--bg-card); border: 1px solid var(--border);
       border-radius: var(--radius-lg); overflow: hidden;
-      box-shadow: 0 0 0 1px rgba(134,59,255,0.15), 0 40px 80px rgba(0,0,0,0.6), 0 0 60px rgba(134,59,255,0.08);
+      box-shadow: 0 0 0 1px rgba(37,99,235,0.15), 0 40px 80px rgba(0,0,0,0.6), 0 0 60px rgba(37,99,235,0.08);
     }
     .hw-titlebar {
       display: flex; align-items: center; gap: 8px; padding: 12px 16px;
@@ -188,7 +198,7 @@
     .section { padding: 96px 0; }
     .section-label {
       text-align: center; font-size: 0.8rem; text-transform: uppercase;
-      letter-spacing: 0.1em; color: var(--purple); font-weight: 700; margin-bottom: 12px;
+      letter-spacing: 0.1em; color: var(--blue); font-weight: 700; margin-bottom: 12px;
     }
     .section-title {
       text-align: center; font-size: clamp(1.8rem, 4vw, 2.8rem);
@@ -208,12 +218,12 @@
       border-radius: var(--radius-lg); padding: 36px 28px;
       transition: border-color 0.2s, transform 0.2s;
     }
-    .step:hover { border-color: rgba(134,59,255,0.4); transform: translateY(-3px); }
+    .step:hover { border-color: rgba(37,99,235,0.4); transform: translateY(-3px); }
     .step-num {
       display: inline-flex; align-items: center; justify-content: center;
       width: 40px; height: 40px; border-radius: 10px;
-      background: var(--accent-bg); border: 1px solid rgba(134,59,255,0.3);
-      font-size: 1.1rem; font-weight: 800; color: var(--purple); margin-bottom: 20px;
+      background: var(--accent-bg); border: 1px solid rgba(37,99,235,0.3);
+      font-size: 1.1rem; font-weight: 800; color: var(--blue); margin-bottom: 20px;
     }
     .step h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 10px; }
     .step p  { color: var(--muted); font-size: 0.9rem; line-height: 1.65; }
@@ -227,7 +237,7 @@
       border-radius: var(--radius-lg); padding: 28px;
       transition: border-color 0.2s, transform 0.2s, background 0.2s;
     }
-    .feat:hover { border-color: rgba(134,59,255,0.35); background: var(--bg-card-alt); transform: translateY(-2px); }
+    .feat:hover { border-color: rgba(37,99,235,0.35); background: var(--bg-card-alt); transform: translateY(-2px); }
     .feat-icon { font-size: 1.8rem; margin-bottom: 14px; display: block; }
     .feat h3 { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
     .feat p  { color: var(--muted); font-size: 0.875rem; line-height: 1.65; }
@@ -242,14 +252,14 @@
       display: inline-flex; margin-top: 12px; font-size: 0.7rem;
       font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
       padding: 3px 9px; border-radius: 99px;
-      background: rgba(134,59,255,0.12); color: #c084fc;
-      border: 1px solid rgba(134,59,255,0.2);
+      background: rgba(37,99,235,0.12); color: #60a5fa;
+      border: 1px solid rgba(37,99,235,0.2);
     }
 
     /* ── PRIVACY BAND ── */
     .privacy-band {
-      background: linear-gradient(135deg, rgba(134,59,255,0.12) 0%, rgba(56,189,248,0.06) 100%);
-      border: 1px solid rgba(134,59,255,0.2);
+      background: linear-gradient(135deg, rgba(37,99,235,0.12) 0%, rgba(56,189,248,0.06) 100%);
+      border: 1px solid rgba(37,99,235,0.2);
       border-radius: var(--radius-lg); padding: 56px 40px; text-align: center; margin: 0 0 96px;
     }
     .privacy-band h2 { font-size: clamp(1.6rem, 3.5vw, 2.2rem); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 16px; }
@@ -264,7 +274,7 @@
       border-radius: var(--radius); padding: 20px 16px; text-align: center;
       transition: border-color 0.2s;
     }
-    .stack-item:hover { border-color: rgba(134,59,255,0.35); }
+    .stack-item:hover { border-color: rgba(37,99,235,0.35); }
     .stack-item .si-icon { font-size: 1.5rem; margin-bottom: 8px; }
     .stack-item .si-name { font-size: 0.8rem; font-weight: 600; margin-bottom: 3px; }
     .stack-item .si-ver  { font-size: 0.7rem; color: var(--muted); }
@@ -276,7 +286,7 @@
     .cta-section::before {
       content: ''; position: absolute; bottom: -200px; left: 50%;
       transform: translateX(-50%); width: 700px; height: 500px;
-      background: radial-gradient(ellipse at center, rgba(134,59,255,0.18) 0%, transparent 70%);
+      background: radial-gradient(ellipse at center, rgba(37,99,235,0.18) 0%, transparent 70%);
       pointer-events: none;
     }
     .cta-section h2 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 18px; }
@@ -290,6 +300,9 @@
     .footer-links { display: flex; flex-wrap: wrap; gap: 20px; }
     .footer-links a { color: var(--muted); font-size: 0.85rem; transition: color 0.15s; }
     .footer-links a:hover { color: var(--text); }
+    .footer-siblings { width: 100%; text-align: center; color: var(--muted); font-size: 0.85rem; padding-top: 20px; }
+    .footer-siblings a { color: var(--sky); }
+    .footer-siblings a:hover { color: var(--text); }
     .footer-copy { color: var(--muted); font-size: 0.8rem; width: 100%; text-align: center; padding-top: 24px; border-top: 1px solid var(--border); margin-top: 20px; }
 
     /* ── RESPONSIVE ── */
@@ -310,8 +323,8 @@
   <div class="container">
     <div class="nav-inner">
       <a href="#" class="nav-brand">
-        <img src="./favicon.svg" alt="ThePrints3D logo" />
-        ThePrints3D
+        <img src="./brand/mark.svg" alt="" />
+        <span class="wm"><span class="wm-the">The</span><span class="wm-prints">Prints</span><span class="wm-3d">3D</span></span>
       </a>
       <div class="nav-links">
         <a href="#how-it-works" class="nav-link">How It Works</a>
@@ -397,7 +410,7 @@
           <path d="M180 130 L380 130 L440 100 L240 100 Z" fill="#243a6b" stroke="#334155" stroke-width="1"/>
           <rect x="210" y="145" width="28" height="22" rx="2" fill="#38bdf8" opacity="0.4"/>
           <rect x="255" y="145" width="28" height="22" rx="2" fill="#38bdf8" opacity="0.4"/>
-          <rect x="300" y="145" width="28" height="22" rx="2" fill="#863bff" opacity="0.5"/>
+          <rect x="300" y="145" width="28" height="22" rx="2" fill="#F97316" opacity="0.55"/>
           <rect x="345" y="145" width="28" height="22" rx="2" fill="#38bdf8" opacity="0.4"/>
           <rect x="210" y="183" width="28" height="22" rx="2" fill="#38bdf8" opacity="0.25"/>
           <rect x="255" y="183" width="28" height="22" rx="2" fill="#38bdf8" opacity="0.25"/>
@@ -412,7 +425,7 @@
           <line x1="382" y1="224" x2="382" y2="232" stroke="#38bdf8" stroke-width="1.5" opacity="0.7"/>
           <rect x="256" y="218" width="48" height="18" rx="4" fill="#0f172a" opacity="0.85"/>
           <text x="280" y="231" text-anchor="middle" fill="#38bdf8" font-size="9" font-family="monospace" font-weight="600">12.4 m</text>
-          <circle cx="302" cy="132" r="7" fill="#863bff" opacity="0.9"/>
+          <circle cx="302" cy="132" r="7" fill="#1FA65A" opacity="0.95"/>
           <rect x="312" y="118" width="52" height="18" rx="4" fill="#1e293b" stroke="#334155" stroke-width="1"/>
           <text x="338" y="131" text-anchor="middle" fill="#f1f5f9" font-size="8" font-family="sans-serif">Load bearing</text>
         </svg>
@@ -424,16 +437,16 @@
 <!-- TRUST STRIP -->
 <div class="trust">
   <div class="container">
-    <p class="trust-label">Built with</p>
+    <p class="trust-label">Built for the trades</p>
     <div class="trust-stack">
-      <span class="trust-badge">⚛️ React 19</span>
-      <span class="trust-badge">🔷 TypeScript 6</span>
-      <span class="trust-badge">🎲 Three.js v0.184</span>
-      <span class="trust-badge">⚡ Vite 8</span>
-      <span class="trust-badge">🧠 ONNX Runtime v1.26</span>
-      <span class="trust-badge">📄 PDF.js v5</span>
-      <span class="trust-badge">🐻 Zustand v5</span>
-      <span class="trust-badge">📱 Capacitor 8</span>
+      <span class="trust-badge">Framing</span>
+      <span class="trust-badge">Electrical</span>
+      <span class="trust-badge">Plumbing</span>
+      <span class="trust-badge">HVAC</span>
+      <span class="trust-badge">Trade-specific layers</span>
+      <span class="trust-badge">Real-world measurement</span>
+      <span class="trust-badge">Works offline</span>
+      <span class="trust-badge">Nothing leaves your device</span>
     </div>
   </div>
 </div>
@@ -546,21 +559,21 @@
   </div>
 </div>
 
-<!-- TECH STACK -->
+<!-- WHAT IT BUILDS -->
 <section class="section" style="padding-top:0;">
   <div class="container">
-    <p class="section-label">Tech stack</p>
-    <h2 class="section-title">Modern, open-source tools</h2>
-    <p class="section-sub">No proprietary dependencies. Built entirely on widely-used, battle-tested open-source libraries.</p>
+    <p class="section-label">What it builds</p>
+    <h2 class="section-title">Every system, one model</h2>
+    <p class="section-sub">Trace it once and each trade gets its own layer — show only what matters to the person you're standing with.</p>
     <div class="stack-grid">
-      <div class="stack-item"><div class="si-icon">⚛️</div><div class="si-name">React</div><div class="si-ver">v19</div></div>
-      <div class="stack-item"><div class="si-icon">🔷</div><div class="si-name">TypeScript</div><div class="si-ver">v6</div></div>
-      <div class="stack-item"><div class="si-icon">🎲</div><div class="si-name">Three.js</div><div class="si-ver">v0.184</div></div>
-      <div class="stack-item"><div class="si-icon">⚡</div><div class="si-name">Vite</div><div class="si-ver">v8</div></div>
-      <div class="stack-item"><div class="si-icon">🧠</div><div class="si-name">ONNX Runtime</div><div class="si-ver">v1.26</div></div>
-      <div class="stack-item"><div class="si-icon">📄</div><div class="si-name">PDF.js</div><div class="si-ver">v5</div></div>
-      <div class="stack-item"><div class="si-icon">🐻</div><div class="si-name">Zustand</div><div class="si-ver">v5</div></div>
-      <div class="stack-item"><div class="si-icon">📱</div><div class="si-name">Capacitor</div><div class="si-ver">v8</div></div>
+      <div class="stack-item"><div class="si-icon">🪚</div><div class="si-name">Framing</div><div class="si-ver">studs, plates, headers</div></div>
+      <div class="stack-item"><div class="si-icon">📐</div><div class="si-name">Floors</div><div class="si-ver">joists &amp; deck</div></div>
+      <div class="stack-item"><div class="si-icon">🏠</div><div class="si-name">Roof</div><div class="si-ver">gable, hip, shed, flat</div></div>
+      <div class="stack-item"><div class="si-icon">🚪</div><div class="si-name">Openings</div><div class="si-ver">doors &amp; windows</div></div>
+      <div class="stack-item"><div class="si-icon">⚡</div><div class="si-name">Electrical</div><div class="si-ver">boxes &amp; runs</div></div>
+      <div class="stack-item"><div class="si-icon">🚿</div><div class="si-name">Plumbing</div><div class="si-ver">supply &amp; drain</div></div>
+      <div class="stack-item"><div class="si-icon">🌬️</div><div class="si-name">HVAC</div><div class="si-ver">duct runs</div></div>
+      <div class="stack-item"><div class="si-icon">🧱</div><div class="si-name">Finishes</div><div class="si-ver">sheathing to siding</div></div>
     </div>
   </div>
 </section>
@@ -587,8 +600,8 @@
   <div class="container">
     <div class="footer-inner">
       <div class="footer-brand">
-        <img src="./favicon.svg" alt="ThePrints3D logo" />
-        ThePrints3D
+        <img src="./brand/mark.svg" alt="" />
+        <span class="wm"><span class="wm-the">The</span><span class="wm-prints">Prints</span><span class="wm-3d">3D</span></span>
       </div>
       <div class="footer-links">
         <a href="https://github.com/Mitchelllorin/ThePrints3D" target="_blank" rel="noopener">GitHub</a>
@@ -598,6 +611,12 @@
         <a href="./datasafety.html">Data Safety</a>
       </div>
     </div>
+    <p class="footer-siblings">
+      From the same shop —
+      <a href="https://circuitry3d.app" target="_blank" rel="noopener">CircuiTry3D</a>
+      <span aria-hidden="true">·</span>
+      <a href="https://automotive3d.ca" target="_blank" rel="noopener">Automotive3D</a>
+    </p>
     <p class="footer-copy">© 2026 ThePrints3D — Founded and built by Mitchell Lorin McKnight. All processing is 100% on-device.</p>
   </div>
 </footer>
