@@ -124,18 +124,35 @@ export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'wate
   if (!visible) return null
   const box = isMark
     // Top-CENTRE so an extended edge menu (left rail) never touches the logo.
-    ? { top: 10, left: '50%', width: 150, height: 36, zIndex: 100, transform: 'translateX(-50%)' }
+    // Wider than the wordmark alone: the small badge is the full canonical
+    // lockup (building mark + wordmark), so it needs room for both.
+    ? { top: 10, left: '50%', width: 166, height: 36, zIndex: 100, transform: 'translateX(-50%)' }
     : { top: '50%', left: '50%', width: 'min(70vw, 680px)', height: 'min(20vh, 190px)', zIndex: 40, transform: 'translate(-50%, -50%)' }
   return (
     <div
       style={{
         position: 'fixed', ...box, pointerEvents: 'none',
+        display: isMark ? 'flex' : undefined,
+        alignItems: isMark ? 'center' : undefined,
+        gap: isMark ? 2 : undefined,
       }}
     >
+      {/* The canonical lockup is the building mark BESIDE the wordmark. The
+          wordmark below is the loved 3D one and is left exactly as it was —
+          this only adds the half that was missing. Flat SVG on purpose: a
+          second <Canvas> for a 30px glyph is not worth the frame budget. */}
+      {isMark && (
+        <img
+          src="/brand/mark.svg"
+          alt=""
+          aria-hidden="true"
+          style={{ width: 34, height: 34, flex: '0 0 auto', display: 'block' }}
+        />
+      )}
       <Canvas
         camera={{ position: [0, 0, 6], fov: 32 }}
         gl={{ alpha: true, antialias: true }}
-        style={{ background: 'transparent', pointerEvents: 'none' }}
+        style={{ background: 'transparent', pointerEvents: 'none', flex: '1 1 auto', minWidth: 0 }}
         onCreated={({ gl }) => {
           // R3F gives its canvas an explicit `pointer-events: auto`, which
           // overrides the click-through wrapper. This decorative canvas sits
