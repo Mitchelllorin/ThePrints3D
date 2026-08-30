@@ -19,6 +19,7 @@ import { pickScaleNotation } from './scaleParser'
 import {
   rankPlanPages, scorePlanSheet, thumbnailScale, type PlanSheetScore,
 } from './planSheet'
+import { readSheetTitle } from './sheetTitle'
 
 // Configure worker once
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -141,12 +142,40 @@ export async function rasterizePDF(
     // face from a detail drawn at 1"=1'-0" — cannot be applied to it. Rendering
     // is what turns line weight into something measurable. The cost buys the
     // correctness.
+    /**
+     * AND THEN ASK THE SHEET WHAT IT IS — see `sheetTitle`.
+     *
+     * The signature above is about what is DRAWN. It cannot tell a floor plan
+     * from the electrical sheet, because the electrical sheet is the same walls
+     * with wiring over them — which is how this set came to be read off page 3
+     * when the floor plan is page 2 and says so, three times.
+     *
+     * Text is nearly free here: `getTextContent` parses the page's text layer
+     * without rendering it, and the pages are being opened anyway. A sheet with
+     * no text layer — the scanned set this picker was written for — comes back
+     * weighted 1 and nothing about its ranking changes.
+     *
+     * A WEIGHT, not a verdict. Portland's booklet says FLOOR PLAN five times on
+     * a page of prose with no drawing on it at all, so the words are allowed to
+     * move a page up the ranking and never to put it there on their own.
+     */
     const scores: Array<{ page: number } & PlanSheetScore> = []
     for (let p = 1; p <= pdf.numPages; p++) {
       // A page that would not render scores as a blank one rather than
       // shifting every page after it up a slot.
       const thumb = await renderThumbnail(pdf, p)
-      scores.push({ page: p, ...scorePlanSheet(thumb ?? new ImageData(1, 1)) })
+      const pixels = scorePlanSheet(thumb ?? new ImageData(1, 1))
+      let weight = 1
+      try {
+        const page = await pdf.getPage(p)
+        const content = await page.getTextContent()
+        const text = content.items.map((i) => ('str' in i ? i.str : '')).join(' ')
+        weight = readSheetTitle(text).weight
+      } catch {
+        // No text layer, or a page that will not give one up. Neutral, which
+        // leaves the pixel score to decide exactly as it did before.
+      }
+      scores.push({ page: p, ...pixels, score: pixels.score * weight })
       onProgress?.(20 + (p / pdf.numPages) * 20)
     }
     const pick = rankPlanPages(scores)
