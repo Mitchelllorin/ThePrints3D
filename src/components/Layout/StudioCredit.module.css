@@ -18,9 +18,6 @@
   letter-spacing: 0.02em;
   color: var(--bp-accent, #38bdf8);
   text-decoration: none;
-  /* Same 44px-touch-box absorption as .links below: keep the tap target,
-     don't let it punch a hole in the drawer's rhythm. */
-  margin: -12px 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -66,18 +63,14 @@
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
-/* The links sit in ONE row. mobile.css gives every a[href] a 44px minimum box
-   for touch; laid out in a row they share that height instead of stacking two
-   of them. Negative top margin absorbs the leading half of that box so the
-   name isn't pushed away from its own links. */
+/* The links sit in ONE row rather than stacked — see the phone rule at the
+   bottom of this file for why that matters. */
 .links {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
   column-gap: 14px;
-  margin-top: -12px;
-  margin-bottom: -12px;
   font-size: 10px;
 }
 
@@ -95,4 +88,25 @@
   color: var(--bp-text-dim, #64748b);
   opacity: 0.6;
   font-style: italic;
+}
+
+/* ── Phones only ───────────────────────────────────────────────────────────────
+   mobile.css gives EVERY a[href] a 44px minimum box under 768px so touch
+   targets clear the platform guidance. That is correct, but on a stack of
+   10px links it padded this block into a wall of whitespace. Keeping the
+   links in a row means they share one 44px height, and these negative margins
+   absorb what still leaks past the text.
+
+   These MUST stay inside the media query: above 768px there is no 44px box to
+   absorb, and applying them unconditionally collapses the app name onto its
+   own links on desktop. */
+@media (max-width: 768px) {
+  .site { margin: -12px 0; }
+
+  /* -8px, not -12px: two of these rows sit one app apart, and at -12px the
+     pitch came out to 37px while the touch boxes are 44px — the bottom 7px of
+     one app's links overlapped the next app's, so a tap in that band opened
+     the wrong site. -8px keeps the pitch at 45px, clear of the box. Measured,
+     not guessed; re-measure before tightening this further. */
+  .links { margin-top: -8px; margin-bottom: -8px; }
 }
