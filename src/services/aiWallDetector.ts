@@ -179,6 +179,16 @@ export async function isAIModelAvailable(): Promise<boolean> {
   return modelExists()
 }
 
+/**
+ * Is the model's answer worth preferring over the classical detector?
+ *
+ * Only if it actually found walls. Kept separate and exported so the rule can
+ * be tested without standing up onnxruntime and a 2 MB model in a unit test.
+ */
+export function aiResultIsUsable(result: Pick<DetectWallsResult, 'walls'>): boolean {
+  return result.walls.length > 0
+}
+
 export async function detectWallsWithAI(
   imageData: ImageData,
 ): Promise<DetectWallsResult | null> {
@@ -205,6 +215,26 @@ export async function detectWallsWithAI(
       requirePairedEdges: false,
       mergeGapPx: 6,
     })
+    /**
+     * AN EMPTY ANSWER IS NOT AN ANSWER.
+     *
+     * The caller falls back to the classical three-pass ladder only when this
+     * returns null, so returning a successful-but-empty result silently
+     * cancelled the fallback and the user got no walls at all — on a phone
+     * screenshot, every time. The model was trained on synthetic plans; a
+     * screenshot is nothing like one, the mask comes back all but blank, and
+     * the ladder that would have coped never ran.
+     *
+     * So "the model ran without throwing" is not the bar. Finding something is.
+     * A non-empty AI result still wins exactly as before.
+     */
+    if (!aiResultIsUsable(aiResult)) {
+      console.warn(
+        '[ThePrints3D] AI wall detection ran but found no walls — falling back to the classical detector.',
+      )
+      return null
+    }
+
     aiResult.walls = aiResult.walls.map((w) => ({
       ...w,
       source: 'auto' as const,
