@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2732" height="2732" viewBox="0 0 2732 2732">
+  <!--
+    LAUNCH SPLASH. Square and centred because capacitor.config.ts uses
+    androidScaleType CENTER_CROP — a portrait phone crops the sides off, so
+    everything that matters stays well inside the middle third.
+
+    The ground is #0f172a, the SAME navy the config declares as the splash
+    background. The placeholder this replaced was a light-blue X on WHITE,
+    which flashed a white box against that navy on every cold start.
+  -->
+  <rect width="2732" height="2732" fill="#0f172a"/>
+
+  <!-- canonical mark, centred and scaled up from the 512 frame -->
+  <g transform="translate(1366,1180) scale(2.0) translate(-256,-250)">
+    <g stroke="#31507f" stroke-width="2.2" fill="none" opacity=".8">
+      <path d="M144 306 L368 418"/><path d="M200 278 L424 390"/><path d="M88 334 L312 446"/>
+      <path d="M256 250 L480 362"/><path d="M32 362 L256 474"/>
+      <path d="M368 306 L144 418"/><path d="M312 278 L88 390"/><path d="M424 334 L200 446"/>
+      <path d="M256 250 L32 362"/><path d="M480 362 L256 474"/>
+    </g>
+    <path d="M144 250 L256 306 L368 250 L256 194 Z" fill="#1d2d4e"/>
+    <path d="M144 250 L256 194 L256 208 L144 264 Z" fill="#2b4069"/>
+    <path d="M256 194 L368 250 L368 264 L256 208 Z" fill="#25385b"/>
+    <path d="M144 250 L256 306 L256 362 L144 306 Z" fill="#3d6cc0"/>
+    <path d="M256 306 L368 250 L368 306 L256 362 Z" fill="#5687dd"/>
+    <path d="M168.6 274.3 L195.5 287.8 L195.5 307.8 L168.6 294.3 Z" fill="#c6d9f8"/>
+    <path d="M295.2 294.4 L321 281.5 L321 329.5 L295.2 342.4 Z" fill="#16264a"/>
+    <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z" fill="#a9c6f5"/>
+    <path d="M256 131.3 L381.4 194 L318.7 137.4 L193.3 74.7 Z" fill="#6d97dd"/>
+    <g stroke="#b3cdf8" stroke-width="3.2" fill="none" stroke-linejoin="round">
+      <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z"/>
+      <path d="M256 131.3 L381.4 194 L318.7 137.4"/>
+    </g>
+  </g>
+
+  <!-- wordmark: The (blue) · Prints (orange, italic) · 3D (green) -->
+  <text x="1366" y="1700" text-anchor="middle"
+        font-family="'Arial Black','Segoe UI',Arial,Helvetica,sans-serif"
+        font-size="188" font-weight="900" letter-spacing="-4">
+    <tspan fill="#2f80ff">The</tspan><tspan fill="#ffa033" font-style="italic">Prints</tspan><tspan fill="#2fe070">3D</tspan>
+  </text>
+</svg>

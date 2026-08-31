@@ -30,6 +30,10 @@ const TARGETS = [
   ['icon.svg', 'public/icons/icon-48.png', 48],
   // Capacitor source icon — `npx cap:assets` regenerates the Android densities
   ['icon.svg', 'assets/icon/icon.png', 1024],
+  // Launch splash. `drawable/splash.png` is the resource capacitor.config.ts
+  // names in androidSplashResourceName, so it is the one that actually shows.
+  ['splash.svg', 'assets/splash/splash.png', 2732],
+  ['splash.svg', 'android/app/src/main/res/drawable/splash.png', 2048],
 ]
 
 const browser = await chromium.launch()
