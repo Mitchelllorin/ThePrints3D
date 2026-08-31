@@ -1,0 +1,86 @@
+/* ── Launch screen ────────────────────────────────────────────────────────────
+   The same #0f172a the native splash and capacitor.config.ts use, so the boot
+   sequence is one continuous surface: native splash → this → workspace, with
+   no colour flash between them. */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(24px + env(safe-area-inset-top, 0px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+
+.mark {
+  width: clamp(150px, 42vw, 210px);
+  height: auto;
+  display: block;
+  /* The mark's own grid already reads as ground; no card, no border. */
+}
+
+.tagline {
+  margin: 6px 0 22px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #94a3b8;
+  max-width: 30ch;
+}
+
+/* The one obvious action. Everything else on this screen is quieter than it. */
+.launch {
+  width: 100%;
+  max-width: 260px;
+  padding: 14px 24px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  background: #2f80ff;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.08s;
+}
+.launch:hover { background: #4d94ff; }
+.launch:active { transform: translateY(1px); }
+.launch:focus-visible { outline: 2px solid #7ab0ff; outline-offset: 3px; }
+
+.legal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 16px 0 0;
+  font-size: 12px;
+}
+
+.legalLink {
+  background: none;
+  border: 0;
+  padding: 4px 2px;
+  font: inherit;
+  color: #7c8da0;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.legalLink:hover,
+.legalLink:focus-visible { color: #cbd5e1; }
+
+.sep { color: #475569; }

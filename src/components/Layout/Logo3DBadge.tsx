@@ -107,7 +107,7 @@ function Wordmark({ opacity }: { opacity: number }) {
  *  - 'mark': an EXACT replica of the same 3D wordmark, rendered SMALL and crisp,
  *    pinned top-left in line with the top-right icon row (top:10, 36px tall).
  */
-export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'watermark' | 'mark' } = {}) {
+export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'watermark' | 'mark' | 'launch' } = {}) {
   const visible = useUISettingsStore((s) => s.logo3DVisible)
   const opacityRaw = useUISettingsStore((s) => s.logo3DOpacity)
   // Honour the setting down to almost-invisible (was floored at 0.7, which made
@@ -115,14 +115,21 @@ export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'wate
   // fully disappears when visible.
   const watermarkOpacity = Math.max(0.02, opacityRaw)
   const isMark = variant === 'mark'
+  // 'launch' is the front door — it flows inline inside the launch screen
+  // instead of being pinned to the viewport, and it ignores the visibility
+  // toggle. Turning the workspace watermark off must not blank the brand on
+  // the one screen whose whole job is to show it.
+  const isLaunch = variant === 'launch'
   // The small replica is always crisp (opacity 1); the watermark honours setting.
-  const opacity = isMark ? 1 : watermarkOpacity
+  const opacity = isMark || isLaunch ? 1 : watermarkOpacity
   // The watermark can be toggled off; the small mark always shows (it's the
   // legible brand mark). Same wordmark either way — an exact replica.
   // Visible toggle now hides BOTH the floating watermark AND the top-left mark
   // (so promo footage can go fully logo-free).
-  if (!visible) return null
-  const box = isMark
+  if (!visible && !isLaunch) return null
+  const box = isLaunch
+    ? { position: 'relative' as const, width: '100%', height: 96 }
+    : isMark
     // Top-CENTRE so an extended edge menu (left rail) never touches the logo.
     // Wider than the wordmark alone: the small badge is the full canonical
     // lockup (building mark + wordmark), so it needs room for both.
