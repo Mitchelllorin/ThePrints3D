@@ -23,6 +23,12 @@ if (import.meta.env.DEV) {
   // four real drawing sets through the whole pipeline and print the numbers —
   // so a change to detection can be measured instead of squinted at. Loaded
   // lazily so the corpus code never reaches a production bundle.
+  // Stroke-width normalisation, exposed so it can be measured against the real
+  // corpus rather than only against synthetic test images.
+  ;(window as unknown as Record<string, unknown>).__measureStroke = async (img: unknown) => {
+    const { measureStroke, normalizeStrokeScale } = await import('./services/spatialNormalize')
+    return { measured: measureStroke(img as never), normalized: normalizeStrokeScale(img as never) }
+  }
   ;(window as unknown as Record<string, unknown>).__scorePrints = async (only?: string[]) => {
     const { scorePrints } = await import('./dev/scorePrints')
     return scorePrints(only)
