@@ -94,6 +94,28 @@ export interface NoisyPrintFilterMetrics {
   fallbackApplied: boolean
 }
 
+/**
+ * A HARD CAP ON WALL THICKNESS, RELATIVE TO THE OTHER WALLS.
+ *
+ * The pair-finder sets thickness from the gap between two parallel faces. When
+ * it pairs one wall's face with a DIFFERENT wall's face across a room, it
+ * reports a single "wall" as thick as the room — the user saw one roughly four
+ * times the thickness of every real wall around it, a solid block.
+ *
+ * Thickness was already scored as an outlier, but only as a soft -0.12 penalty,
+ * which a confident candidate simply absorbs (the AI path floors confidence at
+ * 0.75). A block is not a low-confidence wall, it is not a wall, so this is a
+ * reject and not a nudge.
+ *
+ * Relative to the MEDIAN, never an absolute pixel count: the ladder's own
+ * maxWallThicknessPx (up to 120) is tuned for a ~10MP sheet, and 120px on a
+ * phone screenshot is most of a room. The median moves with the image; a fixed
+ * number cannot. The absolute floor only stops a degenerate median (walls one
+ * or two pixels thick) from throwing away everything real.
+ */
+const MAX_THICKNESS_OVER_MEDIAN = 3
+const MIN_THICKNESS_CAP_PX = 12
+
 export interface NoisyPrintFilterResult {
   walls: ParsedWall[]
   metrics: NoisyPrintFilterMetrics
@@ -134,14 +156,23 @@ export function filterWallsForNoisyPrint(input: {
   const profile = selectOpenSourceContextProfile(noiseRatio, lineDensity)
 
   const thicknessMedian = Math.max(1, computeMedian(walls.map((w) => w.thickness)))
+
+  // The median is taken over ALL candidates first — it is robust to a handful
+  // of blocks, so the outliers cannot drag the cap up to cover themselves.
+  const thicknessCap = Math.max(thicknessMedian * MAX_THICKNESS_OVER_MEDIAN, MIN_THICKNESS_CAP_PX)
+  const withinCap = walls.filter((w) => w.thickness <= thicknessCap)
+  // If the cap would empty the list the reading is degenerate, not the walls —
+  // keep everything rather than hand back nothing.
+  const candidates = withinCap.length > 0 ? withinCap : walls
+  const blocksDropped = walls.length - candidates.length
   const borderMargin = Math.max(8, Math.min(imageWidth, imageHeight) * profile.borderSuppressionMarginPct)
   const adaptiveThreshold = clamp(profile.baseConfidenceFloor + noiseRatio * 0.16, 0.4, 0.82)
   const supportSnapPx = Math.max(10, Math.round(minWallLengthPx * 0.16))
 
   const kept: ParsedWall[] = []
-  for (let i = 0; i < walls.length; i++) {
-    const wall = walls[i]
-    const support = countSupport(wall, walls, i, supportSnapPx)
+  for (let i = 0; i < candidates.length; i++) {
+    const wall = candidates[i]
+    const support = countSupport(wall, candidates, i, supportSnapPx)
     const supportCount = support.orthogonal + support.parallel
     const len = lengthOf(wall)
     const nearBorder = isFullyNearSheetBorder(wall, imageWidth, imageHeight, borderMargin)
@@ -169,17 +200,22 @@ export function filterWallsForNoisyPrint(input: {
   }
 
   const minKeep = Math.min(
-    walls.length,
-    Math.max(4, Math.round(walls.length * profile.minRetentionRatio)),
+    candidates.length,
+    Math.max(4, Math.round(candidates.length * profile.minRetentionRatio)),
   )
   if (kept.length < minKeep) {
+    // The bail-out used to hand back the ORIGINAL list, which quietly undid the
+    // whole filter — including resurrecting the blocks. That is why the same
+    // print could come back filtered or unfiltered with no obvious reason: it
+    // depended only on how many candidates happened to survive scoring. Give
+    // back the capped set, so a block never returns by this door.
     return {
-      walls,
+      walls: candidates,
       metrics: {
         profileId: profile.id,
         noiseRatio,
         adaptiveThreshold,
-        dropped: 0,
+        dropped: blocksDropped,
         fallbackApplied: true,
       },
     }
