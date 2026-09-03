@@ -17,10 +17,8 @@ export default function TopBar({ onSettingsOpen, settingsOpen }: { onSettingsOpe
         </button>
         <div className={styles.brand}>
           <span className={styles.brandName}>
-            <span className={styles.brandBlue}>Blue</span>
-            <span>Print3D</span>
+            <span>ThePrints3D</span>
           </span>
-          <span className={styles.brandSub}>by LearnIt3D</span>
         </div>
       </div>
 

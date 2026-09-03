@@ -1,44 +1,25 @@
 # ThePrints3D
 
-[![CI](https://github.com/Mitchelllorin/ThePrints3D/actions/workflows/ci.yml/badge.svg)](https://github.com/Mitchelllorin/ThePrints3D/actions/workflows/ci.yml)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=white)](https://react.dev/)
-[![Three.js](https://img.shields.io/badge/Three.js-0.184-black?logo=threedotjs)](https://threejs.org/)
-[![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vite.dev/)
-[![PWA Ready](https://img.shields.io/badge/PWA-ready-5A0FC8?logo=pwa)](https://web.dev/progressive-web-apps/)
+ThePrints3D turns 2D construction prints and drawing sets into an interactive 3D workspace. It is a React and TypeScript web app that can also be packaged for Android with Capacitor.
 
-**Turn 2D prints and drawings into interactive, explodable 3D models — right on your phone or in the browser.**
+- Website: <https://theprints3d.com>
+- Companion marketing site: <https://github.com/Mitchelllorin/ThePrints3D---Site>
 
-ThePrints3D is a React + TypeScript app for web and Android that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. Core processing stays on-device, so drawings do not have to leave your phone or browser just to become a model.
+## What the app does
 
-🌐 **[Website](https://theprints3d.com)** &nbsp;|&nbsp; 📱 **[Get it on Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app)**
+- Imports PDF, PNG, JPEG, TIFF, and WebP drawing files, or captures a print with a device camera.
+- Organizes uploaded sheets by drawing discipline, rasterizes them for review, and derives scale when possible. Users can calibrate and trace when a drawing needs correction.
+- Detects walls and openings with an ONNX model when available, with a heuristic fallback and adjustable detection settings.
+- Renders drawings as an interactive Three.js building model with camera controls, layer visibility, explode controls, element editing, annotations, distance measurement, and PNG snapshots.
+- Supports trade and construction layers, including framing, floors, roofs, drywall, envelope, plumbing, electrical, and HVAC content.
+- Provides material takeoffs, a CSV export for unlocked Pro users, construction calculators, and unit conversion.
+- Stores saved projects and their drawing data locally in IndexedDB. The free tier keeps one saved project; additional project and export features are gated by the in-app Pro entitlement.
 
----
+The core drawing-to-model workflow runs in the client. An optional Ask AI proxy can be configured at build time, and product-catalog links deliberately open third-party sites when a user chooses them.
 
-## ✨ Features
+## Development
 
-| Feature | Description |
-|---|---|
-| **Drag-and-drop upload** | PDF, PNG, JPG, TIFF, WebP — all accepted |
-| **AI wall detection** | U-Net ONNX model (WebGPU → WASM fallback) trained on CubiCasa5k |
-| **Heuristic fallback** | Edge-based wall detector when no model is present |
-| **Interactive 3D viewer** | Orbit, pan, zoom; camera presets; perspective/orthographic |
-| **Layer toggles** | Show/hide walls, doors, windows, rooms independently |
-| **Distance measurement** | Click two surface points to get real-world distances |
-| **Annotation pins** | Place labelled, colour-coded notes anywhere on the model |
-| **Product placement** | Drop doors, windows, plumbing, HVAC, lighting into the scene |
-| **Material estimator** | Auto-estimates studs, plates, drywall, insulation from parsed walls |
-| **Scale calibration** | Auto-detected from title block; manual override available |
-| **Unit converter** | Imperial ↔ metric conversions for common construction units |
-| **Construction calculators** | On-the-fly estimating helpers |
-| **Project library** | Save and reopen projects from browser IndexedDB |
-| **Share PNG** | Export a snapshot of the current 3D view |
-| **PWA / offline** | Installable; works offline after first load |
-| **Privacy-first** | 100 % client-side — no server, no uploads |
-
----
-
-## 🚀 Quick start
+Requirements: Node.js and npm.
 
 ```bash
 git clone https://github.com/Mitchelllorin/ThePrints3D.git
@@ -47,193 +28,72 @@ npm ci
 npm run dev
 ```
 
-Open the URL printed by Vite (usually `http://localhost:5173`).
-
-### Supported input formats
-
-- **PDF** (`.pdf`) — rasterised via PDF.js; scale text is extracted from the title block
-- **Images** (`.png`, `.jpg`, `.jpeg`, `.tif`, `.tiff`, `.webp`)
-
----
-
-## 🛠 Commands
+Vite serves the development app on port 5173 by default. It binds to all local interfaces; set `PORT` to select a different port. Set `VITE_BASE_PATH` when the app is deployed below the domain root.
 
 | Command | Purpose |
-|---|---|
-| `npm run dev` | Local development server (HMR) |
-| `npm run build` | TypeScript check + Vite production bundle → `dist/` |
-| `npm run preview` | Serve the built `dist/` locally |
-| `npm run lint` | ESLint quality checks |
-| `npm run test` | Unit tests (Vitest) |
-| `npm run build:android` | Build + sync to Capacitor Android project |
+| --- | --- |
+| `npm run dev` | Start the Vite development server. |
+| `npm run build` | Type-check and create the production web bundle in `dist/`. |
+| `npm run preview` | Serve the production bundle locally. |
+| `npm run lint` | Run ESLint. |
+| `npm run test` | Run the Vitest suite. |
+| `npm run build:android` | Build the web bundle and synchronize it into the Android project. |
+| `npm run open:android` | Open the Android project through Capacitor. |
+| `npm run cap:assets` | Generate Android icon and splash assets. |
 
----
+Copy `.env.example` to `.env` only when configuring the optional Ask AI proxy or a development-only Gemini key. Do not put secrets in `VITE_` variables: Vite embeds them in the client bundle.
 
-## 🏗 Architecture
+## Architecture
 
-```
-src/
-├── components/
-│   ├── Upload/          # Drag-and-drop file intake
-│   ├── Drawings/        # Sheet list, preview, scale calibration UI
-│   ├── Viewer3D/        # Three.js canvas, camera HUD, measure & annotate tools
-│   ├── Layers/          # Layer visibility panel
-│   ├── Tools/           # Unit converter + construction calculators
-│   ├── Projects/        # Project library (IndexedDB)
-│   ├── Annotations/     # Annotation pin components
-│   └── Layout/          # App shell, navigation
-├── services/
-│   ├── pdfRasterizer.ts        # PDF/image → canvas rasterisation
-│   ├── aiWallDetector.ts       # ONNX U-Net wall segmentation
-│   ├── wallDetector.ts         # Heuristic edge-based wall detector
-│   ├── enhancedWallDetector.ts # Post-processing & refinement
-│   ├── lineClassifier.ts       # Line-segment wall/non-wall classifier
-│   ├── noisyPrintFilter.ts     # Context-aware filtering for noisy architectural prints
-│   ├── openSourceDrawingContext.ts # Open drawing priors used by the noise filter
-│   ├── wallTraceReducer.ts     # Wall-trace simplification
-│   ├── wallTypeClassifier.ts   # Interior / exterior / partition labelling
-│   ├── openingDetector.ts      # Door & window gap detection
-│   ├── roomExtractor.ts        # BFS flood-fill room segmentation
-│   ├── scaleInference.ts       # Scale auto-detection from title block
-│   ├── scaleParser.ts          # Scale string parser
-│   ├── sheetParser.ts          # Floor level inference & sheet grouping
-│   ├── sheetDiscipline.ts      # Sheet discipline classification
-│   ├── drawingProcessor.ts     # End-to-end processing pipeline
-│   ├── materialEstimator.ts    # Bill-of-materials estimator
-│   ├── projectStorage.ts       # IndexedDB project persistence
-│   ├── datasetCollector.ts     # Anonymous feature collection for model training
-│   ├── pilotMetrics.ts         # Pilot CSV snapshot/export utilities
-│   └── logger.ts               # Structured event logging
-├── store/
-│   └── useAppStore.ts          # Centralised state + actions (Zustand + Immer)
-└── types/                      # Shared TypeScript types
+| Area | Implementation |
+| --- | --- |
+| Application | React, TypeScript, Vite, and Zustand |
+| 3D workspace | Three.js with React Three Fiber and Drei |
+| Drawing processing | PDF.js, Tesseract.js, ONNX Runtime Web, and in-repository detection services |
+| Persistence | Browser IndexedDB through `idb` |
+| Offline web support | Vite PWA and Workbox |
+| Android | Capacitor 8 project in `android/` |
+| Tests | Vitest service and store tests |
+
+Key directories:
+
+```text
+src/components/  UI, workspace controls, upload, drawing, and 3D features
+src/services/    drawing processing, detection, construction, billing, and storage
+src/store/       application, configuration, and workspace state
+src/data/        construction defaults and object catalog data
+public/          PWA assets, model, product catalog, and static site pages
+android/         Capacitor Android project
+docs/            Play Store listing and release guidance
+proxy/           optional Cloudflare Worker for Ask AI
 ```
 
----
+## Android release configuration
 
-## 🤖 AI wall-segmentation model
+The Android application ID and Capacitor app ID are `com.theprints3d.app`. The app declares network access and Android 13+ image-read access for importing drawing images. It does not declare video-read access.
 
-`src/services/aiWallDetector.ts` looks for a trained ONNX model at
-`public/models/floorplan-wall-segmentation.onnx`. When present it is loaded
-via ONNX Runtime Web (WebGPU → WASM fallback). When absent, processing falls
-back to the heuristic detector.
+`npm run build:android` builds the web application and runs `cap sync android`. For a signed release bundle, follow [`docs/play-store-release.md`](docs/play-store-release.md). The `Build Android AAB` workflow runs manually or for tags matching `v*`; it builds a signed AAB when the required Android keystore secrets are available and publishes the bundle as a workflow artifact. The Android app is currently in Google Play closed testing; public availability is planned, and no public store listing is linked here.
 
-The model is a lightweight U-Net (~1.5 M parameters, ~6 MB) trained on the
-[CubiCasa5k][cubicasa5k] open floor-plan dataset (CC BY 4.0).
+## Web pages and deployment
 
-### Train your own model
+The production web build is generated in `dist/`. This repository also contains legacy static landing, privacy, and data-safety pages in `public/`. On pushes to `main` that change those files, `.github/workflows/deploy-site.yml` publishes them to this repository's default GitHub Pages project URL. The companion marketing repository owns production `theprints3d.com`.
+
+The app manifest is in `public/manifest.json`. The bundled PWA precaches application assets while treating PDF files as network-only runtime resources.
+
+## Data handling
+
+Drawing processing and saved projects are local to the device or browser for the core workflow. The in-app privacy policy, static privacy page, and data-safety page document the current handling and Android permissions:
+
+- <https://theprints3d.com/privacy>
+- <https://theprints3d.com/datasafety.html>
+- <mailto:privacy@theprints3d.com>
+
+## Contributing
+
+Before opening a pull request, run the checks relevant to the change:
 
 ```bash
-# 1. Install Python dependencies
-pip install -r ops/train/requirements.txt
-
-# 2. Download the CubiCasa5k dataset (~1.8 GB)
-git clone --depth 1 https://github.com/CubiCasa/CubiCasa5k data/cubicasa5k
-
-# 3. Train (~30 epochs — ≈1 h on GPU, ≈6 h on CPU)
-python ops/train/train.py --data data/cubicasa5k --out checkpoints/
-
-# 4. Export to ONNX
-python ops/train/export.py --checkpoint checkpoints/best.pth
+npm run lint
+npm run test
+npm run build
 ```
-
-See [`ops/train/README.md`](ops/train/README.md) for full documentation.  
-A `workflow_dispatch` CI job (`.github/workflows/train-model.yml`) can run a smoke-test and upload the ONNX as a build artifact.
-
-- **CI** (`.github/workflows/ci.yml`)
-  - Runs lint, test, and build on pushes/PRs.
-- **PR Preview** (`.github/workflows/preview.yml`)
-  - Builds PR branch and uploads `dist` bundle to external preview endpoint.
-
----
-
-## 🧱 Tech stack
-
-| Layer | Technology |
-|---|---|
-| UI framework | React 19 + TypeScript 6 |
-| 3D rendering | Three.js 0.184 + React Three Fiber + Drei |
-| State management | Zustand 5 + Immer |
-| Build tooling | Vite 8 + Rolldown |
-| PDF rendering | PDF.js 5 |
-| AI inference | ONNX Runtime Web 1.26 (WebGPU / WASM) |
-| Persistence | IndexedDB via idb |
-| Mobile | Capacitor 8 (Android) |
-| PWA | vite-plugin-pwa + Workbox |
-| Testing | Vitest |
-| Linting | ESLint 10 + typescript-eslint |
-
----
-
-## Privacy and Play Store
-
-- **Privacy policy:** `https://theprints3d.com/privacy`
-- **Data safety page:** `https://theprints3d.com/data-safety`
-- **Google Play:** `https://play.google.com/store/apps/details?id=com.theprints3d.app`
-- **Privacy contact:** `privacy@theprints3d.com`
-
-The Android app package name is `com.theprints3d.app`. Use the live URLs above for Play Console metadata.
-
----
-
-## ⚠️ Known limitations
-
-- Wall detection includes adaptive noisy-print filtering, but extreme low-contrast scans can still require manual tracing.
-- 3D geometry falls back to procedural generation when parsed wall fidelity is low.
-- Scale inference is best-effort; manual calibration may be needed for non-standard title blocks.
-- No server-side persistence — all state lives in browser memory / IndexedDB.
-
----
-
-## 🗺 Near-term roadmap
-
-1. Improve noisy-input robustness (reduce false positives / false negatives)
-2. Strengthen scale inference and multi-floor stacking confidence
-3. Expand unit-test coverage across parser and service modules
-4. Add richer telemetry and result dashboards for pilot tracking
-5. Introduce secure backend data handling and retention enforcement
-
----
-
-## 🔧 Ops & pilot artifacts
-
-| File | Purpose |
-|---|---|
-| `pilot/pilot_runbook.txt` | 2-week pilot operational runbook |
-| `pilot/pilot_metrics_template.csv` | Required pilot metrics schema |
-| `pilot/two_week_execution_loop.txt` | Daily execution and fix cadence |
-| `ops/day1_setup_checklist.txt` | Day-1 setup checklist |
-| `ops/data_permission_template.txt` | Permissions capture template |
-| `ops/mvp_acceptance_criteria.md` | MVP readiness / exit criteria |
-| `ops/data_governance_controls.txt` | Governance controls baseline |
-| `ops/data_access_register_template.csv` | Permission / access register |
-
----
-
-## 🧩 Part of the 3D Learning Family
-
-ThePrints3D is one of a family of interactive 3D apps built by Mitchell Lorin McKnight, each making an abstract, hands-on trade visual and tangible:
-
-| App | What it does | Links |
-|---|---|---|
-| **ThePrints3D** *(this app)* | Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely in the browser | [theprints3d.com](https://theprints3d.com) · [Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app) |
-| **CircuiTry3D** | Build and simulate electrical circuits in 3D — from macro current flow to the atomic scale, with the FUSE™ failure engine | [circuitry3d.net](https://www.circuitry3d.net) · [Google Play](https://play.google.com/store/apps/details?id=com.circuitry3d.app) |
-| **Automotive3D** | Build real engines in 3D, swap branded parts, and diagnose faults with live DTC codes | [automotive3d.ca](https://automotive3d.ca) · [Google Play](https://play.google.com/store/apps/details?id=com.automotive3d.app) |
-
----
-
-## 🤝 Contributing
-
-1. Fork the repo and create a feature branch (`git checkout -b feature/my-thing`)
-2. Make your changes and add tests where applicable
-3. Ensure all quality gates pass: `npm run lint && npm run test && npm run build`
-4. Open a pull request — the CI workflow and a preview deployment will run automatically
-5. If you need a preview before opening a PR, run the **PR Preview** workflow manually and optionally provide the branch/SHA in the `ref` input; the workflow summary will include the preview URL
-
----
-
-## 📄 CI / deployment
-
-The CI workflow (`.github/workflows/ci.yml`) runs **lint → test → build** on every push and pull request.
-
-The preview workflow (`.github/workflows/preview.yml`) builds and deploys a preview environment for every pull request. You can also run it manually for any branch/SHA, and the workflow summary will include the preview URL when the deploy API returns one.

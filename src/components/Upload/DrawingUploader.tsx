@@ -79,8 +79,7 @@ export default function DrawingUploader({ autoNavigate = true }: { autoNavigate?
       )}
       <div className={styles.hero}>
         <h1 className={styles.title}>
-          <span className={styles.titleBlue}>Blue</span>
-          <span>Print3D</span>
+          <span>ThePrints3D</span>
         </h1>
         <p className={styles.subtitle}>
           Scan your construction drawings and turn them into an interactive 3D model.

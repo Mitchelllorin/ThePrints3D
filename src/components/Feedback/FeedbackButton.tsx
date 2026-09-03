@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import styles from './FeedbackButton.module.css'
 
-const FEEDBACK_EMAIL = 'circuitry3dsim@gmail.com'
+const FEEDBACK_EMAIL = 'hello@theprints3d.com'
 
 /**
  * Floating "Send feedback" button. Visible everywhere in the app.
