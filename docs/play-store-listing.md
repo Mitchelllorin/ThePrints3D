@@ -95,10 +95,22 @@ pitch deck, website:
 
 ## Asset checklist
 
-- [ ] Hi-res icon — 512 × 512, 32-bit PNG → `PlayStore_icon_512.png`
+**This list tracks what exists IN THIS REPO. It is not, and cannot be, the state
+of the Play Console — a checkbox here says nothing about what has been uploaded.**
+The app entered closed testing with a full set of assets already on the listing,
+while every box below still read unticked; that gap was read as "assets missing"
+and it was wrong. For what is actually live, look at Play Console → Test and
+release → App bundle explorer and the listing page itself.
+
+- [x] Hi-res icon — 512 × 512, 32-bit PNG → `public/brand/PlayStore_icon_512.png`
 - [ ] Feature graphic — 1024 × 500, PNG/JPG, **no alpha** → `feature_graphic_1024x500.png`
-- [ ] Phone screenshots — 2–8, min 320px, max 3840px (user is capturing)
-- [ ] Adaptive launcher icon — `adaptive_foreground_512.png` + `adaptive_background_512.png`
+- [x] Adaptive launcher icon — `public/brand/adaptive_foreground_512.png` + `adaptive_background_512.png`
+- [ ] Phone screenshots — captured by the user, uploaded straight to Console; not
+      kept in the repo (`public/screenshots/` holds a README only)
+
+**Already on the live listing but superseded here:** the icon uploaded before
+2026-08-30 is the old purple placeholder. The generated files above are the real
+mark and need re-uploading — see [[canonical-logo]] in memory.
 
 ---
 
