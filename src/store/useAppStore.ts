@@ -772,6 +772,43 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
  * return the framing result (or null if there's nothing to frame). Shared by
  * buildModel (Build 3D) and buildForMe so BOTH always produce framing.
  */
+/**
+ * SIZE THE PRINT TO THE DRAWING, NOT TO A DEFAULT SHEET.
+ *
+ * floorplanOverlay.scale started life at a fixed [12, 8] and was never derived
+ * from anything. The walls, meanwhile, are built at the drawing's real scale —
+ * so the print plane and the model only ever agreed by luck, when a sheet
+ * happened to be about 11x7 metres.
+ *
+ * When they disagreed the result was a BLANK WORKSPACE. PrintAutoFrame computes
+ * the camera from this scale, so a screenshot that read 28.5 mm/px framed the
+ * camera for an 11x7 sheet while the model was 21x21 and sat entirely outside
+ * the view. The G.C. reported "I found 19 walls" and the user saw nothing —
+ * walls built, print loaded, camera aimed at empty space. It looked random
+ * because it depended on the inferred scale.
+ *
+ * Only for the drawing the overlay is actually showing, so it can never stamp
+ * on a print the user has positioned or calibrated by hand.
+ */
+function sizeOverlayToDrawing(s: AppState, id: string): void {
+  if (s.floorplanOverlay.drawingId !== id) return
+  const d = s.drawings.find((x) => x.id === id)
+  if (!d || d.status !== 'ready') return
+  const mmPerPx = d.scaleMmPerPx
+  const w = d.rasterWidth
+  const h = d.rasterHeight
+  if (!mmPerPx || !w || !h) return
+  const worldW = (w * mmPerPx) / 1000
+  const worldH = (h * mmPerPx) / 1000
+  // A wild inferred scale must not throw the print to the horizon. Clamped
+  // rather than rejected: per the standing rule, something always comes out and
+  // the user corrects it.
+  const sane = (v: number) => Number.isFinite(v) && v > 0.5 && v < 500
+  if (sane(worldW) && sane(worldH)) {
+    s.floorplanOverlay.scale = [worldW, worldH]
+  }
+}
+
 function computeFramingResult(
   drawings: AppState['drawings'],
   placedObjects: PlacedObject[] = [],
@@ -1016,7 +1053,10 @@ export const useAppStore = create<AppState>()(
     updateDrawing: (id, patch) =>
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)
-        if (d) Object.assign(d, patch)
+        if (!d) return
+        Object.assign(d, patch)
+
+        sizeOverlayToDrawing(s, id)
       }),
 
     setDrawingType: (id, type) =>
@@ -1380,6 +1420,10 @@ export const useAppStore = create<AppState>()(
             )
           }
           Object.assign(d, patch)
+          // processDrawing assigns the patch itself rather than going through
+          // updateDrawing, so the overlay has to be sized here too — this is
+          // the path every real upload takes.
+          sizeOverlayToDrawing(s, id)
         }
       })
 
