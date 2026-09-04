@@ -43,9 +43,56 @@ if (import.meta.env.DEV) {
     const image = new ImageData(
       new Uint8ClampedArray(src.data), src.width, src.height,
     )
+    /**
+     * Do these walls actually enclose rooms?
+     *
+     * Wall COUNT cannot answer that — it rewards noise, and a sweep scored on
+     * it tuned straight into 164 walls on a five-room studio. Rasterising the
+     * walls and counting the regions they enclose is two-sided: too few walls
+     * and rooms merge into one, too many and the plan shatters into slivers.
+     * truth.json states the real number, so this can be scored honestly.
+     */
+    const regionCount = (walls: { x1: number; y1: number; x2: number; y2: number; thickness: number }[]) => {
+      const W = 420
+      const k = W / image.width
+      const H = Math.max(1, Math.round(image.height * k))
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H
+      const g = cv.getContext('2d')!
+      g.fillStyle = '#fff'; g.fillRect(0, 0, W, H)
+      g.strokeStyle = '#000'; g.lineCap = 'round'
+      for (const wl of walls) {
+        g.lineWidth = Math.max(1.5, wl.thickness * k)
+        g.beginPath(); g.moveTo(wl.x1 * k, wl.y1 * k); g.lineTo(wl.x2 * k, wl.y2 * k); g.stroke()
+      }
+      const d = g.getImageData(0, 0, W, H).data
+      const open = new Uint8Array(W * H)
+      for (let i = 0; i < W * H; i++) open[i] = d[i * 4] > 128 ? 1 : 0
+      const seen = new Uint8Array(W * H)
+      const minArea = Math.max(80, W * H * 0.004)
+      const stack: number[] = []
+      let rooms = 0
+      for (let start = 0; start < W * H; start++) {
+        if (!open[start] || seen[start]) continue
+        let area = 0; let edge = false
+        stack.length = 0; stack.push(start); seen[start] = 1
+        while (stack.length) {
+          const q = stack.pop()!; area++
+          const x = q % W; const y = (q - x) / W
+          if (x === 0 || y === 0 || x === W - 1 || y === H - 1) edge = true
+          if (x > 0 && open[q - 1] && !seen[q - 1]) { seen[q - 1] = 1; stack.push(q - 1) }
+          if (x < W - 1 && open[q + 1] && !seen[q + 1]) { seen[q + 1] = 1; stack.push(q + 1) }
+          if (y > 0 && open[q - W] && !seen[q - W]) { seen[q - W] = 1; stack.push(q - W) }
+          if (y < H - 1 && open[q + W] && !seen[q + W]) { seen[q + W] = 1; stack.push(q + W) }
+        }
+        // Edge-touching is the paper around the plan, not a room.
+        if (area >= minArea && !edge) rooms++
+      }
+      return rooms
+    }
+
     const rows = (configs as Record<string, number | boolean>[]).map((c) => {
       const r = detectWalls(image, c as never)
-      return { cfg: c, walls: r.walls.length }
+      return { cfg: c, walls: r.walls.length, regions: regionCount(r.walls as never) }
     })
     return { stroke: norm.measured.strokePx, adjusted: norm.adjusted,
              size: [image.width, image.height], inv: norm.inverseFactor, rows }
