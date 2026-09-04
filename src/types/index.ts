@@ -35,6 +35,11 @@ export type DrawingStatus = 'pending' | 'processing' | 'ready' | 'error'
 export type ScaleConfidence = 'parsed' | 'inferred' | 'fallback'
 
 export interface ParsedWall {
+  /** True when this wall was inferred from a room's boundary rather than read
+   *  off the ink — see `wallsFromRooms`. An estimate the user can correct, not
+   *  a measurement, and worth telling apart from a wall the detector saw. */
+  roomDerived?: boolean
+
   /** Pixel coordinates on the rasterized image */
   x1: number
   y1: number

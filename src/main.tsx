@@ -36,6 +36,7 @@ if (import.meta.env.DEV) {
     const { normalizeStrokeScale } = await import('./services/spatialNormalize')
     const { normalizeForDetection } = await import('./services/rasterNormalize')
     const { detectWalls } = await import('./services/wallDetector')
+    const { joinDetectedWalls } = await import('./services/joinDetectedWalls')
     const toned = normalizeForDetection(img as never)
     const base = toned.adjusted ? toned.image : (img as never)
     const norm = normalizeStrokeScale(base as never, target)
@@ -92,7 +93,10 @@ if (import.meta.env.DEV) {
 
     const rows = (configs as Record<string, number | boolean>[]).map((c) => {
       const r = detectWalls(image, c as never)
-      return { cfg: c, walls: r.walls.length, regions: regionCount(r.walls as never) }
+      const j = joinDetectedWalls(r.walls as never)
+      return { cfg: c, walls: r.walls.length,
+               regions: regionCount(r.walls as never),
+               joinedRegions: regionCount(j.walls as never), joined: j.joined }
     })
     return { stroke: norm.measured.strokePx, adjusted: norm.adjusted,
              size: [image.width, image.height], inv: norm.inverseFactor, rows }

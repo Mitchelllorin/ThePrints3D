@@ -8,6 +8,9 @@ import { extractRooms } from './roomExtractor'
 import { rejoinAcrossOpenings } from './openingDetector'
 import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
+import { logEvent } from './logger'
+import { enclosedRegions } from './wallEnclosure'
+import { wallsFromRooms } from './wallsFromRooms'
 import { inferScaleFromPaper, inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
 import { filterWallsForNoisyPrint } from './noisyPrintFilter'
@@ -408,6 +411,52 @@ export async function processDrawing(
     })
     walls = rejoined.walls
     const openings = rejoined.openings
+
+    /**
+     * THE LAST RUNG: IF THE WALLS DO NOT MAKE ROOMS, USE THE ROOMS.
+     *
+     * Every step above is a cascade — the model, then the heuristic ladder,
+     * then the returns pass, then rejoining across doorways — and each only
+     * knows to try because the one before produced NOTHING. That is a poor
+     * test. A print can come back with fifty walls that enclose no rooms at
+     * all, and every guard in the pipeline waves it through because fifty is
+     * not zero. Measured on screenshot-adu-71sqm: 50-plus walls, ZERO enclosed
+     * rooms, across 42 threshold configurations and again after corner-joining.
+     * The lines were read; they simply never closed.
+     *
+     * `extractRooms` was succeeding on that same image the whole time, from the
+     * other direction — it floods the raster, seals the doorways, reads the
+     * labels, and found 7 rooms against a stated truth of 5. The app knew where
+     * the kitchen was. Nothing had ever turned that back into the walls which
+     * must be around it.
+     *
+     * So when the ink-read walls enclose less of the plan than the rooms say
+     * exists, the rooms' own boundaries are added. They are marked
+     * `roomDerived`, because they are an estimate from a bounding box rather
+     * than a reading of the ink, and the user is the one who corrects them.
+     * Additive: nothing the detector found is discarded.
+     */
+    const roomsFound = rooms.length
+    if (roomsFound > 0) {
+      const enclosed = enclosedRegions(walls, detectImage.width, detectImage.height)
+      if (enclosed < roomsFound) {
+        const thicknessPx = walls.length
+          ? [...walls].map((w) => w.thickness).sort((a, b) => a - b)[Math.floor(walls.length / 2)]
+          : 6
+        const derived = wallsFromRooms(rooms, thicknessPx)
+        if (derived.walls.length) {
+          walls = [...walls, ...derived.walls]
+          logEvent('drawing.walls.roomDerived', {
+            drawingId: drawing.id,
+            enclosedBefore: enclosed,
+            roomsFound,
+            added: derived.walls.length,
+            sharedEdges: derived.shared,
+            enclosedAfter: enclosedRegions(walls, detectImage.width, detectImage.height),
+          })
+        }
+      }
+    }
 
     // 8. Derive text/symbol/annotation semantics by combining detector outputs
     //    with the canonical symbol glossary.
