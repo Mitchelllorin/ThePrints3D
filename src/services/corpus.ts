@@ -155,6 +155,29 @@ export interface CorpusSheet {
   read: CorpusReading
   /** The first reading in full — see `CorpusDetection`. */
   detected?: CorpusDetection
+  /**
+   * WHAT THE USER SAYS IS ACTUALLY THERE.
+   *
+   * `detected` is our guess. This is the answer. Without it the corpus holds a
+   * pile of predictions with nothing to score them against, which is why it
+   * could never have trained anything: a labelled example needs the label.
+   *
+   * Written whenever the walls standing on a sheet change by the user's hand —
+   * a trace, a drag, a delete — so it always reflects the last state they were
+   * willing to leave the model in. Overwrites rather than appends: the newest
+   * answer is the answer, and keeping every intermediate would store mostly
+   * half-finished traces.
+   */
+  truth?: CorpusTruth
+}
+
+/** The user's own reading of a sheet — geometry, not counts. */
+export interface CorpusTruth {
+  /** Wall segments in the sheet's measured coordinate space. */
+  walls: unknown[]
+  /** How many of those the user drew or moved themselves. */
+  userWallCount: number
+  at: number
 }
 
 /** A correction, tied to the pixels it was made against. */
@@ -454,6 +477,30 @@ export async function captureSheet(input: SheetCapture): Promise<string | null> 
  *
  * Returns how many records the corpus now holds for that sheet.
  */
+/**
+ * Record the user's own reading of a sheet as ground truth.
+ *
+ * Paired with the stored raster this is a training example: these pixels, these
+ * walls. The app has been keeping the pixels and its own guess since the corpus
+ * was built, and throwing the answer away.
+ */
+export async function rememberTruth(
+  sheetId: string,
+  walls: unknown[],
+  userWallCount: number,
+): Promise<void> {
+  if (!corpusAvailable()) return
+  try {
+    const d = await db()
+    const sheet = (await d.get(SHEETS, sheetId)) as CorpusSheet | undefined
+    if (!sheet) return
+    sheet.truth = { walls, userWallCount, at: Date.now() }
+    await d.put(SHEETS, sheet)
+  } catch {
+    // Storage is a courtesy, never a blocker — same rule as every other write here.
+  }
+}
+
 export async function rememberCorrections(
   sheetId: string,
   records: readonly CorrectionRecord[],
@@ -548,7 +595,15 @@ export async function corpusStats(): Promise<CorpusStats> {
  * way to crash a phone. Each entry carries its sheet id, which is the hash of
  * the pixels, so an image exported separately can always be matched back.
  */
-export async function exportCorpus(): Promise<string> {
+/**
+ * `includeRaster` turns the export from a report into a TRAINING SET.
+ *
+ * Off by default because the pixels are megabytes against the record's
+ * kilobytes, and most reasons to export are diagnostic. On, each sheet carries
+ * its raster as a data URL, so an example is self-contained: the image, our
+ * reading, and the user's corrections in one object.
+ */
+export async function exportCorpus(opts: { includeRaster?: boolean } = {}): Promise<string> {
   const sheets = await listSheets()
   const corrections = corpusAvailable()
     ? await (async () => {
@@ -564,11 +619,14 @@ export async function exportCorpus(): Promise<string> {
     {
       version: 1,
       exportedAt: Date.now(),
-      sheets: sheets.map(({ raster, source, ...meta }) => ({
-        ...meta,
-        rasterBytes: raster?.size ?? 0,
-        sourceBytes: source?.size ?? 0,
-      })),
+      sheets: await Promise.all(
+        sheets.map(async ({ raster, source, ...meta }) => ({
+          ...meta,
+          rasterBytes: raster?.size ?? 0,
+          sourceBytes: source?.size ?? 0,
+          rasterDataUrl: opts.includeRaster && raster ? await blobToDataUrl(raster) : undefined,
+        })),
+      ),
       corrections,
     },
     null,
@@ -580,6 +638,20 @@ export async function exportCorpus(): Promise<string> {
  * Delete the lot. Present from the first commit, because the answer to "what do
  * you keep about me?" has to come with a way to make the answer nothing.
  */
+/** Blob → data URL, so an exported sheet carries its own pixels. */
+async function blobToDataUrl(blob: Blob): Promise<string | undefined> {
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader()
+      r.onload = () => resolve(String(r.result))
+      r.onerror = () => reject(r.error)
+      r.readAsDataURL(blob)
+    })
+  } catch {
+    return undefined
+  }
+}
+
 export async function forgetEverything(): Promise<void> {
   if (!corpusAvailable()) return
   try {

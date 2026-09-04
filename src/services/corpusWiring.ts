@@ -24,7 +24,7 @@
  * the work must never be able to interrupt the work.
  */
 import { useAppStore } from '../store/useAppStore'
-import { captureSheet, correctionsForSheet, rememberCorrections } from './corpus'
+import { captureSheet, correctionsForSheet, rememberCorrections, rememberTruth } from './corpus'
 
 /** in-session drawing id → the sheet's content hash in the corpus. */
 const sheetIdByDrawing = new Map<string, string>()
@@ -127,6 +127,41 @@ export function startCorpusCapture(): () => void {
     }
   })
 
+  /**
+   * RECORD THE ANSWER, NOT JUST THE GUESS.
+   *
+   * captureDrawing fires once, when a drawing reaches `ready`, and stores the
+   * raster next to what the DETECTOR produced. Everything the user then does to
+   * those walls — tracing the ones we missed, dragging the ones we put in the
+   * wrong place, deleting the ones that were never there — was applied to the
+   * model and never written down. So the corpus held a pile of predictions with
+   * nothing to score them against, and could not have trained anything: a
+   * labelled example needs the label.
+   *
+   * This writes the user's own reading back. Debounced because a drag fires on
+   * every pointer move and only where it lands is worth keeping.
+   */
+  const truthTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const unsubTruth = useAppStore.subscribe((state, prev) => {
+    for (const d of state.drawings) {
+      const before = prev.drawings.find((p) => p.id === d.id)
+      if (!before || before.parsedWalls === d.parsedWalls) continue
+      const sheetId = sheetIdByDrawing.get(d.id)
+      if (!sheetId) continue
+      // Only the user's hand counts as truth. A re-detect is another guess.
+      const userWallCount = d.parsedWalls.filter((w) => w.source === 'user').length
+      const beforeUser = before.parsedWalls.filter((w) => w.source === 'user').length
+      if (userWallCount === 0 && userWallCount === beforeUser) continue
+      clearTimeout(truthTimers.get(d.id))
+      truthTimers.set(d.id, setTimeout(() => {
+        truthTimers.delete(d.id)
+        const now = useAppStore.getState().drawings.find((x) => x.id === d.id)
+        if (!now) return
+        void rememberTruth(sheetId, now.parsedWalls, userWallCount)
+      }, 1500))
+    }
+  })
+
   const unsubCorrections = useAppStore.subscribe((state, prev) => {
     if (state.corrections === prev.corrections) return
     // Group by the sheet each record was made on: one write per sheet, and a
@@ -146,6 +181,9 @@ export function startCorpusCapture(): () => void {
   })
 
   stop = () => {
+    for (const t of truthTimers.values()) clearTimeout(t)
+    truthTimers.clear()
+    unsubTruth()
     unsubDrawings()
     unsubCorrections()
     started = false
