@@ -27,7 +27,14 @@ import type { OcrRequest, OcrResponse } from '../workers/ocr.worker'
  * Generous on purpose — see above. First run on a cold cache pays for the
  * language model download; every run after it is far quicker.
  */
-const OFF_THREAD_TIMEOUT_MS = 120_000
+/**
+ * A budget, not a deadline for correctness. Words are a BONUS — room names and
+ * a stated area sharpen the read, and a print with none still builds. So when
+ * this runs out the answer is "no words", not "do it all again somewhere worse".
+ * 45s is long enough for a real sheet on a phone and short enough that nobody
+ * watches a blank workspace wondering if it crashed.
+ */
+const OFF_THREAD_TIMEOUT_MS = 45_000
 
 let worker: Worker | null = null
 let nextId = 1
@@ -54,6 +61,11 @@ function getWorker(): Worker | null {
  * A failure out here falls back to the inline reader rather than giving up, so
  * the worst case is the behaviour this replaced.
  */
+/** Distinguishes "too slow" from "broken" — they want opposite answers. */
+export class OcrTimeout extends Error {
+  constructor() { super('ocr worker timed out') ; this.name = 'OcrTimeout' }
+}
+
 export async function ocrRasterOffThread(
   img: RasterLike,
   minConfidence = 60,
@@ -72,7 +84,7 @@ export async function ocrRasterOffThread(
 
   try {
     const tokens = await new Promise<SizedTextToken[]>((resolve, reject) => {
-      const timer = setTimeout(() => { cleanup(); reject(new Error('ocr worker timed out')) }, OFF_THREAD_TIMEOUT_MS)
+      const timer = setTimeout(() => { cleanup(); reject(new OcrTimeout()) }, OFF_THREAD_TIMEOUT_MS)
       const cleanup = () => {
         clearTimeout(timer)
         w.removeEventListener('message', onMessage)
@@ -91,6 +103,28 @@ export async function ocrRasterOffThread(
     })
     return { tokens, offThread: true }
   } catch (err) {
+    /**
+     * A TIMEOUT IS NOT A FAILURE, AND THE FALLBACK WAS WORSE THAN IT.
+     *
+     * This used to answer every rejection by running the whole OCR AGAIN on the
+     * main thread — the one thing the worker exists to prevent. So a slow sheet
+     * cost its 120s budget in the worker and then blocked the UI for as long
+     * again, which is why a 732x727 screenshot could take over four minutes
+     * with the workspace apparently frozen. It also set `workerUsable = false`,
+     * so every later print in the session skipped the worker too: one slow
+     * sheet poisoned the whole run.
+     *
+     * Slowness and breakage want opposite answers. If the worker is merely
+     * slow, the work is already being done and repeating it on the thread that
+     * has to paint is strictly worse — take "no words" and carry on; the print
+     * still builds, just without room names. If the worker is genuinely broken
+     * — it could not be constructed, or it threw — then the main thread is the
+     * only place left, and that fallback is kept exactly as it was.
+     */
+    if (err instanceof OcrTimeout) {
+      console.warn('[ocr] worker exceeded its budget; continuing without words')
+      return { tokens: [], offThread: true }
+    }
     // SAY SO. A silent failure here is indistinguishable from a drawing that
     // genuinely has no words on it, which is precisely how this went unnoticed.
     console.warn('[ocr] worker failed, falling back to the main thread:', err)
