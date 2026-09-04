@@ -31,7 +31,7 @@
  * `RasterLike` structurally, so callers pass one straight in.
  */
 
-import { grayHistogram, otsuThreshold, type RasterLike } from './rasterNormalize'
+import { grayHistogram, inkStats, otsuThreshold, type RasterLike } from './rasterNormalize'
 
 /**
  * The stroke width every image is resampled to.
@@ -47,7 +47,7 @@ export const CANONICAL_STROKE_PX = 3
 const MAX_STROKE_RUN = 40
 
 export interface StrokeMeasurement {
-  /** Modal ink run length in pixels — the typical line thickness. */
+  /** Typical line thickness in pixels. Fractional — see the estimator below. */
   strokePx: number
   /** How many runs the mode was drawn from. Low counts mean a weak reading. */
   samples: number
@@ -71,11 +71,27 @@ function toGray(img: RasterLike, x: number, y: number): number {
  * them while the mode is not.
  */
 export function measureStroke(img: RasterLike): StrokeMeasurement {
-  // Otsu's split is INCLUSIVE of the ink side. On a clean bi-level drawing it
-  // lands exactly on the ink value, so a strict `<` finds no ink at all and the
-  // measurement silently returns nothing — which is precisely the well-formed
-  // input this must never fail on.
-  const threshold = otsuThreshold(grayHistogram(img))
+  /**
+   * BIAS THE INK SPLIT AWAY FROM THE FRINGE.
+   *
+   * Otsu sits between paper and ink, which is the right split for deciding
+   * "is there ink here". It is the WRONG split for measuring how THICK the ink
+   * is: on an anti-aliased screenshot every stroke carries a grey halo that
+   * falls on the ink side of Otsu, and those halos produce a flood of 2px runs
+   * that win the mode outright. Measured on the corpus, both real screenshots
+   * reported a stroke of 2 — the floor of the search — regardless of their
+   * actual line work.
+   *
+   * So the threshold moves halfway from Otsu down toward the ink level, which
+   * selects stroke CORES and leaves the halo on the paper side.
+   *
+   * Otsu's split is also inclusive of the ink side: on a clean bi-level drawing
+   * it lands exactly on the ink value, so a strict `<` would find no ink at all
+   * on the best-formed input imaginable.
+   */
+  const stats = inkStats(img)
+  const otsu = otsuThreshold(grayHistogram(img))
+  const threshold = Math.max(stats.ink, Math.round(stats.ink + (otsu - stats.ink) * 0.5))
   const hist = new Uint32Array(MAX_STROKE_RUN + 1)
   let samples = 0
 
@@ -117,7 +133,26 @@ export function measureStroke(img: RasterLike): StrokeMeasurement {
     if (hist[w] > bestCount) { bestCount = hist[w]; best = w }
   }
 
-  return { strokePx: best, samples, threshold }
+  /**
+   * SUB-PIXEL PEAK, NOT A WINNING BIN.
+   *
+   * A whole-pixel mode quantises hard: a drawing whose true stroke sits between
+   * 2 and 3 gets reported as one or the other depending on which bin wins by a
+   * hair, and the resample factor then jumps by 50%. Fitting a parabola through
+   * the winning bin and its two neighbours recovers the fraction, so the factor
+   * moves smoothly with the drawing instead of snapping between two answers.
+   *
+   * On a clean synthetic image the neighbours are empty, the fit returns
+   * exactly zero offset, and the integer answer is preserved.
+   */
+  const yL = best > 2 ? hist[best - 1] : 0
+  const yC = hist[best]
+  const yR = best < MAX_STROKE_RUN ? hist[best + 1] : 0
+  const denom = yL - 2 * yC + yR
+  const delta = denom !== 0 ? (0.5 * (yL - yR)) / denom : 0
+  const strokePx = best + Math.max(-0.5, Math.min(0.5, delta))
+
+  return { strokePx, samples, threshold }
 }
 
 /** Bilinear resample. Handles both up- and down-scaling. */

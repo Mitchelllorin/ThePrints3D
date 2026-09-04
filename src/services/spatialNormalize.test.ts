@@ -81,3 +81,42 @@ describe('normalizeStrokeScale', () => {
     expect(normalizeStrokeScale(blank).adjusted).toBe(false)
   })
 })
+
+/**
+ * Regression guards for the two faults the real corpus exposed, both of which
+ * the synthetic tests above passed straight through.
+ */
+describe('estimator faults found on the real corpus', () => {
+  it('does not pin at the floor when strokes carry an anti-aliased halo', () => {
+    // Soft-edged lines: a core of `core` px flanked by grey fringe. Measuring
+    // at Otsu counted the fringe and reported 2 — the floor — on every real
+    // screenshot regardless of its actual line work.
+    const w = 600, h = 600, core = 6
+    const data = new Uint8ClampedArray(w * h * 4).fill(255)
+    const put = (x: number, y: number, v: number) => {
+      if (x < 0 || y < 0 || x >= w || y >= h) return
+      const i = (y * w + x) * 4
+      if (data[i] > v) { data[i] = data[i + 1] = data[i + 2] = v }
+    }
+    const softLine = (fixed: number, vertical: boolean) => {
+      for (let t = -2; t < core + 2; t++) {
+        const v = t < 0 || t >= core ? 170 : 20   // halo vs core
+        for (let k = 30; k < (vertical ? h : w) - 30; k++) {
+          vertical ? put(fixed + t, k, v) : put(k, fixed + t, v)
+        }
+      }
+    }
+    for (let g = 60; g < w - 60; g += 90) { softLine(g, true); softLine(g, false) }
+    const m = measureStroke({ data, width: w, height: h })
+    expect(m.strokePx).toBeGreaterThan(3)
+  })
+
+  it('reports a fractional width rather than snapping between bins', () => {
+    // A whole-pixel mode makes the resample factor jump 50% between adjacent
+    // answers; the sub-pixel fit keeps it continuous.
+    const m = measureStroke(planWithStroke(5))
+    expect(Number.isInteger(m.strokePx * 100)).toBe(true)
+    expect(m.strokePx).toBeGreaterThanOrEqual(4.5)
+    expect(m.strokePx).toBeLessThanOrEqual(5.5)
+  })
+})
