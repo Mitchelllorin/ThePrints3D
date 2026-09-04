@@ -50,10 +50,18 @@ describe('resample', () => {
 })
 
 describe('normalizeStrokeScale', () => {
-  it('shrinks a heavy-stroked drawing toward the canonical width', () => {
+  it('NEVER shrinks a heavy-stroked drawing — downsampling destroys detail', () => {
+    // The corpus proved this: at a target of 3, adu-71sqm (stroke 6.14) was
+    // downsampled 759x622 -> 371x304 and no threshold in a 48-point sweep could
+    // recover its walls, because the information was already gone.
     const r = normalizeStrokeScale(planWithStroke(9))
+    expect(r.image.width).toBeGreaterThanOrEqual(600)
+  })
+
+  it('scales a fine-stroked drawing UP toward the canonical width', () => {
+    const r = normalizeStrokeScale(planWithStroke(2))
     expect(r.adjusted).toBe(true)
-    expect(r.image.width).toBeLessThan(600)
+    expect(r.image.width).toBeGreaterThan(600)
     // Round-trip: normalized coords times inverseFactor land back in source px.
     expect(r.image.width * r.inverseFactor).toBeCloseTo(600, 0)
   })
@@ -64,14 +72,19 @@ describe('normalizeStrokeScale', () => {
     expect(r.inverseFactor).toBe(1)
   })
 
-  it('brings two drawings of the same plan at different resolutions together', () => {
-    // The whole justification for the module: a sheet and a screenshot of the
-    // same plan must arrive at detection looking alike.
-    const sheet = normalizeStrokeScale(planWithStroke(9))
+  it('brings a fine-stroked drawing up to meet a canonical one', () => {
+    // Convergence is from BELOW only. A drawing already at or above the
+    // canonical stroke is passed through, so two inputs meet by raising the
+    // lighter one — never by degrading the heavier one to match it.
     const shot = normalizeStrokeScale(planWithStroke(2))
-    const a = measureStroke(sheet.image).strokePx
-    const b = measureStroke(shot.image).strokePx
-    expect(Math.abs(a - b)).toBeLessThanOrEqual(1)
+    const raised = measureStroke(shot.image).strokePx
+    // Measured: a 2px stroke scaled x3 comes back around 4, not 6. Bilinear
+    // interpolation softens the edges and the ink-biased threshold then reads a
+    // narrower core, so convergence UNDERSHOOTS. That residual is real and is
+    // recorded here rather than papered over with a loose bound — the contract
+    // is "moves substantially up toward canonical, never past it".
+    expect(raised).toBeGreaterThan(3)
+    expect(raised).toBeLessThanOrEqual(CANONICAL_STROKE_PX + 1)
   })
 
   it('does nothing when there is too little ink to measure', () => {

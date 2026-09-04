@@ -36,12 +36,23 @@ import { grayHistogram, inkStats, otsuThreshold, type RasterLike } from './raste
 /**
  * The stroke width every image is resampled to.
  *
- * Chosen to match what the existing constants were tuned against — a rendered
- * PDF sheet, whose ordinary line work lands around 3 px. Keeping the target
- * there means the detector's numbers keep meaning what they already meant on
- * the source they were chosen for; it is the other inputs that move.
+ * SET AT THE TOP OF THE OBSERVED RANGE, NOT THE BOTTOM, SO NORMALISATION ONLY
+ * EVER SCALES UP.
+ *
+ * The first value here was 3, chosen to match a rendered PDF sheet. Sweeping it
+ * against the corpus showed why that is the wrong end: a target of 3 forces any
+ * drawing with heavier line work to be SHRUNK, and shrinking throws away the
+ * detail detection needs. screenshot-adu-71sqm (stroke 6.14) was downsampled
+ * 759x622 -> 371x304, and at that size no threshold in a 48-point sweep could
+ * recover its walls — the best was 20 against a baseline of 27, because the
+ * information was already gone.
+ *
+ * Upsampling cannot lose anything. So the target sits at the top of the range
+ * measured across the corpus, and `normalizeStrokeScale` clamps the factor at 1
+ * so a drawing that already has heavy line work is passed through untouched
+ * rather than degraded.
  */
-export const CANONICAL_STROKE_PX = 3
+export const CANONICAL_STROKE_PX = 6
 
 /** Runs longer than this are filled regions (hatching, solid poché), not strokes. */
 const MAX_STROKE_RUN = 40
@@ -223,8 +234,11 @@ export function normalizeStrokeScale(
   // Under a few thousand runs the mode is noise, not a measurement.
   if (measured.samples < 2000) return untouched
 
+  // Never below 1: see CANONICAL_STROKE_PX. Downsampling destroys detail the
+  // detector needs and no threshold can win it back, so a drawing already at or
+  // above the canonical stroke is left exactly as it came in.
   const raw = target / measured.strokePx
-  const factor = Math.min(4, Math.max(0.25, raw))
+  const factor = Math.min(4, Math.max(1, raw))
   // Within ±15% the resample would cost more sharpness than it buys.
   if (factor > 0.85 && factor < 1.15) return untouched
 

@@ -29,6 +29,27 @@ if (import.meta.env.DEV) {
     const { measureStroke, normalizeStrokeScale } = await import('./services/spatialNormalize')
     return { measured: measureStroke(img as never), normalized: normalizeStrokeScale(img as never) }
   }
+  // Threshold sweep in canonical (stroke-normalised) space. The point is to find
+  // ONE pass that matches the hand-tuned three-pass ladder, so the ladder can be
+  // deleted rather than extended.
+  ;(window as unknown as Record<string, unknown>).__sweep = async (img: unknown, configs: unknown[], target?: number) => {
+    const { normalizeStrokeScale } = await import('./services/spatialNormalize')
+    const { normalizeForDetection } = await import('./services/rasterNormalize')
+    const { detectWalls } = await import('./services/wallDetector')
+    const toned = normalizeForDetection(img as never)
+    const base = toned.adjusted ? toned.image : (img as never)
+    const norm = normalizeStrokeScale(base as never, target)
+    const src = norm.image
+    const image = new ImageData(
+      new Uint8ClampedArray(src.data), src.width, src.height,
+    )
+    const rows = (configs as Record<string, number | boolean>[]).map((c) => {
+      const r = detectWalls(image, c as never)
+      return { cfg: c, walls: r.walls.length }
+    })
+    return { stroke: norm.measured.strokePx, adjusted: norm.adjusted,
+             size: [image.width, image.height], inv: norm.inverseFactor, rows }
+  }
   ;(window as unknown as Record<string, unknown>).__scorePrints = async (only?: string[]) => {
     const { scorePrints } = await import('./dev/scorePrints')
     return scorePrints(only)
