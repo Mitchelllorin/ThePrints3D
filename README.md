@@ -7,7 +7,7 @@
 [![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)](https://vite.dev/)
 [![PWA Ready](https://img.shields.io/badge/PWA-ready-5A0FC8?logo=pwa)](https://web.dev/progressive-web-apps/)
 
-**Turn 2D prints and drawings into interactive, explodable 3D models — right on your phone or in the browser.**
+**Turn 2D prints and drawings into interactive, explodable 3D models.**
 
 ThePrints3D is a React + TypeScript app for web and Android that ingests architectural drawing sets (PDF or image files), automatically detects walls and openings using an AI segmentation model (with a heuristic fallback), and renders the result as a navigable Three.js 3D model. Core processing stays on-device, so drawings do not have to leave your phone or browser just to become a model.
 
@@ -216,7 +216,7 @@ ThePrints3D is one of a family of interactive 3D apps built by Mitchell Lorin Mc
 
 | App | What it does | Links |
 |---|---|---|
-| **ThePrints3D** *(this app)* | Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely in the browser | [theprints3d.com](https://theprints3d.com) · [Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app) |
+| **ThePrints3D** *(this app)* | Turn flat floor-plan PDFs and images into an interactive 3D building model — entirely on your device | [theprints3d.com](https://theprints3d.com) · [Google Play](https://play.google.com/store/apps/details?id=com.theprints3d.app) |
 | **CircuiTry3D** | Build and simulate electrical circuits in 3D — from macro current flow to the atomic scale, with the FUSE™ failure engine | [circuitry3d.app](https://circuitry3d.app) · [Google Play](https://play.google.com/store/apps/details?id=com.circuitry3d.app) |
 | **Automotive3D** | Build real engines in 3D, swap branded parts, and diagnose faults with live DTC codes | [automotive3d.ca](https://automotive3d.ca) · [Google Play](https://play.google.com/store/apps/details?id=com.automotive3d.app) |
 
