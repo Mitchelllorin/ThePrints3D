@@ -185,6 +185,10 @@ export default function GCBubble() {
     userWallCount: drawing ? drawing.parsedWalls.filter((w) => w.source === 'user').length : 0,
     detectedScaleAvailable: !!drawing && drawing.scaleMmPerPx !== null,
     detectedWallCount: drawing ? drawing.parsedWalls.length : 0,
+    // The walls the app GUESSED from room labels rather than read off the ink,
+    // so the G.C. can own up to them instead of presenting them as measured.
+    roomDerivedWallCount: drawing ? drawing.parsedWalls.filter((w) => w.roomDerived).length : 0,
+    roomCount: drawing ? drawing.parsedRooms.length : 0,
     built: buildResult !== null || modelStatus === 'ready',
     traceMode,
     tracePaused,

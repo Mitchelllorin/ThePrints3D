@@ -318,3 +318,26 @@ describe('nextSuggestion — build-aware walk', () => {
     expect(withLesson?.id).toBe('lesson-scale')
   })
 })
+
+describe('owning up to guessed walls', () => {
+  // When the ink could not be read, wallsFromRooms supplies the walls a room
+  // must have. Presenting those as measured is the one thing that would cost
+  // the user's trust — and their correction is how the next read gets better.
+  const standing = { hasWalls: true, userWallCount: 12, built: true }
+
+  it('says how many walls it inferred rather than read, and asks', () => {
+    const s = nextSuggestion(ctx({ ...standing, roomDerivedWallCount: 24, roomCount: 6 }))
+    expect(s?.id).toBe('roomDerivedWalls')
+    expect(s?.message).toContain('24')
+  })
+
+  it('stays quiet when every wall was actually read', () => {
+    const s = nextSuggestion(ctx({ ...standing, roomDerivedWallCount: 0 }))
+    expect(s?.id).not.toBe('roomDerivedWalls')
+  })
+
+  it('asks for a correction rather than just announcing', () => {
+    const s = nextSuggestion(ctx({ ...standing, roomDerivedWallCount: 3, roomCount: 2 }))
+    expect(s?.message.toLowerCase()).toMatch(/wrong|drag|correct/)
+  })
+})

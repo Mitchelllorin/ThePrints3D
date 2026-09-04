@@ -88,6 +88,19 @@ export interface GCContext {
    */
   lesson?: Lesson | null
   /**
+   * HOW MANY WALLS WE GUESSED RATHER THAN READ.
+   *
+   * When the ink-read walls enclose fewer rooms than the plan's own labels say
+   * exist, `wallsFromRooms` adds the walls a room must have and marks them
+   * `roomDerived`. Those are the app's guesses, and the user is the only one
+   * who can say whether they landed. Counting them here lets the G.C. own up to
+   * them by name instead of presenting a half-inferred model as if it had read
+   * the whole thing.
+   */
+  roomDerivedWallCount?: number
+  /** Rooms the plan's labels say exist — what the guesses were built from. */
+  roomCount?: number
+  /**
    * WHAT IS ACTUALLY STANDING, storey by storey — the half of the job the G.C.
    * was blind to. Everything above describes the DRAWING and the reading taken
    * off it; this describes the model the user is looking at.
@@ -205,6 +218,31 @@ function inspectBuild(ctx: GCContext): Suggestion {
       message: "It's closed in, but there's no door in it yet. Place one?",
       actionLabel: 'Place a door',
       actionKind: 'place',
+      tone: 'idle',
+    }
+  }
+
+  /**
+   * SAY WHICH WALLS WE GUESSED, AND ASK.
+   *
+   * When the print could not be read cleanly the model still gets built —
+   * that is the standing rule, a model you can fix beats a blank workspace.
+   * But presenting a half-inferred plan as though every line came off the ink
+   * is the one thing that would make the user stop trusting it, and their
+   * answer is the only way the next one gets better: corrections are kept per
+   * sheet and become a lesson once three of them point the same way.
+   *
+   * So this owns up before the terminal "your model's standing" — naming the
+   * count, saying where the guesses came from, and asking a question the user
+   * can answer by tapping a wall rather than filling in a form.
+   */
+  if (ctx.roomDerivedWallCount && ctx.roomDerivedWallCount > 0) {
+    const n = ctx.roomDerivedWallCount
+    return {
+      id: 'roomDerivedWalls',
+      message: `I couldn't read ${n} of these walls off the print, so I put them where the room labels say they should be. Tap any one that's wrong and drag it — I'll take the correction from there.`,
+      actionLabel: 'Show me',
+      actionKind: 'trace',
       tone: 'idle',
     }
   }
