@@ -18,8 +18,8 @@ export default function PrivacyPolicy({ onClose }: Props) {
           <h3>Overview</h3>
           <p>
             ThePrints3D ("the App") turns 2D prints and drawings into interactive 3D models you can
-            inspect and edit on your phone. This policy explains what data the App collects and how it
-            is handled.
+            inspect and edit. This policy explains what data the App collects and how it is
+            handled.
           </p>
 
           <h3>Data We Collect</h3>

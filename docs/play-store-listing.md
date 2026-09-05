@@ -12,10 +12,10 @@ chat history. That is why it lives in the repo now.
 ThePrints3D
 ```
 
-## Short description (max 80 chars) — 76 chars
+## Short description (max 80 chars) — 54 chars
 
 ```
-Turn 2D prints into interactive, explodable 3D models — right on your phone.
+Turn 2D prints into interactive, explodable 3D models.
 ```
 
 ## Full description (max 4000 chars) — ~1,760 chars

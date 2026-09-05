@@ -12,6 +12,7 @@ import { labelText } from './labelStyle'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useAreaNameplateVisible } from './useNameplateVisible'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildCeiling, FLOOR_ASSEMBLY_H, CEILING_JOIST_DEPTH } from '../../services/framingGeometry'
 import { CEILING_TYPES, ocToM } from '../../data/traceLayers'
@@ -42,7 +43,7 @@ function CeilingMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, ov
   }, [lenX, lenZ, area.size, area.level])
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
-  const dimensionsVisible = useUISettingsStore((s) => s.dimensionsVisible)
+  const dimensionsVisible = useAreaNameplateVisible('floor', area.id)
   useEffect(() => () => disposeGroup(ceiling), [ceiling])
   if (lenX < 0.1 || lenZ < 0.1) return null
   // Joist bottoms rest on this storey's wall top plate.

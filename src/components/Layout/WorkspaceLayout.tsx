@@ -61,6 +61,36 @@ function Toggle({ label, val, onChange }: { label: string; val: boolean; onChang
   )
 }
 
+/** Three-or-so mutually exclusive options in the same row idiom as Toggle. */
+function Choice<T extends string>({ label, val, opts, onChange }: {
+  label: string; val: T; opts: { v: T; text: string }[]; onChange: (v: T) => void
+}) {
+  return (
+    <div className={styles.settingRow}>
+      <span className={styles.settingLabel}>{label}</span>
+      <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+        {opts.map((o) => (
+          <button
+            key={o.v}
+            type="button"
+            onClick={() => onChange(o.v)}
+            aria-pressed={val === o.v}
+            style={{
+              padding: '3px 8px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
+              border: `1px solid ${val === o.v ? 'var(--bp-accent, #38bdf8)' : 'rgba(148,163,184,0.3)'}`,
+              background: val === o.v ? 'var(--bp-accent, #38bdf8)' : 'transparent',
+              color: val === o.v ? '#06121f' : 'var(--bp-text-dim, #97a4b6)',
+              fontWeight: val === o.v ? 700 : 500,
+            }}
+          >
+            {o.text}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ColorRow({ label, val, onChange }: { label: string; val: string; onChange: (v: string) => void }) {
   return (
     <label className={styles.settingRow}>
@@ -203,6 +233,16 @@ function SettingsContent() {
         <ColorRow label="Label colour" val={ui.labelColor} onChange={(v) => setUI({ labelColor: v })} />
         <Slider label="Label size" val={Math.round(ui.labelScale * 100)} min={50} max={200} step={5} unit="%"
           onChange={(v) => setUI({ labelScale: v / 100 })} />
+        {/* Nameplates used to be on for everything, always, and a finished
+            storey came out as a wall of floating text with the model behind
+            it. "Selected" is the default: the thing you picked says what it
+            is, the rest stay out of the way. */}
+        <Choice
+          label="Metric nameplates"
+          val={ui.dimensionsMode}
+          opts={[{ v: 'selected' as const, text: 'Selected' }, { v: 'always' as const, text: 'Always' }, { v: 'off' as const, text: 'Off' }]}
+          onChange={(v) => setUI({ dimensionsMode: v })}
+        />
       </CollapsibleSection>
 
       <CollapsibleSection id="lighting" title="Lighting & background" openId={openId} setOpenId={setOpenId}>

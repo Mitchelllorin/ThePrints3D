@@ -50,10 +50,19 @@ export interface UISettings {
    *  was under the siding was to set the siding to 'none' and lose your choice.
    *  Every other layer has its own switch; this one now does too. */
   claddingVisible: boolean
-  /** Show the floating dimension nameplates on walls, joists and ceilings.
-   *  They are the right thing while you are laying something out and pure
-   *  clutter once a storey is full of them. */
-  dimensionsVisible: boolean
+  /** WHEN the floating dimension nameplates show on walls, joists and ceilings.
+   *
+   *  They are the right thing while you are laying one thing out and pure
+   *  clutter once a storey is full of them — a finished floor is a wall of
+   *  floating text with the model somewhere behind it. So this is no longer
+   *  on/off: the useful state is the middle one, where a nameplate belongs to
+   *  the thing you have actually picked.
+   *
+   *  'always'   — every element carries its metrics. The old behaviour.
+   *  'selected' — only the current selection does. THE DEFAULT.
+   *  'off'      — never; read metrics from the property card instead.
+   */
+  dimensionsMode: DimensionsMode
   /** WHEN finishes appear, as opposed to which ones.
    *  'live'  — clad as soon as a wall exists (fine once you have stopped framing)
    *  'later' — keep the frame bare while you build; finishes appear only when you
@@ -114,7 +123,9 @@ export interface UISettings {
 }
 
 /** rev 2 — presets go back to PRACTICE by default. */
-const SETTINGS_REV = 3
+export type DimensionsMode = 'always' | 'selected' | 'off'
+
+const SETTINGS_REV = 4
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
   // Menus/panels/toolbars default to ALMOST transparent so the workspace stays
@@ -145,7 +156,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   woodSheathing: 'osb',
   cladding: 'none',
   claddingVisible: false,
-  dimensionsVisible: true,
+  dimensionsMode: 'selected',
   presetMode: 'practice',
   heatingType: DEFAULT_HEATING,
   settingsRev: SETTINGS_REV,
@@ -196,6 +207,16 @@ function load(): UISettings {
         stored.drywallVisible = false
         stored.claddingVisible = false
         stored.wrapVisible = false
+      }
+      /* Nameplates stopped being a boolean. An existing install carries
+         `dimensionsVisible: true`, which as a mode means 'always' — the very
+         clutter this change exists to remove — so the old value is translated
+         rather than inherited: anyone who had them ON gets the new default,
+         and anyone who had deliberately turned them OFF keeps them off. */
+      if ((saved.settingsRev ?? 0) < 4) {
+        const legacy = (saved as { dimensionsVisible?: boolean }).dimensionsVisible
+        stored.dimensionsMode = legacy === false ? 'off' : 'selected'
+        delete (stored as { dimensionsVisible?: boolean }).dimensionsVisible
       }
       if ((saved.settingsRev ?? 0) < SETTINGS_REV) {
         stored.settingsRev = SETTINGS_REV

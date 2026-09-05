@@ -32,7 +32,7 @@ export default function LaunchScreen({ onLaunch }: { onLaunch: () => void }) {
         <Logo3DBadge variant="launch" />
 
         <p className={styles.tagline}>
-          Turn 2D prints into interactive, explodable 3D models — right on your phone.
+          Turn 2D prints into interactive, explodable 3D models.
         </p>
 
         <button type="button" className={styles.launch} onClick={onLaunch} autoFocus>

@@ -1,11 +1,17 @@
-/* Global actions (Undo + Zoom), fixed in the top-right corner, horizontally
-   aligned and flush to the perimeter. */
+/* Global actions (Undo + Zoom), fixed top-right and flush to the perimeter.
+   Dropped BELOW the brand line rather than sharing it: the wordmark badge is
+   pinned at top:10 and is 36px tall, so anything at top:10 sits shoulder to
+   shoulder with the logo and the header reads as one crowded row. These start
+   under it instead, and the top line is the mark and the wordmark alone.
+   Aligned to flex-start so the glyphs line up even though Undo carries a
+   label under it and the zooms do not. */
 .bar {
   position: fixed;
-  top: 10px;
+  top: 52px;
   right: 10px;
   display: flex;
   flex-direction: row;
+  align-items: flex-start;
   gap: 6px;
   z-index: 100;
 }
@@ -13,15 +19,18 @@
 /* No box — floating glyphs, legible from a shadow. */
 .btn {
   width: 40px;
-  height: 40px;
+  min-height: 40px;
   background: none;
   border: none;
   color: var(--bp-text, #ffffff);
   font-size: 20px;
   cursor: pointer;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1px;
+  line-height: 1;
   position: relative;
   opacity: 0.8;
   filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.9));
@@ -54,4 +63,14 @@
 .active {
   border-color: var(--bp-accent, #38bdf8);
   color: var(--bp-accent, #38bdf8);
+}
+
+/* The word under the arrow. Undo is the one button here you reach for in a
+   hurry and the one you must not press by mistake, so it says what it is —
+   the same glyph-over-label the left rail uses. */
+.btnLabel {
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  text-transform: uppercase;
 }

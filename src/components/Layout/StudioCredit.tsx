@@ -4,7 +4,7 @@
  * Inside the Play/APK build there is no URL bar, so a user who wants the
  * website has no way to find it. This is that way. It doubles as the studio
  * credit: CircuiTry3D and Automotive3D are the same maker, not sponsors, so
- * they read as one quiet "from the same shop" line, never a second call to
+ * they read as one quiet "from the makers of" line, never a second call to
  * action competing with Build.
  *
  * Containerless by house rule: no card, no border, no fill. The surface it
@@ -66,7 +66,7 @@ export default function StudioCredit({ className, variant = 'full' }: Props) {
         </a>
       )}
 
-      <p className={styles.lead}>From the same shop</p>
+      <p className={styles.lead}>From the makers of</p>
 
       <ul className={styles.list}>
         {SIBLING_APPS.map((app) => (

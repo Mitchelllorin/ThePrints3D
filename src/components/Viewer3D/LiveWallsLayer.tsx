@@ -15,6 +15,7 @@ import { renderWallThicknessM, wallHeightM } from '../../services/constructionCo
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useWallNameplateVisible } from './useNameplateVisible'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
@@ -56,7 +57,7 @@ interface WallMeshProps {
 function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, storeyHeight, detailExplode }: WallMeshProps) {
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
-  const dimensionsVisible = useUISettingsStore((s) => s.dimensionsVisible)
+  const dimensionsVisible = useWallNameplateVisible()
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
   // Thickness first — it sets how far to extend ends into a corner.

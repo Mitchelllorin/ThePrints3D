@@ -37,7 +37,7 @@ interface TradeRow {
 interface FlagRow {
   kind: 'flag'
   key: 'sheathingVisible' | 'wrapVisible' | 'claddingVisible' | 'drywallVisible'
-    | 'gridVisible' | 'dimensionsVisible'
+    | 'gridVisible'
   label: string
   color: string
 }
@@ -83,7 +83,6 @@ const GROUPS: Group[] = [
     title: 'Reference',
     rows: [
       { kind: 'print', label: 'Print overlay', color: '#93c5fd' },
-      { kind: 'flag', key: 'dimensionsVisible', label: 'Dimensions', color: '#cbd5e1' },
       { kind: 'flag', key: 'gridVisible', label: 'Grid', color: '#2b3b5c' },
     ],
   },

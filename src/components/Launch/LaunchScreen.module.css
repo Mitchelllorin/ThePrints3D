@@ -71,6 +71,14 @@
 }
 
 .legalLink {
+  /* Both of these are stretched to a 44px touch box by mobile.css, but a
+     <button> centres its own label and an <a> does not — so on a phone
+     "Privacy Policy" sat a few pixels below "Data Safety" and the row read as
+     two staggered lines. Centring the content of BOTH puts the text on one
+     line whatever the box around it is doing. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: 0;
   padding: 4px 2px;

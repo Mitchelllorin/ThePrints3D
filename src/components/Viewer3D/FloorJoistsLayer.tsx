@@ -16,6 +16,7 @@ import { labelText } from './labelStyle'
 import { explodeRuntime } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useAreaNameplateVisible } from './useNameplateVisible'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
 import {
@@ -152,7 +153,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   const deck = useMemo(() => buildFloorDeck({ lenX, lenZ, holes }), [lenX, lenZ, holeKey])
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
-  const dimensionsVisible = useUISettingsStore((s) => s.dimensionsVisible)
+  const dimensionsVisible = useAreaNameplateVisible('floor', area.id)
   const ref = useRef<THREE.Group>(null)
   const level = area.level ?? 0
   useFloorExplode(ref, level * storeyHeight, level, DECK_LIFT)
