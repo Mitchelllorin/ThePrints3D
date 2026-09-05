@@ -22,7 +22,11 @@
  *             the number that was 72-across-18-rooms on a phone photo.
  *   stub%     stubs as a share of walls. THE headline: it is the difference
  *             between a building and a pile of offcuts.
- *   rooms     enclosed regions found
+ *   rooms     regions the room EXTRACTOR found, reading the raster directly
+ *   enclosed  regions the DETECTED WALLS themselves close. The two are not the
+ *             same number and the gap is the story: adu-71sqm scored 7 rooms
+ *             and 0 enclosed — the app knew where the kitchen was while its
+ *             walls closed nothing at all.
  *   w/room    walls per room. A house is roughly 2-4. Much higher means the
  *             detector is fragmenting real walls or inventing them.
  *   scale     did it find one? Without it every dimension is a guess, and it is
@@ -36,6 +40,7 @@
 import type { Drawing } from '../types'
 import { processDrawing } from '../services/drawingProcessor'
 import { MIN_AUTO_WALL_PX } from '../services/modelWalls'
+import { enclosedRegions } from '../services/wallEnclosure'
 
 /** The corpus. Served straight from the project root by the dev server. */
 export const TEST_PRINTS = [
@@ -43,6 +48,16 @@ export const TEST_PRINTS = [
   'lacounty-adu-B-2bed-1200sf.pdf',
   'portland-residential-permit-plans.pdf',
   'bungalow-ukiah-adu.pdf',
+  /**
+   * The screenshots belong in the ruler, and leaving them out hid the bug.
+   *
+   * Every connectivity finding on this corpus came from screenshot-adu-71sqm —
+   * 50-plus walls enclosing ZERO rooms across 42 threshold configurations —
+   * and yet the score that decides whether detection improved never ran it.
+   * A ruler that omits the failing case reports progress by not looking.
+   */
+  'screenshot-adu-71sqm.png',
+  'screenshot-studio-1bed.png',
 ] as const
 
 export interface PrintScore {
@@ -51,6 +66,15 @@ export interface PrintScore {
   stubs: number
   'stub%': number
   rooms: number
+  /**
+   * Do the WALLS enclose anything? `rooms` above is the room EXTRACTOR's
+   * answer, read independently off the raster — it can find seven rooms on a
+   * plan whose walls close none of them, which is exactly the state
+   * screenshot-adu-71sqm was in while every guard called it a success. This is
+   * the two-sided one: too few walls and the rooms merge, too many and the
+   * plan shatters into slivers.
+   */
+  enclosed: number
   'w/room': number
   scale: string
   /** Rasterising the PDF — render + sheet pick. */
@@ -65,7 +89,11 @@ async function fileFor(name: string): Promise<File> {
   const res = await fetch(`/data/test-prints/${name}`)
   if (!res.ok) throw new Error(`${res.status} fetching ${name}`)
   const blob = await res.blob()
-  return new File([blob], name, { type: 'application/pdf' })
+  // The corpus is no longer all PDFs. Handing a PNG the PDF mime type sends it
+  // down the rasteriser instead of the image path, where it fails as a corrupt
+  // document rather than scoring.
+  const type = name.endsWith('.png') ? 'image/png' : 'application/pdf'
+  return new File([blob], name, { type })
 }
 
 /** Enough of a Drawing for the processor; the rest it fills in itself. */
@@ -128,12 +156,16 @@ export async function scorePrints(only?: string[]): Promise<PrintScore[]> {
         (w) => Math.hypot(w.x2 - w.x1, w.y2 - w.y1) < MIN_AUTO_WALL_PX,
       ).length
       const rooms = (patch.parsedRooms ?? []).length
+      const enclosed = enclosedRegions(
+        walls, patch.rasterWidth ?? 0, patch.rasterHeight ?? 0,
+      )
       rows.push({
-        print: name.replace(/\.pdf$/, ''),
+        print: name.replace(/\.(pdf|png)$/, ''),
         walls: walls.length,
         stubs,
         'stub%': walls.length ? Math.round((stubs / walls.length) * 100) : 0,
         rooms,
+        enclosed,
         'w/room': rooms ? +(walls.length / rooms).toFixed(1) : 0,
         scale: patch.scaleNotation ?? (patch.scaleMmPerPx ? 'derived' : '—'),
         rasterMs,
@@ -142,8 +174,8 @@ export async function scorePrints(only?: string[]): Promise<PrintScore[]> {
       })
     } catch (err) {
       rows.push({
-        print: name.replace(/\.pdf$/, ''),
-        walls: 0, stubs: 0, 'stub%': 0, rooms: 0, 'w/room': 0, scale: '—',
+        print: name.replace(/\.(pdf|png)$/, ''),
+        walls: 0, stubs: 0, 'stub%': 0, rooms: 0, enclosed: 0, 'w/room': 0, scale: '—',
         rasterMs: 0, detectMs: 0,
         ms: Math.round(performance.now() - started),
         error: String(err).slice(0, 80),
