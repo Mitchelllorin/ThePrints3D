@@ -10,6 +10,8 @@ import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
 import { logEvent } from './logger'
 import { enclosedRegions } from './wallEnclosure'
+import { joinDetectedWalls } from './joinDetectedWalls'
+import { keepUnlessWorse } from './detectionGuard'
 import { wallsFromRooms } from './wallsFromRooms'
 import { inferScaleFromPaper, inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
@@ -411,6 +413,53 @@ export async function processDrawing(
     })
     walls = rejoined.walls
     const openings = rejoined.openings
+
+    /**
+     * NOW MAKE THE CORNERS MEET — AND ROLL BACK IF THAT MADE IT WORSE.
+     *
+     * `rejoinAcrossOpenings` above closes the COLLINEAR case: a doorway gap in
+     * an otherwise straight run. It cannot close the perpendicular one, where
+     * two walls stop a few pixels short of each other, and neither can
+     * `inferCorners` in step 5 — that one only fires when both walls'
+     * ENDPOINTS are already within 20px, so it closes L-corners and misses the
+     * T-junctions that most interior walls actually form. Twenty pixels is also
+     * an absolute constant, which is the bug class behind most of the others:
+     * it is nothing on a 3900px sheet and a great deal on a 732px screenshot.
+     *
+     * `joinDetectedWalls` casts a ray from each endpoint along the wall's own
+     * direction until it meets another wall's INTERIOR, so it ties in Ts as
+     * well as corners, with a tolerance taken from the median wall length
+     * rather than a pixel count. It was written for this and has been sitting
+     * unwired, reachable only from the dev sweep.
+     *
+     * It runs BEFORE the room-derived rung below on purpose. Walls read off
+     * the ink and carried to meet each other are a truer building than
+     * boundaries estimated from a room's bounding box, so the cheap real fix
+     * gets its turn before the estimate does.
+     */
+    const joined = joinDetectedWalls(walls)
+    if (joined.joined > 0) {
+      /**
+       * Extending endpoints can shatter a room as easily as close one — a wall
+       * carried across an opening splits the space behind it. So the step is
+       * measured, not trusted, against the room extractor's own independent
+       * reading of the same raster.
+       */
+      const verdict = keepUnlessWorse(
+        walls, joined.walls, detectImage.width, detectImage.height,
+        rooms.length || null,
+      )
+      walls = verdict.walls
+      logEvent('drawing.walls.joined', {
+        drawingId: drawing.id,
+        endpointsMoved: joined.joined,
+        maxExtendPx: Math.round(joined.maxExtendPx),
+        kept: verdict.kept,
+        enclosedBefore: verdict.enclosedBefore,
+        enclosedAfter: verdict.enclosedAfter,
+        reason: verdict.reason,
+      })
+    }
 
     /**
      * THE LAST RUNG: IF THE WALLS DO NOT MAKE ROOMS, USE THE ROOMS.
