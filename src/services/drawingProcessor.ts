@@ -5,7 +5,6 @@ import { deriveScaleFromNotation } from './scaleParser'
 import { inferDiscipline, shouldDetectWalls } from './sheetDiscipline'
 import { classifyWallType, pxToMm, type DrywallConfig, type WallType } from './wallTypeClassifier'
 import { extractRooms } from './roomExtractor'
-import { findPlanRegion } from './planRegion'
 import { rejoinAcrossOpenings } from './openingDetector'
 import type { Drawing, ParsedWall, ScaleConfidence } from '../types'
 import { detectWallsWithAI } from './aiWallDetector'
@@ -89,78 +88,7 @@ export async function processDrawing(
       detectImage = new ImageData(bytes, norm.image.width, norm.image.height)
     }
 
-    /**
-     * FIND THE BUILDING BEFORE READING IT.
-     *
-     * Detection has always run across the whole sheet — title block, general
-     * notes, door schedule, the other drawings on the page — and then spent the
-     * rest of the pipeline filtering out ink it should never have looked at.
-     * `noiseRatio` across the corpus runs 0.766 to 0.856, which is the same
-     * sentence in numbers: four fifths of this page is not the building.
-     *
-     * Masking, not cropping: every coordinate downstream lives in this image's
-     * pixel space, and handing back a smaller image would shift walls, rooms
-     * and the print overlay by the crop origin. Same size in, same size out.
-     *
-     * `findPlanRegion` returns null whenever it cannot commit — a blank sheet,
-     * a drawing that already fills the page, or two plans side by side where
-     * choosing one would delete the other. Null means leave the sheet alone,
-     * which is exactly the behaviour that existed before this step.
-     */
-    /**
-     * THE MASK IS FOR THE GEOMETRY ONLY. Everything else keeps the whole sheet.
-     *
-     * The scale notation — `1/4" = 1'-0"` — lives in the title block, which is
-     * the first thing the mask removes, and so does the sheet name and often
-     * the stated area. Reading text from the masked image would trade a better
-     * wall count for a lost scale, and a model at the wrong scale is worth less
-     * than no model.
-     *
-     * The ink buffer keeps the full sheet for a different reason: it is what
-     * the user's own tracing snaps to. Masked ink is ink they can see on their
-     * drawing but cannot trace against, including everywhere they are meant to
-     * be able to build beyond the plan's bounds.
-     */
-    const fullSheet = detectImage
-
-    /**
-     * MEASURING, NOT YET ACTING — and the numbers say why.
-     *
-     * Masking was switched on and scored against the corpus. It did what it was
-     * built to do on portland: rooms 57 → 5, the paragraphs of body text no
-     * longer read as rooms. It also took 35% of that sheet's walls with them
-     * (100 → 65) and half its enclosure (15 → 8), and on the 71sqm screenshot
-     * it cost 43% of the walls (51 → 29, enclosed 11 → 4).
-     *
-     * The screenshot failure is the instructive one. `MAX_RUN_FRACTION` calls a
-     * run too long to be a wall "page furniture", which is true of a sheet
-     * border and false of the exterior wall of a plan that has been cropped to
-     * its own edges — so the filter ate the building, and that sheet flipped
-     * from correctly declining to wrongly masking.
-     *
-     * So the region is found and LOGGED and nothing is removed. That keeps the
-     * diagnosis — which sheets have a dominant plan, which are split, and what
-     * the shares actually are on real drawings — while the pipeline behaves
-     * exactly as it did before. Trading a third of the walls for cleaner rooms
-     * is not a trade this makes on a user's drawing.
-     *
-     * To finish it: distinguish a border (a long run AT THE PAGE EDGE) from a
-     * long wall anywhere else, then re-score. The gate holds the numbers to
-     * beat — walls 100 and enclosed 15 on portland, 51 and 11 on the 71sqm.
-     */
-    const plan = findPlanRegion(detectImage)
-    logEvent('drawing.walls.planRegion', {
-      drawingId: drawing.id,
-      masked: false,
-      /** What it WOULD have done, had masking been enabled. */
-      wouldMask: !!plan.region,
-      // Say WHY when it declines. A guard that only reports "no" is untunable.
-      reason: plan.reason,
-      inkShare: +plan.inkShare.toFixed(3),
-      areaShare: +plan.areaShare.toFixed(3),
-    })
-
-    setInkBuffer(drawing.id, fullSheet)
+    setInkBuffer(drawing.id, detectImage)
 
     /**
      * START READING THE WORDS NOW, NOT AFTER THE WALLS.
@@ -183,7 +111,7 @@ export async function processDrawing(
      * it anyway.
      */
     const wordsPromise: Promise<SizedTextToken[]> = shouldOcr(raster.textTokens)
-      ? ocrRasterOffThread(fullSheet).then((r) => r.tokens).catch(() => [])
+      ? ocrRasterOffThread(detectImage).then((r) => r.tokens).catch(() => [])
       : Promise.resolve([])
 
     // 2. Discipline gate — skip wall detection on M/E/P/C/L/F/T sheets where
