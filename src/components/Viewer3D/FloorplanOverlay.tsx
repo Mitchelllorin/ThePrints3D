@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
+import PrintWalkabout from './PrintWalkabout'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '../../store/useFloorplanLocalStore'
@@ -390,6 +391,15 @@ export default function FloorplanOverlay() {
   const halfD = depth / 2
   const rotationRad = THREE.MathUtils.degToRad(overlay.rotationDeg)
   const canEdit = overlay.calibrationMode && !overlay.locked
+
+  /**
+   * May the print wander off? Only when the workspace is genuinely unattended:
+   * nothing being traced, calibrated or placed, and the print not locked down
+   * for editing. Same "action locks, idle unlocks" rule the spin and the trace
+   * already follow — an easter egg does not get to interrupt work.
+   */
+  const printMayWander =
+    !traceMode && !overlay.calibrationMode && !overlay.locked && !placeObjectType
   // Edit handles scale up so they're visible/tappable — much larger on phones,
   // and a touch larger on a big overlay so the dots don't get lost on the print.
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768
@@ -1559,23 +1569,29 @@ export default function FloorplanOverlay() {
           position={[overlay.position[0], 0.01 + traceElevation, overlay.position[1]]}
           rotation={[0, rotationRad, 0]}
         >
-          <mesh
-            rotation={[-Math.PI / 2, 0, 0]}
-            /* Optionally keep the IMAGE at ground while the group (and the
-               separate tap-catcher above) stay lifted to the active storey — so
-               an upper floor isn't muddled with the ground plan floating up. */
-            position={[0, overlay.printAtGround ? -traceElevation : 0, 0]}
-            userData={{ layer: 'floors', noPick: true }}
-          >
-            <planeGeometry args={[width, depth]} />
-            <meshBasicMaterial
-              map={texture}
-              transparent
-              opacity={printOpacity}
-              depthWrite={false}
-              side={THREE.DoubleSide}
-            />
-          </mesh>
+          {/* Left alone for a long while, the print wanders off. Wraps the
+              IMAGE only — the tap-catcher and every trace handle sit outside
+              this group, so nothing it does can move a coordinate. See
+              PrintWalkabout. */}
+          <PrintWalkabout enabled={printMayWander} width={width} depth={depth}>
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              /* Optionally keep the IMAGE at ground while the group (and the
+                 separate tap-catcher above) stay lifted to the active storey — so
+                 an upper floor isn't muddled with the ground plan floating up. */
+              position={[0, overlay.printAtGround ? -traceElevation : 0, 0]}
+              userData={{ layer: 'floors', noPick: true }}
+            >
+              <planeGeometry args={[width, depth]} />
+              <meshBasicMaterial
+                map={texture}
+                transparent
+                opacity={printOpacity}
+                depthWrite={false}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+          </PrintWalkabout>
 
           {canEdit && (
             <>
