@@ -14,6 +14,7 @@
  */
 
 import type { ParsedRoom } from '../types'
+import { cleanRoomLabel } from './roomNames'
 
 /** Pixels darker than this (0–255 grayscale) are treated as walls. */
 const WALL_GRAY_THRESHOLD = 110
@@ -92,8 +93,14 @@ export interface RoomExtractorOptions {
    * region contains two labels, the fill escaped through a doorway and the seal
    * needs to be wider. Without labels it still works; it just cannot check
    * itself.
+   *
+   * `text` is the word itself, and it is what NAMES the room it lands in. The
+   * count was being used and the word thrown away, so every room on every real
+   * print came back nameless — and a room with no name is not known to be a
+   * bathroom, so its walls were never called out for tile backer. Optional: a
+   * caller with only positions still gets the counting behaviour.
    */
-  labels?: { x: number; y: number }[]
+  labels?: { x: number; y: number; text?: string }[]
   /**
    * How wide an opening to seal, in original pixels. Derived from
    * `scaleMmPerPx` when omitted (a doorway is about 900mm), with a small fixed
@@ -168,7 +175,7 @@ export function extractRooms(
    * Five labels really do mean five rooms.
    */
   const labelPts = labels
-    .map((l) => ({ x: Math.floor(l.x / DOWNSAMPLE), y: Math.floor(l.y / DOWNSAMPLE) }))
+    .map((l) => ({ x: Math.floor(l.x / DOWNSAMPLE), y: Math.floor(l.y / DOWNSAMPLE), text: l.text }))
     .filter((l) => l.x >= 0 && l.y >= 0 && l.x < dw && l.y < dh)
 
   /**
@@ -247,6 +254,46 @@ export function extractRooms(
     }
   }
 
+  /**
+   * NAME EACH REGION FROM THE LABEL THAT LANDS IN IT.
+   *
+   * A label cannot simply be looked up at its own pixel. The label IS ink — it
+   * is the word printed on the plan — so the mask says "wall" exactly where the
+   * text sits, and `regionOf` there is NONE. Reading that one pixel names
+   * nothing, which is a quiet way to reimplement the bug this fixes.
+   *
+   * So the lookup walks outward in rings from the label until it meets real
+   * open floor, and that region takes the name. The radius is bounded because a
+   * label stranded in a title block should stay nameless rather than reach
+   * across the sheet and mislabel a real room.
+   *
+   * Regions touching the border are skipped for the same reason they are
+   * skipped in the stats: they are the margin, not a room.
+   */
+  const regionName = new Map<number, string>()
+  const NAME_SEARCH_RINGS = 12
+  for (const pt of labelPts) {
+    const cleaned = pt.text ? cleanRoomLabel(pt.text) : ''
+    if (!cleaned) continue
+    let found = NONE
+    for (let r = 0; r <= NAME_SEARCH_RINGS && found === NONE; r++) {
+      for (let dy = -r; dy <= r && found === NONE; dy++) {
+        for (let dx = -r; dx <= r && found === NONE; dx++) {
+          // Only the ring's edge is new on each pass; the interior was searched.
+          if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue
+          const x = pt.x + dx
+          const y = pt.y + dy
+          if (x < 0 || y < 0 || x >= dw || y >= dh) continue
+          const id = regionOf[y * dw + x]
+          if (id !== NONE && !borderRegion.has(id)) found = id
+        }
+      }
+    }
+    // First label wins: the seal loop above already worked to put one label in
+    // each region, so a second one here is a leak, not a rename.
+    if (found !== NONE && !regionName.has(found)) regionName.set(found, cleaned)
+  }
+
   // ── Stats per region ──────────────────────────────────────────────────────
   interface Acc { n: number; sx: number; sy: number; x1: number; y1: number; x2: number; y2: number }
   const acc = new Map<number, Acc>()
@@ -266,13 +313,15 @@ export function extractRooms(
     }
   }
 
-  for (const a of acc.values()) {
+  for (const [regionId, a] of acc.entries()) {
     const areaPx = a.n * DOWNSAMPLE * DOWNSAMPLE
     if (areaPx < minAreaPx) continue
     const areaSqM =
       scaleMmPerPx != null ? (areaPx * scaleMmPerPx * scaleMmPerPx) / 1_000_000 : null
+    const name = regionName.get(regionId)
     rooms.push({
       id: `room-${nextId++}`,
+      ...(name ? { name } : {}),
       cx: Math.round((a.sx / a.n) * DOWNSAMPLE),
       cy: Math.round((a.sy / a.n) * DOWNSAMPLE),
       x1: a.x1 * DOWNSAMPLE,

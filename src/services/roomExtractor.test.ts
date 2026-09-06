@@ -160,3 +160,81 @@ describe('extractRooms', () => {
     expect(r.y2).toBeGreaterThan(r.y1)
   })
 })
+
+/**
+ * The label's COUNT was being used and its WORD thrown away, so every room on
+ * every real print came back nameless. Nameless matters: `wetWalls` selects
+ * tile backer by `isWetRoom(room.name)`, so a bathroom nobody named got gypsum.
+ */
+describe('room naming from the drawing\'s own labels', () => {
+  const twoRooms = () => {
+    const grid: number[][] = []
+    for (let y = 0; y < 11; y++) {
+      const row: number[] = []
+      for (let x = 0; x < 11; x++) {
+        // Border wall, plus a full-height divider down the middle. The divider
+        // is two columns wide because DOWNSAMPLE=2 samples only even columns —
+        // a one-pixel divider is never sampled and the rooms silently merge.
+        const divider = x === 5 || x === 6
+        row.push(y === 0 || y === 10 || x === 0 || x === 10 || divider ? W : R)
+      }
+      grid.push(row)
+    }
+    return makeImageData(grid)
+  }
+
+  it('names a room after the label that lands inside it', () => {
+    const rooms = extractRooms(twoRooms(), {
+      minAreaPx: 1,
+      labels: [{ x: 2, y: 5, text: 'KITCHEN' }],
+    })
+    const named = rooms.filter((r) => r.name)
+    expect(named).toHaveLength(1)
+    expect(named[0].name).toBe('KITCHEN')
+    // The label belongs to the side it sits on, not to whichever room is first.
+    expect(named[0].x1).toBeLessThan(5 * 2)
+  })
+
+  it('gives each room its own label rather than one name winning both', () => {
+    const rooms = extractRooms(twoRooms(), {
+      minAreaPx: 1,
+      labels: [
+        { x: 2, y: 5, text: 'KITCHEN' },
+        { x: 8, y: 5, text: 'BATH' },
+      ],
+    })
+    expect(rooms.map((r) => r.name).sort()).toEqual(['BATH', 'KITCHEN'])
+  })
+
+  it('leaves rooms nameless when the caller passes positions only', () => {
+    const rooms = extractRooms(twoRooms(), {
+      minAreaPx: 1,
+      labels: [{ x: 2, y: 5 }],
+    })
+    expect(rooms.every((r) => r.name === undefined)).toBe(true)
+  })
+
+  /**
+   * The label IS ink, so the mask says "wall" exactly where the word sits and a
+   * naive lookup at that pixel finds no region at all. This is the regression
+   * that would silently restore nameless rooms.
+   */
+  it('names the room even though the label pixel itself reads as wall', () => {
+    const grid: number[][] = []
+    for (let y = 0; y < 11; y++) {
+      const row: number[] = []
+      for (let x = 0; x < 11; x++) {
+        const edge = y === 0 || y === 10 || x === 0 || x === 10
+        // A blot of "text" ink sitting in the middle of the open floor.
+        const glyph = y >= 4 && y <= 6 && x >= 4 && x <= 6
+        row.push(edge || glyph ? W : R)
+      }
+      grid.push(row)
+    }
+    const rooms = extractRooms(makeImageData(grid), {
+      minAreaPx: 1,
+      labels: [{ x: 10, y: 10, text: 'BEDROOM 1' }],
+    })
+    expect(rooms.some((r) => r.name === 'BEDROOM 1')).toBe(true)
+  })
+})

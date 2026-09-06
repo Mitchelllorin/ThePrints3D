@@ -425,7 +425,7 @@ export async function processDrawing(
        */
       labels: textTokens
         .filter((t) => looksLikeRoomName(t.text))
-        .map((t) => ({ x: t.x, y: t.y })),
+        .map((t) => ({ x: t.x, y: t.y, text: t.text })),
     })
 
     // 7. Detect door/window openings — and REJOIN the walls they interrupt.
