@@ -21,6 +21,7 @@ import {
   recommendedWrb, wallTakesEnvelope, wallFramingSpec,
   type WrbKind, type WoodSheathing, type CladdingKind, type BoardKind,
 } from '../../services/constructionCode'
+import type { WetWallMethod } from '../../services/wetWalls'
 import styles from './FinishesPanel.module.css'
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -156,6 +157,16 @@ export default function FinishesPanel() {
             { value: 'foam-waterproof', label: 'Waterproof foam (Schluter KERDI-BOARD)' },
           ]}
           onChange={(v) => setUI({ boardKind: v })}
+        />
+      </Row>
+      <Row label="Wet walls">
+        <Pick<WetWallMethod>
+          value={ui.wetWallMethod}
+          options={[
+            { value: 'backer-board', label: 'Tile backer board' },
+            { value: 'membrane-system', label: 'Membrane system (Schluter)' },
+          ]}
+          onChange={(v) => setUI({ wetWallMethod: v })}
         />
       </Row>
       <Row label="Sheets">

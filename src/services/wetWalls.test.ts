@@ -86,3 +86,41 @@ describe('which walls bound the wet room', () => {
     expect(suggestWetWalls([wall(100, 100, 300, 100)], unnamed)).toEqual([])
   })
 })
+
+/**
+ * Two accepted ways to waterproof a bathroom wall, and the trade is split.
+ * A listed tile backer is what an inspector expects; a bonded membrane over
+ * ordinary gypsum — the orange Schluter stuff — is what a lot of tile setters
+ * actually build. The app has to be able to specify either.
+ */
+describe('wet wall method', () => {
+  it('defaults to a tile backer, so no existing takeoff moves', () => {
+    expect(boardForRoom('BATH')).toBe('glassmat-tile')
+    expect(boardForRoom('BATH', 'backer-board')).toBe('glassmat-tile')
+  })
+
+  it('specifies the waterproof panel when building the Schluter way', () => {
+    expect(boardForRoom('BATH', 'membrane-system')).toBe('foam-waterproof')
+    expect(boardForRoom('ENSUITE', 'membrane-system')).toBe('foam-waterproof')
+  })
+
+  it('leaves a powder room on mould-resistant under BOTH methods', () => {
+    // Nobody wraps a hand basin in a shower system. Specifying a membrane there
+    // would put a cost in the takeoff that the job does not have.
+    expect(boardForRoom('POWDER', 'backer-board')).toBe('mold-resistant')
+    expect(boardForRoom('POWDER', 'membrane-system')).toBe('mold-resistant')
+  })
+
+  it('still says nothing about a bedroom, whichever method is chosen', () => {
+    expect(boardForRoom('BED 1', 'membrane-system')).toBeNull()
+  })
+
+  it('suggests the chosen method to the walls that bound the bath', () => {
+    const walls: ParsedWall[] = [
+      { x1: 0, y1: 0, x2: 100, y2: 0, thickness: 6, source: 'user' } as ParsedWall,
+    ]
+    const bath = { id: 'r1', name: 'BATH', cx: 50, cy: 50, x1: 0, y1: 0, x2: 100, y2: 100, areaPx: 10000, areaSqM: 4 } as ParsedRoom
+    expect(suggestWetWalls(walls, [bath], 'membrane-system')[0].boardKind).toBe('foam-waterproof')
+    expect(suggestWetWalls(walls, [bath], 'backer-board')[0].boardKind).toBe('glassmat-tile')
+  })
+})

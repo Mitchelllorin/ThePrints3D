@@ -87,6 +87,7 @@ export default function FloorplanPanel() {
   const carryWallsUp    = useAppStore((s) => s.carryWallsUp)
   const carryFloorUp    = useAppStore((s) => s.carryFloorUp)
   const autoCarryShellUp = useUISettingsStore((s) => s.autoCarryShellUp)
+  const wetWallMethod = useUISettingsStore((s) => s.wetWallMethod)
   const clearFloorLevel = useAppStore((s) => s.clearFloorLevel)
   const setRoofOverhang = useAppStore((s) => s.setRoofOverhang)
   const assignDrawingToLevel = useAppStore((s) => s.assignDrawingToLevel)
@@ -743,7 +744,7 @@ export default function FloorplanPanel() {
 
   // Walls the plan says are wet but whose board does not agree yet.
   const wetSuggestions = wetDismissed || !drawing ? [] :
-    suggestWetWalls(drawing.parsedWalls, drawing.parsedRooms ?? [])
+    suggestWetWalls(drawing.parsedWalls, drawing.parsedRooms ?? [], wetWallMethod)
       // The card edits by USER-wall index, so report in those terms.
       .map((sg) => ({ ...sg, index: userWalls.findIndex((w) => w === drawing.parsedWalls[sg.index]) }))
       .filter((sg) => sg.index >= 0)

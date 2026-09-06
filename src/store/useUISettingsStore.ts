@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { WrbKind, WoodSheathing, CladdingKind, BoardKind } from '../services/constructionCode'
+import type { WetWallMethod } from '../services/wetWalls'
 import { DEFAULT_HEATING, type HeatingType } from '../services/tradeRules'
 
 export interface UISettings {
@@ -33,6 +34,12 @@ export interface UISettings {
   drywallOrientation: 'vertical' | 'horizontal'
   /** Which interior board product goes on the studs. */
   boardKind: BoardKind
+  /**
+   * How a bathroom wall is made waterproof — a listed tile backer, or a bonded
+   * membrane system (Schluter). Both are built; the trade is split, so this is
+   * the user's call rather than ours. Default keeps the existing takeoff.
+   */
+  wetWallMethod: WetWallMethod
   // Exterior envelope — sheathing, then housewrap over it. Two toggles rather
   // than one, because seeing the sheathing is exactly what you want while
   // checking the panel layout, and the wrap covers it up.
@@ -150,6 +157,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   drywallVisible: false,
   drywallOrientation: 'vertical',
   boardKind: 'gypsum-half',
+  wetWallMethod: 'backer-board',
   sheathingVisible: false,
   wrapVisible: false,
   wrbKind: 'housewrap',
