@@ -34,7 +34,11 @@ describe('CorpusTruth', () => {
   })
 
   it('is optional, so every sheet captured before this existed still loads', () => {
-    const old = {
+    // Annotated, not `satisfies`: `satisfies` narrows to the literal, and the
+    // literal has no `truth` key, so reading `old.truth` — the entire point of
+    // the test — is a type error. It passed under vitest, which does not
+    // typecheck, and broke `npm run build`, which does.
+    const old: CorpusSheet = {
       id: 'x', name: 'n', capturedAt: 0, lastSeenAt: 0, seenCount: 1,
       raster: null, source: null, sourceName: '', sourceType: '',
       width: 10, height: 10,
