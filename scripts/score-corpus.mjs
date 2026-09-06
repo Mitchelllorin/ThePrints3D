@@ -52,7 +52,7 @@ console.table(rows)
 const events = await page.evaluate(() => {
   try {
     return (JSON.parse(localStorage.getItem('theprints3d.logs') ?? '[]'))
-      .filter((r) => r.event === 'drawing.walls.joined' || r.event === 'drawing.walls.roomDerived')
+      .filter((r) => r.event.startsWith('drawing.walls.'))
       .map((r) => ({ event: r.event.replace('drawing.walls.', ''), ...r.context }))
   } catch { return [] }
 })
@@ -65,5 +65,5 @@ if (events.length) {
   console.log('wall steps: none logged')
 }
 
-if (out) { writeFileSync(out, JSON.stringify(rows, null, 2)); console.log(`wrote ${out}`) }
+if (out) { writeFileSync(out, JSON.stringify({ rows, events }, null, 2)); console.log(`wrote ${out}`) }
 await browser.close()

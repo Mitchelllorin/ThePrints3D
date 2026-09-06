@@ -55,4 +55,61 @@ describe('wallsFromRooms', () => {
   it('returns nothing when there are no usable rooms', () => {
     expect(wallsFromRooms([]).walls).toHaveLength(0)
   })
+
+  /**
+   * THE PORTLAND CASE.
+   *
+   * A permit booklet page with body text above the plan. `extractRooms`
+   * returned 57 regions for a two-bedroom drawing — the tail of them
+   * paragraphs of lettering at 0.05% of the page against a largest room of
+   * 8.6% — and every one got four walls built around it. 228 fabricated walls
+   * on top of 69 read off the ink, so the model was mostly text.
+   */
+  it('does not build walls around lettering', () => {
+    const rooms = [
+      room('big', 0, 0, 400, 300),
+      room('real', 400, 0, 700, 300),
+      // Text blobs: each well under a twentieth of the largest room.
+      ...Array.from({ length: 20 }, (_, i) =>
+        room(`text${i}`, i * 12, 400, i * 12 + 10, 406)),
+    ]
+    // 1000x600 page: the blobs are 60px² each, ~0.01% of it.
+    const out = wallsFromRooms(rooms, 6, 1000 * 600)
+    expect(out.rejected).toBe(20)
+    // Two rooms sharing one edge: seven walls, not 88.
+    expect(out.walls.length).toBeLessThanOrEqual(8)
+  })
+
+  it('keeps every room on a plan whose rooms are all real', () => {
+    // The adu-71sqm shape: a large region and six smaller ones, none tiny.
+    const rooms = [
+      room('a', 0, 0, 600, 400),
+      room('b', 600, 0, 800, 200),
+      room('c', 600, 200, 800, 400),
+      room('d', 0, 400, 300, 600),
+    ]
+    const out = wallsFromRooms(rooms, 6, 800 * 600)
+    expect(out.rejected).toBe(0)
+  })
+
+  /**
+   * ONE BIG SPACE MUST NOT CONDEMN THE SMALL ONES.
+   *
+   * The first cut at this measured each room against the LARGEST room, and the
+   * largest is often the whole footprint read as a single region.
+   * screenshot-studio-1bed lost five of its six rooms that way, and
+   * bungalow-ukiah lost the room holding its enclosure together — 5 enclosed
+   * regions down to 2. Real rooms are judged against the page, not against the
+   * biggest thing on it.
+   */
+  it('keeps small real rooms on a plan that also has one very large region', () => {
+    const page = 1000 * 1000
+    const rooms = [
+      room('footprint', 0, 0, 750, 750),   // 56% of the page, like adu-71sqm
+      room('bath', 800, 0, 950, 150),      // 2.25%
+      room('closet', 800, 200, 920, 320),  // 1.44%
+    ]
+    const out = wallsFromRooms(rooms, 6, page)
+    expect(out.rejected).toBe(0)
+  })
 })

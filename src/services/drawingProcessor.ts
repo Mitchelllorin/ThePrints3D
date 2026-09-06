@@ -162,7 +162,8 @@ export async function processDrawing(
      */
     setProgress(82)
     const isRasterPhoto = drawing.file.type.startsWith('image/')
-    let result = await detectWallsWithAI(detectImage)
+    const aiWalls = await detectWallsWithAI(detectImage)
+    let result = aiWalls
     if (!result) {
       const { result: detected } = await detectWallsOffThread(detectImage, [
         // Strict: reduces annotation noise (text, dimension lines).
@@ -195,6 +196,18 @@ export async function processDrawing(
       ])
       result = detected
     }
+    /**
+     * WHERE DID THE WALLS COME FROM, AND WHERE DID THEY GO?
+     *
+     * lacounty-adu-A came back with 655 walls on a seven-room bungalow, and
+     * nothing in the pipeline could say which stage produced them or which
+     * stage failed to remove them. Every number below is counted at the point
+     * it changes, so over-detection can be attributed instead of guessed at.
+     */
+    const stageCounts: Record<string, number> = {}
+    const wallSource = aiWalls ? 'ai' : 'ladder'
+    stageCounts.detected = result.walls.length
+
     const filtered = filterWallsForNoisyPrint({
       walls: result.walls,
       classified: result.classified,
@@ -224,8 +237,21 @@ export async function processDrawing(
      * gaining a wall, and counting `isReturn` in the finished model understates
      * what this did — see scripts/returns-overlay.mjs.
      */
+    stageCounts.afterNoiseFilter = filtered.walls.length
+    /**
+     * Did the noise filter actually filter, or did it bail?
+     *
+     * `filterWallsForNoisyPrint` has a retention floor: if scoring keeps fewer
+     * than a share of the candidates it hands back the whole capped set
+     * instead. That is the difference between a filtered print and an
+     * unfiltered one, and it was never recorded anywhere — so a sheet coming
+     * back with hundreds of walls looked identical to one that had been
+     * cleaned.
+     */
+    const noiseMetrics = filtered.metrics
     const returns = await findWallReturns(detectImage, filtered.walls, isRasterPhoto)
     if (returns.length) filtered.walls = [...filtered.walls, ...returns]
+    stageCounts.afterReturns = filtered.walls.length
 
     const classificationStats = result.stats
     setProgress(92)
@@ -342,6 +368,7 @@ export async function processDrawing(
     //    meet get extended/trimmed to an exact intersection, so detected
     //    walls connect instead of floating as disjoint segments.
     const corneredWalls = inferCorners(filtered.walls)
+    stageCounts.afterCorners = corneredWalls.length
     let walls: ParsedWall[] = corneredWalls.map((w) => {
       const finishedMm = pxToMm(w.thickness, effectiveScale)
       if (finishedMm === null) {
@@ -412,6 +439,7 @@ export async function processDrawing(
       scaleMmPerPx: effectiveScale,
     })
     walls = rejoined.walls
+    stageCounts.afterRejoin = walls.length
     const openings = rejoined.openings
 
     /**
@@ -492,7 +520,7 @@ export async function processDrawing(
         const thicknessPx = walls.length
           ? [...walls].map((w) => w.thickness).sort((a, b) => a - b)[Math.floor(walls.length / 2)]
           : 6
-        const derived = wallsFromRooms(rooms, thicknessPx)
+        const derived = wallsFromRooms(rooms, thicknessPx, detectImage.width * detectImage.height)
         if (derived.walls.length) {
           walls = [...walls, ...derived.walls]
           logEvent('drawing.walls.roomDerived', {
@@ -501,11 +529,34 @@ export async function processDrawing(
             roomsFound,
             added: derived.walls.length,
             sharedEdges: derived.shared,
+            roomsRejected: derived.rejected,
             enclosedAfter: enclosedRegions(walls, detectImage.width, detectImage.height),
           })
         }
       }
     }
+
+    stageCounts.final = walls.length
+    logEvent('drawing.walls.stages', {
+      drawingId: drawing.id,
+      source: wallSource,
+      ...stageCounts,
+      profile: noiseMetrics.profileId,
+      filterBailed: noiseMetrics.fallbackApplied,
+      noiseRatio: +noiseMetrics.noiseRatio.toFixed(3),
+      threshold: +noiseMetrics.adaptiveThreshold.toFixed(3),
+      rooms: rooms.length,
+      imageW: detectImage.width,
+      imageH: detectImage.height,
+      /** What SHAPE are the things being called rooms? A plan's rooms are a
+       *  handful of large boxes that tile the footprint. Fifty-seven small
+       *  ones scattered over a page are paragraphs of body text. */
+      roomAreaShares: rooms
+        .map((r) => Math.abs((r.x2 - r.x1) * (r.y2 - r.y1)) / (detectImage.width * detectImage.height))
+        .sort((a, b) => b - a)
+        .map((v) => +v.toFixed(4)),
+      roomsNamed: rooms.filter((r) => !!r.name).length,
+    })
 
     // 8. Derive text/symbol/annotation semantics by combining detector outputs
     //    with the canonical symbol glossary.
