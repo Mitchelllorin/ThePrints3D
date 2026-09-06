@@ -5,6 +5,82 @@ const MODEL_INPUT_SIZE = 256
 const AI_THRESHOLD = 0.5
 
 /**
+ * THE MASK IS 256x256. VECTORISE IT AT A SIZE THAT SAYS SO.
+ *
+ * The model reads a 256x256 square and returns a 256x256 mask. That mask was
+ * then stretched straight up to the full raster and handed to `detectWalls`,
+ * whose thresholds — 36px minimum length, 2px minimum thickness, an edge
+ * threshold of 8 — are ABSOLUTE PIXEL COUNTS. So what those thresholds
+ * actually asked for depended entirely on how big the page happened to be:
+ *
+ *   screenshot 732px long edge   2.9x upscale   36px = 12.6 mask px    22 walls
+ *   portland    1188px           4.6x           36px =  7.8 mask px    59 walls
+ *   ukiah       1836px           7.2x           36px =  5.0 mask px   110 walls
+ *   lacounty    3888px          15.2x           36px =  2.4 mask px   612 walls
+ *
+ * Wall count tracks the upscale factor and nothing else. A 3-bed bungalow and
+ * a studio have similar numbers of walls; the only thing that changed was the
+ * rasteriser's output size. At 15x a two-pixel smudge in the mask clears the
+ * minimum length, and bilinear smoothing puts a gradient fringe around every
+ * blob for the edge pass to find, so lacounty came back with 612 walls of
+ * which roughly five hundred were the interpolator's own handiwork.
+ *
+ * Upscaling adds no information — there are 65,536 mask pixels no matter what
+ * — so the vectoriser runs at a bounded size instead and the walls it finds
+ * are scaled up to raster coordinates afterwards. Every large sheet then lands
+ * at exactly 4x, inside the band where prints already behaved, and anything
+ * already smaller than the cap is left alone so the prints that worked keep
+ * working.
+ */
+const VECTORIZE_LONG_EDGE = 1024
+
+/**
+ * The size to vectorise a mask at for a raster of this size: the source aspect
+ * ratio, with the long edge capped. Never upscales a small print.
+ */
+export function vectorizeSize(
+  width: number,
+  height: number,
+): { width: number; height: number; scale: number } {
+  const longEdge = Math.max(width, height)
+  const scale = longEdge > VECTORIZE_LONG_EDGE ? VECTORIZE_LONG_EDGE / longEdge : 1
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+    scale,
+  }
+}
+
+/**
+ * Put geometry found at the working size back into raster coordinates.
+ *
+ * The measured ratio is used rather than the requested scale because the
+ * working size is rounded to whole pixels; on a tall thin sheet those differ
+ * by enough to walk walls off the plan.
+ */
+export function scaleGeometryToRaster<T extends { x1: number; y1: number; x2: number; y2: number; thickness: number }>(
+  items: T[],
+  from: { width: number; height: number },
+  to: { width: number; height: number },
+): T[] {
+  const sx = to.width / from.width
+  const sy = to.height / from.height
+  if (sx === 1 && sy === 1) return items
+  // Thickness is measured across a line of any orientation, so it has no single
+  // axis to belong to; the mean is the honest answer for the near-uniform
+  // scaling this does, and the aspect ratio is preserved so the two barely differ.
+  const st = (sx + sy) / 2
+  return items.map((item) => ({
+    ...item,
+    x1: item.x1 * sx,
+    y1: item.y1 * sy,
+    x2: item.x2 * sx,
+    y2: item.y2 * sy,
+    thickness: item.thickness * st,
+  }))
+}
+
+/**
  * ImageNet mean/std — the SAME values `ops/train/dataset.py` normalises with.
  *
  * These must match the training pipeline exactly or the model sees inputs on a
@@ -206,7 +282,11 @@ export async function detectWallsWithAI(
       data: tensor.data as Float32Array,
       dims: tensor.dims,
     })
-    const maskImage = maskToImageData(mask, width, height, imageData.width, imageData.height)
+    // Vectorise at a bounded size so `detectWalls`'s absolute pixel thresholds
+    // mean the same thing on a 3888px permit sheet as on a 732px screenshot —
+    // see VECTORIZE_LONG_EDGE.
+    const work = vectorizeSize(imageData.width, imageData.height)
+    const maskImage = maskToImageData(mask, width, height, work.width, work.height)
     const aiResult = detectWalls(maskImage, {
       edgeThreshold: 8,
       minWallLengthPx: 36,
@@ -228,6 +308,16 @@ export async function detectWallsWithAI(
      * So "the model ran without throwing" is not the bar. Finding something is.
      * A non-empty AI result still wins exactly as before.
      */
+    /**
+     * Back to raster coordinates before anything downstream sees them. Every
+     * later stage — scale calibration, corner inference, the openings pass —
+     * works in raster pixels, so walls left at the working size would be a
+     * quarter of the way up the page and a quarter as thick.
+     */
+    const raster = { width: imageData.width, height: imageData.height }
+    aiResult.walls = scaleGeometryToRaster(aiResult.walls, work, raster)
+    aiResult.classified = scaleGeometryToRaster(aiResult.classified, work, raster)
+
     if (!aiResultIsUsable(aiResult)) {
       console.warn(
         '[ThePrints3D] AI wall detection ran but found no walls — falling back to the classical detector.',
