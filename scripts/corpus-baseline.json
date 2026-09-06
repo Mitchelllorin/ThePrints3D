@@ -1,0 +1,38 @@
+{
+  "lacounty-adu-A-3bed-1200sf": {
+    "walls": 90,
+    "rooms": 21,
+    "enclosed": 7,
+    "roomsNamed": 5
+  },
+  "lacounty-adu-B-2bed-1200sf": {
+    "walls": 80,
+    "rooms": 15,
+    "enclosed": 4,
+    "roomsNamed": 1
+  },
+  "portland-residential-permit-plans": {
+    "walls": 100,
+    "rooms": 57,
+    "enclosed": 15,
+    "roomsNamed": 0
+  },
+  "bungalow-ukiah-adu": {
+    "walls": 87,
+    "rooms": 7,
+    "enclosed": 4,
+    "roomsNamed": 2
+  },
+  "screenshot-adu-71sqm": {
+    "walls": 51,
+    "rooms": 6,
+    "enclosed": 11,
+    "roomsNamed": 0
+  },
+  "screenshot-studio-1bed": {
+    "walls": 31,
+    "rooms": 6,
+    "enclosed": 3,
+    "roomsNamed": 0
+  }
+}

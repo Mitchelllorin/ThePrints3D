@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "score": "node scripts/score-corpus.mjs",
+    "gate": "node scripts/corpus-gate.mjs",
     "preview": "vite preview",
     "build:android": "npm run build && npx cap sync android",
     "open:android": "npx cap open android",
