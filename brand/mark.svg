@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ThePrints3D">
+  <title>ThePrints3D</title>
+  <!--
+    THE CANONICAL MARK. A plan on the grid with the roof lifted clear of the
+    walls — the product's own sentence, "rises the drawing off the page".
+
+    Isometric frame (centre 256,250): +x = (+112,+56), +y = (-112,+56),
+    wall height 56. Wall-top diamond Bk(256,194) R(368,250) F(256,306) L(144,250).
+    Roof plan is that diamond scaled 1.12 for the eave overhang, lifted 56 clear,
+    ridge parallel to +x at y=0.5, rise 88. Every number below comes off that
+    frame — change the frame, not the individual points.
+
+    Transparent ground on purpose: this is the mark for use on any surface.
+    For the app tile see icon.svg, which is this mark on the brand navy.
+  -->
+  <defs>
+    <linearGradient id="roofFront" x1="0.1" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#b3cdf8" stop-opacity=".94"/>
+      <stop offset="1" stop-color="#6d97dd" stop-opacity=".84"/>
+    </linearGradient>
+    <linearGradient id="roofBack" x1="0.1" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#84a9e9" stop-opacity=".52"/>
+      <stop offset="1" stop-color="#3f66b4" stop-opacity=".42"/>
+    </linearGradient>
+    <radialGradient id="gridFalloff" cx="0.5" cy="0.62" r="0.5">
+      <stop offset="0.45" stop-color="#fff" stop-opacity="1"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="gridMask"><rect width="512" height="512" fill="url(#gridFalloff)"/></mask>
+  </defs>
+
+  <!-- the blueprint grid the building sits on -->
+  <g mask="url(#gridMask)" stroke="#9fbdea" stroke-width="2.2" fill="none" opacity=".85">
+    <path d="M144 306 L368 418"/><path d="M200 278 L424 390"/><path d="M88 334 L312 446"/>
+    <path d="M256 250 L480 362"/><path d="M32 362 L256 474"/>
+    <path d="M368 306 L144 418"/><path d="M312 278 L88 390"/><path d="M424 334 L200 446"/>
+    <path d="M256 250 L32 362"/><path d="M480 362 L256 474"/>
+  </g>
+
+  <!-- open-topped walls: floor, far inner faces, then the two facing us -->
+  <path d="M144 250 L256 306 L368 250 L256 194 Z" fill="#e8effb"/>
+  <path d="M144 250 L256 194 L256 208 L144 264 Z" fill="#b9cae7"/>
+  <path d="M256 194 L368 250 L368 264 L256 208 Z" fill="#a7bbdc"/>
+  <path d="M144 250 L256 306 L256 362 L144 306 Z" fill="#3f5f9e"/>
+  <path d="M256 306 L368 250 L368 306 L256 362 Z" fill="#4d72b8"/>
+  <path d="M168.6 274.3 L195.5 287.8 L195.5 307.8 L168.6 294.3 Z" fill="#dce7f8"/>
+  <path d="M295.2 294.4 L321 281.5 L321 329.5 L295.2 342.4 Z" fill="#2b4478"/>
+
+  <!-- the roof, lifted clear and translucent so both slopes read -->
+  <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z" fill="url(#roofFront)"/>
+  <path d="M256 131.3 L381.4 194 L318.7 137.4 L193.3 74.7 Z" fill="url(#roofBack)"/>
+  <g stroke="#5b83c9" stroke-width="3" fill="none" stroke-linejoin="round">
+    <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z"/>
+    <path d="M256 131.3 L381.4 194 L318.7 137.4"/>
+    <path d="M256 131.3 L193.3 74.7"/>
+  </g>
+</svg>

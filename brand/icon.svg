@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ThePrints3D">
+  <title>ThePrints3D</title>
+  <!--
+    THE APP TILE. Same mark as mark.svg, cut for small sizes: the blueprint
+    grid is dropped and the roof is opaque, because at 48px a translucent fill
+    over a 2px grid turns to mush. The mark is scaled 1.22 about the tile centre
+    so it fills the square instead of floating in it — measured at 48px, which
+    is where an icon either reads or doesn't.
+
+    Art stays inside the central ~66% so an adaptive launcher mask can't clip it.
+  -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#18243f"/><stop offset="1" stop-color="#0b1220"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#tile)"/>
+  <g transform="translate(256,268) scale(1.22) translate(-256,-250)">
+    <path d="M144 250 L256 306 L368 250 L256 194 Z" fill="#1d2d4e"/>
+    <path d="M144 250 L256 306 L256 362 L144 306 Z" fill="#3d6cc0"/>
+    <path d="M256 306 L368 250 L368 306 L256 362 Z" fill="#5687dd"/>
+    <path d="M295.2 294.4 L321 281.5 L321 329.5 L295.2 342.4 Z" fill="#16264a"/>
+    <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z" fill="#a9c6f5"/>
+    <path d="M256 131.3 L381.4 194 L318.7 137.4 L193.3 74.7 Z" fill="#6d97dd"/>
+  </g>
+</svg>

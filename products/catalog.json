@@ -1,0 +1,92 @@
+[
+  {
+    "id": "door-pro-entry-36",
+    "manufacturer": "NorthStar Millwork",
+    "category": "doors",
+    "name": "Pro Entry Door 36\"",
+    "modelUrl": "/products/models/door-pro-entry-36.glb",
+    "specs": { "width": "36 in", "height": "80 in", "material": "Fiberglass" },
+    "affiliateUrl": "https://example.com/products/door-pro-entry-36"
+  },
+  {
+    "id": "window-casement-3050",
+    "manufacturer": "Skyline Windows",
+    "category": "windows",
+    "name": "Casement Window 30x50",
+    "modelUrl": "/products/models/window-casement-3050.glb",
+    "specs": { "width": "30 in", "height": "50 in", "uValue": "0.29" },
+    "affiliateUrl": "https://example.com/products/window-casement-3050"
+  },
+  {
+    "id": "sink-kitchen-33",
+    "manufacturer": "AquaForge",
+    "category": "kitchen-bath",
+    "name": "Stainless Kitchen Sink 33\"",
+    "modelUrl": "/products/models/sink-kitchen-33.glb",
+    "specs": { "mount": "Undermount", "bowls": "Double", "width": "33 in" },
+    "affiliateUrl": "https://example.com/products/sink-kitchen-33"
+  },
+  {
+    "id": "toilet-compact-elongated",
+    "manufacturer": "AquaForge",
+    "category": "plumbing-fixtures",
+    "name": "Compact Elongated Toilet",
+    "modelUrl": "/products/models/toilet-compact-elongated.glb",
+    "specs": { "flush": "1.28 gpf", "roughIn": "12 in" },
+    "affiliateUrl": "https://example.com/products/toilet-compact-elongated"
+  },
+  {
+    "id": "ahu-2ton-horizontal",
+    "manufacturer": "ClimateMax",
+    "category": "hvac-equipment",
+    "name": "2-Ton Horizontal AHU",
+    "modelUrl": "/products/models/ahu-2ton-horizontal.glb",
+    "specs": { "capacity": "24,000 BTU", "voltage": "240V" },
+    "affiliateUrl": "https://example.com/products/ahu-2ton-horizontal"
+  },
+  {
+    "id": "light-led-downlight-6",
+    "manufacturer": "LumaCore",
+    "category": "lighting",
+    "name": "6\" LED Downlight",
+    "modelUrl": "/products/models/light-led-downlight-6.glb",
+    "specs": { "wattage": "12W", "lumens": "950" },
+    "affiliateUrl": "https://example.com/products/light-led-downlight-6"
+  },
+  {
+    "id": "flooring-lvp-oak",
+    "manufacturer": "TimberLine",
+    "category": "flooring",
+    "name": "LVP Oak Plank",
+    "modelUrl": "/products/models/flooring-lvp-oak.glb",
+    "specs": { "thickness": "6 mm", "wearLayer": "20 mil" },
+    "affiliateUrl": "https://example.com/products/flooring-lvp-oak"
+  },
+  {
+    "id": "door-interior-solidcore-32",
+    "manufacturer": "NorthStar Millwork",
+    "category": "doors",
+    "name": "Interior Solid Core Door 32\"",
+    "modelUrl": "/products/models/door-interior-solidcore-32.glb",
+    "specs": { "width": "32 in", "height": "80 in", "core": "Solid" },
+    "affiliateUrl": "https://example.com/products/door-interior-solidcore-32"
+  },
+  {
+    "id": "window-slider-6040",
+    "manufacturer": "Skyline Windows",
+    "category": "windows",
+    "name": "Slider Window 60x40",
+    "modelUrl": "/products/models/window-slider-6040.glb",
+    "specs": { "width": "60 in", "height": "40 in", "frame": "Vinyl" },
+    "affiliateUrl": "https://example.com/products/window-slider-6040"
+  },
+  {
+    "id": "faucet-pull-down",
+    "manufacturer": "AquaForge",
+    "category": "kitchen-bath",
+    "name": "Pull-Down Kitchen Faucet",
+    "modelUrl": "/products/models/faucet-pull-down.glb",
+    "specs": { "finish": "Brushed Nickel", "flow": "1.8 gpm" },
+    "affiliateUrl": "https://example.com/products/faucet-pull-down"
+  }
+]
