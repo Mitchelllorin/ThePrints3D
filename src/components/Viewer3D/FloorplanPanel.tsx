@@ -1073,8 +1073,24 @@ export default function FloorplanPanel() {
                 <span className={styles.stepText}>Trace {layerLabel.toLowerCase()} runs</span>
               )}
               <span className={styles.stepHint}>{tradeIndicator}</span>
+              {/* THE GESTURE NAMED ABOVE HAS TO BE ONE TAP AWAY.
+                  The line above says "Pull a floor — tap opposite corners", and
+                  it said that while nothing was armed: the overlay's tap handler
+                  returns immediately unless `traceMode` is on, so the taps
+                  it asks for landed on nothing. The only way in was "Choose type
+                  →" and then "Start Tracing →" inside the picker — a button that
+                  reads like an optional settings detour, two taps behind the
+                  instruction. Pick a preset, open Floors, do exactly what the
+                  panel says, and the app is dead in your hands.
+                  So the instruction is now also the way to begin. `confirmWallType`
+                  is the same action the picker's "Start Tracing →" runs, calibration
+                  gate and all; "Choose type" still opens the picker for anyone who
+                  wants to change joist, level or size first. */}
               <div className={styles.btnRow}>
-                <button className={styles.action} onClick={openPicker}>Choose type →</button>
+                <button className={styles.action} onClick={confirmWallType}>
+                  {floorsActive ? 'Pull a floor →' : roofActive ? 'Pull a roof →' : `Trace ${layerLabel.toLowerCase()} →`}
+                </button>
+                <button className={styles.secondary} onClick={openPicker}>Choose type</button>
                 {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel board</button>}
               </div>
             </div>
