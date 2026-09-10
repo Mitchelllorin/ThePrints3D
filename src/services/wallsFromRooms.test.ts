@@ -22,6 +22,45 @@ describe('wallsFromRooms', () => {
     expect(r.walls).toHaveLength(7)
   })
 
+  /**
+   * THE PARTY LINE, BUILT ONCE.
+   *
+   * Neighbours on a real plan share a LINE, not an edge. A deep living room
+   * beside a stacked kitchen and bath all meet on x=200, in three different
+   * spans. Keying edges on their exact coordinates collapsed none of them and
+   * built the same wall three times, stacked on itself:
+   *   [0→295.8], [0→132.6], [132.6→295.8]
+   * That is why `sharedEdges` read 0 on print after print.
+   */
+  it('collapses a party line the neighbours share only partly', () => {
+    const out = wallsFromRooms([
+      room('LIVING', 0, 0, 200, 300),
+      room('KITCHEN', 200, 0, 380, 130),
+      room('BATH', 200, 130, 380, 300),
+    ], 6, 400 * 320)
+    const onLine = out.walls.filter((w) => w.x1 === w.x2 && Math.abs(w.x1 - 200) < out.snapPx)
+    expect(onLine).toHaveLength(1)
+    // And it spans the whole line, not just one room's share of it.
+    const [party] = onLine
+    expect(Math.abs(party.y1 - party.y2)).toBeGreaterThan(280)
+  })
+
+  /**
+   * A GAP ON A LINE IS A DOORWAY, NOT A WALL.
+   *
+   * Merging must need real overlap. Two spans that merely touch end-to-end are
+   * two rooms' walls meeting, and two spans with space between them are an
+   * opening — neither is one wall counted twice.
+   */
+  it('does not join two spans that have a gap between them', () => {
+    const out = wallsFromRooms([
+      room('A', 0, 0, 100, 100),
+      room('B', 0, 300, 100, 400),
+    ], 6, 200 * 500)
+    const right = out.walls.filter((w) => w.x1 === w.x2 && w.x1 > 50)
+    expect(right).toHaveLength(2)
+  })
+
   it('marks its output as inferred, not measured', () => {
     // The user has to be able to tell an estimate from a reading.
     const r = wallsFromRooms([room('BATH', 0, 0, 100, 90)])

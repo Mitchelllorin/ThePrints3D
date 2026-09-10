@@ -123,31 +123,87 @@ export function wallsFromRooms(
   const snapPx = Math.max(2, typical * SNAP_FRACTION)
   const snap = (v: number) => Math.round(v / snapPx) * snapPx
 
-  const seen = new Map<string, ParsedWall>()
-  let shared = 0
+  /**
+   * NEIGHBOURS SHARE A LINE, NOT AN EDGE.
+   *
+   * The first version of this keyed each edge on its exact four coordinates,
+   * so two rooms collapsed onto one wall only when they shared the WHOLE
+   * edge — identical from end to end. Rooms on a real plan almost never do.
+   * A deep living room beside a stacked kitchen and bath share the same party
+   * line, but in three different spans, and all three were built:
+   *
+   *   x=200 party line → [0→295.8], [0→132.6], [132.6→295.8]
+   *
+   * One wall, drawn three times, stacked on itself. Measured on the LA County
+   * plan A layout that left 26 walls with 2 collapsed, against 28 for rooms
+   * treated as wholly independent — the collapse was recovering almost
+   * nothing, which is why `sharedEdges` read 0 on print after print.
+   *
+   * So edges are grouped by the LINE they sit on and merged by span. Only
+   * genuine overlap merges: two spans that merely touch end-to-end are left
+   * alone, because a gap between spans on one line is a doorway or a
+   * courtyard, and a butt joint is two rooms' walls meeting rather than one
+   * wall counted twice.
+   */
+  type Span = { lo: number; hi: number }
+  /** Vertical edges keyed by x, horizontal by y. */
+  const vertical = new Map<number, Span[]>()
+  const horizontal = new Map<number, Span[]>()
 
   for (const r of roomy) {
     const x1 = snap(r.x1), y1 = snap(r.y1)
     const x2 = snap(r.x2), y2 = snap(r.y2)
-    const edges: Array<[number, number, number, number]> = [
-      [x1, y1, x2, y1], // top
-      [x2, y1, x2, y2], // right
-      [x1, y2, x2, y2], // bottom
-      [x1, y1, x1, y2], // left
-    ]
-    for (const [ax, ay, bx, by] of edges) {
-      if (ax === bx && ay === by) continue
-      const key = `${ax},${ay},${bx},${by}`
-      if (seen.has(key)) { shared++; continue }
-      seen.set(key, {
-        x1: ax, y1: ay, x2: bx, y2: by,
-        thickness: thicknessPx,
-        source: 'auto',
-        roomDerived: true,
-        detectionConfidence: 0.5,
-      } as ParsedWall)
+    if (x1 !== x2) {
+      for (const y of [y1, y2]) {
+        const at = horizontal.get(y) ?? []
+        at.push({ lo: Math.min(x1, x2), hi: Math.max(x1, x2) })
+        horizontal.set(y, at)
+      }
+    }
+    if (y1 !== y2) {
+      for (const x of [x1, x2]) {
+        const at = vertical.get(x) ?? []
+        at.push({ lo: Math.min(y1, y2), hi: Math.max(y1, y2) })
+        vertical.set(x, at)
+      }
     }
   }
 
-  return { walls: [...seen.values()], shared, snapPx, rejected }
+  let shared = 0
+
+  /** Sweep one line's spans, merging those that genuinely overlap. */
+  const mergeSpans = (spans: Span[]): Span[] => {
+    const sorted = [...spans].sort((a, b) => a.lo - b.lo || a.hi - b.hi)
+    const out: Span[] = []
+    for (const s of sorted) {
+      const last = out[out.length - 1]
+      // Strictly overlapping — touching end-to-end is not the same wall.
+      if (last && s.lo < last.hi) {
+        if (s.hi > last.hi) last.hi = s.hi
+        shared++
+      } else {
+        out.push({ ...s })
+      }
+    }
+    return out
+  }
+
+  const walls: ParsedWall[] = []
+  const wall = (ax: number, ay: number, bx: number, by: number) =>
+    ({
+      x1: ax, y1: ay, x2: bx, y2: by,
+      thickness: thicknessPx,
+      source: 'auto',
+      roomDerived: true,
+      detectionConfidence: 0.5,
+    } as ParsedWall)
+
+  for (const [y, spans] of horizontal) {
+    for (const s of mergeSpans(spans)) walls.push(wall(s.lo, y, s.hi, y))
+  }
+  for (const [x, spans] of vertical) {
+    for (const s of mergeSpans(spans)) walls.push(wall(x, s.lo, x, s.hi))
+  }
+
+  return { walls, shared, snapPx, rejected }
 }
