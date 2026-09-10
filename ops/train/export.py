@@ -57,10 +57,14 @@ def export(
         out_path,
         opset_version=opset,
         input_names=['input'],
-        output_names=['output'],
+        # Two outputs now: the wall mask and the four junction arm heatmaps.
+        # 'output' keeps its name so an existing consumer that asks for it by
+        # name goes on getting the wall mask and nothing downstream breaks.
+        output_names=['output', 'junctions'],
         dynamic_axes={
             'input': {0: 'batch', 2: 'height', 3: 'width'},
             'output': {0: 'batch', 2: 'height', 3: 'width'},
+            'junctions': {0: 'batch', 2: 'height', 3: 'width'},
         },
         do_constant_folding=True,
     )
@@ -92,13 +96,22 @@ def export(
 
         sess = ort.InferenceSession(out_path, providers=['CPUExecutionProvider'])
         inp_name = sess.get_inputs()[0].name
-        out_name = sess.get_outputs()[0].name
+        names = [o.name for o in sess.get_outputs()]
         dummy_np = np.zeros((1, 3, img_size, img_size), dtype=np.float32)
-        result = sess.run([out_name], {inp_name: dummy_np})
-        out_shape = result[0].shape
-        assert out_shape == (1, 1, img_size, img_size), \
-            f'Unexpected output shape: {out_shape}'
-        print(f'ONNX Runtime check passed — output shape {out_shape}')
+        by_name = dict(zip(names, sess.run(names, {inp_name: dummy_np})))
+
+        wall_shape = by_name['output'].shape
+        assert wall_shape == (1, 1, img_size, img_size), \
+            f'Unexpected wall output shape: {wall_shape}'
+        # CHECK THE JUNCTION HEAD EXPLICITLY.
+        # It is what makes rooms close, and an export that quietly dropped it
+        # would pass every other check here and then find no corners at all.
+        assert 'junctions' in by_name, \
+            f'Export is missing the junction head — outputs were {names}'
+        junc_shape = by_name['junctions'].shape
+        assert junc_shape == (1, 4, img_size, img_size), \
+            f'Unexpected junction output shape: {junc_shape}'
+        print(f'ONNX Runtime check passed — wall {wall_shape}, junctions {junc_shape}')
     except ImportError:
         print('onnxruntime not installed — skipping runtime check.')
 

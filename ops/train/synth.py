@@ -405,6 +405,186 @@ def build_wall_mask(plan: Plan, canvas: int) -> Tuple[np.ndarray, np.ndarray, np
     return (ext | inte), ext, inte
 
 
+# ── Junction ground truth ─────────────────────────────────────────────────────
+
+"""
+WHY A JUNCTION MAP AND NOT JUST A WALL MASK.
+
+A wall mask says "there is wall here". Vectorising it means finding line
+segments and hoping they meet, and on a real drawing they do not: measured on
+screenshot-adu-71sqm, fifty-plus detected segments enclosed ZERO rooms across
+42 threshold configurations. The lines were read; they never closed. No
+threshold fixes that, because closure is not a thresholding problem.
+
+The published methods do not read lines. They detect the CORNERS and the
+directions the wall arms leave each corner, then connect two corners whose
+arms face each other. Rooms close because the construction closes them — it
+is a property of how the polygon is built, not something hoped for afterwards.
+
+That representation needs ground truth we happen to get for nothing: this
+generator SPLITS a footprint into rooms, so it knows every corner exactly.
+Most teams pay annotators for this.
+
+Encoded as four channels, one per arm direction, so the downstream pairing rule
+reads straight off them: a junction with a SOUTH arm pairs with the junction
+below it that has a NORTH arm. The alternative — CubiCasa's 13 junction classes
+— carries the same information but has to be decoded before it can be used.
+"""
+
+#: Arm directions, in channel order: north, east, south, west.
+ARM_DIRS: Tuple[Tuple[int, int], ...] = ((0, -1), (1, 0), (0, 1), (-1, 0))
+ARM_N, ARM_E, ARM_S, ARM_W = 0, 1, 2, 3
+
+
+def _wall_centrelines(plan: Plan) -> Tuple[List[Tuple[float, float, float]],
+                                           List[Tuple[float, float, float]]]:
+    """Every wall reduced to the line it is drawn about.
+
+    Returns (horizontals, verticals) as (fixed, lo, hi) triples — a horizontal
+    at y=fixed spanning x in [lo,hi], a vertical at x=fixed spanning y.
+    """
+    hs: List[Tuple[float, float, float]] = []
+    vs: List[Tuple[float, float, float]] = []
+    for w in plan.walls:
+        r = w.rect
+        if w.horizontal:
+            hs.append((r.cy, min(r.x0, r.x1), max(r.x0, r.x1)))
+        else:
+            vs.append((r.cx, min(r.y0, r.y1), max(r.y0, r.y1)))
+    return hs, vs
+
+
+def _snap_centrelines(plan: Plan) -> Tuple[List[Tuple[float, float, float]],
+                                           List[Tuple[float, float, float]]]:
+    """Close the centreline network so walls meet corner to corner.
+
+    THE GROUND TRUTH HAD THE SAME DISEASE AS THE DETECTOR.
+
+    Walls are drawn face to face — a partition runs from the inner face of one
+    wall to the inner face of the next, and an exterior wall's rectangle spans
+    the whole footprint. Centrelines taken straight off those rectangles do not
+    meet: measured on one 8-room plan, a partition's centreline stopped 4.3px
+    short of the exterior wall it dies into, while the exterior wall's own
+    centreline overhung the corner by 4.2px. So every footprint corner read as
+    a four-armed CROSS off a stub, every partition end read as a free END
+    rather than a T, and the far edges of the wall rectangles showed up as
+    junctions that are not junctions. Zero L-corners on a plan with four.
+
+    A wall's centreline runs corner to corner, so each end is snapped onto the
+    perpendicular centreline it abuts — extending it where it fell short and
+    shortening it where it overhung. Tolerance comes from the plan's own
+    thickest wall, since the gap being closed is exactly half a wall.
+    """
+    hs, vs = _wall_centrelines(plan)
+    if not hs or not vs:
+        return hs, vs
+
+    half = 0.0
+    for w in plan.walls:
+        r = w.rect
+        half = max(half, (r.h if w.horizontal else r.w) * 0.5)
+    snap = half + 1.0
+
+    def pull(end: float, others: Sequence[Tuple[float, float, float]],
+             along: float) -> float:
+        """Move *end* onto the nearest perpendicular centreline that spans it."""
+        best, bestd = end, snap
+        for fixed, lo, hi in others:
+            if lo - snap <= along <= hi + snap:
+                d = abs(fixed - end)
+                if d <= bestd:
+                    best, bestd = fixed, d
+        return best
+
+    hs2 = [(y, pull(x0, vs, y), pull(x1, vs, y)) for y, x0, x1 in hs]
+    vs2 = [(x, pull(y0, hs, x), pull(y1, hs, x)) for x, y0, y1 in vs]
+    # Keep them ordered lo..hi; a snap can cross the ends on a very short wall.
+    hs2 = [(y, min(a, b), max(a, b)) for y, a, b in hs2]
+    vs2 = [(x, min(a, b), max(a, b)) for x, a, b in vs2]
+    return hs2, vs2
+
+
+def plan_junctions(plan: Plan, tol: float = 2.0,
+                   min_arm: float = 3.0) -> List[Tuple[float, float, int]]:
+    """Every corner in the plan, with a bitmask of which arms leave it.
+
+    A junction is where wall centrelines cross or end. The arm mask has bit
+    `ARM_N/E/S/W` set when wall material continues from the point in that
+    direction for at least *min_arm* pixels — which is what makes two junctions
+    pairable.
+    """
+    hs, vs = _snap_centrelines(plan)
+
+    pts: List[Tuple[float, float]] = []
+    # Crossings: every place a horizontal centreline meets a vertical one.
+    for hy, hx0, hx1 in hs:
+        for vx, vy0, vy1 in vs:
+            if hx0 - tol <= vx <= hx1 + tol and vy0 - tol <= hy <= vy1 + tol:
+                pts.append((vx, hy))
+    # Free ends, so a stub wall still terminates in a junction.
+    for hy, hx0, hx1 in hs:
+        pts.append((hx0, hy))
+        pts.append((hx1, hy))
+    for vx, vy0, vy1 in vs:
+        pts.append((vx, vy0))
+        pts.append((vx, vy1))
+
+    # Collapse points that are the same corner measured twice.
+    merged: List[List[float]] = []
+    for x, y in pts:
+        for m in merged:
+            if abs(m[0] - x) <= tol and abs(m[1] - y) <= tol:
+                break
+        else:
+            merged.append([x, y])
+
+    out: List[Tuple[float, float, int]] = []
+    for x, y in merged:
+        arms = 0
+        for hy, hx0, hx1 in hs:
+            if abs(hy - y) > tol:
+                continue
+            if hx0 <= x - min_arm and hx1 >= x - tol:
+                arms |= 1 << ARM_W
+            if hx1 >= x + min_arm and hx0 <= x + tol:
+                arms |= 1 << ARM_E
+        for vx, vy0, vy1 in vs:
+            if abs(vx - x) > tol:
+                continue
+            if vy0 <= y - min_arm and vy1 >= y - tol:
+                arms |= 1 << ARM_N
+            if vy1 >= y + min_arm and vy0 <= y + tol:
+                arms |= 1 << ARM_S
+        if arms:
+            out.append((x, y, arms))
+    return out
+
+
+def build_junction_map(plan: Plan, canvas: int, sigma: float = 2.0) -> np.ndarray:
+    """Rasterise the plan's junctions as four uint8 arm heatmaps.
+
+    Returns (canvas, canvas, 4) — channels north, east, south, west — with a
+    Gaussian peak at every junction carrying that arm. Peaks rather than single
+    pixels because a corner one pixel out is a corner found, and a network
+    trained on lone pixels learns to predict nothing.
+    """
+    hm = np.zeros((canvas, canvas, 4), dtype=np.float32)
+    rad = max(1, int(math.ceil(sigma * 3)))
+    juncs = plan_junctions(plan)
+    for x, y, arms in juncs:
+        xi, yi = int(round(x)), int(round(y))
+        x0, x1 = max(0, xi - rad), min(canvas, xi + rad + 1)
+        y0, y1 = max(0, yi - rad), min(canvas, yi + rad + 1)
+        if x0 >= x1 or y0 >= y1:
+            continue
+        yy, xx = np.mgrid[y0:y1, x0:x1]
+        blob = np.exp(-(((xx - x) ** 2 + (yy - y) ** 2) / (2.0 * sigma * sigma)))
+        for d in range(4):
+            if arms & (1 << d):
+                np.maximum(hm[y0:y1, x0:x1, d], blob, out=hm[y0:y1, x0:x1, d])
+    return (hm * 255.0).astype(np.uint8)
+
+
 # ── Rendering ─────────────────────────────────────────────────────────────────
 
 def _load_font(size: int, rng: random.Random) -> ImageFont.ImageFont:
@@ -776,9 +956,17 @@ def augment_pair(
     img: Image.Image,
     mask: Image.Image,
     rng: random.Random,
-) -> Tuple[Image.Image, Image.Image]:
+    junc: Optional[Image.Image] = None,
+) -> Tuple[Image.Image, Image.Image, Optional[Image.Image]]:
     """Scan/photo degradation chain.  Geometry is applied to both; photometric
-    effects to the image only."""
+    effects to the image only.
+
+    *junc* is the four-channel (RGBA) junction heatmap. It rides through the
+    SAME geometric transforms as the mask — a corner that moves with the walls
+    is still that corner, and one that does not is a mislabelled corner. The
+    arm directions survive because the geometry here is small: ±4° of rotation
+    and ±0.035 of shear leave north pointing north.
+    """
     size = img.size[0]
 
     # ── Geometric: small rotation + perspective-ish skew (applies to both) ──
@@ -786,6 +974,8 @@ def augment_pair(
         angle = rng.uniform(-4.0, 4.0)
         img = img.rotate(angle, resample=Image.BICUBIC, fillcolor=250)
         mask = mask.rotate(angle, resample=Image.BILINEAR, fillcolor=0)
+        if junc is not None:
+            junc = junc.rotate(angle, resample=Image.BILINEAR, fillcolor=0)
     if rng.random() < 0.45:
         # affine shear
         sx = rng.uniform(-0.035, 0.035)
@@ -795,17 +985,23 @@ def augment_pair(
                             resample=Image.BICUBIC, fillcolor=250)
         mask = mask.transform((size, size), Image.AFFINE, coeffs,
                               resample=Image.BILINEAR, fillcolor=0)
+        if junc is not None:
+            junc = junc.transform((size, size), Image.AFFINE, coeffs,
+                                  resample=Image.BILINEAR, fillcolor=0)
     if rng.random() < 0.5:
         # slight scale/crop jitter (simulates framing)
         s = rng.uniform(0.94, 1.06)
         nw = int(size * s)
         tmp_i = img.resize((nw, nw), Image.BICUBIC)
         tmp_m = mask.resize((nw, nw), Image.BILINEAR)
+        tmp_j = junc.resize((nw, nw), Image.BILINEAR) if junc is not None else None
         if s >= 1.0:
             ox = rng.randint(0, nw - size)
             oy = rng.randint(0, nw - size)
             img = tmp_i.crop((ox, oy, ox + size, oy + size))
             mask = tmp_m.crop((ox, oy, ox + size, oy + size))
+            if tmp_j is not None:
+                junc = tmp_j.crop((ox, oy, ox + size, oy + size))
         else:
             canvas_i = Image.new('L', (size, size), 250)
             canvas_m = Image.new('L', (size, size), 0)
@@ -814,6 +1010,10 @@ def augment_pair(
             canvas_i.paste(tmp_i, (ox, oy))
             canvas_m.paste(tmp_m, (ox, oy))
             img, mask = canvas_i, canvas_m
+            if tmp_j is not None:
+                canvas_j = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+                canvas_j.paste(tmp_j, (ox, oy))
+                junc = canvas_j
 
     a = np.asarray(img, dtype=np.float32)
 
@@ -868,7 +1068,10 @@ def augment_pair(
     mask = Image.fromarray(
         ((np.asarray(mask, dtype=np.uint8) > 127) * 255).astype(np.uint8), mode='L'
     )
-    return img, mask
+    # The junction map is NOT re-binarised — it is a heatmap, and its falloff
+    # is the label. Thresholding it here would throw away the tolerance that
+    # makes a corner one pixel out still a corner found.
+    return img, mask, junc
 
 
 # ── Sample generation ─────────────────────────────────────────────────────────
@@ -877,8 +1080,8 @@ def generate_sample(
     seed: int,
     img_size: int,
     augment: bool,
-) -> Tuple[Image.Image, Image.Image, dict]:
-    """Generate one (image, mask, meta) triple deterministically from *seed*."""
+) -> Tuple[Image.Image, Image.Image, Image.Image, dict]:
+    """Generate one (image, mask, junctions, meta) tuple from *seed*."""
     rng = random.Random(seed)
     canvas = img_size * SS
 
@@ -887,25 +1090,33 @@ def generate_sample(
     img_hi = render_plan(plan, canvas, rng, union, ext, inte)
 
     mask_hi = Image.fromarray((union * 255).astype(np.uint8), mode='L')
+    # Junctions are rasterised at the supersampled size with a sigma to match,
+    # so downsampling lands a peak of the intended width rather than a spike.
+    junc_hi = Image.fromarray(build_junction_map(plan, canvas, sigma=2.0 * SS),
+                              mode='RGBA')
 
     img = img_hi.resize((img_size, img_size), Image.LANCZOS)
     mask = mask_hi.resize((img_size, img_size), Image.BILINEAR)
     mask = Image.fromarray(
         ((np.asarray(mask, dtype=np.uint8) > 127) * 255).astype(np.uint8), mode='L'
     )
+    junc = junc_hi.resize((img_size, img_size), Image.BILINEAR)
 
     if augment:
-        img, mask = augment_pair(img, mask, rng)
+        img, mask, junc = augment_pair(img, mask, rng, junc)
 
+    ja = np.asarray(junc, dtype=np.uint8)
     meta = {
         'seed': seed,
         'rooms': len(plan.rooms),
         'walls': len(plan.walls),
         'openings': len(plan.openings),
+        'junctions': len(plan_junctions(plan)),
         'px_per_ft': round(plan.px_per_ft / SS, 3),
         'wall_frac': float((np.asarray(mask) > 127).mean()),
+        'junc_frac': float((ja > 127).any(axis=2).mean()),
     }
-    return img, mask, meta
+    return img, mask, junc, meta
 
 
 def main() -> None:
@@ -928,18 +1139,20 @@ def main() -> None:
     for split in ('train', 'val'):
         (out / split / 'images').mkdir(parents=True, exist_ok=True)
         (out / split / 'masks').mkdir(parents=True, exist_ok=True)
+        (out / split / 'juncs').mkdir(parents=True, exist_ok=True)
 
     metas = []
     fracs = []
     for i in range(args.count):
         split = 'train' if i < n_train else 'val'
         seed = args.seed * 1_000_003 + i
-        img, mask, meta = generate_sample(seed, args.img_size, args.augment)
+        img, mask, junc, meta = generate_sample(seed, args.img_size, args.augment)
         if args.rgb:
             img = img.convert('RGB')
         name = f'plan_{i:06d}.png'
         img.save(out / split / 'images' / name)
         mask.save(out / split / 'masks' / name)
+        junc.save(out / split / 'juncs' / name)
         meta['split'] = split
         meta['file'] = name
         metas.append(meta)

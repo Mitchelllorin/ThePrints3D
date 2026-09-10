@@ -64,6 +64,7 @@ renderer using Pillow ImageDraw.
 
 import os
 import re
+import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
@@ -73,6 +74,12 @@ from PIL import Image, ImageDraw
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as TF
 import torch
+
+sys.path.insert(0, str(Path(__file__).parent))
+#: Junction channel order, shared with the generator that writes the labels.
+#: Imported rather than restated so the two can never drift apart — a silent
+#: disagreement here trains the head against arms pointing the wrong way.
+from synth import ARM_N, ARM_E, ARM_S, ARM_W  # noqa: E402
 
 # ── SVG namespaces ────────────────────────────────────────────────────────────
 
@@ -335,7 +342,12 @@ class CubiCasa5kDataset(Dataset):
         if self.transform:
             img_t = self.transform(img_t)
 
-        return img_t, mask_t
+        # Same arity as the synthetic loader so the training loop unpacks one
+        # shape. CubiCasa carries no junction labels, so the weight is zero and
+        # the junction head simply learns nothing from these samples — rather
+        # than learning that floor plans have no corners.
+        return (img_t, mask_t,
+                torch.zeros(4, self.img_size, self.img_size), torch.zeros(()))
 
 
 class SyntheticWallDataset(Dataset):
@@ -377,17 +389,28 @@ class SyntheticWallDataset(Dataset):
 
         base = Path(root) / ('train' if split == 'all' else split)
         img_dir, mask_dir = base / 'images', base / 'masks'
+        junc_dir = base / 'juncs'
         if not img_dir.is_dir() or not mask_dir.is_dir():
             raise FileNotFoundError(
                 f'No synthetic split at {base!r}. Generate one first:\n'
                 f'  python ops/train/synth.py --out {root} --count 3000 --augment'
             )
 
-        self.pairs: List[Tuple[Path, Path]] = []
+        # A corpus generated before the junction head existed has no juncs/. It
+        # still trains the wall head; the junction loss is weighted out for
+        # those samples rather than trained against zeros, which would actively
+        # teach the model that floor plans have no corners.
+        self.has_junctions = junc_dir.is_dir()
+
+        self.pairs: List[Tuple[Path, Path, Optional[Path]]] = []
         for img_path in sorted(img_dir.glob('*.png')):
             mask_path = mask_dir / img_path.name
-            if mask_path.exists():
-                self.pairs.append((img_path, mask_path))
+            if not mask_path.exists():
+                continue
+            junc_path = junc_dir / img_path.name if self.has_junctions else None
+            if junc_path is not None and not junc_path.exists():
+                junc_path = None
+            self.pairs.append((img_path, mask_path, junc_path))
 
         if not self.pairs:
             raise FileNotFoundError(f'No image/mask pairs found under {base!r}.')
@@ -395,11 +418,19 @@ class SyntheticWallDataset(Dataset):
     def __len__(self) -> int:
         return len(self.pairs)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        img_path, mask_path = self.pairs[idx]
+    def __getitem__(
+        self, idx: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Returns (image, wall mask, junction arms, junction weight).
+
+        The weight is 1 where this sample carries junction labels and 0 where
+        it does not, so a mixed or older corpus still trains the wall head.
+        """
+        img_path, mask_path, junc_path = self.pairs[idx]
 
         img = Image.open(img_path).convert('RGB')
         mask = Image.open(mask_path).convert('L')
+        junc = Image.open(junc_path).convert('RGBA') if junc_path else None
         if img.size != (self.img_size, self.img_size):
             img = img.resize((self.img_size, self.img_size), Image.BILINEAR)
         if mask.size != (self.img_size, self.img_size):
@@ -407,17 +438,37 @@ class SyntheticWallDataset(Dataset):
             # it would invent half-walls along every edge and blur the very
             # boundary the model is being asked to find.
             mask = mask.resize((self.img_size, self.img_size), Image.NEAREST)
+        if junc is not None and junc.size != (self.img_size, self.img_size):
+            # BILINEAR here, unlike the mask: the junction map is a heatmap and
+            # its falloff IS the label, so it must be resampled, not snapped.
+            junc = junc.resize((self.img_size, self.img_size), Image.BILINEAR)
+
+        # A FLIP RENAMES THE ARMS.
+        #
+        # The junction channels carry direction — north, east, south, west.
+        # Mirroring the picture turns every east arm into a west one, so the
+        # channels must be swapped to match. Get this wrong and the head trains
+        # against labels pointing the wrong way: no error, no warning, just a
+        # head that never converges and no obvious reason why.
+        flip_h = self.augment and bool(torch.rand(1) < 0.5)
+        flip_v = self.augment and bool(torch.rand(1) < 0.5)
 
         if self.augment:
-            if torch.rand(1) < 0.5:
+            if flip_h:
                 img = TF.hflip(img)
                 mask = TF.hflip(mask)
-            if torch.rand(1) < 0.5:
+                if junc is not None:
+                    junc = TF.hflip(junc)
+            if flip_v:
                 img = TF.vflip(img)
                 mask = TF.vflip(mask)
+                if junc is not None:
+                    junc = TF.vflip(junc)
             angle = float(torch.randint(-10, 11, (1,)))
             img = TF.rotate(img, angle)
             mask = TF.rotate(mask, angle)
+            if junc is not None:
+                junc = TF.rotate(junc, angle)
             img = TF.adjust_brightness(img, 1.0 + float(torch.empty(1).uniform_(-0.3, 0.3)))
             img = TF.adjust_contrast(img, 1.0 + float(torch.empty(1).uniform_(-0.2, 0.2)))
 
@@ -425,10 +476,21 @@ class SyntheticWallDataset(Dataset):
         img_t = TF.normalize(img_t, _IMG_MEAN, _IMG_STD)
         mask_t = (TF.to_tensor(mask) > 0.5).float()
 
+        if junc is not None:
+            junc_t = TF.to_tensor(junc)  # (4, H, W) in [0, 1] — N, E, S, W
+            if flip_h:
+                junc_t = junc_t[[ARM_N, ARM_W, ARM_S, ARM_E]]
+            if flip_v:
+                junc_t = junc_t[[ARM_S, ARM_E, ARM_N, ARM_W]]
+            junc_w = torch.ones(())
+        else:
+            junc_t = torch.zeros(4, self.img_size, self.img_size)
+            junc_w = torch.zeros(())
+
         if self.transform:
             img_t = self.transform(img_t)
 
-        return img_t, mask_t
+        return img_t, mask_t, junc_t, junc_w
 
 
 def build_dataset(

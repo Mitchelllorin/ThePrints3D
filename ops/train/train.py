@@ -48,6 +48,58 @@ def combined_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return 0.5 * bce + 0.5 * dice_loss(pred, target)
 
 
+#: How hard the junction head is pushed relative to the wall head.
+JUNC_LOSS_WEIGHT = 1.0
+
+#: Junction pixels are ~0.5% of a plan, so an unweighted BCE is minimised by
+#: predicting "no corner anywhere" — 99.5% correct and completely useless. The
+#: positive term is scaled up to make a missed corner cost more than a false
+#: one, which is the trade we want: a spurious corner is discarded by the
+#: pairing step, a missing one leaves a room that cannot close.
+JUNC_POS_WEIGHT = 40.0
+
+
+def junction_loss(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    sample_w: torch.Tensor,
+) -> torch.Tensor:
+    """Weighted BCE over the four arm heatmaps, per-sample maskable.
+
+    *sample_w* is 1 for samples carrying junction labels and 0 for those that
+    do not, so a corpus without them contributes nothing here instead of
+    teaching the head that corners do not exist.
+    """
+    if float(sample_w.sum()) == 0.0:
+        return pred.sum() * 0.0  # keeps the graph, contributes nothing
+
+    w = 1.0 + (JUNC_POS_WEIGHT - 1.0) * target
+    per_px = nn.functional.binary_cross_entropy(pred, target, weight=w, reduction='none')
+    per_sample = per_px.flatten(1).mean(dim=1)
+    return (per_sample * sample_w).sum() / sample_w.sum().clamp(min=1.0)
+
+
+def junction_peak_recall(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    sample_w: torch.Tensor,
+    threshold: float = 0.5,
+) -> float:
+    """Share of labelled junction pixels the head fires on.
+
+    Reported instead of IoU because a heatmap peak is a location, not a region:
+    IoU on a handful of bright pixels is dominated by how wide the blob is
+    rather than by whether the corner was found at all.
+    """
+    if float(sample_w.sum()) == 0.0:
+        return float('nan')
+    m = sample_w.view(-1, 1, 1, 1) > 0
+    t = (target > 0.5) & m
+    hit = ((pred > threshold) & t).sum().item()
+    tot = t.sum().item()
+    return hit / tot if tot > 0 else 1.0
+
+
 # ── Metrics ──────────────────────────────────────────────────────────────────
 
 def iou_score(pred: torch.Tensor, target: torch.Tensor, threshold: float = 0.5) -> float:
@@ -66,23 +118,34 @@ def run_epoch(
     optimizer: Optional[torch.optim.Optimizer],
     device: torch.device,
     train: bool,
-) -> tuple[float, float]:
+) -> tuple[float, float, float]:
     model.train(train)
     total_loss, total_iou, n = 0.0, 0.0, 0
+    junc_hits, junc_n = 0.0, 0
     with torch.set_grad_enabled(train):
-        for images, masks in tqdm(loader, leave=False, desc='train' if train else 'val'):
+        for images, masks, juncs, junc_w in tqdm(
+            loader, leave=False, desc='train' if train else 'val'
+        ):
             images = images.to(device)
             masks = masks.to(device)
-            preds = model(images)
-            loss = combined_loss(preds, masks)
+            juncs = juncs.to(device)
+            junc_w = junc_w.to(device)
+            preds, junc_preds = model(images)
+            loss = (combined_loss(preds, masks)
+                    + JUNC_LOSS_WEIGHT * junction_loss(junc_preds, juncs, junc_w))
             if train and optimizer:
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
             total_loss += loss.item() * images.size(0)
             total_iou += iou_score(preds.detach(), masks.detach()) * images.size(0)
+            r = junction_peak_recall(junc_preds.detach(), juncs.detach(), junc_w.detach())
+            if r == r:  # not NaN — this batch carried junction labels
+                junc_hits += r * images.size(0)
+                junc_n += images.size(0)
             n += images.size(0)
-    return total_loss / n, total_iou / n
+    junc_recall = junc_hits / junc_n if junc_n else float('nan')
+    return total_loss / n, total_iou / n, junc_recall
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -180,8 +243,8 @@ def main() -> None:
 
     # ── Training loop ──
     for epoch in range(start_epoch, args.epochs):
-        train_loss, train_iou = run_epoch(model, train_loader, optimizer, device, train=True)
-        val_loss, val_iou = run_epoch(model, val_loader, None, device, train=False)
+        train_loss, train_iou, train_jr = run_epoch(model, train_loader, optimizer, device, train=True)
+        val_loss, val_iou, val_jr = run_epoch(model, val_loader, None, device, train=False)
         scheduler.step()
 
         improved = val_loss < best_val_loss
@@ -204,7 +267,8 @@ def main() -> None:
         print(
             f'Epoch {epoch + 1:03d}/{args.epochs}  '
             f'train_loss={train_loss:.4f}  train_iou={train_iou:.4f}  '
-            f'val_loss={val_loss:.4f}  val_iou={val_iou:.4f}{mark}'
+            f'val_loss={val_loss:.4f}  val_iou={val_iou:.4f}  '
+            f'val_junc={val_jr:.3f}{mark}'
         )
 
     print(f'\nBest val_loss={best_val_loss:.4f} — checkpoint saved to {out_dir / "best.pth"}')

@@ -6,12 +6,15 @@ Architecture
 Encoder : 4 levels, starting with 16 channels, doubled each level.
 Bottleneck : 256 → 256 conv block.
 Decoder : 4 symmetric up-sample levels with skip connections.
-Output : 1-channel sigmoid mask (wall probability per pixel).
+Output : 1-channel sigmoid wall mask + 4-channel sigmoid junction
+         arm heatmaps (north/east/south/west).
 
 Parameters : ~1.5 M (produces a ~6 MB ONNX file).
 Input  : (N, 3, H, W) float32, values in [0, 1].
-Output : (N, 1, H, W) float32, values in [0, 1].
+Output : (N, 1, H, W) wall + (N, 4, H, W) junctions, both in [0, 1].
 """
+
+from typing import Tuple
 
 import torch
 import torch.nn as nn
@@ -91,10 +94,29 @@ class WallSegNet(nn.Module):
         self.dec2 = _Up(b * 4, b * 2, b * 2)
         self.dec1 = _Up(b * 2, b, b)
 
-        # Output head — sigmoid gives probability in [0, 1]
+        # Output heads — sigmoid gives probability in [0, 1].
+        #
+        # TWO HEADS, ONE ENCODER.
+        #
+        # The wall head says WHERE THERE IS WALL. On its own that is not enough
+        # to build a floor plan: vectorising a mask means finding line segments
+        # and hoping they meet, and on real drawings they do not — fifty-plus
+        # segments enclosing zero rooms, across 42 threshold configurations.
+        #
+        # The junction head says WHERE THE CORNERS ARE and WHICH WAY THE WALLS
+        # LEAVE THEM — four channels, north/east/south/west. Two junctions join
+        # when they line up and their arms face each other, so the polygon
+        # closes because of how it is built rather than by luck. That is the
+        # step the published methods have and this model did not.
+        #
+        # They share an encoder because they are the same question asked twice:
+        # the features that find a wall are the features that find its corner,
+        # and learning both is known to sharpen each.
         self.out_conv = nn.Conv2d(b, 1, kernel_size=1)
+        self.junc_conv = nn.Conv2d(b, 4, kernel_size=1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Returns (wall mask, junction arm heatmaps) — (N,1,H,W), (N,4,H,W)."""
         s1 = self.enc1(x)
         s2 = self.enc2(s1)
         s3 = self.enc3(s2)
@@ -107,7 +129,7 @@ class WallSegNet(nn.Module):
         d2 = self.dec2(d3, s2)
         d1 = self.dec1(d2, s1)
 
-        return torch.sigmoid(self.out_conv(d1))
+        return torch.sigmoid(self.out_conv(d1)), torch.sigmoid(self.junc_conv(d1))
 
 
 def build_model(base_ch: int = 16) -> WallSegNet:
@@ -123,5 +145,6 @@ if __name__ == '__main__':
     n_params = sum(p.numel() for p in model.parameters())
     print(f'WallSegNet  base_ch={ch}  params={n_params / 1e6:.2f}M')
     dummy = torch.zeros(1, 3, 256, 256)
-    out = model(dummy)
-    print(f'Output shape: {out.shape}  min={out.min():.3f} max={out.max():.3f}')
+    wall, junc = model(dummy)
+    print(f'Wall head:     {tuple(wall.shape)}  min={wall.min():.3f} max={wall.max():.3f}')
+    print(f'Junction head: {tuple(junc.shape)}  min={junc.min():.3f} max={junc.max():.3f}')
