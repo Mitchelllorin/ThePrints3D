@@ -430,7 +430,6 @@ class SyntheticWallDataset(Dataset):
 
         img = Image.open(img_path).convert('RGB')
         mask = Image.open(mask_path).convert('L')
-        junc = Image.open(junc_path).convert('RGBA') if junc_path else None
         if img.size != (self.img_size, self.img_size):
             img = img.resize((self.img_size, self.img_size), Image.BILINEAR)
         if mask.size != (self.img_size, self.img_size):
@@ -438,10 +437,26 @@ class SyntheticWallDataset(Dataset):
             # it would invent half-walls along every edge and blur the very
             # boundary the model is being asked to find.
             mask = mask.resize((self.img_size, self.img_size), Image.NEAREST)
-        if junc is not None and junc.size != (self.img_size, self.img_size):
-            # BILINEAR here, unlike the mask: the junction map is a heatmap and
-            # its falloff IS the label, so it must be resampled, not snapped.
-            junc = junc.resize((self.img_size, self.img_size), Image.BILINEAR)
+        # JUNCTION LABELS STAY A TENSOR — NEVER A PIL RGBA IMAGE.
+        #
+        # The arms are stored N, E, S, W in a PNG's R, G, B, A, and Pillow
+        # resamples RGBA with premultiplied alpha: wherever W is 0, N/E/S come
+        # back as 0. That is how every corner without a west arm vanished in
+        # synth.py (see _per_arm there). Read the four channels straight into a
+        # tensor and do every transform on the tensor, where each is its own.
+        junc_t = None
+        if junc_path:
+            jim = Image.open(junc_path)
+            if jim.mode != 'RGBA':
+                jim = jim.convert('RGBA')
+            junc_t = TF.pil_to_tensor(jim).float() / 255.0  # (4, H, W), straight values
+            if tuple(junc_t.shape[-2:]) != (self.img_size, self.img_size):
+                # BILINEAR here, unlike the mask: the junction map is a heatmap and
+                # its falloff IS the label, so it must be resampled, not snapped.
+                junc_t = torch.nn.functional.interpolate(
+                    junc_t[None], size=(self.img_size, self.img_size),
+                    mode='bilinear', align_corners=False,
+                )[0]
 
         # A FLIP RENAMES THE ARMS.
         #
@@ -457,18 +472,18 @@ class SyntheticWallDataset(Dataset):
             if flip_h:
                 img = TF.hflip(img)
                 mask = TF.hflip(mask)
-                if junc is not None:
-                    junc = TF.hflip(junc)
+                if junc_t is not None:
+                    junc_t = torch.flip(junc_t, dims=[2])
             if flip_v:
                 img = TF.vflip(img)
                 mask = TF.vflip(mask)
-                if junc is not None:
-                    junc = TF.vflip(junc)
+                if junc_t is not None:
+                    junc_t = torch.flip(junc_t, dims=[1])
             angle = float(torch.randint(-10, 11, (1,)))
             img = TF.rotate(img, angle)
             mask = TF.rotate(mask, angle)
-            if junc is not None:
-                junc = TF.rotate(junc, angle)
+            if junc_t is not None:
+                junc_t = TF.rotate(junc_t, angle)
             img = TF.adjust_brightness(img, 1.0 + float(torch.empty(1).uniform_(-0.3, 0.3)))
             img = TF.adjust_contrast(img, 1.0 + float(torch.empty(1).uniform_(-0.2, 0.2)))
 
@@ -476,8 +491,8 @@ class SyntheticWallDataset(Dataset):
         img_t = TF.normalize(img_t, _IMG_MEAN, _IMG_STD)
         mask_t = (TF.to_tensor(mask) > 0.5).float()
 
-        if junc is not None:
-            junc_t = TF.to_tensor(junc)  # (4, H, W) in [0, 1] — N, E, S, W
+        if junc_t is not None:
+            # (4, H, W) in [0, 1] — N, E, S, W
             if flip_h:
                 junc_t = junc_t[[ARM_N, ARM_W, ARM_S, ARM_E]]
             if flip_v:

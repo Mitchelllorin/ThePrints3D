@@ -952,20 +952,45 @@ def _smooth_noise(rng: random.Random, size: int, cells: int) -> np.ndarray:
     return np.asarray(small.resize((size, size), Image.BICUBIC), dtype=np.float32) / 255.0
 
 
+def _per_arm(junc: np.ndarray, op) -> np.ndarray:
+    """Apply one PIL geometric operation to each junction arm SEPARATELY.
+
+    NEVER HAND THE FOUR ARMS TO PIL AS ONE RGBA IMAGE.
+
+    The map is saved N, E, S, W in a PNG's R, G, B, A, and Pillow resamples
+    RGBA with PREMULTIPLIED alpha: colour is multiplied by alpha, resampled,
+    then divided back. West is the alpha channel, so at every corner with no
+    west arm N, E and S were multiplied by zero and never came back. Every such
+    corner — the whole west exterior wall, every L that opens east — was erased
+    from the training data, and nothing failed: val/juncs/plan_001700.png had
+    223 labelled pixels and not one without a west arm. The model trained on it
+    lit up all four arms at every corner, which is exactly what stops pairing.
+
+    Each arm goes through PIL as its own single-channel float image ('F'), which
+    has no alpha to premultiply by.
+    """
+    return np.stack(
+        [np.asarray(op(Image.fromarray(np.ascontiguousarray(junc[..., c], dtype=np.float32))),
+                    dtype=np.float32) for c in range(4)],
+        axis=-1,
+    )
+
+
 def augment_pair(
     img: Image.Image,
     mask: Image.Image,
     rng: random.Random,
-    junc: Optional[Image.Image] = None,
-) -> Tuple[Image.Image, Image.Image, Optional[Image.Image]]:
+    junc: Optional[np.ndarray] = None,
+) -> Tuple[Image.Image, Image.Image, Optional[np.ndarray]]:
     """Scan/photo degradation chain.  Geometry is applied to both; photometric
     effects to the image only.
 
-    *junc* is the four-channel (RGBA) junction heatmap. It rides through the
-    SAME geometric transforms as the mask — a corner that moves with the walls
-    is still that corner, and one that does not is a mislabelled corner. The
-    arm directions survive because the geometry here is small: ±4° of rotation
-    and ±0.035 of shear leave north pointing north.
+    *junc* is the junction heatmap as a float (H, W, 4) array — N, E, S, W —
+    never an RGBA image (see _per_arm). It rides through the SAME geometric
+    transforms as the mask — a corner that moves with the walls is still that
+    corner, and one that does not is a mislabelled corner. The arm directions
+    survive because the geometry here is small: ±4° of rotation and ±0.035 of
+    shear leave north pointing north.
     """
     size = img.size[0]
 
@@ -975,7 +1000,7 @@ def augment_pair(
         img = img.rotate(angle, resample=Image.BICUBIC, fillcolor=250)
         mask = mask.rotate(angle, resample=Image.BILINEAR, fillcolor=0)
         if junc is not None:
-            junc = junc.rotate(angle, resample=Image.BILINEAR, fillcolor=0)
+            junc = _per_arm(junc, lambda ch: ch.rotate(angle, resample=Image.BILINEAR, fillcolor=0))
     if rng.random() < 0.45:
         # affine shear
         sx = rng.uniform(-0.035, 0.035)
@@ -986,22 +1011,23 @@ def augment_pair(
         mask = mask.transform((size, size), Image.AFFINE, coeffs,
                               resample=Image.BILINEAR, fillcolor=0)
         if junc is not None:
-            junc = junc.transform((size, size), Image.AFFINE, coeffs,
-                                  resample=Image.BILINEAR, fillcolor=0)
+            junc = _per_arm(junc, lambda ch: ch.transform((size, size), Image.AFFINE, coeffs,
+                                                          resample=Image.BILINEAR, fillcolor=0))
     if rng.random() < 0.5:
         # slight scale/crop jitter (simulates framing)
         s = rng.uniform(0.94, 1.06)
         nw = int(size * s)
         tmp_i = img.resize((nw, nw), Image.BICUBIC)
         tmp_m = mask.resize((nw, nw), Image.BILINEAR)
-        tmp_j = junc.resize((nw, nw), Image.BILINEAR) if junc is not None else None
+        tmp_j = (_per_arm(junc, lambda ch: ch.resize((nw, nw), Image.BILINEAR))
+                 if junc is not None else None)
         if s >= 1.0:
             ox = rng.randint(0, nw - size)
             oy = rng.randint(0, nw - size)
             img = tmp_i.crop((ox, oy, ox + size, oy + size))
             mask = tmp_m.crop((ox, oy, ox + size, oy + size))
             if tmp_j is not None:
-                junc = tmp_j.crop((ox, oy, ox + size, oy + size))
+                junc = tmp_j[oy:oy + size, ox:ox + size]
         else:
             canvas_i = Image.new('L', (size, size), 250)
             canvas_m = Image.new('L', (size, size), 0)
@@ -1011,8 +1037,8 @@ def augment_pair(
             canvas_m.paste(tmp_m, (ox, oy))
             img, mask = canvas_i, canvas_m
             if tmp_j is not None:
-                canvas_j = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-                canvas_j.paste(tmp_j, (ox, oy))
+                canvas_j = np.zeros((size, size, 4), dtype=np.float32)
+                canvas_j[oy:oy + nw, ox:ox + nw] = tmp_j
                 junc = canvas_j
 
     a = np.asarray(img, dtype=np.float32)
@@ -1092,20 +1118,23 @@ def generate_sample(
     mask_hi = Image.fromarray((union * 255).astype(np.uint8), mode='L')
     # Junctions are rasterised at the supersampled size with a sigma to match,
     # so downsampling lands a peak of the intended width rather than a spike.
-    junc_hi = Image.fromarray(build_junction_map(plan, canvas, sigma=2.0 * SS),
-                              mode='RGBA')
+    # A float array all the way through, never an RGBA image — see _per_arm.
+    junc_hi = build_junction_map(plan, canvas, sigma=2.0 * SS).astype(np.float32)
 
     img = img_hi.resize((img_size, img_size), Image.LANCZOS)
     mask = mask_hi.resize((img_size, img_size), Image.BILINEAR)
     mask = Image.fromarray(
         ((np.asarray(mask, dtype=np.uint8) > 127) * 255).astype(np.uint8), mode='L'
     )
-    junc = junc_hi.resize((img_size, img_size), Image.BILINEAR)
+    junc_arr = _per_arm(junc_hi, lambda ch: ch.resize((img_size, img_size), Image.BILINEAR))
 
     if augment:
-        img, mask, junc = augment_pair(img, mask, rng, junc)
+        img, mask, junc_arr = augment_pair(img, mask, rng, junc_arr)
 
-    ja = np.asarray(junc, dtype=np.uint8)
+    ja = np.clip(np.rint(junc_arr), 0, 255).astype(np.uint8)
+    # RGBA only to WRITE the PNG: saving stores the four channels as they are.
+    # It is resampling an RGBA image that destroys them.
+    junc = Image.fromarray(ja)
     meta = {
         'seed': seed,
         'rooms': len(plan.rooms),

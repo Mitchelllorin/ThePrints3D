@@ -168,6 +168,11 @@ def main() -> None:
         help='Limit dataset size for quick tests',
     )
     parser.add_argument('--resume', default=None, help='Path to checkpoint to resume from')
+    # WEIGHTS ONLY — a fresh optimiser, schedule and epoch count. For starting
+    # a new run from a model that already reads walls, when what changed is the
+    # labels, not the task. --resume would carry on the OLD run's schedule.
+    parser.add_argument('--init', default=None,
+                        help='Initialise model weights from a checkpoint (best.pth or last.pth)')
     # 0 = load in-process. Was hard-wired to 4, which is actively WRONG on a
     # 2-core machine: Windows spawns a fresh interpreter per worker and pickles
     # every batch across it, so four of them fight the two cores that are
@@ -221,6 +226,11 @@ def main() -> None:
     model = build_model(args.base_ch).to(device)
     n_params = sum(p.numel() for p in model.parameters())
     print(f'WallSegNet  base_ch={args.base_ch}  params={n_params / 1e6:.2f}M')
+    if args.init:
+        state = torch.load(args.init, map_location=device)
+        # best.pth is a bare state_dict; last.pth wraps it with the optimiser.
+        model.load_state_dict(state['model'] if 'model' in state else state)
+        print(f'Initialised weights from {args.init}')
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
