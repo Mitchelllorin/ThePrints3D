@@ -52,10 +52,11 @@ def combined_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
 JUNC_LOSS_WEIGHT = 1.0
 
 #: Junction pixels are ~0.5% of a plan, so an unweighted BCE is minimised by
-#: predicting "no corner anywhere" — 99.5% correct and completely useless. The
-#: positive term is scaled up to make a missed corner cost more than a false
-#: one, which is the trade we want: a spurious corner is discarded by the
-#: pairing step, a missing one leaves a room that cannot close.
+#: predicting "no corner anywhere" — 99.5% correct and completely useless. So
+#: every pixel AT a corner is scaled up — all four arm channels alike, see
+#: junction_loss — and a missed corner costs far more than a false one: a
+#: spurious corner is discarded by the pairing step, a missing one leaves a
+#: room that cannot close.
 JUNC_POS_WEIGHT = 40.0
 
 
@@ -73,7 +74,20 @@ def junction_loss(
     if float(sample_w.sum()) == 0.0:
         return pred.sum() * 0.0  # keeps the graph, contributes nothing
 
-    w = 1.0 + (JUNC_POS_WEIGHT - 1.0) * target
+    # WEIGHT BY WHETHER THERE IS A CORNER HERE — NOT BY WHETHER THIS ARM IS ON.
+    #
+    # The weight used to be `1 + 39 * target`, per channel. At a real corner
+    # that made a missing arm cost 40 and a WRONG arm — one that is not there —
+    # cost 1, so the cheapest answer at every corner was to fire all four. The
+    # model learned exactly that: on corners labelled N=0.00 E=0.00 it fired
+    # N=0.80 E=0.86, every corner came out a cross, and pairing could not tell
+    # which neighbour a wall ran to. Recall never saw it: a cross finds every arm.
+    #
+    # Now every channel at a corner carries the full weight, so a wrong arm
+    # costs what a missed one does. Away from corners the weight is still 1,
+    # which is what keeps "no corner anywhere" from winning.
+    corner = target.amax(dim=1, keepdim=True)
+    w = 1.0 + (JUNC_POS_WEIGHT - 1.0) * corner
     per_px = nn.functional.binary_cross_entropy(pred, target, weight=w, reduction='none')
     per_sample = per_px.flatten(1).mean(dim=1)
     return (per_sample * sample_w).sum() / sample_w.sum().clamp(min=1.0)
@@ -100,6 +114,32 @@ def junction_peak_recall(
     return hit / tot if tot > 0 else 1.0
 
 
+def junction_arm_counts(
+    pred: torch.Tensor,
+    target: torch.Tensor,
+    sample_w: torch.Tensor,
+    threshold: float = 0.5,
+) -> tuple[int, int]:
+    """(arms called right, arms judged) at the centre of every labelled corner.
+
+    THE NUMBER RECALL CANNOT SEE. Recall asks whether the head fires where an
+    arm is, and a head that fires all four arms at every corner scores
+    perfectly on it while being useless for pairing. This asks whether each of
+    the four arms at a corner is ON when it should be AND OFF when it should
+    be. A cross at every corner lands near 0.7; a head that reads directions,
+    near 1.0.
+
+    Corner centres are where the label peaks: the Gaussian tops out around
+    0.85 after downsampling, so 0.7 takes the centre and its nearest ring.
+    """
+    if float(sample_w.sum()) == 0.0:
+        return 0, 0
+    m = sample_w.view(-1, 1, 1, 1) > 0
+    centre = ((target.amax(dim=1, keepdim=True) > 0.7) & m).expand_as(target)
+    agree = ((pred > threshold) == (target > 0.5)) & centre
+    return int(agree.sum().item()), int(centre.sum().item())
+
+
 # ── Metrics ──────────────────────────────────────────────────────────────────
 
 def iou_score(pred: torch.Tensor, target: torch.Tensor, threshold: float = 0.5) -> float:
@@ -118,10 +158,11 @@ def run_epoch(
     optimizer: Optional[torch.optim.Optimizer],
     device: torch.device,
     train: bool,
-) -> tuple[float, float, float]:
+) -> tuple[float, float, float, float]:
     model.train(train)
     total_loss, total_iou, n = 0.0, 0.0, 0
     junc_hits, junc_n = 0.0, 0
+    arm_ok, arm_n = 0, 0
     with torch.set_grad_enabled(train):
         for images, masks, juncs, junc_w in tqdm(
             loader, leave=False, desc='train' if train else 'val'
@@ -143,9 +184,13 @@ def run_epoch(
             if r == r:  # not NaN — this batch carried junction labels
                 junc_hits += r * images.size(0)
                 junc_n += images.size(0)
+            ok, judged = junction_arm_counts(junc_preds.detach(), juncs.detach(), junc_w.detach())
+            arm_ok += ok
+            arm_n += judged
             n += images.size(0)
     junc_recall = junc_hits / junc_n if junc_n else float('nan')
-    return total_loss / n, total_iou / n, junc_recall
+    arm_accuracy = arm_ok / arm_n if arm_n else float('nan')
+    return total_loss / n, total_iou / n, junc_recall, arm_accuracy
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -253,8 +298,8 @@ def main() -> None:
 
     # ── Training loop ──
     for epoch in range(start_epoch, args.epochs):
-        train_loss, train_iou, train_jr = run_epoch(model, train_loader, optimizer, device, train=True)
-        val_loss, val_iou, val_jr = run_epoch(model, val_loader, None, device, train=False)
+        train_loss, train_iou, train_jr, _ = run_epoch(model, train_loader, optimizer, device, train=True)
+        val_loss, val_iou, val_jr, val_arms = run_epoch(model, val_loader, None, device, train=False)
         scheduler.step()
 
         improved = val_loss < best_val_loss
@@ -278,7 +323,7 @@ def main() -> None:
             f'Epoch {epoch + 1:03d}/{args.epochs}  '
             f'train_loss={train_loss:.4f}  train_iou={train_iou:.4f}  '
             f'val_loss={val_loss:.4f}  val_iou={val_iou:.4f}  '
-            f'val_junc={val_jr:.3f}{mark}'
+            f'val_junc={val_jr:.3f}  val_arms={val_arms:.3f}{mark}'
         )
 
     print(f'\nBest val_loss={best_val_loss:.4f} — checkpoint saved to {out_dir / "best.pth"}')
