@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { aiResultIsUsable, vectorizeSize, scaleGeometryToRaster } from './aiWallDetector'
+import { aiResultIsUsable, vectorizeSize, scaleGeometryToRaster, junctionWallsToRaster } from './aiWallDetector'
 
 /**
  * The rule that decides whether the model's answer is preferred over the
@@ -83,5 +83,36 @@ describe('scaleGeometryToRaster', () => {
     const items = [line(1, 2, 3, 4, 5)]
     expect(scaleGeometryToRaster(items, { width: 800, height: 600 }, { width: 800, height: 600 }))
       .toBe(items)
+  })
+})
+
+/**
+ * Walls the junction skeleton built at 256x256, put back on the page. The model
+ * reads every page stretched to a square, so the axes come back separately.
+ */
+describe('junctionWallsToRaster', () => {
+  const MASK = { width: 256, height: 256 }
+
+  it('stretches each axis back to the page it came from, from pixel centres', () => {
+    const [w] = junctionWallsToRaster([{ x1: 0, y1: 0, x2: 255, y2: 127 }], MASK, { width: 2560, height: 1280 }, 12)
+    expect(w.x1).toBeCloseTo(0.5 * 10, 6)
+    expect(w.y1).toBeCloseTo(0.5 * 5, 6)
+    expect(w.x2).toBeCloseTo(255.5 * 10, 6)
+    expect(w.y2).toBeCloseTo(127.5 * 5, 6)
+  })
+
+  it('lends every wall the raster thickness it is given', () => {
+    const walls = junctionWallsToRaster(
+      [{ x1: 10, y1: 10, x2: 50, y2: 10 }, { x1: 50, y1: 10, x2: 50, y2: 90 }],
+      MASK,
+      { width: 1024, height: 1024 },
+      14,
+    )
+    expect(walls.map((w) => w.thickness)).toEqual([14, 14])
+    expect(walls.every((w) => w.source === 'auto')).toBe(true)
+  })
+
+  it('makes no walls from an empty skeleton', () => {
+    expect(junctionWallsToRaster([], MASK, { width: 800, height: 600 }, 6)).toEqual([])
   })
 })

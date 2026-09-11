@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { keepUnlessWorse } from './detectionGuard'
+import { keepUnlessWorse, replaceIfCloser } from './detectionGuard'
 import type { ParsedWall } from '../types'
 
 const W = 400
@@ -90,5 +90,48 @@ describe('keepUnlessWorse', () => {
     const v = keepUnlessWorse([], [], W, H)
     expect(v.kept).toBe(true)
     expect(v.enclosedBefore).toBe(0)
+  })
+})
+
+/**
+ * The guard for swapping in the junction skeleton's walls wholesale. Unlike a
+ * step that only moves endpoints, a replacement discards everything the current
+ * reading found, so a tie is not enough.
+ */
+describe('replaceIfCloser', () => {
+  it('swaps in a set that closes a room the current one does not', () => {
+    const v = replaceIfCloser(brokenRoom(), closedRoom(), W, H)
+    expect(v.kept).toBe(true)
+    expect(v.enclosedAfter).toBe(1)
+    expect(v.reason).toContain('replaced')
+  })
+
+  it('keeps the current walls on a tie — a replacement has to earn it', () => {
+    const current = closedRoom()
+    const v = replaceIfCloser(current, closedRoom().map((w) => ({ ...w, thickness: 7 })), W, H)
+    expect(v.kept).toBe(false)
+    expect(v.walls).toBe(current)
+  })
+
+  it('keeps the current walls when the candidate is worse', () => {
+    const current = closedRoom()
+    const v = replaceIfCloser(current, brokenRoom(), W, H)
+    expect(v.kept).toBe(false)
+    expect(v.walls).toBe(current)
+    expect(v.reason).toContain('kept current')
+  })
+
+  it('judges against the extractor’s count when there is one', () => {
+    const twoRooms = [...closedRoom(), wall(200, 50, 200, 350)]
+    expect(replaceIfCloser(closedRoom(), twoRooms, W, H, 2).kept).toBe(true)
+    // The drawing says one room; splitting it is over-segmentation, not progress.
+    expect(replaceIfCloser(closedRoom(), twoRooms, W, H, 1).kept).toBe(false)
+  })
+
+  it('never swaps in an empty set', () => {
+    const current = brokenRoom()
+    const v = replaceIfCloser(current, [], W, H, 1)
+    expect(v.kept).toBe(false)
+    expect(v.walls).toBe(current)
   })
 })

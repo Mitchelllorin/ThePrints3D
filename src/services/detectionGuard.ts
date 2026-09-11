@@ -58,6 +58,38 @@ function scoreAgainst(enclosed: number, targetRooms: number | null): number {
 }
 
 /**
+ * Swap a whole wall set for another only if it is STRICTLY better.
+ *
+ * `keepUnlessWorse` below keeps a tie, which is right for a step that only
+ * moves endpoints. A replacement is a different bargain: it throws away every
+ * wall the current reading produced, including the ones the metric cannot see
+ * are good, so it has to earn that by closing rooms the current set does not.
+ */
+export function replaceIfCloser(
+  current: ParsedWall[],
+  candidate: ParsedWall[],
+  imageWidth: number,
+  imageHeight: number,
+  targetRooms: number | null = null,
+): GuardVerdict {
+  const enclosedBefore = enclosedRegions(current, imageWidth, imageHeight)
+  const enclosedAfter = candidate.length ? enclosedRegions(candidate, imageWidth, imageHeight) : 0
+  const better =
+    candidate.length > 0 &&
+    scoreAgainst(enclosedAfter, targetRooms) > scoreAgainst(enclosedBefore, targetRooms)
+  const against = targetRooms ? ` against ${targetRooms} rooms read off the drawing` : ''
+  return {
+    walls: better ? candidate : current,
+    kept: better,
+    enclosedBefore,
+    enclosedAfter,
+    reason: better
+      ? `replaced: enclosed ${enclosedBefore} → ${enclosedAfter}${against}`
+      : `kept current: candidate enclosed ${enclosedAfter} vs ${enclosedBefore}${against}`,
+  }
+}
+
+/**
  * Keep a transform only if it did not reduce what the walls enclose.
  *
  * `targetRooms` is the room extractor's own count when it has one — a genuine

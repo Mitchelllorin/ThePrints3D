@@ -11,7 +11,7 @@ import { detectWallsWithAI } from './aiWallDetector'
 import { logEvent } from './logger'
 import { enclosedRegions } from './wallEnclosure'
 import { joinDetectedWalls } from './joinDetectedWalls'
-import { keepUnlessWorse } from './detectionGuard'
+import { keepUnlessWorse, replaceIfCloser } from './detectionGuard'
 import { wallsFromRooms } from './wallsFromRooms'
 import { inferScaleFromPaper, inferScaleFromStructure } from './scaleInference'
 import { detectSemanticEntities } from './symbolDetection'
@@ -369,7 +369,7 @@ export async function processDrawing(
     //    walls connect instead of floating as disjoint segments.
     const corneredWalls = inferCorners(filtered.walls)
     stageCounts.afterCorners = corneredWalls.length
-    let walls: ParsedWall[] = corneredWalls.map((w) => {
+    const classifyWall = (w: ParsedWall): ParsedWall => {
       const finishedMm = pxToMm(w.thickness, effectiveScale)
       if (finishedMm === null) {
         return {
@@ -409,7 +409,8 @@ export async function processDrawing(
         // Say out loud that the type was defaulted rather than measured.
         typeConfidence: type === c.type ? c.confidence : 0.3,
       }
-    })
+    }
+    let walls: ParsedWall[] = corneredWalls.map(classifyWall)
 
     // 6. Extract enclosed room regions from the rasterized image
     const rooms = extractRooms(detectImage, {
@@ -441,6 +442,39 @@ export async function processDrawing(
     walls = rejoined.walls
     stageCounts.afterRejoin = walls.length
     const openings = rejoined.openings
+
+    /**
+     * CORNERS FIRST — WHEN THE MODEL CAN READ THEM. See junctionGraph.
+     *
+     * Everything above reads walls as LINES and then tries to make the lines
+     * meet. This is the reading that builds walls corner to corner, so a room
+     * closes by construction. It is a candidate, judged here rather than in the
+     * detector because only here is there a second opinion to judge it by: the
+     * room extractor's own count, off the same raster.
+     *
+     * Strictly better or not at all — see replaceIfCloser. Openings are page
+     * positions, not references into the wall list, so they hold for either
+     * set. Runs before the joiner and the room-derived rung, which then work on
+     * whichever set won, exactly as they always have.
+     */
+    if (aiWalls?.junctionWalls?.length) {
+      const currentCount = walls.length
+      const verdict = replaceIfCloser(
+        walls, aiWalls.junctionWalls.map(classifyWall), detectImage.width, detectImage.height,
+        rooms.length || null,
+      )
+      walls = verdict.walls
+      stageCounts.afterJunctions = walls.length
+      logEvent('drawing.walls.junctions', {
+        drawingId: drawing.id,
+        current: currentCount,
+        candidate: aiWalls.junctionWalls.length,
+        kept: verdict.kept,
+        enclosedBefore: verdict.enclosedBefore,
+        enclosedAfter: verdict.enclosedAfter,
+        reason: verdict.reason,
+      })
+    }
 
     /**
      * NOW MAKE THE CORNERS MEET — AND ROLL BACK IF THAT MADE IT WORSE.

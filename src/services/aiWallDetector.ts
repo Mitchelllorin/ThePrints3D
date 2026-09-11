@@ -1,4 +1,6 @@
 import { detectWalls, type DetectWallsResult } from './wallDetector'
+import { buildJunctionSkeleton, type JunctionSegment } from './junctionGraph'
+import type { ParsedWall } from '../types'
 
 const MODEL_URL = '/models/floorplan-wall-segmentation.onnx'
 const MODEL_INPUT_SIZE = 256
@@ -256,6 +258,34 @@ export async function isAIModelAvailable(): Promise<boolean> {
 }
 
 /**
+ * The walls the junction skeleton builds, in raster coordinates.
+ *
+ * The model reads a SQUARE: every page is stretched to 256x256 on the way in,
+ * so the two axes scale separately on the way out. A segment's ends sit on
+ * mask-pixel CENTRES, which is where the stretched raster samples them.
+ * Thickness is passed in already at raster size — the model says where walls
+ * run, not how thick they are, so the caller lends the thickness it measured.
+ */
+export function junctionWallsToRaster(
+  segments: ReadonlyArray<Pick<JunctionSegment, 'x1' | 'y1' | 'x2' | 'y2'>>,
+  mask: { width: number; height: number },
+  raster: { width: number; height: number },
+  thicknessPx: number,
+): ParsedWall[] {
+  const sx = raster.width / mask.width
+  const sy = raster.height / mask.height
+  return segments.map((s) => ({
+    x1: (s.x1 + 0.5) * sx,
+    y1: (s.y1 + 0.5) * sy,
+    x2: (s.x2 + 0.5) * sx,
+    y2: (s.y2 + 0.5) * sy,
+    thickness: thicknessPx,
+    source: 'auto' as const,
+    detectionConfidence: 0.75,
+  }))
+}
+
+/**
  * Is the model's answer worth preferring over the classical detector?
  *
  * Only if it actually found walls. Kept separate and exported so the rule can
@@ -265,18 +295,31 @@ export function aiResultIsUsable(result: Pick<DetectWallsResult, 'walls'>): bool
   return result.walls.length > 0
 }
 
+export type AIWallsResult = DetectWallsResult & {
+  /**
+   * Walls built corner-to-corner from the model's junction head, when the
+   * loaded model has one. A CANDIDATE, not the answer: the processor only
+   * swaps them in if they come strictly closer to the rooms the drawing shows.
+   */
+  junctionWalls?: ParsedWall[]
+}
+
 export async function detectWallsWithAI(
   imageData: ImageData,
-): Promise<DetectWallsResult | null> {
+): Promise<AIWallsResult | null> {
   if (!(await modelExists())) return null
   try {
     const ort = await import('onnxruntime-web')
     const { tensorData, width, height } = resizeToModelInput(imageData, MODEL_INPUT_SIZE)
     const session = await getSession()
     const inputName = session.inputNames[0]
-    const outputName = session.outputNames[0]
+    // By NAME: a two-headed model lists 'output' and 'junctions', and nothing
+    // promises which comes first. A single-headed model only has the one.
+    const outputName = session.outputNames.includes('output') ? 'output' : session.outputNames[0]
+    const hasJunctions = session.outputNames.includes('junctions')
+    const fetches = hasJunctions ? [outputName, 'junctions'] : [outputName]
     const input = new ort.Tensor('float32', tensorData, [1, 3, height, width])
-    const output = await serialize(() => session.run({ [inputName]: input }, [outputName]))
+    const output = await serialize(() => session.run({ [inputName]: input }, fetches))
     const tensor = output[outputName]
     const mask = readMaskTensor({
       data: tensor.data as Float32Array,
@@ -330,6 +373,28 @@ export async function detectWallsWithAI(
       source: 'auto' as const,
       detectionConfidence: Math.max(w.detectionConfidence ?? 0.75, 0.75),
     }))
+
+    /**
+     * THE CORNERS, IF THIS MODEL READS THEM — see junctionGraph.
+     *
+     * Its own try: the wall mask above is the answer the app has always had,
+     * and a fault in the newer, optional head must not take that away with it.
+     */
+    if (hasJunctions) {
+      try {
+        const junc = output.junctions
+        const jh = junc.dims[2]
+        const jw = junc.dims[3]
+        const skeleton = buildJunctionSkeleton(junc.data as Float32Array, mask, jw, jh)
+        const thicknesses = aiResult.walls.map((w) => w.thickness).sort((a, b) => a - b)
+        const thickness = thicknesses[Math.floor(thicknesses.length / 2)]
+        const result: AIWallsResult = aiResult
+        result.junctionWalls = junctionWallsToRaster(skeleton.segments, { width: jw, height: jh }, raster, thickness)
+        return result
+      } catch (err) {
+        console.error('[ThePrints3D] Junction skeleton failed; keeping the wall-mask walls:', err)
+      }
+    }
     return aiResult
   } catch (err) {
     // SAY SOMETHING. Returning null falls back to the classical detector, which
