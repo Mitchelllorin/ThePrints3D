@@ -18,7 +18,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useAreaNameplateVisible } from './useNameplateVisible'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import {
   buildFloorJoists, buildFloorDeck, FLOOR_SLAB_TYPES, SUBFLOOR_T, SLAB_T, FLOOR_ASSEMBLY_H,
   type FloorHole,
@@ -215,10 +215,7 @@ export default function FloorJoistsLayer() {
 
   // Storey-to-storey rise = wall height + the floor assembly on top of it, so a
   // 2nd-floor deck's joists rest ON the lower wall's top plate.
-  const storeyHeight = useMemo(
-    () => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM + FLOOR_ASSEMBLY_H,
-    [wizardInputs],
-  )
+  const storeyHeight = useSceneConfig(wizardInputs).wallHeightM + FLOOR_ASSEMBLY_H
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageWidth = drawing?.rasterWidth ?? 1400

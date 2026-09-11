@@ -22,7 +22,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { XRAY_OPACITY } from './editHelpers'
 import { modelWalls } from '../../services/modelWalls'
 import { buildWallEnvelope, buildWallCladding, buildVeneerSupport, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
@@ -174,7 +174,7 @@ export default function EnvelopeLayer() {
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'walls')
 
-  const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
+  const wallHeight = useSceneConfig(wizardInputs).wallHeightM
   const storeyHeight = wallHeight + FLOOR_ASSEMBLY_H
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null

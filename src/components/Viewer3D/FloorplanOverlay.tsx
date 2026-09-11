@@ -46,7 +46,7 @@ import {
 import { ensureInkBuffer, getInkBuffer, snapSegmentToInk } from '../../services/inkRaster'
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, isWallMountedType, deviceMountHeightM } from '../../data/objectCatalog'
 import { roomEdgeWalls } from '../../services/planPlacement'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { validateElectrical } from '../../services/constructionCode'
 import { LAYER_COLORS, plumbingColorFor, electricalColorFor, hvacColorFor, plumbingColor, electricalColor, hvacColor, CEILING_TYPES } from '../../data/traceLayers'
@@ -241,7 +241,7 @@ export default function FloorplanOverlay() {
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const planView = useFloorplanLocalStore((s) => s.planView)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
-  const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
+  const ceilingM = useSceneConfig(wizardInputs).wallHeightM
 
   const gridSnapM = useConfigStore((s) => s.gridSnapM)
   const wallTraceStyle = useConfigStore((s) => s.wallTraceStyle)

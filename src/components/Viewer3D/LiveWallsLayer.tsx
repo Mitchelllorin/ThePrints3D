@@ -17,7 +17,7 @@ import { useConfigStore } from '../../store/useConfigStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useWallNameplateVisible } from './useNameplateVisible'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { wallFramingSpec } from '../../services/constructionCode'
 import { XRAY_OPACITY } from './editHelpers'
@@ -176,10 +176,7 @@ export default function LiveWallsLayer() {
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'framing')
 
-  const wallHeight = useMemo(
-    () => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM,
-    [wizardInputs],
-  )
+  const wallHeight = useSceneConfig(wizardInputs).wallHeightM
   // Storey-to-storey rise so level-1 walls stand on the 2nd-floor deck, etc.
   const storeyHeight = wallHeight + FLOOR_ASSEMBLY_H
 

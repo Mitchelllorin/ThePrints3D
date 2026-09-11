@@ -24,7 +24,7 @@ import { useConfigStore } from '../../store/useConfigStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { claddingSpec } from '../../services/constructionCode'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { buildRoofByType, buildRidgeRoof, ridgeIsShaped, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { pitchToRatio } from '../../data/traceLayers'
 import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
@@ -334,7 +334,7 @@ export default function RoofLayer() {
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'roof')
 
-  const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
+  const wallHeight = useSceneConfig(wizardInputs).wallHeightM
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
   const imageWidth = drawing?.rasterWidth ?? 1400

@@ -7,7 +7,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import type { Drawing, FloorLevel, FloorplanOverlayState, Layer, ParsedRoom, ParsedWall } from '../../types'
 import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { modelWalls } from '../../services/modelWalls'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
@@ -796,6 +796,9 @@ export default function BuildingModel({ layers }: Props) {
   const model = useAppStore((s) => s.model)
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  // Read at component level, not inside the build effect: it is a hook, and the
+  // engine has to frame to the same ceiling every other layer uses.
+  const sceneConfig = useSceneConfig(wizardInputs)
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const placedObjects = useAppStore((s) => s.placedObjects)
   const floorsAreas = useAppStore((s) => s.floorsAreas)
@@ -838,7 +841,6 @@ export default function BuildingModel({ layers }: Props) {
     }
 
     const layerMap = new Map(layers.map((l) => [l.id, l]))
-    const sceneConfig = deriveWorkspaceSceneConfig(wizardInputs)
     const floorHeight = sceneConfig.wallHeightM
     // Floor-to-floor height includes the wall height PLUS the floor assembly
     // (joists + subfloor) so engine geometry aligns with FloorJoistsLayer and
@@ -1209,7 +1211,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, buildResult, overlay, placedObjects, floorsAreas, granularity])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, sceneConfig, buildResult, overlay, placedObjects, floorsAreas, granularity])
 
   /**
    * MEMBER ISOLATION — one stick, in the clear.

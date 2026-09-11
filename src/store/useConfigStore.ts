@@ -64,8 +64,17 @@ export interface AppConfig {
   pipeStickLengthFt: 10 | 12
 
   // ── Build output ──────────────────────────────────────────────────────────
-  /** Storey height (metres) fed to the construction engine. */
-  buildFloorHeightM: number
+  /**
+   * Ceiling height in metres for every storey, or null to use the default for
+   * the build type (8ft residential, taller for a commercial shell).
+   *
+   * Renamed from `buildFloorHeightM`, which drove NOTHING: it was read by its
+   * own slider and by nothing else, so a persisted value could sit at 5.6 m
+   * (18'4") while every wall in the app framed at 2.44. The rename also means
+   * any such stored value is ignored rather than suddenly taking effect.
+   * Reaches the model through `useSceneConfig`.
+   */
+  ceilingHeightM: number | null
   /** Building type that drives stud size / spacing defaults. */
   buildType: BuildingType
   /** Automatically reveal the framing layer after "Build for me". */
@@ -125,7 +134,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   activeUnit: 'ft',
   lengthFormat: 'ft-in',
   pipeStickLengthFt: 10,
-  buildFloorHeightM: 2.7,
+  ceilingHeightM: null,
   buildType: 'residential-single',
   buildAutoEnableFraming: true,
   buildAutoShell: true,

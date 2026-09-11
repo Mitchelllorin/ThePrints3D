@@ -8,6 +8,7 @@ import App from './App.tsx'
 import { useAppStore } from './store/useAppStore'
 import { useFloorplanLocalStore } from './store/useFloorplanLocalStore'
 import { useUISettingsStore } from './store/useUISettingsStore'
+import { useConfigStore } from './store/useConfigStore'
 import { startCorpusCapture } from './services/corpusWiring'
 
 // Dev-only: expose the stores so verification scripts can inject state (e.g. a
@@ -19,6 +20,10 @@ if (import.meta.env.DEV) {
   // what is worth measuring only exists once finishes are on, so verifying it
   // meant hand-driving the Settings drawer first. Now it does not.
   ;(window as unknown as Record<string, unknown>).__uiSettingsStore = useUISettingsStore
+  // Build settings — ceiling height, build type, overhang, framing. Exposed for
+  // the same reason: the ceiling height drives every layer's storey maths, so a
+  // change to it has to be measurable in the scene without hand-driving Settings.
+  ;(window as unknown as Record<string, unknown>).__configStore = useConfigStore
   // A ruler for the detector. Run `__scorePrints()` in the console to put all
   // four real drawing sets through the whole pipeline and print the numbers —
   // so a change to detection can be measured instead of squinted at. Loaded

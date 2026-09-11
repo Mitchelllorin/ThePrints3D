@@ -25,7 +25,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { getCatalogItem, deviceMountHeightM, isWallMountedType } from '../../data/objectCatalog'
 import { placementPose, roomEdgeWalls, type PlanTransform, type PlanWall } from '../../services/planPlacement'
 import ObjectModel from './ObjectModels'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import type { PlacedObject } from '../../types'
 
@@ -131,7 +131,7 @@ export default function PlacedObjectsLayer() {
   const modelReadyForPlan = useAppStore((s) => s.model.status === 'ready')
   const planSymbolsOn = useAppStore((s) => s.floorplanOverlay.visible) && !modelReadyForPlan
 
-  const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
+  const ceilingM = useSceneConfig(wizardInputs).wallHeightM
   // Same storey-to-storey rise the walls/decks use, so an object placed on an
   // upper floor sits on THAT floor instead of down at grade.
   const storeyHeight = ceilingM + FLOOR_ASSEMBLY_H

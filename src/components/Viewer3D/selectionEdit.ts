@@ -29,7 +29,7 @@ import * as THREE from 'three'
 import { useMemo } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { worldDeltaToPixel } from './editHelpers'
 import { followWall, segYawDelta } from '../../services/openingFollow'
@@ -119,7 +119,7 @@ export function useSelectionEdit(): SelectionEdit | null {
   const imageHeight = drawing?.rasterHeight ?? 900
   const [overlayW, overlayD] = overlay.scale
   const rotRad = THREE.MathUtils.degToRad(overlay.rotationDeg)
-  const ceilingM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
+  const ceilingM = useSceneConfig(wizardInputs).wallHeightM
   const storeyHeight = ceilingM + FLOOR_ASSEMBLY_H
 
   return useMemo(() => {

@@ -314,7 +314,10 @@ function SettingsContent() {
       </CollapsibleSection>
 
       <CollapsibleSection id="build" title="Build output" openId={openId} setOpenId={setOpenId}>
-        <Slider label="Floor height" val={cfg.buildFloorHeightM} min={2} max={6} step={0.1} unit="m" onChange={(v) => setCfg({ buildFloorHeightM: v })} />
+        {/* Ceiling height, not "floor height": it is the height walls frame to,
+            and it now actually drives the model (see useSceneConfig). Range is
+            7ft to 13ft — a residential 8ft default sits near the bottom. */}
+        <Slider label="Ceiling height" val={cfg.ceilingHeightM ?? 2.44} min={2.1} max={4} step={0.05} unit="m" onChange={(v) => setCfg({ ceilingHeightM: v })} />
         <Select label="Type" val={cfg.buildType} options={BUILD_TYPE_OPTIONS} onChange={(v) => setCfg({ buildType: v as BuildingType })} />
         <Toggle label="Auto framing" val={cfg.buildAutoEnableFraming} onChange={(v) => setCfg({ buildAutoEnableFraming: v })} />
         <Toggle label="Auto shell (slab → fascia)" val={cfg.buildAutoShell} onChange={(v) => setCfg({ buildAutoShell: v })} />

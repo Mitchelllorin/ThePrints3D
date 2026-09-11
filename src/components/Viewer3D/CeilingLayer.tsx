@@ -13,7 +13,7 @@ import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useAreaNameplateVisible } from './useNameplateVisible'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { buildCeiling, FLOOR_ASSEMBLY_H, CEILING_JOIST_DEPTH } from '../../services/framingGeometry'
 import { CEILING_TYPES, ocToM } from '../../data/traceLayers'
 import type { TracedLine } from '../../types'
@@ -73,7 +73,7 @@ export default function CeilingLayer() {
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'framing')
 
-  const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
+  const wallHeight = useSceneConfig(wizardInputs).wallHeightM
   const storeyHeight = wallHeight + FLOOR_ASSEMBLY_H
 
   const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null

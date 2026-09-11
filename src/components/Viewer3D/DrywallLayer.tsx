@@ -10,7 +10,7 @@ import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
@@ -96,7 +96,7 @@ export default function DrywallLayer() {
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'walls')
 
-  const wallHeight = useMemo(() => deriveWorkspaceSceneConfig(wizardInputs).wallHeightM, [wizardInputs])
+  const wallHeight = useSceneConfig(wizardInputs).wallHeightM
   // Storey-to-storey rise so level-1 boards stand on the 2nd-floor deck, etc.
   const storeyHeight = wallHeight + FLOOR_ASSEMBLY_H
 

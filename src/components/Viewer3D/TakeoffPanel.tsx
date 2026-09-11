@@ -7,7 +7,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import { deriveWorkspaceSceneConfig } from '../../services/workspaceScene'
+import { useSceneConfig } from '../../store/useSceneConfig'
 import { computeTakeoff, takeoffToCsv } from '../../services/takeoff'
 import { builtScene, countBuiltMembers, groupBuiltMembers } from '../../services/builtScene'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -29,6 +29,9 @@ export default function TakeoffContent() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const roofOverhangIn = useConfigStore((s) => s.roofOverhangIn)
+  // Wall height comes from the one place that decides it, so the takeoff counts
+  // the walls the model actually built — see useSceneConfig.
+  const sceneConfig = useSceneConfig(wizardInputs)
   const isPro = useAppStore((s) => s.isPro)
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
 
@@ -36,7 +39,7 @@ export default function TakeoffContent() {
     const active = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
     const scaleMmPerPx = active?.scaleMmPerPx ?? 23.5
     const walls: ParsedWall[] = drawings.flatMap((d) => d.parsedWalls)
-    const wallHeightM = deriveWorkspaceSceneConfig(wizardInputs).wallHeightM
+    const wallHeightM = sceneConfig.wallHeightM
     return computeTakeoff({
       scaleMmPerPx, wallHeightM, walls,
       plumbing: plumbingLines, electrical: electricalLines, hvac: hvacLines,
@@ -44,7 +47,7 @@ export default function TakeoffContent() {
       placedObjects: placedObjects.map((o) => ({ type: o.type })),
       roofOverhangM: roofOverhangIn * 0.0254,
     })
-  }, [drawings, overlay.drawingId, plumbingLines, electricalLines, hvacLines, floorsAreas, roofAreas, placedObjects, wizardInputs, roofOverhangIn])
+  }, [drawings, overlay.drawingId, plumbingLines, electricalLines, hvacLines, floorsAreas, roofAreas, placedObjects, sceneConfig, roofOverhangIn])
 
   const empty = sections.length === 0
 
