@@ -15,6 +15,7 @@ import { joistProfile } from '../data/traceLayers'
 import {
   type EnvelopeLayer, type CladdingSpec, type BoardSpec,
   LEDGE_DROP_M, LEDGE_BEARING_EXTRA_M, WEEP_SPACING_M, TIE_SPACING_M, FLASHING_UPTURN_M,
+  BOARD_HALF_T,
 } from './constructionCode'
 
 const STUD_WIDTH_M = 0.038    // 1-1/2" nominal stud face
@@ -555,6 +556,219 @@ export const OPENING_HANGER_SPAN_M = 1.8288   // 6'-0"
  */
 export function openingPlies(headerSpanM: number): number {
   return headerSpanM > OPENING_DOUBLE_SPAN_M ? 2 : 1
+}
+
+// ─── Hiding services: box-outs and bulkheads ─────────────────────────────────
+//
+// Four ways to hide a service, and these are the two for pipe that runs OUTSIDE
+// the wall: a BOX-OUT is the vertical answer (round a stack, column or beam), a
+// BULKHEAD the horizontal one (over duct, pipe or a beam). The other two —
+// thickening a plumbing wall to 2x6/2x8, or a double-2x4 chase — hide services
+// INSIDE the wall and are the wall's own business.
+//
+// Built the way they are built on site: a bulkhead is two 2x2 ladders with rungs
+// at 24" (drywall's own span limit) tied across the bottom at 16", hung off the
+// joists; a box-out is corner studs with plates top and bottom, floor to ceiling.
+// Both then get boarded, which is why board is the default here and not a flag
+// somebody has to remember.
+//
+// FIREBLOCKING IS A REAL MEMBER, not a detail: IRC R302.11 requires it exactly
+// where a soffit meets a concealed vertical space, and the 2024 edition spells
+// out the soffit-to-wall interface. It is also a line on the takeoff, so it is
+// modelled rather than assumed.
+
+/** 2x2 — what bulkhead ladders are made from. */
+const LADDER_W = 0.038
+/** Rungs at 24": drywall is not designed to span further unsupported. */
+const RUNG_OC_M = 0.6096
+/** Cross ties at 16". */
+const TIE_OC_M = 0.4064
+
+export interface BoxOutOpts {
+  /** Finished outside width (m) — the face you see. */
+  widthM: number
+  /** Finished outside depth (m) — how far it stands off the wall. */
+  depthM: number
+  /** Floor to ceiling. */
+  heightM: number
+  opacity?: number
+  /** Board the exposed faces. Box-outs are usually drywalled, so: yes. */
+  board?: boolean
+  /** Exposed faces: 2 in a corner, 3 against a flat wall, 4 free-standing. */
+  exposedFaces?: 2 | 3 | 4
+  color?: string
+}
+
+/**
+ * A vertical chase round a stack, column or beam. Origin at the floor, centred
+ * on the box; the caller positions and rotates it.
+ */
+export function buildBoxOut(opts: BoxOutOpts): THREE.Group {
+  const { widthM, depthM, heightM, opacity = 1, board = true, exposedFaces = 2 } = opts
+  const g = new THREE.Group()
+  if (widthM < 0.08 || depthM < 0.08 || heightM < 0.2) return g
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(opts.color ?? '#c9a56c'),
+    roughness: 0.75, metalness: 0.05,
+    transparent: opacity < 1, opacity, depthWrite: opacity >= 1,
+  })
+  const boardMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f5f0eb'), roughness: 0.9, metalness: 0,
+    transparent: opacity < 1, opacity, depthWrite: opacity >= 1,
+  })
+  const add = (geo: THREE.BufferGeometry, x: number, y: number, z: number, info: string, m = mat) => {
+    const mesh = new THREE.Mesh(geo, m)
+    mesh.position.set(x, y, z)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.userData.info = info
+    g.add(mesh)
+    return mesh
+  }
+
+  const S = STUD_WIDTH_M
+  const halfW = widthM / 2
+  const halfD = depthM / 2
+  const studH = Math.max(0.05, heightM - PLATE_H_M * 2)
+
+  // Corner studs — one at each corner, inset so the frame finishes flush.
+  const studGeo = new THREE.BoxGeometry(S, studH, S)
+  for (const sx of [-1, 1] as const) {
+    for (const sz of [-1, 1] as const) {
+      add(studGeo.clone(), sx * (halfW - S / 2), PLATE_H_M + studH / 2, sz * (halfD - S / 2), '2×4 chase stud')
+    }
+  }
+  // Plates top and bottom, both directions, so the box is a closed frame.
+  for (const [y, label] of [[PLATE_H_M / 2, 'bottom plate'], [heightM - PLATE_H_M / 2, 'top plate']] as const) {
+    add(new THREE.BoxGeometry(widthM, PLATE_H_M, S), 0, y, -(halfD - S / 2), `2×4 chase ${label}`)
+    add(new THREE.BoxGeometry(widthM, PLATE_H_M, S), 0, y, halfD - S / 2, `2×4 chase ${label}`)
+    add(new THREE.BoxGeometry(S, PLATE_H_M, Math.max(0.02, depthM - S * 2)), -(halfW - S / 2), y, 0, `2×4 chase ${label}`)
+    add(new THREE.BoxGeometry(S, PLATE_H_M, Math.max(0.02, depthM - S * 2)), halfW - S / 2, y, 0, `2×4 chase ${label}`)
+  }
+  // Fireblock where the chase passes the ceiling — R302.11, and a takeoff item.
+  add(
+    new THREE.BoxGeometry(Math.max(0.02, widthM - S * 2), PLATE_H_M, Math.max(0.02, depthM - S * 2)),
+    0, heightM - PLATE_H_M * 1.5, 0, 'fireblock',
+  )
+
+  if (board) {
+    const faces: Array<[number, number, number, number, number]> = [
+      // [w, h, d, x, z] — front face, then the side, then the rest if exposed.
+      [widthM, heightM, BOARD_HALF_T, 0, halfD + BOARD_HALF_T / 2],
+      [BOARD_HALF_T, heightM, depthM, halfW + BOARD_HALF_T / 2, 0],
+      [widthM, heightM, BOARD_HALF_T, 0, -(halfD + BOARD_HALF_T / 2)],
+      [BOARD_HALF_T, heightM, depthM, -(halfW + BOARD_HALF_T / 2), 0],
+    ]
+    let boardArea = 0
+    for (let i = 0; i < exposedFaces; i++) {
+      const [w, h, d, x, z] = faces[i]
+      add(new THREE.BoxGeometry(w, h, d), x, heightM / 2, z, '1/2" board', boardMat)
+      boardArea += (w > d ? w : d) * h
+    }
+    g.userData.boardSqM = Math.round(boardArea * 100) / 100
+  }
+  g.userData.enclosure = 'box-out'
+  return g
+}
+
+export interface BulkheadOpts {
+  /** The run — how long the bulkhead is. */
+  lengthM: number
+  /** How far it comes off the wall. */
+  widthM: number
+  /** How far it hangs below the ceiling. */
+  dropM: number
+  opacity?: number
+  /** Board the exposed face and underside. Bulkheads are usually drywalled. */
+  board?: boolean
+  /** Ends die into a wall — the usual case, and each end then needs a fireblock. */
+  endsAtWall?: boolean
+  color?: string
+}
+
+/**
+ * A dropped soffit over duct, pipe or a beam. Origin at the BOTTOM of the
+ * bulkhead, centred on its length and width; y runs up to the ceiling.
+ *
+ * Size it to the duct PLUS clearance — about 1½" all round is what gets built —
+ * because what is passed here is the finished box, not the duct.
+ */
+export function buildBulkhead(opts: BulkheadOpts): THREE.Group {
+  const { lengthM, widthM, dropM, opacity = 1, board = true, endsAtWall = true } = opts
+  const g = new THREE.Group()
+  if (lengthM < 0.1 || widthM < 0.05 || dropM < 0.05) return g
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(opts.color ?? '#c9a56c'),
+    roughness: 0.75, metalness: 0.05,
+    transparent: opacity < 1, opacity, depthWrite: opacity >= 1,
+  })
+  const boardMat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color('#f5f0eb'), roughness: 0.9, metalness: 0,
+    transparent: opacity < 1, opacity, depthWrite: opacity >= 1,
+  })
+  const add = (geo: THREE.BufferGeometry, x: number, y: number, z: number, info: string, m = mat) => {
+    const mesh = new THREE.Mesh(geo, m)
+    mesh.position.set(x, y, z)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.userData.info = info
+    g.add(mesh)
+    return mesh
+  }
+
+  const L = LADDER_W
+  const halfL = lengthM / 2
+  const halfW = widthM / 2
+  const rungH = Math.max(0.02, dropM - L * 2)
+
+  // Positions along the run: ONE AT EACH END plus the field members at spacing.
+  // Stepping from one end and stopping when the next step overshoots leaves the
+  // far end unframed — on a 3.6 m run that is half a metre of ladder with
+  // nothing at the end of it, exactly where it meets the wall and exactly where
+  // the board needs backing.
+  const spread = (ocM: number) => {
+    const first = -halfL + L / 2
+    const last = halfL - L / 2
+    const out = [first]
+    for (let x = -halfL + ocM; x < last - L; x += ocM) out.push(x)
+    out.push(last)
+    return out
+  }
+
+  // Two ladders, one against the wall and one at the outer face.
+  for (const sz of [-1, 1] as const) {
+    const z = sz * (halfW - L / 2)
+    add(new THREE.BoxGeometry(lengthM, L, L), 0, L / 2, z, '2×2 ladder plate')
+    add(new THREE.BoxGeometry(lengthM, L, L), 0, dropM - L / 2, z, '2×2 ladder plate')
+    for (const px of spread(RUNG_OC_M)) {
+      add(new THREE.BoxGeometry(L, rungH, L), px, L + rungH / 2, z, '2×2 ladder rung')
+    }
+  }
+  // Cross ties along the bottom — what the underside board lands on.
+  const tieLen = Math.max(0.02, widthM - L * 2)
+  for (const px of spread(TIE_OC_M)) {
+    add(new THREE.BoxGeometry(L, L, tieLen), px, L / 2, 0, '2×2 cross tie')
+  }
+  // R302.11 — a soffit meeting a concealed vertical space gets fireblocked.
+  if (endsAtWall) {
+    for (const sx of [-1, 1] as const) {
+      add(
+        new THREE.BoxGeometry(L, Math.max(0.02, dropM - L), tieLen),
+        sx * (halfL - L / 2), dropM / 2, 0, 'fireblock',
+      )
+    }
+  }
+
+  if (board) {
+    // The face you see, and the underside you look up at.
+    add(new THREE.BoxGeometry(lengthM, dropM, BOARD_HALF_T), 0, dropM / 2, halfW + BOARD_HALF_T / 2, '1/2" board', boardMat)
+    add(new THREE.BoxGeometry(lengthM, BOARD_HALF_T, widthM), 0, -BOARD_HALF_T / 2, 0, '1/2" board', boardMat)
+    g.userData.boardSqM = Math.round((lengthM * dropM + lengthM * widthM) * 100) / 100
+  }
+  g.userData.enclosure = 'bulkhead'
+  return g
 }
 
 export function buildFloorJoists(opts: {

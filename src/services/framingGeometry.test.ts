@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall, buildVeneerSupport } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall, buildVeneerSupport, buildBoxOut, buildBulkhead } from './framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb, boardSpec,
   finishesVisible,
@@ -669,6 +669,57 @@ describe('two walls meeting make ONE framed corner', () => {
     const a = studsIn(buildWallFraming({ ...base })).length
     const b = studsIn(buildWallFraming({ ...base, capLap: {} })).length
     expect(a).toBe(b)
+  })
+})
+
+describe('hiding services that run outside the wall', () => {
+  it('frames a box-out as a closed frame, floor to ceiling, and boards it', () => {
+    const g = buildBoxOut({ widthM: 0.45, depthM: 0.35, heightM: 2.44 })
+    // Four corners, plates both ways top and bottom, and drywall on the faces
+    // you can see — a chase in a corner shows two.
+    expect(withInfo(g, /chase stud/)).toHaveLength(4)
+    expect(withInfo(g, /chase bottom plate/)).toHaveLength(4)
+    expect(withInfo(g, /chase top plate/)).toHaveLength(4)
+    expect(withInfo(g, /board/)).toHaveLength(2)
+    expect(g.userData.boardSqM as number).toBeGreaterThan(0)
+  })
+
+  it('fireblocks the box-out where it passes the ceiling', () => {
+    // R302.11: a concealed vertical space gets blocked at the ceiling, and the
+    // block is a member somebody buys, not a note on a drawing.
+    expect(withInfo(buildBoxOut({ widthM: 0.4, depthM: 0.3, heightM: 2.44 }), /fireblock/)).toHaveLength(1)
+  })
+
+  it('boards every face when the chase stands free', () => {
+    const g = buildBoxOut({ widthM: 0.4, depthM: 0.4, heightM: 2.44, exposedFaces: 4 })
+    expect(withInfo(g, /board/)).toHaveLength(4)
+  })
+
+  it('builds a bulkhead as two ladders tied across the bottom', () => {
+    const g = buildBulkhead({ lengthM: 3.6, widthM: 0.4, dropM: 0.3 })
+    expect(withInfo(g, /ladder plate/)).toHaveLength(4)        // top and bottom, both ladders
+    // A rung at each END plus the field rungs at 24" o.c. between them: on a
+    // 3.6m run that is 7 per ladder, two ladders. Ends matter — that is where
+    // the ladder meets the wall and where the board needs something to land on.
+    expect(withInfo(g, /ladder rung/).length).toBe(14)
+    const rungXs = withInfo(g, /ladder rung/).map((m) => m.position.x).sort((a, b) => a - b)
+    expect(rungXs[0]).toBeCloseTo(-3.6 / 2 + 0.038 / 2, 6)
+    expect(rungXs[rungXs.length - 1]).toBeCloseTo(3.6 / 2 - 0.038 / 2, 6)
+    // Ties at 16" — more of them than rungs, which is the point of the spacing.
+    expect(withInfo(g, /cross tie/).length).toBeGreaterThan(7)
+    expect(withInfo(g, /board/)).toHaveLength(2)               // face and underside
+  })
+
+  it('fireblocks both ends where a bulkhead dies into a wall', () => {
+    const into = buildBulkhead({ lengthM: 3, widthM: 0.4, dropM: 0.3 })
+    const free = buildBulkhead({ lengthM: 3, widthM: 0.4, dropM: 0.3, endsAtWall: false })
+    expect(withInfo(into, /fireblock/)).toHaveLength(2)
+    expect(withInfo(free, /fireblock/)).toHaveLength(0)
+  })
+
+  it('refuses to build something too small to be real', () => {
+    expect(buildBoxOut({ widthM: 0.01, depthM: 0.01, heightM: 2.4 }).children).toHaveLength(0)
+    expect(buildBulkhead({ lengthM: 0.05, widthM: 0.4, dropM: 0.3 }).children).toHaveLength(0)
   })
 })
 
