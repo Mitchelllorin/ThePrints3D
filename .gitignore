@@ -37,6 +37,10 @@ data/cubicasa5k*
 checkpoints/
 data/synth*
 data/test-prints/
+# Real drawings dropped in for labelling/training — may be client work, never
+# committed. The README explaining the folder is the one thing that is.
+data/real-prints/*
+!data/real-prints/README.md
 __pycache__/
 *.pyc
 .venv-train/
