@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseTag, readPlanTags, tagSummary, LEGEND, type LegendEntry } from './planTags'
+import { parseTag, readPlanTags, tagSummary, legendGaps, learnLegendEntry, LEGEND, type LegendEntry } from './planTags'
 
 const tok = (text: string, x = 0, y = 0) => ({ text, x, y, confidence: 90 })
 
@@ -50,6 +50,40 @@ describe('parseTag', () => {
     expect(parseTag('H&P-505.3', shop)!.label).toBe('Hall and party panel')
     // The shipped legend is unchanged — one contractor's scheme is not everyone's.
     expect(parseTag('H&P-505.3')!.label).toBeNull()
+  })
+})
+
+describe('legendGaps — what to ask the user about', () => {
+  const sheet = [
+    tok('EXT-101.3'), tok('EXT-102.3'),                     // known, never asked about
+    tok('H&P-505.3'), tok('H&P-506.3'), tok('H&P-507.3'),   // unknown, three of them
+    tok('ZZ-900.1'), tok('ZZ-901.1'),                       // unknown, two
+    tok('QQ-1.1'),                                          // unknown, once — a typo, probably
+  ]
+
+  it('asks about what it cannot read, most-used first', () => {
+    const gaps = legendGaps(readPlanTags(sheet))
+    expect(gaps.map((g) => g.prefix)).toEqual(['H&P', 'ZZ'])
+    expect(gaps[0].count).toBe(3)
+    expect(gaps[0].examples).toContain('H&P-505.3')
+  })
+
+  it('does not interview anybody about a one-off', () => {
+    expect(legendGaps(readPlanTags(sheet)).some((g) => g.prefix === 'QQ')).toBe(false)
+    // Unless you ask it to — a single tag is still a gap if you want it.
+    expect(legendGaps(readPlanTags(sheet), 1).some((g) => g.prefix === 'QQ')).toBe(true)
+  })
+
+  it('asks nothing when the legend already covers the sheet', () => {
+    expect(legendGaps(readPlanTags([tok('EXT-101.3'), tok('SW2'), tok('HDU5')]))).toEqual([])
+  })
+
+  it('an answer decodes that prefix from then on', () => {
+    const learned = learnLegendEntry(LEGEND, { prefix: 'h&p', kind: 'panel', label: 'Hall and party panel', source: 'Giusti' })
+    const tags = readPlanTags([tok('H&P-505.3')], learned)
+    expect(tags[0].kind).toBe('panel')
+    expect(tags[0].label).toBe('Hall and party panel')
+    expect(legendGaps(tags)).toEqual([])
   })
 })
 

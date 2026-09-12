@@ -146,6 +146,51 @@ export function readPlanTags(
   return out
 }
 
+export interface LegendGap {
+  /** The prefix nobody has explained yet. */
+  prefix: string
+  /** How many times it appears on this sheet — the leverage of asking. */
+  count: number
+  /** A few verbatim tags, so the question can show what it is asking about. */
+  examples: string[]
+}
+
+/**
+ * WHAT THE DRAWING USES THAT WE CANNOT READ — i.e. the questions worth asking.
+ *
+ * The app reads the tags, finds the prefixes its legend does not hold, and asks
+ * the user ONCE: "what is H&P?" One answer decodes every H&P panel on this
+ * sheet and every sheet from that shop afterwards. That is the cheapest input
+ * in the whole app — one question buys a scheme — and it is the same bargain as
+ * everything else here: do what can be done, NAME the gap rather than hide it,
+ * and let the cheapest possible question fill it.
+ *
+ * Ranked by count, so the prefix stamped on forty panels is asked about before
+ * the one that appears once. Nobody should be interviewed about a typo.
+ */
+export function legendGaps(tags: readonly PlanTag[], minCount = 2): LegendGap[] {
+  const byPrefix = new Map<string, LegendGap>()
+  for (const t of tags) {
+    if (t.kind !== 'unknown') continue
+    const g = byPrefix.get(t.prefix) ?? { prefix: t.prefix, count: 0, examples: [] }
+    g.count++
+    if (g.examples.length < 3 && !g.examples.includes(t.raw)) g.examples.push(t.raw)
+    byPrefix.set(t.prefix, g)
+  }
+  return [...byPrefix.values()]
+    .filter((g) => g.count >= minCount)
+    .sort((a, b) => b.count - a.count || a.prefix.localeCompare(b.prefix))
+}
+
+/**
+ * Fold an answer into a legend: the user says what a prefix means, and every
+ * later sheet from that shop reads it without asking again.
+ */
+export function learnLegendEntry(legend: readonly LegendEntry[], entry: LegendEntry): LegendEntry[] {
+  const prefix = entry.prefix.toUpperCase()
+  return [...legend.filter((e) => e.prefix !== prefix), { ...entry, prefix }]
+}
+
 /** What the sheet told us, counted by kind — a quick read on tag coverage. */
 export function tagSummary(tags: readonly PlanTag[]): Record<TagKind, number> {
   const out = { panel: 0, unit: 0, shear: 0, holdown: 0, opening: 0, detail: 0, unknown: 0 }
