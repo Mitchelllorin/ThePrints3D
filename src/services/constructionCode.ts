@@ -8,7 +8,11 @@
 export const WALL_THICKNESS_M: Record<string, number> = {
   'wood-2x4': 0.0889,   // 3.5"
   'wood-2x6': 0.1397,   // 5.5"
-  'wood-2x8': 0.1905,   // 7.5"
+  // A 2x8 is 7-1/4", not 7-1/2" — the same 184mm `framing.json` has carried all
+  // along. This said 0.1905 (which is 8" CMU, one line down), so every exterior
+  // wall in the app — wood-2x8 is the default exterior type — framed a quarter
+  // inch too thick, and the sheathing and board on it followed.
+  'wood-2x8': 0.18415,  // 7-1/4"
   'steel-1-5-8': 0.0413, // 1-5/8" furring channel (towers: furr out for space)
   'steel-3-5-8': 0.0921, // 3-5/8"
   'steel-6': 0.1524,    // 6"
@@ -64,7 +68,7 @@ export function wallCoversLevel(wall: { level?: number; spanLevels?: number }, l
 /**
  * How thick to RENDER a wall — the one answer every layer must use.
  *
- * If the wall has a framing type, that governs: you picked 2x8, you get 7.5".
+ * If the wall has a framing type, that governs: you picked 2x8, you get 7-1/4".
  * Only a wall with no framing type falls back to measuring the traced line on the
  * print, which is a guess from ink width and the drawing's scale.
  *

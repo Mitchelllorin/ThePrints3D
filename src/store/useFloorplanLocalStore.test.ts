@@ -39,11 +39,14 @@ describe('stud size follows the wall role', () => {
   })
 
   it('renders those defaults at real thickness, so the model stays to scale', () => {
-    // 2x8 = 7.5" = 0.1905 m, 2x4 = 3.5" = 0.0889 m. An exterior wall must come
-    // out visibly thicker than an interior one.
+    // 2x8 = 7-1/4" = 0.18415 m, 2x4 = 3.5" = 0.0889 m. An exterior wall must
+    // come out visibly thicker than an interior one.
+    //
+    // This asserted 0.1905 — 7-1/2", which is 8" block, not a 2x8 — so the test
+    // held the bug in place instead of catching it.
     const ext = WALL_THICKNESS_M[defaultWallTypeForRole('exterior-bearing')]
     const int = WALL_THICKNESS_M[defaultWallTypeForRole('partition')]
-    expect(ext).toBeCloseTo(0.1905, 4)
+    expect(ext).toBeCloseTo(0.18415, 4)
     expect(int).toBeCloseTo(0.0889, 4)
     expect(ext).toBeGreaterThan(int)
   })

@@ -61,7 +61,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
   // Thickness first — it sets how far to extend ends into a corner.
-  // The FRAMING TYPE governs — pick 2x8 and you get 7.5". Only a wall with no
+  // The FRAMING TYPE governs — pick 2x8 and you get 7-1/4". Only a wall with no
   // type falls back to measuring the traced line. See renderWallThicknessM.
   const thicknessM = renderWallThicknessM(wall, scaleMmPerPx)
 
