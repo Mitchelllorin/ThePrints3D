@@ -18,6 +18,7 @@ import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useWallNameplateVisible } from './useNameplateVisible'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useSceneConfig } from '../../store/useSceneConfig'
+import { teesForWalls } from '../../services/wallTees'
 import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
 import { wallFramingSpec } from '../../services/constructionCode'
 import { XRAY_OPACITY } from './editHelpers'
@@ -48,13 +49,15 @@ interface WallMeshProps {
   /** This end meets another wall — extend it so the corner joins (no gap). */
   startCorner: boolean
   endCorner: boolean
+  /** Where other walls land on this one's face, as fractions along it (0..1). */
+  tees: number[]
   /** Storey-to-storey rise, so upper-floor walls stack on the floor below. */
   storeyHeight: number
   /** Spread this wall's framing members apart to show the assembly. */
   detailExplode?: boolean
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, storeyHeight, detailExplode }: WallMeshProps) {
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, tees, storeyHeight, detailExplode }: WallMeshProps) {
   const labelColor = useUISettingsStore((s) => s.labelColor)
   const labelScale = useUISettingsStore((s) => s.labelScale)
   const dimensionsVisible = useWallNameplateVisible()
@@ -88,6 +91,8 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
     start: startCorner ? capMode : undefined,
     end: endCorner ? capMode : undefined,
   }
+  // A stable dep for the framing memo — the array is rebuilt every render.
+  const teesKey = tees.join(',')
 
   // Masonry (CMU/brick/concrete) is a solid block; framed walls get studs.
   const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
@@ -101,11 +106,11 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       f = buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity, kind })
     } else {
       const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-      f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity, capLap })
+      f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity, capLap, tees: tees.map((t) => t * length) })
     }
     f.userData.level = wall.level ?? 0  // so the shared explode lifts it floor-by-floor
     return f
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level, startCorner, endCorner, capMode])
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level, startCorner, endCorner, capMode, teesKey])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {
@@ -219,6 +224,12 @@ export default function LiveWallsLayer() {
       end: (counts.get(key(wall.x2, wall.y2)) ?? 0) > 1,
     }))
   }, [userWalls])
+
+  // TEES — where another wall's END lands on this wall's SPAN. See wallTees:
+  // it is a pure, unit-tested function rather than arithmetic buried in here,
+  // because a hit test that only runs inside a component can only be debugged
+  // by driving a browser, and that is exactly how the first attempt was spent.
+  const teesByWall = useMemo(() => teesForWalls(userWalls.map((u) => u.wall)), [userWalls])
 
   // Assign each placed door/window to its nearest wall and record its position
   // (t, 0..1) and rough-opening width — so the live framing frames the opening
@@ -374,6 +385,7 @@ export default function LiveWallsLayer() {
           lengthFormat={lengthFormat}
           startCorner={cornerEnds[i]?.start ?? false}
           endCorner={cornerEnds[i]?.end ?? false}
+          tees={teesByWall[i] ?? []}
           storeyHeight={storeyHeight}
           detailExplode={wallDetailExplode && i === selectedWallIndex}
         />

@@ -672,6 +672,42 @@ describe('two walls meeting make ONE framed corner', () => {
   })
 })
 
+describe('the wall being met carries the tee', () => {
+  const base = { length: 4, height: 2.44, thickness: 0.14, material: 'wood' as const }
+  const tallCount = (g: THREE.Object3D) => {
+    let n = 0
+    g.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      m.geometry.computeBoundingBox()
+      const bb = m.geometry.boundingBox!
+      if (bb.max.y - bb.min.y > base.height * 0.6) n++
+    })
+    return n
+  }
+
+  it('packs studs and a backer where a wall lands mid-span', () => {
+    const plain = buildWallFraming({ ...base })
+    const teed = buildWallFraming({ ...base, tees: [2] })
+    expect(tallCount(teed)).toBeGreaterThan(tallCount(plain))
+    const backers = withInfo(teed, /tee backer/)
+    expect(backers).toHaveLength(1)
+    // Turned across the wall, like the corner backer — that is the nailing face.
+    expect(Math.abs(backers[0].position.z)).toBeGreaterThan(0)
+  })
+
+  it('ignores a hit at the very end, which is a corner and already packed', () => {
+    const teed = buildWallFraming({ ...base, tees: [0.01] })
+    expect(withInfo(teed, /tee backer/)).toHaveLength(0)
+  })
+
+  it('frames nothing extra when no wall lands on it', () => {
+    const a = tallCount(buildWallFraming({ ...base }))
+    const b = tallCount(buildWallFraming({ ...base, tees: [] }))
+    expect(a).toBe(b)
+  })
+})
+
 describe('stud layout is pulled from the outside face', () => {
   const base = { length: 4, height: 2.44, thickness: 0.14, material: 'wood' as const }
   const STUD_W = 0.038      // 1-1/2" stud face

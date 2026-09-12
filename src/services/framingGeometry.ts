@@ -121,6 +121,17 @@ export interface WallFramingOpts {
    *  top plates overlap and tie the corner. Undefined ends keep a full-length cap
    *  (lower top plate always runs full length and butts at the corner). */
   capLap?: { start?: 'lap' | 'back'; end?: 'lap' | 'back' }
+  /**
+   * Where another wall lands on the FACE of this one — a TEE. Measured from the
+   * wall START, in metres, same as an opening's centre.
+   *
+   * The wall being met carries the pack; the wall arriving just runs into it,
+   * the same bargain as a corner. Two studs flank the landing point and a backer
+   * turns across behind them, so the arriving wall has something to nail to and
+   * the drywall has an edge each side of it. On real panel drawings these are
+   * the tees, and they get bigger as the walls they join get bigger.
+   */
+  tees?: number[]
 }
 
 export interface WallOpening {
@@ -152,6 +163,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     opacity = 1,
     openings = [],
     capLap,
+    tees = [],
   } = opts
 
   const group = new THREE.Group()
@@ -320,6 +332,28 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   }
   cornerPost(-half, 1, capLap?.start)
   cornerPost(half, -1, capLap?.end)
+
+  // TEES — where another wall lands on the face of this one.
+  //
+  // Ladder blocking is the advanced-framing answer and is rare on real jobs;
+  // what gets built is a pack: studs either side of where the partition arrives
+  // plus a nailer between them. Skipped at the ends (that is a corner, already
+  // packed) and inside a rough opening (nothing to nail to there anyway).
+  for (const tm of tees) {
+    const x = tm - half
+    if (Math.abs(x - endA) < studW * 2 || Math.abs(x - endB) < studW * 2) continue
+    // NOT skipped for landing in an opening. A partition cannot land in a
+    // doorway on site, so a tee that reads as "inside an opening" means the
+    // opening was assigned loosely, not that the pack is unwanted — and
+    // dropping it silently is how this first came back with no pack at all
+    // while every unit test passed.
+    if (inClear(x)) continue
+    xs.push(x - studW, x + studW)
+    add(
+      new THREE.BoxGeometry(studW, studH, studW),
+      x, studY, (studDepth - studW) / 2, memberInfo('tee backer'),
+    )
+  }
 
   const seen = new Set<number>()
   for (const x of xs) {
