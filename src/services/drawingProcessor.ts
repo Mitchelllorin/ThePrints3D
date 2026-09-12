@@ -23,6 +23,7 @@ import { normalizeForDetection } from './rasterNormalize'
 import { shouldOcr, groupIntoLines, type SizedTextToken } from './ocr'
 import { ocrRasterOffThread } from './ocrOffThread'
 import { statedAreaSqM, looksLikeRoomName } from './roomNames'
+import { readPlanTags, tagSummary } from './planTags'
 import { scaleFromTotalArea, footprintAreaPx } from './scaleInference'
 
 export type DrawingPatch = Partial<Drawing>
@@ -591,6 +592,31 @@ export async function processDrawing(
         .map((v) => +v.toFixed(4)),
       roomsNamed: rooms.filter((r) => !!r.name).length,
     })
+
+    /**
+     * WHAT THE SHEET SAID ABOUT ITSELF — see planTags.
+     *
+     * A shop drawing tags every panel, unit and assembly: EXT-101.3, UNIT C3
+     * 305, SW2, HDU5. That is a different KIND of evidence from anything the
+     * wall detector produces — it says what a thing IS, not where ink is — and
+     * it costs nothing, because the words have already been read by the time we
+     * get here.
+     *
+     * Logged, not yet acted on. It goes under `drawing.walls.` so the corpus
+     * ruler already sees it, and a step that cannot yet be measured has no
+     * business changing the walls: that is the mistake the ceiling override made
+     * for months, sitting available while nothing passed it.
+     */
+    const planTags = readPlanTags(textTokens)
+    if (planTags.length > 0) {
+      logEvent('drawing.walls.tags', {
+        drawingId: drawing.id,
+        found: planTags.length,
+        ...tagSummary(planTags),
+        /** A few verbatim, so an unknown scheme is visible rather than a count. */
+        sample: planTags.slice(0, 8).map((t) => t.raw),
+      })
+    }
 
     // 8. Derive text/symbol/annotation semantics by combining detector outputs
     //    with the canonical symbol glossary.
