@@ -672,6 +672,41 @@ describe('two walls meeting make ONE framed corner', () => {
   })
 })
 
+describe('stud layout is pulled from the outside face', () => {
+  const base = { length: 4, height: 2.44, thickness: 0.14, material: 'wood' as const }
+  const STUD_W = 0.038      // 1-1/2" stud face
+  const OC = 0.4064         // 16" on centre
+  const half = base.length / 2
+
+  /** X of every full-height member — the studs, not plates or blocking. */
+  const studXs = (g: THREE.Object3D) => {
+    const out: number[] = []
+    g.traverse((o) => {
+      const m = o as THREE.Mesh
+      if (!m.isMesh) return
+      m.geometry.computeBoundingBox()
+      const bb = m.geometry.boundingBox!
+      if (bb.max.y - bb.min.y > base.height * 0.6) out.push(m.position.x)
+    })
+    return out.sort((a, b) => a - b)
+  }
+
+  it('lands a stud centre one spacing in from the face, so 4ft sheets break on a stud', () => {
+    const xs = studXs(buildWallFraming({ ...base }))
+    // 3 x 16" = 48" exactly: the sheet edge must find a stud centre there.
+    for (const n of [1, 2, 3]) {
+      const want = -half + OC * n
+      expect(xs.some((x) => Math.abs(x - want) < 1e-6)).toBe(true)
+    }
+  })
+
+  it('sets the end studs flush with the wall instead of hanging past the corner', () => {
+    const xs = studXs(buildWallFraming({ ...base }))
+    expect(Math.min(...xs)).toBeCloseTo(-half + STUD_W / 2, 6)
+    expect(Math.max(...xs)).toBeCloseTo(half - STUD_W / 2, 6)
+  })
+})
+
 describe('masonry veneer stands on something', () => {
   const base = { length: 6, height: 2.44, standoff: 0.12, outward: 1 as const }
   const brick = claddingSpec('brick-veneer')!

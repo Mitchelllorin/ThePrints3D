@@ -267,9 +267,30 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // an opening's rough span — king/jack studs are added back at the edges.
   const inClear = (x: number) => ops.some((o) => x > o.x - o.w / 2 - studW * 0.5 && x < o.x + o.w / 2 + studW * 0.5)
 
-  const xs: number[] = []
-  for (let x = -half; x < half - 1e-4; x += spacingM) xs.push(Math.round(x * 1000) / 1000)
-  xs.push(half)
+  // LAYOUT IS PULLED FROM THE OUTSIDE FACE, THE WAY A TAPE IS.
+  //
+  // The end stud sits FLUSH with the end of the wall, and every field stud's
+  // centre lands a whole spacing in from that face — so at 16" OC a 4' sheet
+  // breaks on the centre of the third stud and the next sheet has half a stud
+  // to land on. That is the whole reason the layout is pulled from one end.
+  //
+  // This used to run `for (x = -half; x < half; x += spacing)`, which centres a
+  // stud ON the end of the wall — half of it hanging out past the corner — and
+  // puts every field stud half a stud width off where the tape says. Same
+  // spacing, wrong datum: the studs were 3/4" out all the way along, and a sheet
+  // edge landed on the edge of a stud instead of its centre.
+  const endA = -half + studW / 2
+  const endB = half - studW / 2
+  const xs: number[] = [endA, endB]
+  for (let d = spacingM; d < length - studW; d += spacingM) {
+    // EXACT, not rounded to the millimetre: the claim is that a stud centre is
+    // one spacing from the face, and 16" is 0.4064 m, not 0.406. The dedupe
+    // below still keys on millimetres, which is all that rounding was for.
+    const x = -half + d
+    // Don't stack a field stud on top of an end stud that is already there.
+    if (Math.abs(x - endA) < studW || Math.abs(x - endB) < studW) continue
+    xs.push(x)
+  }
   // END PACKS — and a real CORNER POST where two walls meet.
   //
   // Every end used to get the same doubled stud, so a corner came out as two
@@ -281,7 +302,9 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   //
   // capLap already says which wall is which at each end: 'lap' runs through,
   // 'back' butts into it. Same signal, so the plates and the studs agree.
-  const endInset = studW
+  // The doubled stud sits immediately inboard of the flush end stud (which is
+  // centred half a width in), so the pair reads as one pack at the corner.
+  const endInset = studW * 1.5
   const cornerPost = (endX: number, sign: 1 | -1, role?: 'lap' | 'back') => {
     if (role === 'back') return          // butts into the other wall's post
     xs.push(endX + sign * endInset)      // the doubled stud
