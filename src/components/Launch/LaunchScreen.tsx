@@ -44,7 +44,7 @@ export default function LaunchScreen({ onLaunch }: { onLaunch: () => void }) {
             Privacy Policy
           </button>
           <span className={styles.sep} aria-hidden="true">·</span>
-          {/* Bundled with the app, so it still opens with no signal. */}
+          {/* Bundled with the app, not fetched from the site. */}
           <a className={styles.legalLink} href="/datasafety.html" target="_blank" rel="noopener noreferrer">
             Data Safety
           </a>

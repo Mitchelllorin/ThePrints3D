@@ -886,8 +886,8 @@ export const useAppStore = create<AppState>()(
     sidebarOpen: true,
     measurements: [],
     measureMode: false,
-    // Trust the cache first. The store is asked on launch, but a basement with
-    // no signal must not read as "never bought it".
+    // Trust the cache first. The store is asked on launch, but a store that
+    // cannot be reached must not read as "never bought it".
     isPro: readCachedPro(),
     annotations: loadPersistedAnnotations(),
     selectedAnnotationId: null,
