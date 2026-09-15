@@ -12,6 +12,20 @@ export default defineConfig({
     // Honor a harness-assigned port (e.g. Claude preview); default to Vite's 5173
     port: process.env.PORT ? Number(process.env.PORT) : 5173,
     strictPort: Boolean(process.env.PORT),
+    /**
+     * Let a tunnel reach the dev server.
+     *
+     * Vite checks the Host header and rejects anything it does not recognise,
+     * which is right — it is what stops a hostile page on another origin from
+     * driving your dev server. A tunnel (ngrok, Cloudflare, localtunnel) sends
+     * its own hostname, so without this the phone gets a bare "Blocked request.
+     * This host is not allowed" and nothing else, which reads like the tunnel
+     * is broken when it is working perfectly.
+     *
+     * Named tunnel domains only — NOT `true`, which would turn the check off
+     * altogether. The LAN address and localhost are allowed by Vite already.
+     */
+    allowedHosts: ['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.app', '.ngrok.io', '.loca.lt', '.trycloudflare.com'],
   },
   plugins: [
     react(),
