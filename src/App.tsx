@@ -13,9 +13,21 @@ function App() {
   return (
     <>
       <CSSVarInjector />
-      {/* The workspace mounts underneath from the start, so the heavy 3D scene
-          is warming up while the user is still reading the front door. */}
-      <WorkspaceLayout />
+      {/*
+        The workspace mounts underneath from the start, so the heavy 3D scene is
+        warming up while the user is still reading the front door.
+
+        But mounted must not mean LIVE. Behind the gate it was a fully
+        interactive app: 167 controls in the tab order, the onboarding card's
+        preset chips sitting directly behind the Launch button, and a Tab press
+        on the front door walking straight into a workspace nobody had opened
+        yet. `inert` keeps the warm-up and takes away the input — the subtree
+        renders and initialises, and is untabbable, unclickable and hidden from
+        assistive tech until the gate lifts.
+      */}
+      <div inert={!launched} style={{ display: 'contents' }}>
+        <WorkspaceLayout />
+      </div>
       {!launched && <LaunchScreen onLaunch={() => setLaunched(true)} />}
     </>
   )

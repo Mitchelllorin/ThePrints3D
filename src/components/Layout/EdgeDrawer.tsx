@@ -58,7 +58,22 @@ export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, ti
           <span className={styles.tabLabel}>{tabLabel}</span>
         </button>
       )}
-      <div className={styles.inner}>
+      {/*
+        A CLOSED DRAWER IS NOT A PLACE YOU CAN TAB INTO.
+
+        Closed only ever meant `transform: translateX(-100%)` — slid out of
+        sight with every control still live. The settings drawer alone parked
+        30-odd buttons at x=-244, all focusable, so tabbing across the workspace
+        walked into an invisible panel and the focus ring vanished off the side
+        of the screen. Worse for anything driving the app by label: the preset
+        buttons exist TWICE while the drawer is closed, and the hidden copy
+        comes first in the DOM.
+
+        `inert` on the body (never the tab — that is how you open it) makes
+        closed mean closed. Visual state is still the transform; this is only
+        about input and the accessibility tree.
+      */}
+      <div className={styles.inner} inert={!open}>
         {title && !inRail && (
           <div className={styles.header}>
             <span className={styles.title}>{title}</span>
