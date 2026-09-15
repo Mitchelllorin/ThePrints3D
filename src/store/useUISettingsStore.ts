@@ -19,7 +19,11 @@ export interface UISettings {
   logoSize: number
   // 3D floating logo
   logo3DVisible: boolean
-  /** When false, the logo is frozen (no rock/float) — for clean promo footage. */
+  /** The gentle swing-and-float on the 3D wordmark. Default OFF: the logo parks
+   *  at a fixed three-quarter angle that still shows the extrusion, so it reads
+   *  as 3D without moving on a screen somebody is working on. On for the swing,
+   *  and for promo footage that wants it. Governs the launch screen and the
+   *  workspace badge alike — one wordmark, one setting. */
   logo3DAnimated: boolean
   logo3DOpacity: number
   logo3DFloatSpeed: number
@@ -132,7 +136,7 @@ export interface UISettings {
 /** rev 2 — presets go back to PRACTICE by default. */
 export type DimensionsMode = 'always' | 'selected' | 'off'
 
-const SETTINGS_REV = 4
+const SETTINGS_REV = 5
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
   // Menus/panels/toolbars default to ALMOST transparent so the workspace stays
@@ -146,7 +150,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   logoOpacity: 1,
   logoSize: 1,
   logo3DVisible: true,
-  logo3DAnimated: true,
+  logo3DAnimated: false, // parked at a three-quarter angle; swing is opt-in
   logo3DOpacity: 0.06, // floating workspace logo defaults to ALMOST invisible
   logo3DFloatSpeed: 0.7,
   logo3DFloatHeight: 0.25,
@@ -225,6 +229,16 @@ function load(): UISettings {
         const legacy = (saved as { dimensionsVisible?: boolean }).dimensionsVisible
         stored.dimensionsMode = legacy === false ? 'off' : 'selected'
         delete (stored as { dimensionsVisible?: boolean }).dimensionsVisible
+      }
+      /* rev 5: the wordmark parks instead of swinging. Motion has defaulted ON
+         since the badge existed, so every stored copy carries `true` and no
+         change to the default alone would ever reach an install — the same
+         trap the skin defaults were in at rev 3. The parked pose is a fixed
+         three-quarter angle, so this costs nothing that made it look 3D; it
+         just stops the thing moving on a screen somebody is trying to work on.
+         Anyone who wants the swing turns Motion back on, and it sticks. */
+      if ((saved.settingsRev ?? 0) < 5) {
+        stored.logo3DAnimated = false
       }
       if ((saved.settingsRev ?? 0) < SETTINGS_REV) {
         stored.settingsRev = SETTINGS_REV

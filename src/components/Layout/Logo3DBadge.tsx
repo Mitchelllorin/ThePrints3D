@@ -1,6 +1,7 @@
 /**
- * Logo3DBadge — the REAL 3D brand wordmark (The·PRINTS·3D), extruded and gently
- * rocking to show its depth, pinned top-left over the workspace.
+ * Logo3DBadge — the REAL 3D brand wordmark (The·PRINTS·3D), extruded and parked
+ * at a three-quarter angle to show its depth, pinned top-left over the
+ * workspace. Motion (the gentle swing) is opt-in; see PARKED_YAW below.
  *
  * It renders in its OWN isolated <Canvas> overlay (its own camera + lights), not
  * inside the main scene — so it can never be hidden by the model, the scene
@@ -19,6 +20,25 @@ const FONT_URL = '/fonts/helvetiker_bold.typeface.json'
 const BASE_SIZE = 0.62
 const EXTRUDE = 0.18
 const PRINTS_SHEAR = 0.26 // italic lean toward the 3D (to the right)
+
+/**
+ * THE PARKED POSE — a fixed three-quarter turn.
+ *
+ * Motion off used to mean rotation.y = 0: dead square to the camera, which
+ * hides the extrusion behind the front faces and makes the real 3D wordmark
+ * look like flat text. That is the one thing it must never look like.
+ *
+ * So parked is ANGLED, not flat. A ~24 degrees yaw walks the letters off-axis far
+ * enough to show the extruded sides and the bevel catching the key light, and
+ * a slight nose-down pitch opens the top edges too — depth you can read in a
+ * still frame, with the wordmark still square-on enough to be legible.
+ *
+ * Yaw stays inside the swing's own amplitude (0.55 rad), so parking the logo
+ * looks like the swing stopped somewhere flattering rather than snapping to a
+ * pose it never passes through.
+ */
+const PARKED_YAW = 0.42   // ~24 degrees
+const PARKED_PITCH = 0.13 // ~7.5 degrees, nose down so the top bevel shows
 
 const WORDS = [
   { text: 'The',    color: '#2f80ff', metalness: 0.25, shear: 0 },
@@ -73,19 +93,35 @@ function Wordmark({ opacity }: { opacity: number }) {
     return starts
   }, [font])
 
-  // Rock back and forth to show the extrusion; gentle vertical float. Frozen flat
-  // when motion is off (Settings → 3D wordmark → Motion) — for clean promo footage.
+  // Rock back and forth to show the extrusion; gentle vertical float. Parked at
+  // a fixed three-quarter angle when motion is off (Settings → 3D wordmark →
+  // Motion) — still obviously 3D, and still for clean promo footage.
   useFrame((state) => {
     const g = rockRef.current
     if (!g) return
-    if (!animated) { g.rotation.y = 0; g.position.y = -BASE_SIZE / 2; return }
+    if (!animated) {
+      g.rotation.y = PARKED_YAW
+      g.rotation.x = PARKED_PITCH
+      g.position.y = -BASE_SIZE / 2
+      return
+    }
     const t = state.clock.elapsedTime
     g.rotation.y = Math.sin(t * (0.5 + floatSpeed * 0.5)) * 0.55
+    // The swing owns pitch too, or the parked tilt would stick through it.
+    g.rotation.x = 0
     g.position.y = -BASE_SIZE / 2 + Math.sin(t * (0.7 + floatSpeed * 0.4)) * floatHeight * 0.4
   })
 
   return (
-    <group ref={rockRef} position={[0, -BASE_SIZE / 2, 0]}>
+    /* Parked values are the INITIAL rotation as well, not just what useFrame
+       settles on: the launch screen is the first thing on screen at a cold
+       start, and a one-frame flash of the flat pose is exactly the wrong first
+       impression for a wordmark whose whole job is to look extruded. */
+    <group
+      ref={rockRef}
+      position={[0, -BASE_SIZE / 2, 0]}
+      rotation={animated ? [0, 0, 0] : [PARKED_PITCH, PARKED_YAW, 0]}
+    >
       {WORDS.map((word, i) => (
         <group key={word.text} position={[offsets[i], 0, 0]}>
           <ShearedWord shear={word.shear}>
@@ -133,8 +169,8 @@ export default function Logo3DBadge({ variant = 'watermark' }: { variant?: 'wate
     // Top-CENTRE so an extended edge menu (left rail) never touches the logo.
     // Wider than the wordmark alone: the small badge is the full canonical
     // lockup (building mark + wordmark), so it needs room for both.
-    ? { top: 10, left: '50%', width: 166, height: 36, zIndex: 100, transform: 'translateX(-50%)' }
-    : { top: '50%', left: '50%', width: 'min(70vw, 680px)', height: 'min(20vh, 190px)', zIndex: 40, transform: 'translate(-50%, -50%)' }
+    ? { top: 10, left: '50%', width: 166, height: 36, zIndex: 'var(--z-hud)', transform: 'translateX(-50%)' }
+    : { top: '50%', left: '50%', width: 'min(70vw, 680px)', height: 'min(20vh, 190px)', zIndex: 'var(--z-canvas)', transform: 'translate(-50%, -50%)' }
   return (
     <div
       style={{
