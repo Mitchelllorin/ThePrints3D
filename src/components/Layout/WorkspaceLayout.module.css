@@ -25,7 +25,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 50;
+  z-index: var(--z-sheet);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -118,28 +118,85 @@
 
 /* ── Preset picker (in the onboarding card + Settings drawer) ──────────────── */
 /* Small floating pills — wrap in a row, not stacked slabs. */
+/*
+ * Preset chips. Sized to the build rules, not to the eye:
+ * 48px minimum tap target, 8px apart, nothing under 13px. These were 24px tall
+ * at 11px type — fine with a mouse, not something a gloved hand finds on a
+ * jobsite, which is the test.
+ */
 .presetList {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
-  padding: 2px 4px;
+  gap: 8px;               /* the 8px separation minimum, from the container */
+  padding: 4px;
+}
+
+/* One preset = its name, with the two ways to open it underneath. */
+.presetCard {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+}
+
+.presetName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bp-text, #e2e8f0);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+
+.presetActions {
+  display: flex;
+  gap: 8px;
 }
 
 .presetBtn {
   flex: 0 0 auto;
+  min-height: 48px;       /* touch target, not visual height */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: color-mix(in srgb, var(--bp-text, #94a3b8) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--bp-text, #94a3b8) 22%, transparent);
   color: var(--bp-text, #e2e8f0);
   border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: 0 16px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
   transition: background 0.12s, border-color 0.12s;
 }
+/* Back out of a picked plan. Quiet — it is an escape hatch, not an action —
+   but it is still a control, so it gets a full-size target like the rest. */
+.presetBack {
+  flex: 0 0 auto;
+  min-width: 48px;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--bp-text, #94a3b8) 22%, transparent);
+  color: var(--bp-text-dim, #97a4b6);
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.presetBack:hover {
+  color: var(--bp-text, #e2e8f0);
+  border-color: color-mix(in srgb, var(--bp-text, #94a3b8) 45%, transparent);
+}
+
 .presetBtn:hover {
   background: color-mix(in srgb, var(--bp-accent, #38bdf8) 18%, transparent);
   border-color: color-mix(in srgb, var(--bp-accent, #38bdf8) 40%, transparent);
@@ -474,7 +531,7 @@
   position: absolute;
   bottom: 14px;
   left: 58px;
-  z-index: 56;
+  z-index: var(--z-hud);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -543,7 +600,7 @@
      line of text suggests. The rail is 44px wide; 58px clears it with the same
      inset the rest of this corner already uses. */
   left: 58px;
-  z-index: 56;
+  z-index: var(--z-sheet);
   display: flex;
   align-items: center;
   gap: 4px;
@@ -593,7 +650,7 @@
   right: 8px;
   left: auto;
   transform: none;
-  z-index: 56;
+  z-index: var(--z-hud);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -691,7 +748,7 @@
   position: absolute;
   top: 92px;
   right: 6px;
-  z-index: 56;
+  z-index: var(--z-hud);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -711,7 +768,7 @@
   position: absolute;
   top: 40px;
   right: 6px;
-  z-index: 56;
+  z-index: var(--z-hud);
   display: flex;
   align-items: center;
   gap: 5px;
@@ -738,7 +795,7 @@
   position: absolute;
   top: 66px;
   right: 6px;
-  z-index: 56;
+  z-index: var(--z-hud);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -771,7 +828,7 @@
   position: absolute;
   top: 92px;
   right: 6px;
-  z-index: 56;
+  z-index: var(--z-hud);
   display: flex;
   flex-direction: column;
   align-items: center;

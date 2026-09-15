@@ -420,14 +420,73 @@ function SettingsContent() {
 }
 
 // ── Preset panel content ───────────────────────────────────────────────────
-function PresetPanel({ onLoad }: { onLoad: (presetId: PresetDifficulty) => void }) {
+/**
+ * THE CHOICE COMES AFTER THE PICK, NOT BEFORE IT.
+ *
+ * A preset used to be one button whose behaviour came from a switch buried in
+ * Settings, so tapping "Two-Bed Bungalow" did one of two completely different
+ * things depending on a setting almost nobody had found. Putting both verbs on
+ * every chip fixed that and created a worse problem: three presets x two verbs
+ * is six buttons offering two distinct actions, stacked in a column, on the
+ * first screen anybody sees. Six buttons that are really two.
+ *
+ * So the panel asks one question at a time. Three names — the actual choice,
+ * which plan. Pick one and it asks the only remaining question, once: do you
+ * want it built, or do you want to trace it. Two buttons instead of six, and
+ * nobody has to read the same pair of words three times to find the difference
+ * between the rows.
+ *
+ * The Settings toggle stays as the default for the entry points that cannot
+ * ask (the drawer's Load Preset, the empty-workspace auto-load), so this is
+ * still a choice added rather than one moved.
+ */
+function PresetPanel({ onLoad }: { onLoad: (presetId: PresetDifficulty, practice: boolean) => void }) {
+  const [picked, setPicked] = useState<PresetDifficulty | null>(null)
+  const presets = listPresetDefinitions()
+  const chosen = presets.find((p) => p.id === picked)
+
+  if (chosen) {
+    return (
+      <div className={styles.presetList}>
+        <div className={styles.presetCard}>
+          <span className={styles.presetName}>{chosen.name}</span>
+          <span className={styles.presetActions}>
+            <button
+              className={styles.presetBtn}
+              onClick={() => onLoad(chosen.id, false)}
+              title="Load it already built — walls, openings and shell in place"
+            >
+              Show it built
+            </button>
+            <button
+              className={styles.presetBtn}
+              onClick={() => onLoad(chosen.id, true)}
+              title="Load the plan only, and trace the walls over it yourself"
+            >
+              Trace it
+            </button>
+            {/* A way back out. Picking the wrong plan should not be a commitment. */}
+            <button
+              className={styles.presetBack}
+              onClick={() => setPicked(null)}
+              aria-label="Pick a different plan"
+              title="Pick a different plan"
+            >
+              ←
+            </button>
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.presetList}>
-      {listPresetDefinitions().map((preset) => (
+      {presets.map((preset) => (
         <button
           key={preset.id}
           className={styles.presetBtn}
-          onClick={() => onLoad(preset.id)}
+          onClick={() => setPicked(preset.id)}
         >
           {preset.name}
         </button>
@@ -738,7 +797,7 @@ export default function WorkspaceLayout() {
     closePanels()
   }
 
-  const handleLoadPreset = (presetId: PresetDifficulty) => {
+  const handleLoadPreset = (presetId: PresetDifficulty, practice = presetMode === 'practice') => {
     try {
       // PRACTICE IS A CHOICE, NOT THE ONLY OPTION.
       //
@@ -754,7 +813,9 @@ export default function WorkspaceLayout() {
       // finished house leaves nothing to practise on. 'ready' is one switch
       // away for when you want the shell handed to you. See Settings → Build
       // help.
-      loadPresetDrawing(presetId, presetMode === 'practice')
+      // The caller decides. Entry points that ask (the preset chips) pass it
+      // explicitly; the ones that cannot ask fall back to the Settings default.
+      loadPresetDrawing(presetId, practice)
       // UX convention: a one-shot pick (preset, file, etc.) retracts the panel.
       closePanels()
     } catch (error) {
@@ -984,7 +1045,12 @@ export default function WorkspaceLayout() {
           watermark over the workspace, and a small crisp replica top-left. Both
           obey Settings → 3D wordmark (Visible off / Motion off) so promo footage
           can be fully logo-free or frozen. */}
-      <Logo3DBadge />
+      {/* The big watermark belongs to an EMPTY workspace. It is pinned dead
+          centre, which is exactly where the plan lands and where the onboarding
+          card sits, so once there is a drawing it stops being a watermark and
+          becomes coloured text printed across the middle of the user's own
+          sheet. It decorates the empty room; it does not decorate the work. */}
+      {!hasDrawings && <Logo3DBadge />}
       <Logo3DBadge variant="mark" />
 
       {/* Persistent global actions, top-right. Build / Settings / Place each
