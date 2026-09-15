@@ -1,17 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ThePrints3D">
   <title>ThePrints3D</title>
   <!--
-    THE CANONICAL MARK. A plan on the grid with the roof lifted clear of the
-    walls — the product's own sentence, "rises the drawing off the page".
+    THE CANONICAL MARK. A plan on the grid, EXPLODED: floor slab down on the
+    grid, walls lifted clear of it, roof lifted clear of them. Three layers
+    with daylight between them, because the explode is the feature — the mark
+    should be the app doing its one trick, not a picture of a house.
+
+    A lifted roof alone did not say that. A roof sitting on a solid box reads
+    as a house with the lid off; it is the gap under the WALLS that says the
+    whole assembly comes apart.
 
     Isometric frame (centre 256,250): +x = (+112,+56), +y = (-112,+56),
-    wall height 56. Wall-top diamond Bk(256,194) R(368,250) F(256,306) L(144,250).
-    Roof plan is that diamond scaled 1.12 for the eave overhang, lifted 56 clear,
-    ridge parallel to +x at y=0.5, rise 88. Every number below comes off that
-    frame — change the frame, not the individual points.
+    wall height 56. A diamond at centre (cx,cy) is
+      Bk(cx, cy-56)  R(cx+112, cy)  F(cx, cy+56)  L(cx-112, cy).
+
+    The explode is two lifts up the screen, and nothing else moves:
+      walls  46 clear of the slab   (measured at the front vertex)
+      roof   22 further still, keeping ~25 of daylight over the wall top
+
+    Every number below comes off that frame and those two lifts — change the
+    frame or the lifts, not the individual points.
 
     Transparent ground on purpose: this is the mark for use on any surface.
-    For the app tile see icon.svg, which is this mark on the brand navy.
+    For the app tile see icon.svg, which is this mark on the brand navy and
+    deliberately NOT exploded — at 48px the gaps close up into mush.
   -->
   <defs>
     <linearGradient id="roofFront" x1="0.1" y1="0" x2="0.8" y2="1">
@@ -37,21 +49,28 @@
     <path d="M256 250 L32 362"/><path d="M480 362 L256 474"/>
   </g>
 
-  <!-- open-topped walls: floor, far inner faces, then the two facing us -->
-  <path d="M144 250 L256 306 L368 250 L256 194 Z" fill="#e8effb"/>
-  <path d="M144 250 L256 194 L256 208 L144 264 Z" fill="#b9cae7"/>
-  <path d="M256 194 L368 250 L368 264 L256 208 Z" fill="#a7bbdc"/>
-  <path d="M144 250 L256 306 L256 362 L144 306 Z" fill="#3f5f9e"/>
-  <path d="M256 306 L368 250 L368 306 L256 362 Z" fill="#4d72b8"/>
-  <path d="M168.6 274.3 L195.5 287.8 L195.5 307.8 L168.6 294.3 Z" fill="#dce7f8"/>
-  <path d="M295.2 294.4 L321 281.5 L321 329.5 L295.2 342.4 Z" fill="#2b4478"/>
+  <!-- FLOOR SLAB — left on the grid, where the walls used to sit. Given real
+       thickness so the layer reads as a plate rather than a shadow. -->
+  <path d="M144 306 L256 362 L368 306 L256 250 Z" fill="#dce7f8"/>
+  <path d="M144 306 L256 362 L256 374 L144 318 Z" fill="#9fb4d6"/>
+  <path d="M256 362 L368 306 L368 318 L256 374 Z" fill="#8da5cc"/>
 
-  <!-- the roof, lifted clear and translucent so both slopes read -->
-  <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z" fill="url(#roofFront)"/>
-  <path d="M256 131.3 L381.4 194 L318.7 137.4 L193.3 74.7 Z" fill="url(#roofBack)"/>
+  <!-- WALLS — open-topped, lifted 46 clear of the slab: floor you see through
+       the top, the two far inner faces, then the two facing us. -->
+  <path d="M144 204 L256 260 L368 204 L256 148 Z" fill="#e8effb"/>
+  <path d="M144 204 L256 148 L256 162 L144 218 Z" fill="#b9cae7"/>
+  <path d="M256 148 L368 204 L368 218 L256 162 Z" fill="#a7bbdc"/>
+  <path d="M144 204 L256 260 L256 316 L144 260 Z" fill="#3f5f9e"/>
+  <path d="M256 260 L368 204 L368 260 L256 316 Z" fill="#4d72b8"/>
+  <path d="M168.6 228.3 L195.5 241.8 L195.5 261.8 L168.6 248.3 Z" fill="#dce7f8"/>
+  <path d="M295.2 248.4 L321 235.5 L321 283.5 L295.2 296.4 Z" fill="#2b4478"/>
+
+  <!-- ROOF — lifted clear again, translucent so both slopes read -->
+  <path d="M130.6 172 L256 234.7 L318.7 115.4 L193.3 52.7 Z" fill="url(#roofFront)"/>
+  <path d="M256 109.3 L381.4 172 L318.7 115.4 L193.3 52.7 Z" fill="url(#roofBack)"/>
   <g stroke="#5b83c9" stroke-width="3" fill="none" stroke-linejoin="round">
-    <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z"/>
-    <path d="M256 131.3 L381.4 194 L318.7 137.4"/>
-    <path d="M256 131.3 L193.3 74.7"/>
+    <path d="M130.6 172 L256 234.7 L318.7 115.4 L193.3 52.7 Z"/>
+    <path d="M256 109.3 L381.4 172 L318.7 115.4"/>
+    <path d="M256 109.3 L193.3 52.7"/>
   </g>
 </svg>
