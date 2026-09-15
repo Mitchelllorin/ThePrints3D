@@ -38,17 +38,25 @@ import * as THREE from 'three'
 const IDLE_BEFORE_WALK_MS = 45_000
 
 /** Legs push up out of the sheet over this long, before the first step. */
-const SPROUT_MS = 700
+const SPROUT_MS = 1_100
 
-/** Strides per second. A wander, not a sprint. */
-const STRIDE_HZ = 1.6
+/**
+ * Strides per second. A wander, not a sprint — and slower than it was.
+ *
+ * The joke only lands if you can SEE it happen. At 1.6 Hz over a 0.42 walk the
+ * sheet was off the grid in about four seconds, so someone glancing back at the
+ * viewport caught the tail of it and read the whole thing as the print
+ * glitching out rather than strolling off. It is an end-of-shift gag; it should
+ * amble.
+ */
+const STRIDE_HZ = 1.0
 
 /**
  * Distance covered per second, as a share of the print's own longest side, so
  * a small screenshot and a large permit sheet take about the same time to
  * leave. An absolute speed would make one crawl and the other bolt.
  */
-const WALK_SPEED_PER_SIZE = 0.42
+const WALK_SPEED_PER_SIZE = 0.24
 
 /** Stop animating once it is this many print-lengths away — it is gone. */
 const GONE_AT = 1.9
@@ -101,8 +109,12 @@ function Legs({ size, phase, grown, hangFrom }: {
   /** Local Y of the sheet's bottom edge once it is standing — where legs go. */
   hangFrom: number
 }) {
-  const legLen = size * 0.085
-  const legR = size * 0.011
+  // Big enough to READ as legs. At 0.085/0.011 against a whole permit sheet
+  // they were a couple of hairlines under a wall of paper — present in the
+  // scene, invisible in the viewport, which is why the sheet looked like it was
+  // gliding off on nothing.
+  const legLen = size * 0.115
+  const legR = size * 0.016
   const spread = size * 0.13
   const footLen = legLen * 0.5
 
