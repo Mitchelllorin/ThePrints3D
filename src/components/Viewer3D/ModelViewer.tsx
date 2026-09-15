@@ -24,6 +24,7 @@ import ConstructionWizard from '../ConstructionWizard/ConstructionWizard'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
+import NameplateStrip from './NameplateStrip'
 import FloorJoistsLayer from './FloorJoistsLayer'
 import CeilingLayer from './CeilingLayer'
 import RoofLayer from './RoofLayer'
@@ -1170,6 +1171,11 @@ export default function ModelViewer() {
 
 
       </Canvas>
+
+      {/* The data plate — fixed HUD block, bottom-left, reading out whatever
+          member is selected. It replaces the labels that used to float in the
+          air over every wall; see NameplateStrip for why that had to go. */}
+      <NameplateStrip />
 
       {/* No "Building 3D model…" popup — the 3D just updates as you trace; a
           flashing build banner on every rebuild is noise. */}

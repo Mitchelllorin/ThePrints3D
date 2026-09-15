@@ -8,14 +8,10 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { Billboard, Text } from '@react-three/drei'
-import { labelText } from './labelStyle'
 import { useExplodeChildren } from './explodeRuntime'
 import { renderWallThicknessM, wallHeightM } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import { useUISettingsStore } from '../../store/useUISettingsStore'
-import { useWallNameplateVisible } from './useNameplateVisible'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useSceneConfig } from '../../store/useSceneConfig'
 import { teesForWalls } from '../../services/wallTees'
@@ -23,9 +19,7 @@ import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening 
 import { wallFramingSpec } from '../../services/constructionCode'
 import { XRAY_OPACITY } from './editHelpers'
 import { modelWalls } from '../../services/modelWalls'
-import { formatMeasureMm, type LengthFormat } from '../../services/unitConverter'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import type { ActiveUnit } from '../../store/useConfigStore'
 import type { ParsedWall } from '../../types'
 
 
@@ -42,10 +36,6 @@ interface WallMeshProps {
   openings: Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>
   /** 0.7 while tracing (ghost), 1 once built (solid/real). */
   opacity: number
-  /** True once the model is built — hides the tracing nameplate. */
-  built: boolean
-  activeUnit: ActiveUnit
-  lengthFormat: LengthFormat
   /** This end meets another wall — extend it so the corner joins (no gap). */
   startCorner: boolean
   endCorner: boolean
@@ -57,10 +47,7 @@ interface WallMeshProps {
   detailExplode?: boolean
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, built, activeUnit, lengthFormat, startCorner, endCorner, tees, storeyHeight, detailExplode }: WallMeshProps) {
-  const labelColor = useUISettingsStore((s) => s.labelColor)
-  const labelScale = useUISettingsStore((s) => s.labelScale)
-  const dimensionsVisible = useWallNameplateVisible()
+function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, startCorner, endCorner, tees, storeyHeight, detailExplode }: WallMeshProps) {
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
 
   // Thickness first — it sets how far to extend ends into a corner.
@@ -145,15 +132,19 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
         rotation={[0, -angle, 0]}
         onDoubleClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleGhostedLevel(wall.level ?? 0) }}
       />
-      {/* Nameplate — the wall's real length while tracing; hidden once built,
-          and hideable outright when a storey full of them stops helping. */}
-      {!built && dimensionsVisible && (
-        <Billboard position={[cx, baseY + wallHeight + 0.28, cz]}>
-          <Text {...labelText(0.46 * labelScale, labelColor)}>
-            {formatMeasureMm(length * 1000, activeUnit, lengthFormat)}
-          </Text>
-        </Billboard>
-      )}
+      {/*
+        NO FLOATING NAMEPLATE HERE ANY MORE.
+
+        This used to hang the wall's length in the air above it while unbuilt.
+        On one wall it was a tape measure; on a traced storey it was ten labels
+        colliding with each other in front of the model — raw text sitting on
+        the canvas, unreadable the moment the view turned, and standing between
+        the user and the thing they opened the app to look at.
+
+        The readout moved to `NameplateStrip`: one fixed block in the HUD, same
+        corner every time, reading out the SELECTED member in a field order that
+        never changes. The length did not get taken away; it got a place to live.
+      */}
     </>
   )
 }
@@ -170,8 +161,6 @@ export default function LiveWallsLayer() {
   const steelGauge = useConfigStore((s) => s.steelGauge)
   const steelTrackTop = useConfigStore((s) => s.steelTrackTop)
   const steelDeflectionGapMm = useConfigStore((s) => s.steelDeflectionGapMm)
-  const activeUnit = useConfigStore((s) => s.activeUnit)
-  const lengthFormat = useConfigStore((s) => s.lengthFormat)
 
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
   const wallDetailExplode = useFloorplanLocalStore((s) => s.wallDetailExplode)
@@ -380,9 +369,6 @@ export default function LiveWallsLayer() {
             if (ghostedLevels.includes(level)) return 0.15
             return built ? 1 : 0.7
           })()}
-          built={built}
-          activeUnit={activeUnit}
-          lengthFormat={lengthFormat}
           startCorner={cornerEnds[i]?.start ?? false}
           endCorner={cornerEnds[i]?.end ?? false}
           tees={teesByWall[i] ?? []}
