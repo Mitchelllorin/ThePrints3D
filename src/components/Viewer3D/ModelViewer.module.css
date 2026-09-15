@@ -15,7 +15,7 @@
   color: white;
   font-size: 16px;
   cursor: pointer;
-  z-index: 21;
+  z-index: var(--z-sheet);
 }
 .wizardClose:hover { background: rgba(0, 0, 0, 0.85); }
 
@@ -40,7 +40,7 @@
 .dropZone {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -62,7 +62,7 @@
   border: 2px dashed var(--bp-accent, #38bdf8);
   border-radius: 8px;
   pointer-events: none;
-  z-index: 50;
+  z-index: var(--z-modal);
   animation: ringPulse 1s ease-in-out infinite;
 }
 
@@ -122,7 +122,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 12;
+  z-index: var(--z-sheet);
 }
 
 /* ── Measure toolbar ──────────────────────────────────────────────────────────── */
@@ -133,7 +133,7 @@
   top: 52px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 45;
+  z-index: var(--z-hud);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -161,7 +161,7 @@
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   padding: 6px;
-  z-index: 46;
+  z-index: var(--z-sheet);
   backdrop-filter: blur(8px);
 }
 
@@ -242,7 +242,7 @@
   right: 12px;
   width: 280px;
   max-height: calc(100% - 78px);
-  z-index: 10;
+  z-index: var(--z-sheet);
   display: flex;
   flex-direction: column;
   background: rgba(var(--bp-panel-rgb, 15, 23, 42), var(--bp-panel-opacity, 0.92));
@@ -409,7 +409,7 @@
   left: 12px;
   bottom: 12px;
   width: 320px;
-  z-index: 12;
+  z-index: var(--z-sheet);
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid #1e293b;
   border-radius: 10px;
@@ -517,7 +517,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 20;
+  z-index: var(--z-modal);
   pointer-events: all;
 }
 
@@ -559,7 +559,7 @@
   position: absolute;
   right: 12px;
   bottom: 84px;
-  z-index: 44;
+  z-index: var(--z-hud);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -599,7 +599,7 @@
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
-  z-index: 40;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   gap: 10px;

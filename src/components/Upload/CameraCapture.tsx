@@ -86,7 +86,7 @@ export default function CameraCapture({
 }
 
 const OVERLAY: React.CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(2,6,23,0.92)',
+  position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', background: 'rgba(2,6,23,0.92)',
   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 16,
 }
 const VIDEO: React.CSSProperties = { maxWidth: '100%', maxHeight: '78vh', borderRadius: 12, background: '#000' }

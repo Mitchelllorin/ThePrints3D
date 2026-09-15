@@ -7,7 +7,7 @@
   left: 0;
   top: 56px;
   bottom: calc(58px + env(safe-area-inset-bottom, 0px));
-  z-index: 56;
+  z-index: var(--z-hud);
   display: flex;
   flex-direction: row;
   align-items: stretch;

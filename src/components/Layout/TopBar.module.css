@@ -7,7 +7,7 @@
   background: var(--bp-surface);
   border-bottom: 1px solid var(--bp-border);
   flex-shrink: 0;
-  z-index: 10;
+  z-index: var(--z-hud);
   backdrop-filter: blur(8px);
 }
 

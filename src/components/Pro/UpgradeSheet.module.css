@@ -8,7 +8,7 @@
   left: 50%;
   transform: translateX(-50%);
   bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-  z-index: 70;                       /* above the drawers — it is the answer to a tap */
+  z-index: var(--z-sheet);                       /* above the drawers — it is the answer to a tap */
   width: min(420px, calc(100vw - 24px));
   max-height: 46dvh;                 /* the model keeps the rest */
   overflow-y: auto;

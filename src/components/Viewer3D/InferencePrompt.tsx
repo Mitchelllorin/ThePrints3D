@@ -38,7 +38,7 @@ export default function InferencePrompt() {
         color: '#e5e7eb',
         fontSize: 13,
         whiteSpace: 'nowrap',
-        zIndex: 60,
+        zIndex: 'var(--z-sheet)',
         backdropFilter: 'blur(4px)',
         pointerEvents: 'auto',
       }}

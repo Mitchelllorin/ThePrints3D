@@ -6,6 +6,27 @@
      surface / text / accent variables below so one setting changes everything.
      ──────────────────────────────────────────────────────────────────────── */
 
+  /* ─────────────────────────────────────────────────────────────────────────
+     STACKING — four layers, and there is no fifth.
+
+     The app had grown past twenty competing z-index values (500, 400, 200, 101,
+     56, 55, 46, 45, 44 …), which is not a stacking order, it is an arms race:
+     every time something appeared behind something else the fix was a bigger
+     number, and the number that won told you nothing about what the thing WAS.
+
+     Four layers, named by role. If something needs a fifth, two things are
+     fighting that shouldn't be — the answer is to work out which layer each one
+     belongs to, not to invent 57.
+
+     A component that needs to order its OWN children gives itself a stacking
+     context (`isolation: isolate`) and numbers them 1, 2, 3 inside it. Those
+     never compete with anything outside, which is the whole point.
+     ──────────────────────────────────────────────────────────────────────── */
+  --z-canvas: 0;   /* the 3D viewport */
+  --z-hud: 10;     /* bars, rails, persistent controls */
+  --z-sheet: 20;   /* sheets, drawers, panels */
+  --z-modal: 30;   /* modals, scrims, toasts */
+
   /* The ONE UI colour (menus, toolbars, panels, buttons) as an "r, g, b" body. */
   --bp-panel-rgb: 15, 23, 42;
   /* The ONE UI opacity: 0 = fully clear, 1 = fully solid. */

@@ -9,7 +9,7 @@
   bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   width: min(330px, calc(100vw - 64px));
   max-height: 50dvh;
-  z-index: 54;                /* under the rail (56), over the workspace */
+  z-index: var(--z-sheet);                /* under the rail (56), over the workspace */
   display: flex;
   flex-direction: column;
   gap: 8px;

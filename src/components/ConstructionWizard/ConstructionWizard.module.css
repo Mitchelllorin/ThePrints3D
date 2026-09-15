@@ -11,7 +11,7 @@
   padding: 12px;
   color: #e2e8f0;
   font-size: 13px;
-  z-index: 20;
+  z-index: var(--z-sheet);
   backdrop-filter: blur(8px);
 }
 

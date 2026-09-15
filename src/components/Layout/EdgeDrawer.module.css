@@ -6,7 +6,9 @@
 
 .root {
   position: fixed;
-  z-index: 55;
+  z-index: var(--z-sheet);
+  /* Private stacking context: children order among themselves, never globally. */
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   overflow: visible;            /* don't clip the protruding tab */
@@ -88,6 +90,13 @@
 .close:hover { background: rgba(255, 255, 255, 0.14); }
 
 /* ── Toggle tab ──────────────────────────────────────────────────────────── */
+/*
+ * The ONLY bare z-index left in the app, and legitimately so: `.root` isolates
+ * (see above), so this 1 orders the tab against its own siblings inside the
+ * drawer and competes with nothing outside it. That is the escape valve for
+ * "four values and no fifth" — a component orders its own children privately
+ * rather than bidding for a bigger global number.
+ */
 .tab {
   position: absolute;
   z-index: 1;

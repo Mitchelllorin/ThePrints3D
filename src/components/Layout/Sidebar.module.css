@@ -31,7 +31,7 @@
     border-top-right-radius: 16px;
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.4);
     padding: 16px 0 calc(var(--safe-bottom) + 16px);
-    z-index: 50;
+    z-index: var(--z-hud);
     transform: translateY(calc(100% - 56px)); /* peek the handle */
     transition: transform 0.25s ease;
   }

@@ -326,7 +326,7 @@
   border: 1px solid rgba(51, 65, 85, 0.35);
   border-radius: 12px;
   padding: 12px 14px;
-  z-index: 31;
+  z-index: var(--z-hud);
   pointer-events: none; /* see-through to workspace; controls re-enable below */
 }
 /* Re-enable the actual controls — without this the whole card is dead: you can't
@@ -454,7 +454,7 @@
   border: 1px solid rgba(51, 65, 85, 0.6);
   border-radius: 12px;
   padding: 12px 14px;
-  z-index: 32;
+  z-index: var(--z-sheet);
   pointer-events: all;
 }
 
@@ -495,7 +495,7 @@
   top: 60px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 60;
+  z-index: var(--z-modal);
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -528,7 +528,7 @@
   top: 52px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 45;
+  z-index: var(--z-hud);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -563,7 +563,7 @@
   position: absolute;
   left: 12px;
   bottom: 72px;            /* clear the Place tab + Explode bar along the bottom */
-  z-index: 33;
+  z-index: var(--z-hud);
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -601,7 +601,7 @@
   position: absolute;
   left: 12px;              /* bottom-LEFT corner — never centered over the plan */
   bottom: 72px;            /* clear the Place tab + Explode bar along the bottom */
-  z-index: 40;
+  z-index: var(--z-hud);
   display: flex;
   align-items: center;
   justify-content: flex-start;

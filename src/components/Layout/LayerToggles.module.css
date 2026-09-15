@@ -4,7 +4,7 @@
   position: absolute;
   top: 52px;
   right: 12px;
-  z-index: 44;
+  z-index: var(--z-hud);
   display: flex;
   gap: 6px;
   max-width: calc(100vw - 24px);

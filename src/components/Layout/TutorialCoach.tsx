@@ -326,7 +326,7 @@ export default function TutorialCoach() {
             position: 'fixed',
             left: rect.left - 6, top: rect.top - 6,
             width: rect.width + 12, height: rect.height + 12,
-            borderRadius: 10, zIndex: 68, pointerEvents: 'none',
+            borderRadius: 10, zIndex: 'var(--z-modal)', pointerEvents: 'none',
             animation: 'tourPulse 1.6s ease-in-out infinite',
           }}
         />
@@ -346,7 +346,7 @@ export default function TutorialCoach() {
         style={{
           position: 'fixed',
           ...place(),
-          zIndex: 71,
+          zIndex: 'var(--z-modal)',
           color: '#f8fafc', fontSize: 12.5, lineHeight: 1.45,
           // With no panel behind it, contrast is the ONLY thing separating this
           // text from whatever it floats over — pale siding and a scanned print
