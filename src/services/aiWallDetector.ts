@@ -1,5 +1,6 @@
 import { detectWalls, type DetectWallsResult } from './wallDetector'
 import { buildJunctionSkeleton, type JunctionSegment } from './junctionGraph'
+import { corroborateWalls, rasterSearchPx } from './wallCorroboration'
 import type { ParsedWall } from '../types'
 
 const MODEL_URL = '/models/floorplan-wall-segmentation.onnx'
@@ -360,6 +361,20 @@ export async function detectWallsWithAI(
     const raster = { width: imageData.width, height: imageData.height }
     aiResult.walls = scaleGeometryToRaster(aiResult.walls, work, raster)
     aiResult.classified = scaleGeometryToRaster(aiResult.classified, work, raster)
+
+    /**
+     * NOW SHOW IT THE DRAWING — see wallCorroboration.
+     *
+     * Everything above this line happens in the model's own world: the mask is
+     * vectorised, the mask's segments are classified against the mask, and the
+     * result is scaled up. At no point does anything look at the pixels the
+     * user handed over. On a phone screenshot of a studio that returned thirty
+     * walls, ten of which were the room labels and the kitchen units.
+     */
+    const corroborated = corroborateWalls(imageData, aiResult.walls, {
+      searchPx: rasterSearchPx(imageData.width, imageData.height),
+    })
+    aiResult.walls = corroborated.walls
 
     if (!aiResultIsUsable(aiResult)) {
       console.warn(
