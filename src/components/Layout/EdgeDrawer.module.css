@@ -13,10 +13,13 @@
   flex-direction: column;
   overflow: visible;            /* don't clip the protruding tab */
   pointer-events: auto;
-  /* Almost transparent by default — frosted glass, not a solid box. The heavy
-     backdrop blur keeps content legible over the 3D model without a panel. */
-  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.2);
-  backdrop-filter: blur(18px);
+  /* Glass: tint AND blur. At 0.2 the drawer's text sat on whatever the model
+     was showing behind it — fine over a dark wall, gone over a bright one. 0.78
+     is above the 0.72 floor where body text survives the worst case (a white
+     face of the model), and the blur is what kills the detail behind the words. */
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.78);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
   border: none;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
   transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
@@ -258,3 +261,8 @@
 .inRail.left:not(.open) { transform: translateX(calc(-100% - 48px)); }
 .inRail.bottom { left: 46px; }               /* clear the rail on the bottom sheet too */
 .inRail.bottom:not(.open) { transform: translateY(100%); }
+
+/* Some Android webviews have no backdrop-filter: no blur, so the tint carries it. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .root { background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.94); }
+}

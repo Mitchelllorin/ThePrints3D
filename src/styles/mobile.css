@@ -53,7 +53,7 @@ button {
   :root select:not([data-touch-target="compact"]),
   :root textarea:not([data-touch-target="compact"]) {
     min-width: 44px;
-    min-height: 44px;
+    min-height: 48px; /* 48 not 44: the build rules floor. Height only - the icon rail is 44px wide. */
   }
 
   input[type="text"],

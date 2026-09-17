@@ -53,6 +53,8 @@ export default function NameplateStrip() {
   const studSpacingIn = useConfigStore((s) => s.studSpacingIn)
   const dimensionsMode = useUISettingsStore((s) => s.dimensionsMode)
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
+  const panelOpen = useFloorplanLocalStore((s) =>
+    s.buildDrawerOpen || s.settingsDrawerOpen || s.askDrawerOpen || s.placeDrawerOpen || s.railPanelOpen)
 
   /**
    * Walls are addressed by INDEX into the active drawing's list, not by id —
@@ -86,6 +88,10 @@ export default function NameplateStrip() {
   // same setting the floating labels answered to, so turning dimensions off
   // still means off.
   if (dimensionsMode === 'off') return null
+  // A drawer or rail column is open over this corner. It covers the plate but
+  // not all of it, so a sliver of "Grade —" peeked out underneath — and the
+  // open panel is already showing this wall's details. Stand aside until it closes.
+  if (panelOpen) return null
   if (!wall || !fields || !nameplateHasContent(fields)) return null
 
   return (

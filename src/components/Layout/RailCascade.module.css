@@ -1,6 +1,6 @@
-/* RailCascade — near-invisible. No containers: icons, labels and rows float
-   directly over the 3D model, legible from a subtle shadow. Active = accent
-   colour, not a filled box. Scrolls with no scrollbar. Let it flow. */
+/* RailCascade — the icon rail is bare icons over the model; the columns it
+   opens (Layers, Place) carry running text, so they sit on glass. Active =
+   accent colour, not a filled box. Scrolls with no scrollbar. */
 
 .wrap {
   position: fixed;
@@ -15,6 +15,13 @@
 }
 .rail,
 .col { pointer-events: auto; }
+
+/* A column is open: the rail is a SHEET now, not HUD. The top icons (Undo, zoom)
+   sit on the HUD layer too, and two things on one layer painted over each other
+   — the Layers list drew straight across UNDO. On the sheet layer the open
+   column covers them cleanly, the same way the Build drawer does, and closing
+   it gives them back. */
+.wrapSheet { z-index: var(--z-sheet); }
 
 /* ── level 0: the icon rail — no panel ── */
 .rail {
@@ -65,13 +72,20 @@
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
 }
 
-/* ── level 1+: slim floating columns — no panel ── */
+/* ── level 1+: the Layers and Place columns ──
+   These carry running text over the model, so they get the glass every panel
+   gets: tint at the 0.72+ floor plus blur. Bare text with a shadow was legible
+   over the dark grid and unreadable over a bright wall. */
 .col {
   min-width: 118px;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 2px 6px 2px 4px;
+  padding: 6px 8px;
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.78);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border-radius: 10px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
@@ -186,4 +200,8 @@
 .wrap.tracing .rail:focus-within,
 .wrap.tracing .rail:active {
   opacity: 1;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .col { background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.94); }
 }

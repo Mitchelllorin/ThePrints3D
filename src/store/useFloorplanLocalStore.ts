@@ -244,6 +244,10 @@ interface FloorplanLocalState {
   settingsDrawerOpen: boolean
   placeDrawerOpen: boolean
   askDrawerOpen: boolean
+  /** A rail column (Layers or Place) is open. Those columns keep their own open
+   *  state; this mirrors it so things outside the rail can stand aside. */
+  railPanelOpen: boolean
+  setRailPanelOpen: (open: boolean) => void
   /** Which locked feature the user just reached for, or null when the upgrade
    *  sheet is closed. It is the REASON rather than a bare open/closed flag so
    *  the sheet can answer the question actually asked — "editing walls is part
@@ -444,6 +448,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   tutorialStep: 0,
   placeDrawerOpen: false,
   askDrawerOpen: false,
+  railPanelOpen: false,
+  setRailPanelOpen: (open) => set({ railPanelOpen: open }),
   upgradeReason: null,
   coachBand: 0,
 

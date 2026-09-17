@@ -10,7 +10,7 @@
  *              the rail for now; these become slim columns next.
  *  • ASK     — opens the real panel-less Ask overlay.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useAppStore } from '../../store/useAppStore'
 import { trayItems } from '../../data/objectCatalog'
@@ -143,6 +143,8 @@ export default function RailCascade() {
   // Place is a cascade column (not a store drawer), so its open state is local.
   const [placeOpen, setPlaceOpen] = useState(false)
   const [layersOpen, setLayersOpen] = useState(false)
+  const setRailPanelOpen = useFloorplanLocalStore((s) => s.setRailPanelOpen)
+  useEffect(() => { setRailPanelOpen(layersOpen || placeOpen) }, [layersOpen, placeOpen, setRailPanelOpen])
   // First tap arms Clear, second does it. See the button for why.
   const [clearArmed, setClearArmed] = useState(false)
 
@@ -227,7 +229,7 @@ export default function RailCascade() {
    * with it.
    */
   return (
-    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''}`}>
+    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen ? styles.wrapSheet : ''}`}>
       <nav className={styles.rail} aria-label="Menus">
         {RAIL.map(({ id, icon, label }) => (
           <button
