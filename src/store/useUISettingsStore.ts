@@ -170,7 +170,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   woodSheathing: 'osb',
   cladding: 'none',
   claddingVisible: false,
-  memberColours: true,
+  memberColours: false,   // opt-in: not everybody wants a painted frame
   dimensionsMode: 'selected',
   presetMode: 'practice',
   heatingType: DEFAULT_HEATING,
