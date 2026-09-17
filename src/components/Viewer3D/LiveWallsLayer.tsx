@@ -9,99 +9,44 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useExplodeChildren } from './explodeRuntime'
-import { renderWallThicknessM, wallHeightM } from '../../services/constructionCode'
 import { useAppStore } from '../../store/useAppStore'
-import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useSceneConfig } from '../../store/useSceneConfig'
-import { teesForWalls } from '../../services/wallTees'
-import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../services/framingGeometry'
-import { wallFramingSpec } from '../../services/constructionCode'
+import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
+import { type PlannedWall } from '../../services/wallFramingPlan'
+import { useWallPlans } from './useWallPlans'
 import { XRAY_OPACITY } from './editHelpers'
-import { modelWalls } from '../../services/modelWalls'
 import { applyMemberColours, applyTopPlatesHidden, ownedMaterial } from '../../services/memberColours'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
-import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
-import type { ParsedWall } from '../../types'
 
 
 interface WallMeshProps {
-  wall: ParsedWall
-  pixelToWorld: (px: number, py: number) => THREE.Vector3
-  scaleMmPerPx: number | null
-  wallHeight: number
-  material: 'wood' | 'steel'
-  steelGauge: string
-  topTrackStyle: 'shallow' | 'deep' | 'slotted' | 'double'
-  deflectionGapMm: number
-  /** Door/window openings on this wall, as {t along wall 0..1, width m, type}. */
-  openings: Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>
+  /** Everything about this wall's framing — see wallFramingPlan. */
+  plan: PlannedWall
   /** 0.7 while tracing (ghost), 1 once built (solid/real). */
   opacity: number
-  /** This end meets another wall — extend it so the corner joins (no gap). */
-  startCorner: boolean
-  endCorner: boolean
-  /** Where other walls land on this one's face, as fractions along it (0..1). */
-  tees: number[]
   /** Storey-to-storey rise, so upper-floor walls stack on the floor below. */
   storeyHeight: number
   /** Spread this wall's framing members apart to show the assembly. */
   detailExplode?: boolean
 }
 
-function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, startCorner, endCorner, tees, storeyHeight, detailExplode }: WallMeshProps) {
+function WallMesh({ plan, opacity, storeyHeight, detailExplode }: WallMeshProps) {
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
+  const { opts, length, angle, cx, cz, level, isMasonry, masonryKind } = plan
 
-  // Thickness first — it sets how far to extend ends into a corner.
-  // The FRAMING TYPE governs — pick 2x8 and you get 7-1/4". Only a wall with no
-  // type falls back to measuring the traced line. See renderWallThicknessM.
-  const thicknessM = renderWallThicknessM(wall, scaleMmPerPx)
-
-  const a = pixelToWorld(wall.x1, wall.y1)
-  const b = pixelToWorld(wall.x2, wall.y2)
-  // Extend any end that meets another wall by half the thickness, so adjacent
-  // stud cages overlap and the corner reads as joined instead of leaving a gap.
-  const rawLen = Math.hypot(b.x - a.x, b.z - a.z) || 1
-  const ux = (b.x - a.x) / rawLen, uz = (b.z - a.z) / rawLen
-  const ext = thicknessM / 2
-  const ax = a.x - (startCorner ? ux * ext : 0), az = a.z - (startCorner ? uz * ext : 0)
-  const bx = b.x + (endCorner ? ux * ext : 0),   bz = b.z + (endCorner ? uz * ext : 0)
-
-  const length = Math.hypot(bx - ax, bz - az)
-  const cx = (ax + bx) / 2
-  const cz = (az + bz) / 2
-  const angle = Math.atan2(bz - az, bx - ax)
-
-  // Cap-plate corner lap: at a corner, the caps of walls on the dominant axis lap
-  // OVER the corner while the perpendicular walls pull their cap back one member
-  // width to receive them — so the two double top plates interlock (the tie).
-  const capMode: 'lap' | 'back' = Math.abs(ux) >= Math.abs(uz) ? 'lap' : 'back'
-  const capLap = {
-    start: startCorner ? capMode : undefined,
-    end: endCorner ? capMode : undefined,
-  }
-  // A stable dep for the framing memo — the array is rebuilt every render.
-  const teesKey = tees.join(',')
-  // Packs sit at a fraction of the TRACED line; the framed length also carries
-  // the corner extension at the start, so offset by it.
-  const packs = (wall.studPacks ?? []).map((p) => ({ atM: (startCorner ? ext : 0) + p.atFrac * rawLen, studs: p.studs }))
-  const packsKey = packs.map((p) => `${p.atM.toFixed(3)}x${p.studs}`).join(',')
-
-  // Masonry (CMU/brick/concrete) is a solid block; framed walls get studs.
-  const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
+  // The plan is rebuilt whenever any wall changes; key the memo on this wall's
+  // content so an untouched wall keeps its geometry.
+  const optsKey = JSON.stringify(opts)
   const framing = useMemo(() => {
-    const wallOpenings: WallOpening[] = openings.map((o) => ({ centerM: o.t * length, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM }))
     let f: THREE.Group
     if (isMasonry) {
       // Block/brick has no studs — doors/windows cut a real hole, with a lintel.
-      const ext = wall.exteriorMaterial
-      const kind = ext === 'brick' || ext === 'exposedBrick' ? 'brick' : ext === 'stone' ? 'stone' : 'cmu'
-      f = buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity, kind })
+      f = buildMasonryWall({ length: opts.length, height: opts.height, thickness: opts.thickness, openings: opts.openings, opacity, kind: masonryKind })
     } else {
-      const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-      f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity, capLap, tees: tees.map((t) => t * length), packs })
+      f = buildWallFraming({ ...opts, opacity })
     }
-    f.userData.level = wall.level ?? 0  // so the shared explode lifts it floor-by-floor
+    f.userData.level = level  // so the shared explode lifts it floor-by-floor
     /**
      * THE DIRECTION THIS WALL COMES OFF IN.
      *
@@ -117,7 +62,9 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
      */
     f.userData.explodeAxis = [-Math.sin(angle), 0, Math.cos(angle)]
     return f
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level, angle, startCorner, endCorner, capMode, teesKey, packsKey])
+    // `opts` is covered by optsKey — the object itself is new on every plan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optsKey, isMasonry, masonryKind, opacity, level, angle])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   // The member colours are shared across every wall, so only the material a
@@ -154,7 +101,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   if (length < 0.05) return null
 
   // Upper-floor walls stand on the floor below.
-  const baseY = (wall.level ?? 0) * storeyHeight
+  const baseY = level * storeyHeight
 
   return (
     <>
@@ -162,7 +109,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
         object={framing}
         position={[cx, baseY, cz]}
         rotation={[0, -angle, 0]}
-        onDoubleClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleGhostedLevel(wall.level ?? 0) }}
+        onDoubleClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleGhostedLevel(level) }}
       />
       {/*
         NO FLOATING NAMEPLATE HERE ANY MORE.
@@ -182,17 +129,10 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
 }
 
 export default function LiveWallsLayer() {
-  const drawings  = useAppStore((s) => s.drawings)
-  const overlay   = useAppStore((s) => s.floorplanOverlay)
   const model     = useAppStore((s) => s.model)
-  const placedObjects = useAppStore((s) => s.placedObjects)
   const buildResult = useAppStore((s) => s.buildResult)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
-  const framingMaterial = useConfigStore((s) => s.framingMaterial)
-  const steelGauge = useConfigStore((s) => s.steelGauge)
-  const steelTrackTop = useConfigStore((s) => s.steelTrackTop)
-  const steelDeflectionGapMm = useConfigStore((s) => s.steelDeflectionGapMm)
 
   const selectedWallIndex = useFloorplanLocalStore((s) => s.selectedWallIndex)
   const wallDetailExplode = useFloorplanLocalStore((s) => s.wallDetailExplode)
@@ -206,154 +146,9 @@ export default function LiveWallsLayer() {
   // Storey-to-storey rise so level-1 walls stand on the 2nd-floor deck, etc.
   const storeyHeight = wallHeight + FLOOR_ASSEMBLY_H
 
-  const drawing = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
-  const imageWidth  = drawing?.rasterWidth  ?? 1400
-  const imageHeight = drawing?.rasterHeight ?? 900
-  const [overlayW, overlayD] = overlay.scale
-  const rotRad = THREE.MathUtils.degToRad(overlay.rotationDeg)
-
-  // Same transform used by FloorplanOverlay so walls sit exactly on the print
-  const pixelToWorld = useMemo(() => (px: number, py: number): THREE.Vector3 => {
-    const localX = ((px / imageWidth)  - 0.5) * overlayW
-    const localZ = ((py / imageHeight) - 0.5) * overlayD
-    const v = new THREE.Vector3(localX, 0, localZ)
-      .applyAxisAngle(new THREE.Vector3(0, 1, 0), rotRad)
-    return new THREE.Vector3(
-      overlay.position[0] + v.x,
-      0,
-      overlay.position[1] + v.z,
-    )
-  }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
-
-  // Traced walls AND detected ones — see modelWalls. Detected walls were built
-  // by nothing, so "Find the rest" changed the data and never the model. Traced
-  // walls stay first in the list, so `selectedWallIndex` still means what it did.
-  const userWalls = useMemo(() => modelWalls(drawings), [drawings])
-
-  // Which wall ends meet another wall (shared endpoint, ~4px tolerance) — those
-  // are corners, and get extended so the framing joins instead of gapping.
-  const cornerEnds = useMemo(() => {
-    const key = (x: number, y: number) => `${Math.round(x / 4)},${Math.round(y / 4)}`
-    const counts = new Map<string, number>()
-    for (const { wall } of userWalls) {
-      const k1 = key(wall.x1, wall.y1), k2 = key(wall.x2, wall.y2)
-      counts.set(k1, (counts.get(k1) ?? 0) + 1)
-      counts.set(k2, (counts.get(k2) ?? 0) + 1)
-    }
-    return userWalls.map(({ wall }) => ({
-      start: (counts.get(key(wall.x1, wall.y1)) ?? 0) > 1,
-      end: (counts.get(key(wall.x2, wall.y2)) ?? 0) > 1,
-    }))
-  }, [userWalls])
-
-  // TEES — where another wall's END lands on this wall's SPAN. See wallTees:
-  // it is a pure, unit-tested function rather than arithmetic buried in here,
-  // because a hit test that only runs inside a component can only be debugged
-  // by driving a browser, and that is exactly how the first attempt was spent.
-  const teesByWall = useMemo(() => teesForWalls(userWalls.map((u) => u.wall)), [userWalls])
-
-  // Assign each placed door/window to its nearest wall and record its position
-  // (t, 0..1) and rough-opening width — so the live framing frames the opening
-  // exactly where it sits, just like on site. Assignment is done in WORLD space
-  // from the object's live x/z: that stays correct after a drag-move (which
-  // updates x/z but not the cached pixel coords) and uses the same transform as
-  // the wall geometry, so the opening can't drift off the wall.
-  const openingsByWall = useMemo(() => {
-    const out: Array<Array<{ t: number; widthM: number; type: 'door' | 'window'; sillM?: number; heightM?: number }>> = userWalls.map(() => [])
-    // Wall segments in world space (same transform that places the framing).
-    const wsegs = userWalls.map(({ wall: w }) => {
-      const a = pixelToWorld(w.x1, w.y1), b = pixelToWorld(w.x2, w.y2)
-      return { ax: a.x, az: a.z, dx: b.x - a.x, dz: b.z - a.z, thick: w.thickness, level: w.level ?? 0 }
-    })
-    // Average metres-per-pixel, to carry the pixel-derived snap tolerance into world.
-    const mPerPx = (overlayW / imageWidth + overlayD / imageHeight) / 2
-    // Nearest wall to a world point. `reach` (m) shifts the match from the wall
-    // centreline to a footprint near-edge (stairs/shafts sit edge-on to a wall).
-    // `level` confines the match to the object's own storey. Exterior walls carry
-    // up plumb and inline, so without it a ground-floor door and the wall directly
-    // above it are the same point in XZ — the opening could be cut upstairs
-    // while the door stayed buried in the solid wall beside it.
-    const nearestWall = (wx: number, wz: number, reach: number, edgeBias: number, level: number) => {
-      let best = -1, bestScore = Infinity, bestT = 0
-      wsegs.forEach((s, i) => {
-        if (s.level !== level) return
-        const len2 = s.dx * s.dx + s.dz * s.dz
-        if (len2 < 1e-6) return
-        const t = ((wx - s.ax) * s.dx + (wz - s.az) * s.dz) / len2
-        if (t < -0.02 || t > 1.02) return
-        const fx = s.ax + t * s.dx, fz = s.az + t * s.dz
-        const perp = Math.hypot(wx - fx, wz - fz)
-        const score = reach > 0 ? Math.abs(perp - reach) : perp
-        const thresh = Math.max((s.thick || 8) * 2.5, 28) * mPerPx + edgeBias
-        if (score < thresh && score < bestScore) { best = i; bestScore = score; bestT = Math.max(0, Math.min(1, t)) }
-      })
-      return { best, t: bestT }
-    }
-    // Doors/windows: match by their centre.
-    for (const o of placedObjects) {
-      if (o.type !== 'door' && o.type !== 'window') continue
-      const { best, t } = nearestWall(o.x, o.z, 0, 0, o.level ?? 0)
-      if (best < 0) continue
-      const item = getCatalogItem(o.type)
-      const widthM = (item?.defaultW ?? 0.9) * o.scaleX
-      const heightM = (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY
-      out[best].push({ t, widthM, type: o.type as 'door' | 'window', sillM: o.sillM, heightM })
-    }
-    // Stairs/elevators cut a full-height opening where they sit flush against a
-    // wall. They're DEEP, so match by the footprint's near EDGE (centre minus
-    // half-depth), not the centre — otherwise a stair's centre is always too far.
-    for (const o of placedObjects) {
-      if (!VERTICAL_CIRCULATION.has(o.type)) continue
-      const item = getCatalogItem(o.type)
-      const widthM = (item?.defaultW ?? 1) * o.scaleX           // along the wall (snap convention)
-      const halfDepth = (item?.defaultD ?? 1) * o.scaleZ / 2    // half-depth toward the wall
-      const { best, t } = nearestWall(o.x, o.z, halfDepth, 6 * mPerPx, o.level ?? 0)
-      if (best < 0) continue
-      out[best].push({ t, widthM, type: 'door', sillM: 0, heightM: (item?.defaultH ?? 2.4) * o.scaleY })
-    }
-    // A DOORWAY OFF THE PRINT IS STILL A DOORWAY.
-    //
-    // Same half-finished story as the walls above: detection reads the doors and
-    // windows, the takeoff frames every one of them (headers, kings, jacks,
-    // cripples all land in the material list), and the framing you actually look
-    // at was built from `placedObjects` alone. So a door that came off the
-    // drawing was cut into nothing — the studs ran straight through it and no
-    // header ever appeared. Detect thirteen openings, watch the model not change
-    // by a single member.
-    //
-    // Width is measured from the gap's own endpoints THROUGH the transform
-    // rather than taken from `widthMm`, so it stays right when the scale is
-    // unknown and when the overlay has been moved or rotated.
-    for (const d of drawings) {
-      for (const op of d.parsedOpenings) {
-        if (op.type !== 'door' && op.type !== 'window') continue
-        const ang = op.angle ?? (op.orientation === 'vertical' ? Math.PI / 2 : 0)
-        const hx = (Math.cos(ang) * op.widthPx) / 2
-        const hy = (Math.sin(ang) * op.widthPx) / 2
-        const a = pixelToWorld(op.x - hx, op.y - hy)
-        const b = pixelToWorld(op.x + hx, op.y + hy)
-        const c = pixelToWorld(op.x, op.y)
-        const widthM = Math.hypot(b.x - a.x, b.z - a.z)
-        // A gap that measures to nothing is a detection artefact, not a door.
-        if (!(widthM > 0.3)) continue
-        // Finishing the shell drops a real leaf into a detected opening, so the
-        // same doorway would arrive down both paths and get framed twice. The
-        // placed one wins — it carries the user's own size.
-        if (placedObjects.some((p) => (p.type === 'door' || p.type === 'window')
-          && Math.hypot(p.x - c.x, p.z - c.z) < 0.45)) continue
-        const { best, t } = nearestWall(c.x, c.z, 0, 0, d.floorNumber ?? 0)
-        if (best < 0) continue
-        const item = getCatalogItem(op.type)
-        out[best].push({
-          t,
-          widthM,
-          type: op.type,
-          heightM: item?.defaultH ?? (op.type === 'door' ? 2.06 : 1.13),
-        })
-      }
-    }
-    return out
-  }, [userWalls, drawings, placedObjects, pixelToWorld, overlayW, overlayD, imageWidth, imageHeight])
+  // Traced walls AND detected ones, with their corners, tees, openings and
+  // packs — all worked out in wallFramingPlan, where the cut list reaches it too.
+  const plans = useWallPlans()
 
   // The traced walls ARE the build: instead of BuildingModel re-rendering them
   // through a different (engine) path that drops detail, the ghost walls persist
@@ -362,7 +157,7 @@ export default function LiveWallsLayer() {
   // openings. BuildingModel skips walls when user walls exist (see there).
   const built = buildResult !== null || model.status === 'ready' || model.status === 'building'
 
-  if (userWalls.length === 0) return null
+  if (plans.length === 0) return null
   // The Framing switch in the Layers panel was wired to nothing — no renderer
   // has ever read `visibleLayers.has('framing')`, so turning it off left every
   // stud standing. Honouring it here also gives the obvious X-ray for free:
@@ -372,43 +167,23 @@ export default function LiveWallsLayer() {
 
   return (
     <group name="live-walls" ref={groupRef}>
-      {userWalls.map(({ wall, scaleMmPerPx }, i) => {
-        // Each wall renders as ITS OWN framing — material + gauge from the type
-        // picked when it was traced — so picking steel for one wall never
-        // re-skins the walls you already traced. Auto walls (no framingType)
-        // fall back to the global config preference.
-        const spec = wall.framingType ? wallFramingSpec(wall.framingType, wall.wallRole) : null
-        const wallMaterial = spec ? spec.material : framingMaterial
-        const wallGauge = spec?.gauge ?? steelGauge
-        return (
+      {plans.map((plan, i) => (
         <WallMesh
           key={i}
-          wall={wall}
-          pixelToWorld={pixelToWorld}
-          scaleMmPerPx={scaleMmPerPx}
-          wallHeight={wallHeightM(wall, wallHeight, storeyHeight)}
-          material={wallMaterial}
-          steelGauge={wallGauge}
-          topTrackStyle={steelTrackTop === 'double' ? 'deep' : steelTrackTop}
-          deflectionGapMm={steelTrackTop === 'slotted' ? steelDeflectionGapMm : 0}
-          openings={openingsByWall[i] ?? []}
+          plan={plan}
           opacity={(() => {
-            const level = wall.level ?? 0
+            const level = plan.level
             if (isolatedFloor !== null && level !== isolatedFloor) return 0
             // Per-wall X-ray before the storey ghost, matching every other
             // layer: your call on this wall beats a floor-wide setting.
-            if (wall.transparent) return XRAY_OPACITY
+            if (plan.wall.transparent) return XRAY_OPACITY
             if (ghostedLevels.includes(level)) return 0.15
             return built ? 1 : 0.7
           })()}
-          startCorner={cornerEnds[i]?.start ?? false}
-          endCorner={cornerEnds[i]?.end ?? false}
-          tees={teesByWall[i] ?? []}
           storeyHeight={storeyHeight}
           detailExplode={wallDetailExplode && i === selectedWallIndex}
         />
-        )
-      })}
+      ))}
     </group>
   )
 }

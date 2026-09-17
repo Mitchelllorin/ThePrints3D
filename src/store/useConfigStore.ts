@@ -2,6 +2,14 @@ import { create } from 'zustand'
 import type { BuildingType } from '../onboarding/types'
 import type { LengthFormat } from '../services/unitConverter'
 
+/** Waste allowance per kind of member, percent. Matches cutList's WasteCategory. */
+export interface CutWastePct {
+  studs: number
+  plates: number
+  headers: number
+  blocking: number
+}
+
 /** Visual feedback shown while a wall is being traced. */
 export type WallTraceStyle = 'dotted' | 'arrow' | 'both'
 
@@ -98,6 +106,13 @@ export interface AppConfig {
   defaultStudSize: '2x4' | '2x6'
   /** Corner framing style: three-stud (standard) or California/two-stud. */
   cornerType: 'three-stud' | 'california'
+  /**
+   * Waste allowance (%) added to the BUY LIST, per kind of member — studs and
+   * plates cull for crown and twist, blocking eats offcuts, engineered headers
+   * carry the least. Null means the defaults in cutList (which is where the
+   * numbers and the reasoning live; this store stays free of the 3D imports).
+   */
+  cutWastePct: CutWastePct | null
 
   // ── Steel framing ───────────────────────────────────────────────────────────
   /** Framing material — wood dimensional lumber or cold-formed steel. */
@@ -142,6 +157,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   studSpacingIn: 16,
   defaultStudSize: '2x4',
   cornerType: 'three-stud',
+  cutWastePct: null,
   framingMaterial: 'wood',
   steelWidth: '3-5/8',
   steelGauge: '25',

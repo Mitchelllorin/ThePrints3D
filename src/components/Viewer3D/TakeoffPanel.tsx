@@ -11,6 +11,9 @@ import { useSceneConfig } from '../../store/useSceneConfig'
 import { computeTakeoff, takeoffToCsv } from '../../services/takeoff'
 import { builtScene, countBuiltMembers, groupBuiltMembers } from '../../services/builtScene'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import CutListSection from './CutListSection'
+import { useCutList, formatCutLength } from './useCutList'
+import { cutListCsvRows } from '../../services/cutList'
 import type { ParsedWall } from '../../types'
 
 const LAYER_TITLE: Record<string, string> = {
@@ -35,7 +38,7 @@ export default function TakeoffContent() {
   const isPro = useAppStore((s) => s.isPro)
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
 
-  const sections = useMemo(() => {
+  const allSections = useMemo(() => {
     const active = drawings.find((d) => d.id === overlay.drawingId) ?? drawings[0] ?? null
     const scaleMmPerPx = active?.scaleMmPerPx ?? 23.5
     const walls: ParsedWall[] = drawings.flatMap((d) => d.parsedWalls)
@@ -48,6 +51,18 @@ export default function TakeoffContent() {
       roofOverhangM: roofOverhangIn * 0.0254,
     })
   }, [drawings, overlay.drawingId, plumbingLines, electricalLines, hvacLines, floorsAreas, roofAreas, placedObjects, sceneConfig, roofOverhangIn])
+
+  // THE WALLS ARE COUNTED NOW, SO THE ESTIMATE OF THEM STANDS DOWN.
+  //
+  // computeTakeoff still derives a wall section from the drawn lines — length ÷
+  // 16" + 1 studs, twice the length in plate, area ÷ 32 sq ft in sheets. Beside
+  // a cut list counted off the framing it is the same quantity worked out twice,
+  // and the two disagree by design (it cannot see a corner post, a king, a jack
+  // or a header). Showing both is how a user ends up ordering the wrong number.
+  // The estimate is kept for floors, roof and the trades, which nothing counts yet.
+  const { walls: cutWalls, buy } = useCutList()
+  const counted = cutWalls.some((w) => w.lines.length > 0)
+  const sections = counted ? allSections.filter((s) => s.title !== 'Walls') : allSections
 
   const empty = sections.length === 0
 
@@ -66,7 +81,13 @@ export default function TakeoffContent() {
     + (isPro ? 0 : built.length)
 
   const exportCsv = () => {
-    const csv = takeoffToCsv(sections, groupBuiltMembers(built))
+    // Both halves of the takeoff, then the cut list and the buy list — the sheet
+    // a framer cuts from and the one the yard prices, in the same file.
+    const csv = [
+      takeoffToCsv(sections, groupBuiltMembers(built)),
+      '',
+      ...cutListCsvRows(cutWalls, buy, formatCutLength),
+    ].join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -170,6 +191,7 @@ export default function TakeoffContent() {
       )}
       {/* Export is the point of a takeoff — it leaves the phone and goes to a
           supplier. Pro only, and only once there is something to send. */}
+      <CutListSection />
       {isPro && !empty && (
         <button
           onClick={exportCsv}

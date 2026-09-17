@@ -140,6 +140,36 @@ export interface WallFramingOpts {
    * Centre measured from the wall START in metres, like a tee.
    */
   packs?: Array<{ atM: number; studs: number }>
+  /**
+   * An end that dies into the FACE of another wall (a tee arrival) stops at that
+   * wall's face, not at its centreline: trim that much off the plates, the end
+   * stud and the cap. Metres, per end. Corners don't use this — capLap already
+   * says which wall runs through.
+   */
+  endTrim?: { start?: number; end?: number }
+}
+
+/**
+ * What a member is on the CUT LIST. Stamped on every mesh that is a piece of
+ * stock somebody cuts, with the length it is actually cut to — which is not
+ * always the length of the box drawn (a header is drawn once and bought in
+ * plies; a steel track is drawn as a web and two legs and is one piece).
+ */
+export type CutRole =
+  | 'bottom plate' | 'top plate' | 'cap plate' | 'track'
+  | 'stud' | 'king stud' | 'jack stud' | 'cripple' | 'sill cripple' | 'backer'
+  | 'sill' | 'header' | 'blocking' | 'channel'
+
+export interface MemberCut {
+  role: CutRole
+  /** The stock it comes out of, as the yard says it: '2×6', 'LVL 1-3/4 × 9-1/4'. */
+  member: string
+  /** Length of ONE piece, metres. */
+  lengthM: number
+  /** Pieces this mesh stands for — a 3-ply header is one box and three cuts. */
+  pieces: number
+  /** Stud packs picked out, so the cut list can say where the extra studs went. */
+  pack?: boolean
 }
 
 export interface WallOpening {
@@ -173,6 +203,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     capLap,
     tees = [],
     packs = [],
+    endTrim,
   } = opts
 
   const group = new THREE.Group()
@@ -207,26 +238,63 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   const memberInfo = (member: string) =>
     steel ? `${steelGauge}ga steel ${member}` : `${sizeLabel} ${member}`
   const framingInfo = steel ? memberInfo('stud') : `${sizeLabel} wood stud`
-  const add = (geo: THREE.BufferGeometry, x: number, y: number, z = 0, info: string = framingInfo) => {
+  // The stock each member is cut from, named the way it is ordered.
+  const depthIn = depth / 0.0254
+  const STEEL_WEBS: Array<[number, string]> = [[1.625, '1-5/8'], [2.5, '2-1/2'], [3.625, '3-5/8'], [6, '6'], [8, '8']]
+  const web = STEEL_WEBS.reduce((b, w) => (Math.abs(w[0] - depthIn) < Math.abs(b[0] - depthIn) ? w : b))[1]
+  const studStock = steel ? `${web}" ${steelGauge}ga steel stud` : sizeLabel
+  const trackStock = `${web}" ${steelGauge}ga steel track`
+  const add = (geo: THREE.BufferGeometry, x: number, y: number, z = 0, info: string = framingInfo, cutAs?: MemberCut) => {
     const m = new THREE.Mesh(geo, mat)
     m.position.set(x, y, z)
     m.castShadow = true
     m.receiveShadow = true
     m.userData.layer = 'framing'
     m.userData.info = info
+    if (cutAs) m.userData.cut = cutAs
     group.add(m)
     return m
   }
+  const cut = (role: CutRole, lengthM: number, member = studStock, pieces = 1): MemberCut =>
+    ({ role, member, lengthM, pieces })
+
+  const half = length / 2
+
+  // WHERE EACH END ACTUALLY STOPS.
+  //
+  // The caller extends a wall by half a thickness at every corner, which carries
+  // BOTH walls out to the outside face of the building. Only one of them can
+  // really go there. The through wall ('lap') runs to the outside face; the wall
+  // that butts into it ('back') stops at the through wall's INSIDE face — a full
+  // member depth shorter. Left extended, the two walls' plates and end studs sat
+  // in the same square of the corner, and every corner was bought twice.
+  //
+  // The double top plate is what ties them, and it ties by swapping: the through
+  // wall's CAP stops short and the butting wall's cap runs over it to the
+  // outside face. Lower plate one way, cap the other — that is the lap.
+  //
+  // A tee arrival (endTrim) stops at the face of the wall it lands on, cap and all.
+  const trimA = (capLap?.start === 'back' ? depth : 0) + (endTrim?.start ?? 0)
+  const trimB = (capLap?.end === 'back' ? depth : 0) + (endTrim?.end ?? 0)
+  const bodyL = -half + trimA
+  const bodyR = half - trimB
+  const bodyLen = Math.max(0.02, bodyR - bodyL)
+  const bodyX = (bodyL + bodyR) / 2
 
   // Plates/track differ by material:
-  //   Wood  → double bottom plate + double top plate (studs run full height).
+  //   Wood  → double bottom plate + double top plate; studs stand BETWEEN them.
   //   Steel → real U-shaped tracks the studs NEST INTO: a shallow floor track
   //           at the bottom (opens up) and a deep / slotted-deflection track at
   //           the top (opens down). The track legs wrap the OUTSIDE of the studs.
   const SHEET_T = 0.012   // rendered sheet thickness of track web + legs
   const studDepth = steel ? Math.max(0.02, depth - 2 * SHEET_T) : depth
-  let studBottom = 0
-  let studTop = height
+  // The stud cage sits between the plates. Studs used to run the full wall
+  // height straight through all four plates — invisible, since the plates hide
+  // the overlap, and six inches long on every stud a cut list would read.
+  let studBottom = PLATE_H_M * 2
+  let studTop = height - PLATE_H_M * 2
+  // Rough openings are measured from the floor, as the door schedule gives them.
+  const floorY = steel ? SHEET_T : 0
   if (steel) {
     const botLegH = 0.032   // shallow floor track legs (~1-1/4")
     const topLegH = topTrackStyle === 'shallow' ? 0.032
@@ -234,57 +302,43 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       : 0.064                                  // standard deep-leg track
     const legZ = depth / 2 - SHEET_T / 2
     // Bottom track — web on the floor, two legs rising (channel opens up).
-    add(new THREE.BoxGeometry(length, SHEET_T, depth), 0, SHEET_T / 2, 0, memberInfo('floor track'))
-    add(new THREE.BoxGeometry(length, botLegH, SHEET_T), 0, SHEET_T + botLegH / 2, legZ, memberInfo('floor track'))
-    add(new THREE.BoxGeometry(length, botLegH, SHEET_T), 0, SHEET_T + botLegH / 2, -legZ, memberInfo('floor track'))
+    // One piece of track: the cut rides on the web, not the legs.
+    add(new THREE.BoxGeometry(bodyLen, SHEET_T, depth), bodyX, SHEET_T / 2, 0, memberInfo('floor track'), cut('track', bodyLen, trackStock))
+    add(new THREE.BoxGeometry(bodyLen, botLegH, SHEET_T), bodyX, SHEET_T + botLegH / 2, legZ, memberInfo('floor track'))
+    add(new THREE.BoxGeometry(bodyLen, botLegH, SHEET_T), bodyX, SHEET_T + botLegH / 2, -legZ, memberInfo('floor track'))
     // Top track — web at the ceiling, two legs descending (channel opens down).
-    add(new THREE.BoxGeometry(length, SHEET_T, depth), 0, height - SHEET_T / 2, 0, memberInfo('top track'))
-    add(new THREE.BoxGeometry(length, topLegH, SHEET_T), 0, height - SHEET_T - topLegH / 2, legZ, memberInfo('top track'))
-    add(new THREE.BoxGeometry(length, topLegH, SHEET_T), 0, height - SHEET_T - topLegH / 2, -legZ, memberInfo('top track'))
+    add(new THREE.BoxGeometry(bodyLen, SHEET_T, depth), bodyX, height - SHEET_T / 2, 0, memberInfo('top track'), cut('track', bodyLen, trackStock))
+    add(new THREE.BoxGeometry(bodyLen, topLegH, SHEET_T), bodyX, height - SHEET_T - topLegH / 2, legZ, memberInfo('top track'))
+    add(new THREE.BoxGeometry(bodyLen, topLegH, SHEET_T), bodyX, height - SHEET_T - topLegH / 2, -legZ, memberInfo('top track'))
     // Studs seat on the bottom-track web and rise to just under the top-track
     // web; a slotted track leaves a deflection gap so the stud isn't pinned.
     studBottom = SHEET_T
     studTop = height - SHEET_T - deflectionGapMm / 1000
   } else {
-    const plateGeo = new THREE.BoxGeometry(length, PLATE_H_M, depth)
-    add(plateGeo, 0, PLATE_H_M / 2, 0, memberInfo('bottom plate'))            // sole plate
-    add(plateGeo, 0, PLATE_H_M * 1.5, 0, memberInfo('bottom plate'))          // 2nd bottom plate
-    add(plateGeo, 0, height - PLATE_H_M * 1.5, 0, memberInfo('top plate')) // lower top plate (butts at corner)
-    // Upper (cap) plate — ties the corner. One wall's cap runs long enough to
-    // cross its neighbour and land FLUSH with that neighbour's outer face; the
-    // mating wall's cap stops one framing-member width short, leaving the pocket
-    // the first one slots into. Together they make a continuous flush corner —
-    // nothing projects past the building line.
-    //
-    // The caller extends the wall BODY by half a thickness at every corner end
-    // (see LiveWallsLayer), which is exactly what carries the end out to the
-    // neighbour's outer face. So a 'lap' cap is simply FULL BODY LENGTH — it
-    // needs no extra. Adding a further member width on top of that (as this did)
-    // pushed the cap clean past the finished corner: measured 0.089 m = 3.5" of
-    // plate hanging in open air at every corner.
-    //
-    // 'back' still pulls back one member width — that is the pocket, and it is
-    // measured from the same extended end, so the two always meet flush.
-    const capLapAmt = depth // one framing-member width (≈ 3.5" for 2x4, 5.5" for 2x6)
-    let capL = -length / 2
-    let capR = length / 2
-    if (capLap?.start === 'back') capL += capLapAmt
-    if (capLap?.end === 'back') capR -= capLapAmt
+    const plateGeo = new THREE.BoxGeometry(bodyLen, PLATE_H_M, depth)
+    add(plateGeo, bodyX, PLATE_H_M / 2, 0, memberInfo('bottom plate'), cut('bottom plate', bodyLen))      // sole plate
+    add(plateGeo, bodyX, PLATE_H_M * 1.5, 0, memberInfo('bottom plate'), cut('bottom plate', bodyLen))    // 2nd bottom plate
+    add(plateGeo, bodyX, height - PLATE_H_M * 1.5, 0, memberInfo('top plate'), cut('top plate', bodyLen)) // lower top plate
+    // Upper (cap) plate — see WHERE EACH END ACTUALLY STOPS above. Measured from
+    // the extended end, which already sits on the outside face of the building,
+    // so a lapping cap is simply full length and nothing projects past the line.
+    let capL = -half + (endTrim?.start ?? 0)
+    let capR = half - (endTrim?.end ?? 0)
+    if (capLap?.start === 'lap') capL += depth
+    if (capLap?.end === 'lap') capR -= depth
     const capLen = Math.max(0.02, capR - capL)
-    add(new THREE.BoxGeometry(capLen, PLATE_H_M, depth), (capL + capR) / 2, height - PLATE_H_M / 2, 0, memberInfo('cap plate'))
+    add(new THREE.BoxGeometry(capLen, PLATE_H_M, depth), (capL + capR) / 2, height - PLATE_H_M / 2, 0, memberInfo('cap plate'), cut('cap plate', capLen))
   }
 
   const studH = Math.max(0.02, studTop - studBottom)
   const studY = studBottom + studH / 2
   const studGeo = new THREE.BoxGeometry(studW, studH, studDepth)
 
-  const half = length / 2
-
   // Rough openings, mapped to local-centred X and clamped to the wall. Only
   // openings that fully fit (with a stud-pack margin at each end) are framed.
   const ops = openings
     .map((o) => ({ type: o.type, x: o.centerM - half, w: Math.min(o.widthM, length - 0.2), sillM: o.sillM, heightM: o.heightM }))
-    .filter((o) => o.w > 0.1 && o.x - o.w / 2 > -half + studW * 2 && o.x + o.w / 2 < half - studW * 2)
+    .filter((o) => o.w > 0.1 && o.x - o.w / 2 > bodyL + studW * 2 && o.x + o.w / 2 < bodyR - studW * 2)
   // A regular stud / blocking span is "in the clear" (dropped) if it falls inside
   // an opening's rough span — king/jack studs are added back at the edges.
   const inClear = (x: number) => ops.some((o) => x > o.x - o.w / 2 - studW * 0.5 && x < o.x + o.w / 2 + studW * 0.5)
@@ -301,8 +355,11 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // puts every field stud half a stud width off where the tape says. Same
   // spacing, wrong datum: the studs were 3/4" out all the way along, and a sheet
   // edge landed on the edge of a stud instead of its centre.
-  const endA = -half + studW / 2
-  const endB = half - studW / 2
+  //
+  // A butting wall's end stud moves in with its plates, but its layout still
+  // pulls from the outside face of the building: that is where the sheathing starts.
+  const endA = bodyL + studW / 2
+  const endB = bodyR - studW / 2
   const xs: number[] = [endA, endB]
   // Which of those positions are PACK studs — ends, corner posts, either side of
   // a tee. They keep the plain "stud" label (the takeoff counts studs), and are
@@ -314,8 +371,8 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     // one spacing from the face, and 16" is 0.4064 m, not 0.406. The dedupe
     // below still keys on millimetres, which is all that rounding was for.
     const x = -half + d
-    // Don't stack a field stud on top of an end stud that is already there.
-    if (Math.abs(x - endA) < studW || Math.abs(x - endB) < studW) continue
+    // Don't stack a field stud on an end stud, or put one past a trimmed end.
+    if (x < endA + studW || x > endB - studW) continue
     xs.push(x)
   }
   // END PACKS — and a real CORNER POST where two walls meet.
@@ -342,12 +399,12 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       const bx = endX + sign * (endInset * 0.5)
       add(
         new THREE.BoxGeometry(studW, studH, studW),
-        bx, studY, (studDepth - studW) / 2, memberInfo('corner backer'),
+        bx, studY, (studDepth - studW) / 2, memberInfo('corner backer'), cut('backer', studH),
       )
     }
   }
-  cornerPost(-half, 1, capLap?.start)
-  cornerPost(half, -1, capLap?.end)
+  cornerPost(bodyL, 1, capLap?.start)
+  cornerPost(bodyR, -1, capLap?.end)
 
   // TEES — where another wall lands on the face of this one.
   //
@@ -368,7 +425,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     packKeys.add(Math.round((x - studW) * 1000)); packKeys.add(Math.round((x + studW) * 1000))
     add(
       new THREE.BoxGeometry(studW, studH, studW),
-      x, studY, (studDepth - studW) / 2, memberInfo('tee backer'),
+      x, studY, (studDepth - studW) / 2, memberInfo('tee backer'), cut('backer', studH),
     )
   }
 
@@ -379,7 +436,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   for (const pk of packs) {
     const n = Math.max(2, Math.min(7, Math.round(pk.studs)))
     const span = n * studW
-    const c = Math.max(-half + span / 2, Math.min(half - span / 2, pk.atM - half))
+    const c = Math.max(bodyL + span / 2, Math.min(bodyR - span / 2, pk.atM - half))
     const lo = c - span / 2
     const hi = c + span / 2
     if (ops.some((o) => hi > o.x - o.w / 2 - studW * 2 && lo < o.x + o.w / 2 + studW * 2)) continue
@@ -399,8 +456,9 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     if (seen.has(key)) continue
     seen.add(key)
     if (inClear(x)) continue   // no studs through a rough opening
-    const stud = add(studGeo, Math.max(-half, Math.min(half, x)), studY)
-    if (packKeys.has(key)) stud.userData.member = 'pack'
+    const isPack = packKeys.has(key)
+    const stud = add(studGeo, Math.max(-half, Math.min(half, x)), studY, 0, framingInfo, { ...cut('stud', studH), pack: isPack })
+    if (isPack) stud.userData.member = 'pack'
   }
 
   const ordered = [...seen].map((k) => k / 1000).sort((a, b) => a - b)
@@ -427,24 +485,39 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     if (heavyDuty) {
       // Cold-rolled carrying channel runs through the knockouts at 4' and 8'.
       for (const h of [1.219, 2.438].filter((y) => y > studBottom + 0.05 && y < studTop - 0.05)) {
-        add(new THREE.BoxGeometry(length, studW * 0.7, studDepth * 0.55), 0, h, 0, memberInfo('carrying channel'))
+        add(new THREE.BoxGeometry(bodyLen, studW * 0.7, studDepth * 0.55), bodyX, h, 0, memberInfo('carrying channel'),
+          cut('channel', bodyLen, '1-1/2" cold-rolled channel'))
       }
     }
   } else {
     // Wood: solid blocking between consecutive studs at mid-height.
+    //
+    // NOT between the studs of a pack. The floor used to be 40mm, which is a
+    // stud's own width, so every corner post, tee and point-load pack threw off
+    // an inch-and-three-quarter offcut — and the cut list dutifully listed
+    // "Blocking 1-3/4" × 1". Nobody cuts those: studs nailed up solid have
+    // nothing to block. 150mm (6") is the narrowest gap worth a block.
+    const BLOCK_MIN_M = 0.15
     for (let i = 0; i < ordered.length - 1; i++) {
       const gap = ordered[i + 1] - ordered[i]
       const span = gap - STUD_WIDTH_M
-      if (span < 0.04) continue
+      if (span < BLOCK_MIN_M) continue
       const mid = (ordered[i] + ordered[i + 1]) / 2
       if (inClear(mid)) continue   // no blocking across a rough opening
-      add(new THREE.BoxGeometry(span, STUD_WIDTH_M, depth), mid, midY, 0, memberInfo('blocking'))
+      add(new THREE.BoxGeometry(span, STUD_WIDTH_M, depth), mid, midY, 0, memberInfo('blocking'), cut('blocking', span))
     }
   }
 
   // ── Rough-opening framing: king + jack studs, header, cripples, sill ────────
   // Modelled like a real rough opening so placing a door/window reads as "frame
   // the opening first" — exactly how it'd be built on site.
+  //
+  // HEADERS ARE BOUGHT IN PLIES. A wood header is 1-3/4" LVL plied up to fill
+  // the wall: two in a 2×4, three in a 2×6, four in a 2×8. Drawn as one block,
+  // cut as that many pieces. The depth is the 9-1/4" the model draws — the span
+  // and the load above decide the real one.
+  const headerPlies = steel ? 2 : Math.max(1, Math.floor(studDepth / 0.0254 / 1.75 + 1e-6))
+  const headerStock = steel ? studStock : 'LVL 1-3/4 × 9-1/4'
   for (const op of ops) {
     const isDoor = op.type === 'door'
     const hw = op.w / 2
@@ -452,38 +525,40 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     // opening's own sill/height, clamped so low ceilings still frame sanely.
     const sill = isDoor ? 0 : (op.sillM ?? 0.9)
     const oh = op.heightM ?? (isDoor ? 2.06 : 1.13)
-    const roBot = isDoor ? studBottom : Math.min(studBottom + sill, studTop - studW - 0.3)
+    const roBot = isDoor ? floorY : Math.min(floorY + sill, studTop - studW - 0.3)
     const roTop = Math.min(roBot + oh, studTop - studW)
     // Wood openings get a beefy LVL header; steel keeps the slimmer box beam.
     const headerDepth = steel ? 0.18 : 0.235
 
-    // King studs — full height, just outside the opening.
-    for (const s of [-1, 1]) add(studGeo, op.x + s * (hw + studW * 1.5), studY, 0, memberInfo('king stud'))
+    // King studs — full stud length, just outside the opening.
+    for (const s of [-1, 1]) add(studGeo, op.x + s * (hw + studW * 1.5), studY, 0, memberInfo('king stud'), cut('king stud', studH))
 
-    // Jack studs — carry the header, from the floor up to the header.
+    // Jack studs — carry the header, from the bottom plate up to the header.
     const jackH = Math.max(0.05, roTop - studBottom)
     const jackGeo = new THREE.BoxGeometry(studW, jackH, studDepth)
-    for (const s of [-1, 1]) add(jackGeo, op.x + s * (hw + studW * 0.5), studBottom + jackH / 2, 0, memberInfo('jack stud'))
+    for (const s of [-1, 1]) add(jackGeo, op.x + s * (hw + studW * 0.5), studBottom + jackH / 2, 0, memberInfo('jack stud'), cut('jack stud', jackH))
 
     // Header spanning the opening, sitting on the jacks.
-    add(new THREE.BoxGeometry(op.w + studW * 2, headerDepth, studDepth), op.x, roTop + headerDepth / 2, 0,
-      steel ? memberInfo('box-beam header') : 'LVL header')
+    const headerLen = op.w + studW * 2
+    add(new THREE.BoxGeometry(headerLen, headerDepth, studDepth), op.x, roTop + headerDepth / 2, 0,
+      steel ? memberInfo('box-beam header') : 'LVL header', cut('header', headerLen, headerStock, headerPlies))
 
     // Cripple studs above the header up to the top plate/track.
     const cripBot = roTop + headerDepth
     if (studTop - cripBot > 0.05) {
       const ch = studTop - cripBot
       const cripGeo = new THREE.BoxGeometry(studW, ch, studDepth)
-      for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(cripGeo, cx, cripBot + ch / 2, 0, memberInfo('cripple stud'))
+      for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(cripGeo, cx, cripBot + ch / 2, 0, memberInfo('cripple stud'), cut('cripple', ch))
     }
 
-    // Windows also get a sill + cripples down to the bottom plate.
+    // Windows also get a sill + cripples down to the bottom plate. The sill fits
+    // BETWEEN the jacks, so it is cut to the rough-opening width.
     if (!isDoor) {
-      add(new THREE.BoxGeometry(op.w + studW * 2, studW, studDepth), op.x, roBot - studW / 2, 0, memberInfo('sill plate'))
+      add(new THREE.BoxGeometry(op.w, studW, studDepth), op.x, roBot - studW / 2, 0, memberInfo('sill plate'), cut('sill', op.w))
       const sbH = roBot - studW - studBottom
       if (sbH > 0.05) {
         const sillGeo = new THREE.BoxGeometry(studW, sbH, studDepth)
-        for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(sillGeo, cx, studBottom + sbH / 2, 0, memberInfo('sill cripple'))
+        for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(sillGeo, cx, studBottom + sbH / 2, 0, memberInfo('sill cripple'), cut('sill cripple', sbH))
       }
     }
   }
