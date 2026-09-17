@@ -117,3 +117,31 @@ export function ownedMaterial(o: THREE.Mesh): THREE.Material | THREE.Material[] 
   if (!Array.isArray(m) && m.userData?.sharedMemberColour) return null
   return m
 }
+
+/**
+ * TOP PLATES OFF — see the wall the way a panel layout draws it.
+ *
+ * A layout print is read from above: single studs, the L at a corner, the T
+ * where a partition lands, the packs under a load. In 3D the top and cap plates
+ * sit exactly on top of all of that and hide it. Hiding them (and steel top
+ * track) opens every stud head to view without touching anything else, and an
+ * invisible mesh is skipped by picking, so nothing hidden can be tapped.
+ */
+export function isTopPlate(tags: { info?: unknown; componentType?: unknown }): boolean {
+  const s = String(tags.componentType ?? tags.info ?? '').toLowerCase()
+  return /top[ -]plate|cap plate|top track/.test(s)
+}
+
+export function applyTopPlatesHidden(root: THREE.Object3D, hidden: boolean): void {
+  root.traverse((o) => {
+    const u = o.userData
+    if (!hidden) {
+      if (u.topPlateHidden) { o.visible = true; delete u.topPlateHidden }
+      return
+    }
+    if (u.topPlateHidden || !o.visible) return
+    if (!isTopPlate(u)) return
+    u.topPlateHidden = true
+    o.visible = false
+  })
+}

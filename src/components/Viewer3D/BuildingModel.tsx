@@ -14,7 +14,7 @@ import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructio
 import { blockMaterial, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { explodeRuntime, FLOOR_SEP, systemOffset } from './explodeRuntime'
 import { cinema } from '../../cinema/cinemaRuntime'
-import { applyMemberColours, ownedMaterial } from '../../services/memberColours'
+import { applyMemberColours, applyTopPlatesHidden, ownedMaterial } from '../../services/memberColours'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 
 /** Reused scratch vector for the per-system explode offset (one per frame). */
@@ -1208,6 +1208,7 @@ export default function BuildingModel({ layers }: Props) {
     explodeCurrentRef.current = 0
 
     applyMemberColours(group, useUISettingsStore.getState().memberColours)
+    applyTopPlatesHidden(group, useUISettingsStore.getState().topPlatesHidden)
 
     const timer = setTimeout(() => {
       setModelStatus('ready')
@@ -1224,6 +1225,10 @@ export default function BuildingModel({ layers }: Props) {
   useEffect(() => {
     if (groupRef.current) applyMemberColours(groupRef.current, memberColours)
   }, [memberColours])
+  const topPlatesHidden = useUISettingsStore((s) => s.topPlatesHidden)
+  useEffect(() => {
+    if (groupRef.current) applyTopPlatesHidden(groupRef.current, topPlatesHidden)
+  }, [topPlatesHidden])
 
   /**
    * MEMBER ISOLATION — one stick, in the clear.

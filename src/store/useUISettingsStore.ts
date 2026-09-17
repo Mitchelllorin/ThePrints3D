@@ -63,6 +63,8 @@ export interface UISettings {
   claddingVisible: boolean
   /** Colour each framing member by what it is — header, jack, king, pack… — instead of all wood. */
   memberColours: boolean
+  /** Hide top/cap plates and top track so the stud heads — L's, T's, packs — read from above. */
+  topPlatesHidden: boolean
   /** WHEN the floating dimension nameplates show on walls, joists and ceilings.
    *
    *  They are the right thing while you are laying one thing out and pure
@@ -171,6 +173,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   cladding: 'none',
   claddingVisible: false,
   memberColours: false,   // opt-in: not everybody wants a painted frame
+  topPlatesHidden: false,
   dimensionsMode: 'selected',
   presetMode: 'practice',
   heatingType: DEFAULT_HEATING,

@@ -91,3 +91,25 @@ describe('applyMemberColours on a real wall', () => {
     })
   })
 })
+
+describe('top plates off', () => {
+  it('hides only the top and cap plates, and puts them back', async () => {
+    const { applyTopPlatesHidden } = await import('./memberColours')
+    const g = buildWallFraming({ length: 3, height: 2.44, thickness: 0.09, material: 'wood' })
+    const vis = () => {
+      const out: Record<string, number> = {}
+      g.traverse((o) => { if (o instanceof THREE.Mesh && o.visible) { const k = String(o.userData.info).replace(/^\S+ /, ''); out[k] = (out[k] ?? 0) + 1 } })
+      return out
+    }
+    const before = vis()
+    expect(before['top plate']).toBeGreaterThan(0)
+    applyTopPlatesHidden(g, true)
+    const hidden = vis()
+    expect(hidden['top plate']).toBeUndefined()
+    expect(hidden['cap plate']).toBeUndefined()
+    expect(hidden['bottom plate']).toBe(before['bottom plate'])
+    expect(hidden['wood stud']).toBe(before['wood stud'])
+    applyTopPlatesHidden(g, false)
+    expect(vis()).toEqual(before)
+  })
+})

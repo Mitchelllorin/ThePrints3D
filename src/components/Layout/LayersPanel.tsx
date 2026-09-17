@@ -249,6 +249,17 @@ export default function LayersPanel() {
                   aria-pressed={ui.memberColours}
                 >{ui.memberColours ? 'On' : 'Off'}</button>
               </div>
+              {/* TOP PLATES — On shows them, Off lifts them away so the stud
+                  heads read from above the way a layout print draws them. */}
+              <div className={styles.layerRow}>
+                <span className={styles.layerDot} style={{ background: '#94a3b8', cursor: 'default' }} />
+                <span className={styles.layerName}>Top plates</span>
+                <button
+                  className={`${styles.layerToggle} ${!ui.topPlatesHidden ? styles.layerToggleOn : ''}`}
+                  onClick={() => setUI({ topPlatesHidden: !ui.topPlatesHidden })}
+                  aria-pressed={!ui.topPlatesHidden}
+                >{ui.topPlatesHidden ? 'Off' : 'On'}</button>
+              </div>
               {ui.memberColours && (
                 <ul className={styles.memberKey} aria-label="Framing colour key">
                   {MEMBER_KEY.map((m) => (

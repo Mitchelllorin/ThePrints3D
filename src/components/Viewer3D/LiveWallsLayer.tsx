@@ -19,7 +19,7 @@ import { buildWallFraming, buildMasonryWall, FLOOR_ASSEMBLY_H, type WallOpening 
 import { wallFramingSpec } from '../../services/constructionCode'
 import { XRAY_OPACITY } from './editHelpers'
 import { modelWalls } from '../../services/modelWalls'
-import { applyMemberColours, ownedMaterial } from '../../services/memberColours'
+import { applyMemberColours, applyTopPlatesHidden, ownedMaterial } from '../../services/memberColours'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import type { ParsedWall } from '../../types'
@@ -131,6 +131,8 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   // Colour by member — a material swap on the built group, never a rebuild.
   const memberColours = useUISettingsStore((s) => s.memberColours)
   useLayoutEffect(() => { applyMemberColours(framing, memberColours) }, [framing, memberColours])
+  const topPlatesHidden = useUISettingsStore((s) => s.topPlatesHidden)
+  useLayoutEffect(() => { applyTopPlatesHidden(framing, topPlatesHidden) }, [framing, topPlatesHidden])
 
   // Detail explode — spread this wall's framing members apart (plates lift, the
   // faces/layers pull out through the thickness) so you can see the assembly;
