@@ -18,11 +18,24 @@ import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { WALL_TYPES } from '../../data/members'
 import { parseSizeMm, ftIn, type FloorChoice } from '../../services/drawnProject'
+import type { AttachSide, FootprintBox } from '../../services/footprint'
+import FootprintPreview from './FootprintPreview'
 import styles from './DrawItSheet.module.css'
 
 /** What a first footprint is, more often than not: a 40 x 30 single storey. */
 const DEFAULT_WIDTH = "40'"
 const DEFAULT_DEPTH = "30'"
+
+/** A section, as typed. Kept as text so a half-typed size does not wipe itself. */
+interface WingDraft { id: number; width: string; depth: string; side: AttachSide; offset: string }
+
+/** Where a section can go, in plan words rather than screen words. */
+const SIDES: Array<{ id: AttachSide; label: string }> = [
+  { id: 'bottom', label: 'Back' },
+  { id: 'top', label: 'Front' },
+  { id: 'left', label: 'Left' },
+  { id: 'right', label: 'Right' },
+]
 
 const FLOORS: Array<{ id: FloorChoice; label: string; note: string }> = [
   { id: 'slab', label: 'Slab', note: '4" on grade' },
@@ -36,16 +49,42 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   const [depth, setDepth] = useState(DEFAULT_DEPTH)
   const [wallTypeKey, setWallTypeKey] = useState('wood-2x6')
   const [floor, setFloor] = useState<FloorChoice>('slab')
+  // MOST HOUSES ARE NOT ONE BOX. An L off the back, a garage on the side, a
+  // bump-out for the dining room — each of those is a section hung off the main
+  // one, and the walls follow the outline they make together.
+  const [wings, setWings] = useState<WingDraft[]>([])
 
   const widthMm = parseSizeMm(width)
   const depthMm = parseSizeMm(depth)
   // A building smaller than a shed or bigger than a city block is a typo.
   const sane = (mm: number | null) => mm !== null && mm >= 1000 && mm <= 120000
-  const ready = sane(widthMm) && sane(depthMm)
+  const mainOk = sane(widthMm) && sane(depthMm)
+
+  // Only the sections that measure to something real are drawn or built; a
+  // half-typed one waits rather than throwing the shape away.
+  const boxes: FootprintBox[] = mainOk ? [
+    { widthMm: widthMm!, depthMm: depthMm! },
+    ...wings.flatMap((w) => {
+      const ww = parseSizeMm(w.width), wd = parseSizeMm(w.depth)
+      if (!sane(ww) || !sane(wd)) return []
+      const off = w.offset.trim() === '' ? 0 : parseSizeMm(w.offset.replace(/^-/, ''))
+      if (off === null) return []
+      return [{ widthMm: ww!, depthMm: wd!, attach: { side: w.side, offsetMm: w.offset.trim().startsWith('-') ? -off : off } }]
+    }),
+  ] : []
+  const ready = mainOk
+
+  const addWing = () => setWings((ws) => [...ws, { id: Date.now(), width: "12'", depth: "14'", side: 'bottom', offset: '0' }])
+  const setWing = (id: number, patch: Partial<WingDraft>) =>
+    setWings((ws) => ws.map((w) => (w.id === id ? { ...w, ...patch } : w)))
+  const dropWing = (id: number) => setWings((ws) => ws.filter((w) => w.id !== id))
 
   const start = () => {
     if (!ready) return
-    startDrawnProject({ widthMm: widthMm!, depthMm: depthMm!, wallTypeKey, floor, name: 'New project' })
+    startDrawnProject({
+      widthMm: widthMm!, depthMm: depthMm!, wallTypeKey, floor, name: 'New project',
+      wings: boxes.slice(1),
+    })
     onClose()
   }
 
@@ -91,6 +130,48 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
             ? `${ftIn(widthMm!)} × ${ftIn(depthMm!)}`
             : 'Type a size: 40, 40′, 40′ 6″, or 12.2m'}
         </p>
+
+        {/* The shape, drawn, while it is typed. */}
+        {boxes.length > 0 && (
+          <div className={styles.preview}>
+            <FootprintPreview boxes={boxes} />
+          </div>
+        )}
+
+        <span className={styles.label}>Sections</span>
+        {wings.map((w, i) => (
+          <div key={w.id} className={styles.wing}>
+            <div className={styles.wingHead}>
+              <span className={styles.wingName}>Section {i + 2}</span>
+              <button className={styles.wingDrop} onClick={() => dropWing(w.id)} aria-label={`Remove section ${i + 2}`}>Remove</button>
+            </div>
+            <div className={styles.sizes}>
+              <label className={styles.field}>
+                <span className={styles.label}>Width</span>
+                <input className={styles.input} value={w.width} onChange={(e) => setWing(w.id, { width: e.target.value })} aria-label={`Section ${i + 2} width`} />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>Depth</span>
+                <input className={styles.input} value={w.depth} onChange={(e) => setWing(w.id, { depth: e.target.value })} aria-label={`Section ${i + 2} depth`} />
+              </label>
+            </div>
+            <div className={styles.row}>
+              {SIDES.map((sd) => (
+                <button
+                  key={sd.id}
+                  className={`${styles.side} ${w.side === sd.id ? styles.chosen : ''}`}
+                  onClick={() => setWing(w.id, { side: sd.id })}
+                  aria-pressed={w.side === sd.id}
+                >{w.side === sd.id ? '✓ ' : ''}{sd.label}</button>
+              ))}
+            </div>
+            <label className={styles.field}>
+              <span className={styles.label}>Along that side, from the corner</span>
+              <input className={styles.input} value={w.offset} onChange={(e) => setWing(w.id, { offset: e.target.value })} aria-label={`Section ${i + 2} offset`} />
+            </label>
+          </div>
+        ))}
+        <button className={styles.addWing} onClick={addWing}>+ Add a section</button>
 
         <span className={styles.label}>Shell</span>
         <select

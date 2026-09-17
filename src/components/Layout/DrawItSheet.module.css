@@ -113,3 +113,64 @@
   .sheet { animation: rise 180ms ease-out; }        /* transform only */
   @keyframes rise { from { transform: translate(-50%, 12px); } to { transform: translate(-50%, 0); } }
 }
+
+/* The shape being typed. Sits on the solid sheet, so it needs no glass. */
+.preview {
+  background: var(--bp-panel-2, #1e2833);
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+/* One section of the building. A container earns its border here: it groups
+   four controls that belong to the same box, and the sheet holds several. */
+.wing {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+}
+.wingHead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.wingName { font-size: 14px; font-weight: 700; }
+.wingDrop {
+  min-height: 48px;
+  padding: 0 12px;
+  background: none;
+  border: none;
+  color: var(--bp-bad, #e5643f);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.side {
+  flex: 1;
+  min-height: 48px;
+  padding: 0 6px;
+  background: none;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  color: var(--bp-text, #e8eef5);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.addWing {
+  min-height: 48px;
+  background: none;
+  border: 1px dashed var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  color: var(--bp-accent, #3d9ae8);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* The chosen side, spelled out again for the side chips: `.side` is declared
+   after `.chosen`, and at equal specificity the later rule wins — so without
+   this the picked side showed its check but kept the unpicked fill. */
+.side.chosen {
+  background: rgba(61, 154, 232, 0.16);
+  border-color: var(--bp-accent, #3d9ae8);
+  border-width: 2px;
+}

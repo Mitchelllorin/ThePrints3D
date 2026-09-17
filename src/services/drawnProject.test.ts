@@ -76,7 +76,7 @@ describe('nothing here is guessed', () => {
 
 describe('the floor goes down before the walls', () => {
   it('lays a slab over the whole footprint', () => {
-    const f = createDrawnProject(spec).floorArea!
+    const f = createDrawnProject(spec).floorAreas[0]
     expect(f).toBeTruthy()
     expect(f.elementType).toBe('Concrete Slab')
     expect((f.x2 - f.x1) * DRAWN_MM_PER_PX).toBeCloseTo(40 * FT, 6)
@@ -84,11 +84,49 @@ describe('the floor goes down before the walls', () => {
   })
 
   it('lays joists instead when asked', () => {
-    expect(createDrawnProject({ ...spec, floor: 'joists' }).floorArea!.elementType).toBe('2x10')
+    expect(createDrawnProject({ ...spec, floor: 'joists' }).floorAreas[0].elementType).toBe('2x10')
   })
 
   it('leaves it out when the floor is for later — every step is optional', () => {
-    expect(createDrawnProject({ ...spec, floor: 'none' }).floorArea).toBeNull()
+    expect(createDrawnProject({ ...spec, floor: 'none' }).floorAreas).toEqual([])
+  })
+})
+
+describe('a house is a series of boxes', () => {
+  // 32 x 26 with a 12 x 14 kitchen wing off the back, flush at the left.
+  const L = {
+    ...spec, widthMm: 32 * FT, depthMm: 26 * FT,
+    wings: [{ widthMm: 12 * FT, depthMm: 14 * FT, attach: { side: 'bottom' as const, offsetMm: 0 } }],
+  }
+
+  it('frames the L as six walls — no wall through the join', () => {
+    const p = createDrawnProject(L)
+    expect(p.drawing.parsedWalls).toHaveLength(6)
+    expect(p.drawing.parsedWalls.every((w) => w.source === 'user')).toBe(true)
+  })
+
+  it('measures the whole building outside face to outside face', () => {
+    const got = outside(createDrawnProject(L))
+    expect(got.width).toBeCloseTo(32 * FT, 6)
+    expect(got.depth).toBeCloseTo((26 + 14) * FT, 6)
+  })
+
+  it('closes the loop, every wall end meeting the next', () => {
+    const w = createDrawnProject(L).drawing.parsedWalls
+    for (let i = 0; i < w.length; i++) {
+      const next = w[(i + 1) % w.length]
+      expect(w[i].x2).toBeCloseTo(next.x1, 6)
+      expect(w[i].y2).toBeCloseTo(next.y1, 6)
+    }
+  })
+
+  it('puts a floor under both legs', () => {
+    expect(createDrawnProject(L).floorAreas).toHaveLength(2)
+  })
+
+  it('builds every wall of it — nothing detected, nothing dropped', () => {
+    const p = createDrawnProject(L)
+    expect(modelWalls([p.drawing as unknown as Drawing])).toHaveLength(6)
   })
 })
 

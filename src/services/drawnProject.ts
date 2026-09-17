@@ -26,6 +26,10 @@
 import type { Drawing, ParsedWall, TracedLine, WorkspaceWizardInputs } from '../types'
 import { getWallType, getMember } from '../data/members'
 import { formatFeetInches, parseFeetInches } from './unitConverter'
+import {
+  placeBoxes, footprintOutline, insetOutline, outlineBounds, translateOutline,
+  type FootprintBox, type Point,
+} from './footprint'
 
 /** Millimetres per sheet pixel. Matches the practice plans, so both paths draw alike. */
 export const DRAWN_MM_PER_PX = 10
@@ -38,9 +42,16 @@ const MM_PER_IN = 25.4
 export type FloorChoice = 'slab' | 'joists' | 'none'
 
 export interface DrawnProjectSpec {
-  /** Outside face to outside face, millimetres. */
+  /** Outside face to outside face, millimetres. The MAIN box. */
   widthMm: number
   depthMm: number
+  /**
+   * The rest of the building. A house is a series of boxes — an L off the back,
+   * a garage on the side, a bump-out for the dining room — and each of these
+   * hangs off a side of the main box. Left out, it is the plain rectangle.
+   * See services/footprint for how they become one outline.
+   */
+  wings?: FootprintBox[]
   /** Shell wall type, a key from the member catalogue's WALL_TYPES. */
   wallTypeKey: string
   /** What goes under it. 'none' leaves the floor for later — every step is optional. */
@@ -58,8 +69,10 @@ export interface DrawnProject {
     | 'uploadedAt' | 'type'>
   /** Metres, for the overlay that lays the sheet on the ground. */
   overlayScale: [number, number]
-  /** The floor area to lay under it, or null when the floor is left for later. */
-  floorArea: TracedLine | null
+  /** The floor under it — one rectangle per box, empty when left for later. */
+  floorAreas: TracedLine[]
+  /** The outside face of the building, in sheet pixels, for anyone drawing it. */
+  outlinePx: Point[]
   wizardInputs: WorkspaceWizardInputs
 }
 
@@ -80,9 +93,11 @@ export function ftIn(mm: number): string {
  * under the model is a drawing of what you typed rather than an empty page. The
  * grid is at 1 ft, which is what makes it read as squared paper you can trace on.
  */
-function sheetSvg(spec: DrawnProjectSpec, wPx: number, hPx: number, rect: { x1: number; y1: number; x2: number; y2: number }, tPx: number): string {
+function sheetSvg(spec: DrawnProjectSpec, wPx: number, hPx: number, outline: readonly Point[], tPx: number, sizeMm: { w: number; d: number }): string {
   const grid = MM_PER_FT / DRAWN_MM_PER_PX
-  const label = `${ftIn(spec.widthMm)} × ${ftIn(spec.depthMm)}`
+  const label = `${ftIn(sizeMm.w)} × ${ftIn(sizeMm.d)}`
+  const path = outline.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') + ' Z'
+  const bounds = outlineBounds(outline)
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${wPx}" height="${hPx}" viewBox="0 0 ${wPx} ${hPx}">
     <defs>
       <pattern id="ft" width="${grid}" height="${grid}" patternUnits="userSpaceOnUse">
@@ -91,10 +106,9 @@ function sheetSvg(spec: DrawnProjectSpec, wPx: number, hPx: number, rect: { x1: 
     </defs>
     <rect width="${wPx}" height="${hPx}" fill="#f8fafc"/>
     <rect width="${wPx}" height="${hPx}" fill="url(#ft)"/>
-    <rect x="${rect.x1}" y="${rect.y1}" width="${rect.x2 - rect.x1}" height="${rect.y2 - rect.y1}"
-      fill="none" stroke="#0f172a" stroke-width="${tPx}"/>
-    <text x="${wPx / 2}" y="${rect.y1 - 10}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${ftIn(spec.widthMm)}</text>
-    <text x="${rect.x1 - 12}" y="${hPx / 2}" text-anchor="middle" transform="rotate(-90 ${rect.x1 - 12} ${hPx / 2})" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${ftIn(spec.depthMm)}</text>
+    <path d="${path}" fill="none" stroke="#0f172a" stroke-width="${tPx}" stroke-linejoin="miter"/>
+    <text x="${wPx / 2}" y="${bounds.y1 - 10}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${ftIn(sizeMm.w)}</text>
+    <text x="${bounds.x1 - 12}" y="${hPx / 2}" text-anchor="middle" transform="rotate(-90 ${bounds.x1 - 12} ${hPx / 2})" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${ftIn(sizeMm.d)}</text>
     <text x="14" y="${hPx - 14}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155">${spec.name ?? 'New project'}</text>
     <text x="${wPx - 14}" y="${hPx - 14}" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="12" fill="#64748b">Drawn to size · ${label}</text>
   </svg>`
@@ -107,21 +121,30 @@ function sheetSvg(spec: DrawnProjectSpec, wPx: number, hPx: number, rect: { x1: 
  * nothing has to be believed. They build straight away and they are editable
  * like any wall you drew yourself.
  */
-export function shellWalls(spec: DrawnProjectSpec, rect: { x1: number; y1: number; x2: number; y2: number }, tPx: number): ParsedWall[] {
-  const wall = (x1: number, y1: number, x2: number, y2: number): ParsedWall => ({
-    x1, y1, x2, y2,
+export function shellWalls(spec: DrawnProjectSpec, centreline: readonly Point[], tPx: number): ParsedWall[] {
+  const wall = (a: Point, b: Point): ParsedWall => ({
+    x1: a.x, y1: a.y, x2: b.x, y2: b.y,
     thickness: tPx,
     source: 'user',
     framingType: spec.wallTypeKey,
     wallRole: 'exterior-bearing',
     level: 0,
   } as ParsedWall)
-  return [
-    wall(rect.x1, rect.y1, rect.x2, rect.y1),   // front
-    wall(rect.x2, rect.y1, rect.x2, rect.y2),   // right
-    wall(rect.x2, rect.y2, rect.x1, rect.y2),   // back
-    wall(rect.x1, rect.y2, rect.x1, rect.y1),   // left
-  ]
+  const out: ParsedWall[] = []
+  for (let i = 0; i < centreline.length; i++) {
+    const a = centreline[i]
+    const b = centreline[(i + 1) % centreline.length]
+    // A wing flush with a corner leaves no wall along that edge; skip the
+    // zero-length run rather than framing a stud cage with nothing in it.
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 1e-6) continue
+    out.push(wall(a, b))
+  }
+  return out
+}
+
+/** Every box of the building, main first, in the shape the footprint service takes. */
+export function specBoxes(spec: DrawnProjectSpec): FootprintBox[] {
+  return [{ widthMm: spec.widthMm, depthMm: spec.depthMm }, ...(spec.wings ?? [])]
 }
 
 /** Feet, from millimetres, for the wizard summary lines. */
@@ -130,18 +153,25 @@ const ftOf = (mm: number): string => `${Math.round((mm / MM_PER_FT) * 10) / 10}f
 export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
   const tMm = shellThicknessMm(spec.wallTypeKey)
   const px = (mm: number) => mm / DRAWN_MM_PER_PX
-  const wPx = Math.round(px(spec.widthMm + MARGIN_MM * 2))
-  const hPx = Math.round(px(spec.depthMm + MARGIN_MM * 2))
-  const tPx = px(tMm)
-  // Centrelines, half a wall inside the outside face you typed.
-  const rect = {
-    x1: px(MARGIN_MM) + tPx / 2,
-    y1: px(MARGIN_MM) + tPx / 2,
-    x2: px(MARGIN_MM + spec.widthMm) - tPx / 2,
-    y2: px(MARGIN_MM + spec.depthMm) - tPx / 2,
-  }
 
-  const svg = sheetSvg(spec, wPx, hPx, rect, tPx)
+  // Every box, unioned into one outside face. A shared edge between two boxes is
+  // not a wall — you do not frame the join between a house and its own wing.
+  const rects = placeBoxes(specBoxes(spec))
+  const raw = footprintOutline(rects)
+  const bounds = outlineBounds(raw)
+  const sizeMm = { w: bounds.x2 - bounds.x1, d: bounds.y2 - bounds.y1 }
+  const wPx = Math.round(px(sizeMm.w + MARGIN_MM * 2))
+  const hPx = Math.round(px(sizeMm.d + MARGIN_MM * 2))
+  const tPx = px(tMm)
+
+  // Onto the sheet: the outside face in pixels, margin included, then the wall
+  // centrelines half a thickness inside it.
+  const toSheet = (poly: readonly Point[]) =>
+    translateOutline(poly.map((p) => ({ x: px(p.x), y: px(p.y) })), px(MARGIN_MM - bounds.x1), px(MARGIN_MM - bounds.y1))
+  const outlinePx = toSheet(raw)
+  const centreline = insetOutline(outlinePx, tPx / 2)
+
+  const svg = sheetSvg(spec, wPx, hPx, outlinePx, tPx, sizeMm)
   let file: File
   try {
     file = new File([svg], 'drawn-project.svg', { type: 'image/svg+xml' })
@@ -153,17 +183,20 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
 
   // The floor covers the OUTSIDE of the shell — a slab is poured to the outside
   // face and joists run to the outside of the rim, so the footprint is the area.
-  const floorArea: TracedLine | null = spec.floor === 'none' ? null : {
-    id: `floor-drawn-${Date.now()}`,
-    x1: px(MARGIN_MM),
-    y1: px(MARGIN_MM),
-    x2: px(MARGIN_MM + spec.widthMm),
-    y2: px(MARGIN_MM + spec.depthMm),
+  // One rectangle per box, because a floor area is a rectangle: an L gets two,
+  // which lay down as one continuous floor.
+  const stamp = Date.now()
+  const floorAreas: TracedLine[] = spec.floor === 'none' ? [] : rects.map((r, i) => ({
+    id: `floor-drawn-${stamp}-${i}`,
+    x1: px(r.x1 - bounds.x1 + MARGIN_MM),
+    y1: px(r.y1 - bounds.y1 + MARGIN_MM),
+    x2: px(r.x2 - bounds.x1 + MARGIN_MM),
+    y2: px(r.y2 - bounds.y1 + MARGIN_MM),
     elementType: spec.floor === 'slab' ? 'Concrete Slab' : '2x10',
     size: spec.floor === 'slab' ? '4in' : '2x10',
     material: spec.floor === 'slab' ? 'Concrete' : 'Wood',
     level: 0,
-  }
+  }))
 
   const wallType = getWallType(spec.wallTypeKey)
   return {
@@ -176,7 +209,7 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
       rasterUrl: url,
       rasterWidth: wPx,
       rasterHeight: hPx,
-      parsedWalls: shellWalls(spec, rect, tPx),
+      parsedWalls: shellWalls(spec, centreline, tPx),
       parsedRooms: [],
       parsedOpenings: [],
       parsedText: [],
@@ -193,10 +226,11 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
       type: 'floor-plan',
     },
     overlayScale: [(wPx * DRAWN_MM_PER_PX) / 1000, (hPx * DRAWN_MM_PER_PX) / 1000],
-    floorArea,
+    floorAreas,
+    outlinePx,
     wizardInputs: {
-      set1BuildingBasics: `${ftOf(spec.widthMm)} x ${ftOf(spec.depthMm)} footprint, 8ft ceiling, 1 floor, ${spec.floor === 'slab' ? 'slab' : spec.floor === 'joists' ? 'crawlspace' : 'foundation not chosen'}`,
-      set1Clarifications: 'Drawn to typed sizes rather than traced from a print.',
+      set1BuildingBasics: `${ftOf(sizeMm.w)} x ${ftOf(sizeMm.d)} footprint, 8ft ceiling, 1 floor, ${spec.floor === 'slab' ? 'slab' : spec.floor === 'joists' ? 'crawlspace' : 'foundation not chosen'}`,
+      set1Clarifications: `Drawn to typed sizes rather than traced from a print.${(spec.wings?.length ?? 0) > 0 ? ` ${(spec.wings ?? []).length + 1} sections.` : ''}`,
       set2StructuralDetails: `Exterior ${wallType?.short ?? 'wood'} bearing walls.`,
       set2Clarifications: 'Interior partitions to be added.',
       set3FinishingDetails: 'Finishes not chosen yet.',

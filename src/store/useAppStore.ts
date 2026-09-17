@@ -1786,7 +1786,8 @@ export const useAppStore = create<AppState>()(
         }
         // FLOOR BEFORE WALLS, the way it is built. The slab (or the joist field)
         // goes down first and the shell stands on it.
-        if (project.floorArea) s.floorsAreas.push(project.floorArea)
+        // One area per box of the footprint, so an L gets a floor under both legs.
+        if (project.floorAreas.length) s.floorsAreas.push(...project.floorAreas)
         s.wizardState = {
           ...DEFAULT_WIZARD_STATE,
           currentGroup: 'group3',
