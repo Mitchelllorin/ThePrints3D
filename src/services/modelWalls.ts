@@ -136,8 +136,31 @@ export function attachedReturnAnchor(
 }
 
 /**
+ * IS THE SCALE KNOWN, OR GUESSED?
+ *
+ * 'parsed' means the number was READ — off the title block, off a stated total
+ * area, or typed in by the user at calibration (which writes 'parsed'). Anything
+ * else is inference from line weights and door widths, and on a phone photo or a
+ * plain PNG it is regularly out by a factor of three or four.
+ *
+ * Nothing gets built from a guess. Upload a 32 ft bungalow, have the scale
+ * inferred at 44.8 mm/px against a true 10, and the app used to stand up forty
+ * nine detected walls at four and a half times life size before it got round to
+ * admitting it could not read the scale. The walls are not wrong — the ruler is.
+ */
+export function scaleIsKnown(d: Pick<Drawing, 'scaleConfidence'>): boolean {
+  return d.scaleConfidence === 'parsed'
+}
+
+/**
  * The walls to build, across every drawing: traced ones first (index-stable),
  * then the detected ones worth showing.
+ *
+ * A TRACED wall is always built: the user drew it, at a size they chose. A
+ * DETECTED wall is only built once the scale is known — until then it stays a
+ * suggestion on the print (FloorplanOverlay draws them faded; a tap adopts one
+ * into the model), which is what detection was agreed to be. It is never the
+ * source of truth for how big the building is.
  */
 export function modelWalls(drawings: Drawing[]): ModelWall[] {
   const traced: ModelWall[] = []
@@ -145,8 +168,10 @@ export function modelWalls(drawings: Drawing[]): ModelWall[] {
   /** Too short to stand on their own — candidates for the return rescue below. */
   const shortlisted: ModelWall[] = []
   for (const d of drawings) {
+    const known = scaleIsKnown(d)
     for (const w of d.parsedWalls) {
       if (w.source === 'user') traced.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
+      else if (!known) continue                      // a suggestion, not a wall
       else if (autoWallIsReal(w)) detected.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
       else shortlisted.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
     }

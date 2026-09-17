@@ -720,6 +720,19 @@ export default function WorkspaceLayout() {
     const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
     return !!d && d.scaleMmPerPx !== null && d.scaleConfidence === 'parsed'
   })
+  /**
+   * READING THE PRINT — the feedback an upload never had.
+   *
+   * Processing a sheet takes several seconds on a phone and the better part of
+   * half a minute on a tired laptop: raster, detect, OCR, scale. The only
+   * progress bar in the app lives in DrawingManager, which is mounted NOWHERE,
+   * so browsing for a file and picking one looked like nothing happening at
+   * all — and the natural response to that is to press something else.
+   */
+  const readingPct = useAppStore((st) => {
+    const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+    return d && d.status === 'processing' ? Math.min(99, Math.max(1, Math.round(d.parseProgress ?? 0))) : null
+  })
   const activeDrawingId = useAppStore((st) => {
     const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
     return d?.id ?? null
@@ -1612,6 +1625,15 @@ export default function WorkspaceLayout() {
       {/* STAND THEM UP — the next step, on the perimeter where it can be seen.
           See .standUpChip. Shown only while there is something read off a plan
           and nothing built from it yet, so it is a step rather than chrome. */}
+      {/* Reading a print: same place the next step appears, because it IS the
+          step in progress. A readout, not a control — it takes no pointers. */}
+      {readingPct !== null && (
+        <div className={styles.readingChip} role="status" aria-live="polite">
+          Reading the print
+          <span className={styles.readingChipPct}>{readingPct}%</span>
+        </div>
+      )}
+
       {nextStep && (
         <button className={styles.standUpChip} onClick={nextStep.run}>
           {nextStep.label}

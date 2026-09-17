@@ -1153,3 +1153,42 @@
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.35);
 }
+
+/* READING THE PRINT — the upload's own progress, in the place the next step
+   appears, because it is the step in progress. Not a button: no pointer events,
+   nothing to tap. Same glass as .standUpChip — it sits over the model, and tint
+   plus blur is what keeps a readout legible as the scene turns behind it. */
+.readingChip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  z-index: var(--z-hud);
+
+  min-height: 48px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.82);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid var(--bp-line, #2c3a4a);
+
+  color: var(--bp-text, #f1f5f9);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .readingChip { background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.95); }
+}
+.readingChipPct {
+  color: var(--bp-accent, #2f80ff);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}

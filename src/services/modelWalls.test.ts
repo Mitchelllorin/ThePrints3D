@@ -1,12 +1,44 @@
 import { describe, it, expect } from 'vitest'
-import { modelWalls, tracedWallCount, autoWallIsReal, isAttachedReturn, MIN_AUTO_WALL_PX } from './modelWalls'
+import { modelWalls, tracedWallCount, autoWallIsReal, isAttachedReturn, scaleIsKnown, MIN_AUTO_WALL_PX } from './modelWalls'
 import type { ParsedWall, Drawing } from '../types'
 
 const wall = (x1: number, y1: number, x2: number, y2: number, source: 'user' | 'auto'): ParsedWall =>
   ({ x1, y1, x2, y2, thickness: 8, confidence: 1, source } as ParsedWall)
 
+/** A drawing whose scale was READ — the state in which detection may be built. */
 const drawing = (walls: ParsedWall[], scaleMmPerPx: number | null = 10): Drawing =>
-  ({ id: 'd1', parsedWalls: walls, scaleMmPerPx } as unknown as Drawing)
+  ({ id: 'd1', parsedWalls: walls, scaleMmPerPx, scaleConfidence: 'parsed' } as unknown as Drawing)
+
+/** A drawing whose scale was GUESSED — an upload nobody has calibrated yet. */
+const guessed = (walls: ParsedWall[], scaleMmPerPx: number | null = 44.8): Drawing =>
+  ({ id: 'd2', parsedWalls: walls, scaleMmPerPx, scaleConfidence: 'inferred' } as unknown as Drawing)
+
+describe('nothing is built from a guessed scale', () => {
+  it('holds detected walls back until the scale is known', () => {
+    // The failure this exists for: upload a 32 ft bungalow, have the scale
+    // inferred at 44.8 mm/px against a true 10, and forty nine detected walls
+    // stand up at four and a half times life size before the app admits it
+    // could not read the scale.
+    const walls = [wall(0, 0, 400, 0, 'auto'), wall(0, 0, 0, 400, 'auto')]
+    expect(modelWalls([guessed(walls)])).toEqual([])
+    expect(modelWalls([drawing(walls)]).length).toBe(2)
+  })
+
+  it('still builds what the user traced, guess or no guess', () => {
+    // A traced wall is the user's own line at a size they chose; the scale being
+    // unread is not a reason to refuse to show it.
+    const out = modelWalls([guessed([wall(9, 9, 409, 9, 'user'), wall(0, 0, 400, 0, 'auto')])])
+    expect(out.length).toBe(1)
+    expect(out[0].wall.source).toBe('user')
+  })
+
+  it('counts only a READ scale as known — a guess is not one', () => {
+    expect(scaleIsKnown({ scaleConfidence: 'parsed' })).toBe(true)
+    expect(scaleIsKnown({ scaleConfidence: 'inferred' })).toBe(false)
+    expect(scaleIsKnown({ scaleConfidence: 'fallback' })).toBe(false)
+    expect(scaleIsKnown({ scaleConfidence: null })).toBe(false)
+  })
+})
 
 describe('the walls the model is built from', () => {
   it('builds detected walls, not just traced ones', () => {
