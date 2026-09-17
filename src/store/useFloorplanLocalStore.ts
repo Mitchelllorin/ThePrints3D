@@ -556,14 +556,33 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
    *  tap that replaces the card appearing on its own. Toggles, so the same mark
    *  puts it away again. */
   openSelectionPanel: () => set((s) => {
-    if (s.activePanel) return { activePanel: null }
+    if (s.activePanel) return { activePanel: null, buildDrawerOpen: false }
     const k = s.editSelected?.kind
+    /**
+     * A WALL'S SPECS LIVE IN THE BUILD DRAWER, so that is what this opens.
+     *
+     * The mark said "Specs for this wall" and set `activePanel: 'wall'` — which
+     * nothing renders. Only placed objects ever had a property card, so for a
+     * wall, a floor, a roof or a trade run the button did nothing at all, on a
+     * rail whose whole promise is that everything you can select, you can edit.
+     *
+     * The wall editor already exists and is good — member, role, span, board,
+     * finishes, trim — it just lives in the Build drawer's "Wall selected" step.
+     * Pointing the mark at the editor that exists beats building a second one
+     * beside it and letting the two drift.
+     */
+    const opensDrawer = k === 'wall' || k === 'line' || k === 'floor' || k === 'roof'
     return {
       activePanel: k === 'object' ? 'object'
         : k === 'wall' ? 'wall'
         : k === 'line' ? 'line'
         : k === 'floor' || k === 'roof' ? 'area'
         : null,
+      // Same exclusivity setDrawerOpen enforces: one surface over the
+      // workspace at a time.
+      ...(opensDrawer
+        ? { buildDrawerOpen: true, settingsDrawerOpen: false, placeDrawerOpen: false, askDrawerOpen: false }
+        : {}),
     }
   }),
   armPlaceExclusive: (type) => set({ activePanel: null, placeObjectType: type, placeGhost: null, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, selectedArea: null, editSelected: null }),

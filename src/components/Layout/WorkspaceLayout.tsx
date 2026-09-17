@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
 import ProjectLibrary from '../Projects/ProjectLibrary'
-import GCBubble from './GCBubble'
 import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
@@ -689,6 +688,73 @@ export default function WorkspaceLayout() {
   )
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const setIsolatedFloor = useFloorplanLocalStore((s) => s.setIsolatedFloor)
+  /**
+   * THE NEXT STEP, ON THE PERIMETER, ONE AT A TIME.
+   *
+   * After an import the app knew two things the user needed to do and said
+   * neither: the scale was a guess, and nothing had been built yet. Both lived
+   * in the Build drawer, which is shut by default — on a 360px screen the build
+   * button sat at left:-242px. The G.C. bubble used to paper over that seam by
+   * speaking up unasked, which is why it was removed, and removing it left the
+   * seam bare.
+   *
+   * ONE chip, not two stacked: there is one next step at a time. Scale comes
+   * first and deliberately so — a wall in the wrong place is visible and can be
+   * dragged, but a drawing at the wrong scale looks right and is wrong in every
+   * number that comes out of it, and building first bakes that in.
+   *
+   * Selected as PRIMITIVES, one call each. A selector returning an object makes
+   * a new one every render and zustand compares by reference, so the component
+   * would re-render on every unrelated store write.
+   */
+  const planWalls = useAppStore((st) => {
+    const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+    return d && d.status === 'ready' ? (d.parsedWalls?.length ?? 0) : 0
+  })
+  const planReady = useAppStore((st) => {
+    const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+    return !!d && d.status === 'ready'
+  })
+  // Only a scale READ off the sheet counts — see FloorplanPanel's isCalibrated.
+  const scaleIsRead = useAppStore((st) => {
+    const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+    return !!d && d.scaleMmPerPx !== null && d.scaleConfidence === 'parsed'
+  })
+  const activeDrawingId = useAppStore((st) => {
+    const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+    return d?.id ?? null
+  })
+  const modelIdle = useAppStore((st) => st.model.status === 'idle')
+  const calibrationHandled = useFloorplanLocalStore(
+    (st) => !!activeDrawingId && st.calibrationHandledIds.includes(activeDrawingId),
+  )
+  const inCalibration = useAppStore((st) => st.floorplanOverlay.calibrationMode)
+
+  const setScale = useCallback(() => {
+    const fp = useFloorplanLocalStore.getState()
+    fp.setTraceMode(false); fp.setTraceStroke([])
+    fp.setCalibrationA(null); fp.setCalibrationB(null)
+    fp.setHoverPixel(null); fp.setDistanceInput('')
+    // The drawer carries the step-by-step prompts, so open it with the mode.
+    fp.setDrawerOpen('build', true)
+    useAppStore.getState().updateFloorplanOverlay({ calibrationMode: true, guidedStep: 1, locked: false }, false)
+  }, [])
+
+  const standThemUp = useCallback(() => {
+    // Same order as every other build door: hang the openings, frame around
+    // them, then run the shell again for the roof.
+    const app = useAppStore.getState()
+    app.finishShell(); app.buildForMe(); app.finishShell()
+  }, [])
+
+  const nextStep = !planReady || traceMode || inCalibration
+    ? null
+    : !scaleIsRead && !calibrationHandled
+      ? { label: 'Set the scale', note: "couldn't read it", run: setScale }
+      : planWalls > 0 && modelIdle
+        ? { label: 'Stand them up', note: `${planWalls} wall${planWalls === 1 ? '' : 's'}`, run: standThemUp }
+        : null
+
   // What the selection can be told to do. Buttons, not handles — see selectionEdit.
   const selectionEdit = useSelectionEdit()
 
@@ -1543,15 +1609,28 @@ export default function WorkspaceLayout() {
       {/* Ambient inference nudge — gentle "snap flush?" prompt, bottom-centre. */}
       <InferencePrompt />
 
-      {/* THE NEXT-STEP COACH, back — because with it gone there was no guidance
-          at all. It was pulled for two fair reasons: it floated over other
-          menus, and its suggestion order was wrong. Both are fixed rather than
-          waved away — generalContractor.ts now requires real walls before it declares
-          the model finished (floor → walls → build → done, in step), and the
-          bubble goes silent whenever a drawer is open, on the same principle as
-          its existing busy gate: if the user is doing something, say nothing.
-          One line at a time, dismissible, with a button that does the step. */}
-      <GCBubble />
+      {/* STAND THEM UP — the next step, on the perimeter where it can be seen.
+          See .standUpChip. Shown only while there is something read off a plan
+          and nothing built from it yet, so it is a step rather than chrome. */}
+      {nextStep && (
+        <button className={styles.standUpChip} onClick={nextStep.run}>
+          {nextStep.label}
+          <span className={styles.standUpChipCount}>{nextStep.note}</span>
+        </button>
+      )}
+
+      {/* THE G.C. IS OUT.
+          It was an ambient assistant that spoke up when the workspace went
+          quiet: one suggestion at a time, with a button that did the step. Two
+          things retired it. It talked over the work — it arrived unasked across
+          the top of the frame, including in the footage, offering to stand up
+          walls that were already standing. And the one action it alone could
+          reach, "Stand them up", was the end of the whole intake workflow
+          hanging off a bubble that dismissed itself after fifteen seconds. That
+          action is now a step in the Build drawer, where it can be found twice.
+          `generalContractor.ts` and its tests are left in place: the suggestion
+          ladder is sound work and the next thing that needs to know "what is
+          the next step here" should read it rather than write it again. */}
 
       {/* The guided "build a whole house" walkthrough (its own persistent card). */}
       <TutorialCoach />

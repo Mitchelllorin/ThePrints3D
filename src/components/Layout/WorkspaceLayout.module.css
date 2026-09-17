@@ -1059,3 +1059,69 @@
   .editRail { top: 92px; right: 2px; gap: 8px; max-height: calc(100dvh - 321px); }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   STAND THEM UP — the one thing to do next, where you can see it.
+
+   Importing a plan read 21 walls off it and then said nothing: the build action
+   lived in the Build drawer, the drawer is shut by default, and the button sat
+   at left:-242px on a 360px screen. Before that the G.C. bubble covered the
+   gap by speaking up unasked, which is why it was removed — so the seam was
+   left with nothing across it at all.
+
+   ONE CONTROL, SO IT IS A CHIP AND NOT A PANEL: it carries its own tint and
+   blur and sits straight on the canvas rather than wrapping a bigger opaque
+   rectangle round a single button. Bottom edge because that is where the hand
+   is, and bottom CENTRE because the corners are taken — CLEAR bottom-left in
+   the rail, the explode slider bottom-right. It leaves the moment the model is
+   standing, so it is a step and never permanent chrome.
+   ──────────────────────────────────────────────────────────────────────────── */
+/* OUT-SPECIFIES THE GLOBAL TOUCH FLOOR ON PURPOSE.
+   mobile.css carries `:root button:not([data-touch-target="compact"])` at
+   min-height:44px — specificity (0,2,1) — so a plain `.standUpChip` (0,1,0),
+   and even `:root .standUpChip` (0,2,0), lose to it and this measured 44px on a
+   phone. Matched shape and one class deeper (0,3,1) so 48 wins.
+   Raised to 48 rather than settling for 44 because the build rules say 48 and
+   the test is a gloved hand on a jobsite, not the platform minimum. The global
+   floor is still 44 everywhere else — that is a separate job, because the left
+   rail is 44px wide and lifting min-WIDTH would overflow it. */
+:root button.standUpChip:not([data-touch-target="compact"]) {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  z-index: var(--z-hud);
+
+  min-height: 48px;               /* a gloved hand on a jobsite, not a cursor */
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+
+  /* Tint plus blur, never alpha alone — it sits over the model it is offering
+     to build, and the scene behind it changes brightness as the view turns. */
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.82);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid var(--bp-accent, #2f80ff);
+
+  color: var(--bp-text, #f1f5f9);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+/* Android webviews without backdrop-filter get no blur, so the tint carries it. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  /* Same selector as the rule above — a bare .standUpChip (0,1,0) loses to its
+     (0,3,1) and this fallback would never apply. */
+  :root button.standUpChip:not([data-touch-target="compact"]) { background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.95); }
+}
+.standUpChip:disabled { opacity: 0.6; cursor: default; }
+.standUpChipCount {
+  color: var(--bp-text-dim, #97a4b6);
+  font-weight: 500;
+}

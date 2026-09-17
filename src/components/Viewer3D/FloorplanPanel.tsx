@@ -78,6 +78,13 @@ export default function FloorplanPanel() {
   const overlay         = useAppStore((s) => s.floorplanOverlay)
   const addDrawings     = useAppStore((s) => s.addDrawings)
   const buildModel      = useAppStore((s) => s.buildModel)
+  const buildForMe      = useAppStore((s) => s.buildForMe)
+  const finishShell     = useAppStore((s) => s.finishShell)
+  /** Walls on the active drawing — detected or traced; both are walls. */
+  const wallCount = useAppStore((st) => {
+    const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+    return d ? (d.parsedWalls?.length ?? 0) : 0
+  })
   const processDrawing  = useAppStore((s) => s.processDrawing)
   const setOverlayDrawing   = useAppStore((s) => s.setFloorplanOverlayDrawing)
   const updateOverlay   = useAppStore((s) => s.updateFloorplanOverlay)
@@ -273,18 +280,6 @@ export default function FloorplanPanel() {
       (drawing.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX)
     : null
 
-  // ── derived scale estimate for finalizeCalibration ───────────────────────
-  const estimatedScale = (() => {
-    if (!drawing) return overlay.scale
-    const widthPx  = drawing.rasterWidth  ?? 1400
-    const heightPx = drawing.rasterHeight ?? 900
-    const ratio    = Math.max(0.2, Math.min(5, widthPx / Math.max(1, heightPx)))
-    const mmPerPx  = drawing.scaleMmPerPx ?? 8
-    const widthM   = Math.max(2, Math.min(80, (widthPx * mmPerPx) / 1000))
-    const depthM   = Math.max(2, Math.min(80, widthM / ratio))
-    return [widthM, depthM] as [number, number]
-  })()
-
   // ── live calibration estimate (in the active unit) ───────────────────────
   // Pixel span of the picked segment × the current scale → the app's own
   // estimated real distance, shown and pre-filled in the SAME active unit the
@@ -367,7 +362,8 @@ export default function FloorplanPanel() {
     const ratio   = Math.round((25.4 / 72) * (1 / mmPerPx))
     setDrawingScale(drawing.id, mmPerPx, ratio > 0 ? `1:${ratio}` : 'custom')
     markCalibrationHandled(drawing.id)
-    updateOverlay({ scale: estimatedScale, calibrationMode: false }, false)
+    // The print is resized by setDrawingScale itself, from the new scale.
+    updateOverlay({ calibrationMode: false }, false)
     setCalibrationA(null); setCalibrationB(null); setHoverPixel(null); setDistanceInput('')
     if (pendingTrace) {
       setPendingTrace(false)
@@ -541,7 +537,24 @@ export default function FloorplanPanel() {
 
   const isAnalysing  = drawing.status === 'processing'
   const isPending    = drawing.status === 'pending'
-  const isCalibrated = drawing.scaleMmPerPx !== null && drawing.scaleConfidence !== 'fallback'
+  /**
+   * ONLY A SCALE THAT WAS READ COUNTS AS KNOWN.
+   *
+   * This used to accept anything that was not 'fallback', which quietly made an
+   * INFERRED scale — a guess from how thick the lines are — as good as one read
+   * off the title block. So the Scale step never appeared for a scanned plan:
+   * the app had already decided it knew, and the one number every dimension,
+   * every stud count and every takeoff quantity is derived from was a guess
+   * nobody was ever asked about. The comment two routes up in drawingProcessor
+   * says that guess came out 3.1x too big on a file in our own corpus.
+   *
+   * A wall in the wrong place is visible and draggable. A drawing at the wrong
+   * scale looks perfectly correct and is wrong everywhere, which is exactly why
+   * it is the thing to ask about rather than assume.
+   *
+   * Presets are unaffected: they carry 'parsed', because their scale is stated.
+   */
+  const isCalibrated = drawing.scaleMmPerPx !== null && drawing.scaleConfidence === 'parsed'
   const calibrationHandled = calibrationHandledIds.includes(drawing.id)
   // Tracing/building is reachable once calibration is set OR explicitly skipped.
   const calibrationCleared = isCalibrated || calibrationHandled
@@ -629,7 +642,20 @@ export default function FloorplanPanel() {
 
   // While placing or with an object selected, the side guide stays clear so the
   // workspace is fully visible — the tray and property card carry the UI.
-  const showSteps = !placeObjectType && !selectedObject
+  /**
+   * CALIBRATION OWNS THE DRAWER WHILE IT RUNS.
+   *
+   * `showSteps` gates every ordinary step in the drawer, and it did not exclude
+   * calibration — so starting it left "Pull a floor — tap opposite corners to
+   * lay joists" sitting at the top of the drawer while the actual "Tap point A
+   * on the print" prompt was pushed below the fold. Two scale handles appeared
+   * on the model and the only instruction on screen was about floor joists.
+   *
+   * Calibration is two taps and a number, and it is the one step the drawer is
+   * deliberately allowed to stay open over the plan for (see the EdgeDrawer's
+   * clickThrough note). While it runs it is the only thing in there.
+   */
+  const showSteps = !placeObjectType && !selectedObject && !overlay.calibrationMode
   const framingActive = activeTraceLayer === 'framing'
   // Which storey the next trace lands on — shown wherever you trace so walls
   // never silently build on a level you forgot you were on.
@@ -954,6 +980,38 @@ export default function FloorplanPanel() {
           </div>
         )}
 
+        {/* ── STAND THEM UP — the one action the whole intake leads to ──
+              The app reads walls off your print and then had nowhere to say
+              "build it". The only door was the G.C. bubble's "Stand them up",
+              which appears when the assistant decides to speak and dismisses
+              itself fifteen seconds later; the drawer's own "Show it built"
+              belongs to the demo presets and never sees a scanned plan. So the
+              reliable end of the workflow depended on catching a bubble.
+              It is the first thing in the drawer while it is the next thing to
+              do, and it leaves once the model is standing — a step, not a
+              permanent control.
+              Same order as the preset path: hang the openings, frame around
+              them, then run the shell again for the roof. Framing an empty
+              shell first gives walls with holes and sticks across them. */}
+        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && !traceMode
+          && !modelReady && wallCount > 0 && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>Ready to build</span>
+            <span className={styles.stepHint}>
+              {wallCount} wall{wallCount === 1 ? '' : 's'} on the plan. Stand them up and frame them.
+            </span>
+            <div className={styles.btnRow}>
+              <button
+                className={styles.action}
+                onClick={() => { finishShell(); buildForMe(); finishShell() }}
+                title="Frame every wall, hang the openings and put the shell on"
+              >
+                Stand them up
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Discipline layer tabs (hidden while actively tracing, but shown
               again when paused so you can switch trades mid-flow). ── */}
         {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && (!traceMode || tracePaused) && (
@@ -1097,8 +1155,17 @@ export default function FloorplanPanel() {
           )
         )}
 
-        {showSteps && framingActive && (
-        <>
+        {/* ── THE DRAWING'S OWN STEPS — not the framing trade's ──
+         * Reading the sheet, and setting its scale, belong to the DRAWING. They
+         * used to sit inside `showSteps && framingActive`, so the Scale step
+         * only existed while the Framing layer happened to be selected — and a
+         * fresh import lands on Floors. The one step every measurement in the
+         * app depends on was therefore unreachable from the drawer on the exact
+         * path a new user takes, which is why the scale went unquestioned.
+         * Not gated on `showSteps` either: that now stands down during
+         * calibration so the trade steps get out of the way, and gating these
+         * on it would take the calibration prompts with them.
+         */}
         {/* ── Step 0: analysing ── */}
         {isAnalysing && (
           <div className={styles.hint}>
@@ -1180,6 +1247,9 @@ export default function FloorplanPanel() {
           </div>
         )}
 
+
+        {showSteps && framingActive && (
+        <>
         {/* THE "STEP 2 OF 3 / STEP 3 OF 3" WIZARD USED TO LIVE HERE. IT IS GONE.
          *
          * It was written when the Build drawer was a linear three-step wizard —
@@ -1512,6 +1582,35 @@ export default function FloorplanPanel() {
           <div className={styles.step}>
             <span className={styles.stepLabel}>Wall selected</span>
             <span className={styles.stepHint}>Wall {selectedWallIndex + 1} of {userWalls.length}</span>
+            {/* WHAT THIS WALL IS MADE OF, AND WHETHER IT HOLDS ANYTHING UP.
+                The two facts that decide how the wall gets framed, and until
+                now the only way to set either was to choose it BEFORE tracing,
+                for a whole session at once. So a wall the app read off the
+                print — which never went through that picker — could not be
+                told it was a 2x6, and a bearing wall read as a partition
+                stayed a partition. Both are one tap now, per wall, after the
+                fact, which is when you actually know.
+                Rebuilds on change, because both change the geometry. */}
+            <label className={styles.row}>
+              <span className={styles.propLabel}>Member</span>
+              <select
+                className={styles.select}
+                value={userWalls[selectedWallIndex].framingType ?? 'wood-2x4'}
+                onChange={(e) => { updateUserWall(drawing.id, selectedWallIndex, { framingType: e.target.value }); if (modelReady) buildModel() }}
+              >
+                {FRAMING_TYPES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </label>
+            <label className={styles.row}>
+              <span className={styles.propLabel}>Role</span>
+              <select
+                className={styles.select}
+                value={userWalls[selectedWallIndex].wallRole ?? 'interior-non-bearing'}
+                onChange={(e) => { updateUserWall(drawing.id, selectedWallIndex, { wallRole: e.target.value }); if (modelReady) buildModel() }}
+              >
+                {WALL_ROLES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </label>
             {/* SPAN — how many storeys this wall runs through.
                 A stairwell wall, a two-storey foyer, a vaulted wall or a shaft
                 does not stop at the next floor, because there is no floor there

@@ -478,6 +478,28 @@ interface AppState {
   addUserTracedWalls: (id: string, walls: ParsedWall[]) => void
   /** Delete a single user-traced wall by its index within the drawing's user walls. */
   deleteUserWall: (id: string, userIndex: number) => void
+  /**
+   * TAKE OWNERSHIP OF A WALL THE DETECTOR FOUND.
+   *
+   * Editing is indexed to user-traced walls throughout — the rail, the pick
+   * meshes, update, delete, trim, all of it addresses `parsedWalls` filtered to
+   * `source === 'user'`. A wall read off the plan is `source: 'auto'`, so it
+   * had no hit box, no edit rail and no way to be corrected: the walls the app
+   * guessed at were the only walls you could not fix.
+   *
+   * Re-indexing every one of those call sites to absolute positions would touch
+   * a dozen files to change nothing a user can see. Adopting is the same fix
+   * from the other end and it is what the field already means — `source` says
+   * who put the wall there, and the moment you correct the machine's guess, you
+   * did. The guess becomes your wall, every existing edit path works on it
+   * unchanged, and a later re-detection leaves it alone instead of overwriting
+   * the correction.
+   *
+   * Returns the wall's index among user walls, ready to select, or -1 if there
+   * is no such wall. Adopting an already-adopted wall is a no-op that still
+   * returns its index, so a second tap costs nothing and no history step.
+   */
+  adoptDetectedWall: (id: string, wallIndex: number) => number
   /** Patch a single user-traced wall by its index within the drawing's user walls. */
   updateUserWall: (id: string, userIndex: number, patch: Partial<ParsedWall>) => void
   /** Live-move a user wall's endpoints WITHOUT pushing history (drag use). */
@@ -1091,6 +1113,18 @@ export const useAppStore = create<AppState>()(
         d.scaleMmPerPx = mmPerPx
         d.scaleNotation = notation
         d.scaleConfidence = 'parsed'
+        /**
+         * THE PRINT RESIZES WITH THE SCALE, HERE, FROM THE NUMBER JUST SET.
+         *
+         * Where a wall lands in the world is its pixel position times the print's
+         * size; how thick it is and where its studs go come from mm/px. The two
+         * have to move together. Calibration used to resize the print itself, in
+         * the panel, from a size it had worked out BEFORE this write — so the
+         * print kept the old scale while every wall's thickness took the new one.
+         * Type 12 ft over a 36 ft guess and the house stayed 20 m across with
+         * walls a third as thick: spindly little walls on a giant slab.
+         */
+        sizeOverlayToDrawing(s, id)
       })
     },
 
@@ -1169,6 +1203,47 @@ export const useAppStore = create<AppState>()(
         }
         s.inferenceSuggestion = cornerSuggestionFor(d.parsedWalls, id)
       })
+    },
+
+    adoptDetectedWall: (id, wallIndex) => {
+      const d = get().drawings.find((dr) => dr.id === id)
+      if (!d) return -1
+      const target = d.parsedWalls[wallIndex]
+      if (!target) return -1
+
+      /**
+       * The user index is the count of user walls BEFORE this one, because the
+       * wall is relabelled where it stands rather than appended.
+       */
+      const indexAmongUsers = d.parsedWalls
+        .slice(0, wallIndex)
+        .filter((w) => w.source === 'user').length
+
+      // Already ours. Same index, no history step — a second tap is free.
+      if (target.source === 'user') return indexAmongUsers
+
+      pushHistory()
+      set((s) => {
+        const dd = s.drawings.find((dr) => dr.id === id)
+        if (!dd) return
+        const t = dd.parsedWalls[wallIndex]
+        if (!t || t.source === 'user') return
+        /**
+         * RELABELLED IN PLACE, NOT RE-MERGED.
+         *
+         * The obvious version rebuilds the list through `mergeAutoAndUserWalls`,
+         * the way tracing does. That is wrong here and quietly destructive:
+         * the merge drops any auto wall `areConflicting` with a user wall, which
+         * is anything parallel within 1.5x its thickness — a furred wall, a party
+         * wall, the second leg of a double stud wall. Tracing a NEW wall over a
+         * guess should replace that guess; adopting is not a new wall, it is the
+         * same wall under new ownership, so nothing else may move or disappear.
+         */
+        dd.parsedWalls = dd.parsedWalls.map((w, i) => (
+          i === wallIndex ? { ...w, source: 'user' as const } : w
+        ))
+      })
+      return indexAmongUsers
     },
 
     // Remove a single user-traced wall (identified by its index among the

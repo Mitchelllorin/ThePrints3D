@@ -271,6 +271,7 @@ export default function FloorplanOverlay() {
   const setPlaceObjectType = useFloorplanLocalStore((s) => s.setPlaceObjectType)
   const keepPlacing = useFloorplanLocalStore((s) => s.keepPlacing)
   const placeStairCfg = useFloorplanLocalStore((s) => s.placeStairCfg)
+  const adoptDetectedWall = useAppStore((s) => s.adoptDetectedWall)
   const selectWallExclusive = useFloorplanLocalStore((s) => s.selectWallExclusive)
   const wallTrimArmed = useFloorplanLocalStore((s) => s.wallTrimArmed)
   const setWallTrimArmed = useFloorplanLocalStore((s) => s.setWallTrimArmed)
@@ -1083,6 +1084,23 @@ export default function FloorplanOverlay() {
     () => (drawing ? drawing.parsedWalls.filter((w) => w.source === 'user') : []),
     [drawing],
   )
+  /**
+   * EVERY WALL GETS A HIT BOX, NOT JUST THE ONES YOU DREW.
+   *
+   * The pick meshes below used to run over `userWalls`, so a wall the app read
+   * off the print had nothing to tap: no selection, therefore no edit rail, no
+   * move, no delete, no X-ray. The walls the detector guessed at were the only
+   * walls in the building you could not correct — which is exactly backwards,
+   * because they are the ones most likely to be wrong.
+   *
+   * Carries the absolute index, because that is what `adoptDetectedWall` takes.
+   * Tapping an auto wall adopts it and selects it by its new user index; the
+   * rest of edit mode then works on it exactly as it does on a traced wall.
+   */
+  const pickableWalls = useMemo(
+    () => (drawing ? drawing.parsedWalls.map((w, index) => ({ w, index })) : []),
+    [drawing],
+  )
   // Walls a PLACEMENT may snap/orient to: the active storey's only. Exterior
   // walls carry up plumb and inline so they're the same line either way, but
   // interior partitions change floor to floor (a second floor needs stairs, and
@@ -1820,17 +1838,27 @@ export default function FloorplanOverlay() {
           unreachable by touching the wall — and once a floor deck went down, that
           sliver was buried under it as well. Now the thing you point at is the
           thing you select, which is the whole premise of edit mode. */}
-      {editMode && canEditWalls && !placeObjectType && userWalls.map((w, i) => {
-        if (i === selectedWallIndex) return null
+      {editMode && canEditWalls && !placeObjectType && pickableWalls.map(({ w, index }) => {
+        // The user index is what selection, hover and the rail all speak in.
+        // An auto wall has none yet — it gets one the moment it is tapped.
+        const i = w.source === 'user' ? userWalls.indexOf(w) : -1
+        if (i >= 0 && i === selectedWallIndex) return null
         const a = planeLocalToWorld([w.x1, w.y1])
         const b = planeLocalToWorld([w.x2, w.y2])
         const len = Math.hypot(b[0] - a[0], b[2] - a[2])
         if (len < 0.05) return null
         const ang = Math.atan2(b[2] - a[2], b[0] - a[0])
-        const editHovered = editMode && editHover?.kind === 'wall' && editHover.id === String(i)
+        const editHovered = editMode && editHover?.kind === 'wall' && i >= 0 && editHover.id === String(i)
         const wallBase = (w.level ?? 0) * storeyHeight
         return (
-          <group key={`wall-pick-${i}`}>
+          <group
+            key={`wall-pick-${index}`}
+            /* Named as well as keyed: a React key is not a three.js name, and
+               without one there is no way to tell a wall's pick box from the
+               roof's when walking the scene — which is exactly what a driven
+               test has to do to tap a wall on purpose. */
+            name={`wall-pick-${index}`}
+          >
             {editHovered && <Line points={[a, b]} color="#22d3ee" lineWidth={6} />}
             <mesh
               position={[(a[0] + b[0]) / 2, wallBase + ceilingM / 2, (a[2] + b[2]) / 2]}
@@ -1841,16 +1869,21 @@ export default function FloorplanOverlay() {
                 // rather than selecting it. Derive the point from the ray (the
                 // same reason tracing does — a mesh intersection can be
                 // degenerate), then disarm so one arm = one trim.
-                if (wallTrimArmed && drawing) {
+                if (!drawing) return
+                // Adopt first: trim and select both address user walls, and an
+                // auto wall has no user index until it is taken over.
+                const ui = i >= 0 ? i : adoptDetectedWall(drawing.id, index)
+                if (ui < 0) return
+                if (wallTrimArmed) {
                   const hit = rayToTracePlane(e) ?? e.point
                   const [px, py] = toPixel(hit)
-                  trimUserWallAt(drawing.id, i, px, py)
+                  trimUserWallAt(drawing.id, ui, px, py)
                   setWallTrimArmed(false)
                   return
                 }
-                selectWallExclusive(i)
+                selectWallExclusive(ui)
               }}
-              onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'wall', id: String(i) }) } : undefined}
+              onPointerOver={editMode ? (e) => { e.stopPropagation(); if (i >= 0) setEditHover({ kind: 'wall', id: String(i) }) } : undefined}
               onPointerOut={editMode ? () => setEditHover(null) : undefined}
             >
               <boxGeometry args={[len, ceilingM, wallPickWidthM]} />
