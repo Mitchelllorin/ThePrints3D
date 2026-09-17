@@ -93,10 +93,48 @@ export function useExplodeChildren(
         continue
       }
       const level = (child.userData.level as number) ?? 0
+
+      /**
+       * ALONG ITS OWN AXIS WHERE THE PART HAS ONE — never a radial scatter.
+       *
+       * `(base - centre) * mult` pushes every part straight away from the middle
+       * of the model. For a pipe or a fixture that is fine. For a WALL it is the
+       * one thing the build rules forbid: "parts travel along their real
+       * assembly axis — the direction they would actually come off in the shop.
+       * Never a radial scatter." A wall thrown along the line from the building's
+       * centre to its own centre leaves at a diagonal, tipped off square, and a
+       * storey of them reads as a starburst — a screensaver, not a building
+       * coming apart.
+       *
+       * A wall comes away from the building PERPENDICULAR TO ITS OWN FACE. Give
+       * it that axis (LiveWallsLayer does, from the wall's own bearing) and the
+       * same explode reads as a box unfolding: every wall square to itself the
+       * whole way out, which is what it would do if you pulled it off the deck.
+       *
+       * The axis is stored unsigned, because which of the two perpendiculars
+       * points AWAY from the building depends on where the centre is, and the
+       * centre moves. Sign it here against the live centre instead.
+       *
+       * Magnitude matches what radial would have given, so a wall travels as far
+       * as it always did and a big plan still spreads further than a small one.
+       */
+      const axis = child.userData.explodeAxis as [number, number, number] | undefined
+      let px: number, pz: number
+      if (axis) {
+        const rx = base.x - c.x
+        const rz = base.z - c.z
+        const reach = Math.hypot(rx, rz) * mult
+        const facing = rx * axis[0] + rz * axis[2] >= 0 ? 1 : -1
+        px = base.x + axis[0] * reach * facing
+        pz = base.z + axis[2] * reach * facing
+      } else {
+        px = base.x + (base.x - c.x) * mult
+        pz = base.z + (base.z - c.z) * mult
+      }
       tmp.current.set(
-        base.x + (base.x - c.x) * mult + off.current.x,
+        px + off.current.x,
         base.y + (base.y - c.y) * mult + level * sep + off.current.y,
-        base.z + (base.z - c.z) * mult + off.current.z,
+        pz + off.current.z,
       )
       child.position.copy(tmp.current)
     }

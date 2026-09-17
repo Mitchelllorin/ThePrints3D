@@ -96,8 +96,22 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity, capLap, tees: tees.map((t) => t * length) })
     }
     f.userData.level = wall.level ?? 0  // so the shared explode lifts it floor-by-floor
+    /**
+     * THE DIRECTION THIS WALL COMES OFF IN.
+     *
+     * Perpendicular to its own face, in world coordinates — the way you would
+     * actually pull it away from the building. Without it the shared explode
+     * falls back to pushing every wall along the line from the model's centre
+     * to its own, which throws it off square and diagonally: the radial scatter
+     * the build rules rule out. See useExplodeChildren.
+     *
+     * Stored UNSIGNED. Which of the two perpendiculars points away from the
+     * building depends on where the centre is, and the centre moves as the
+     * model grows, so the runtime picks the sign each frame.
+     */
+    f.userData.explodeAxis = [-Math.sin(angle), 0, Math.cos(angle)]
     return f
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level, startCorner, endCorner, capMode, teesKey])
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level, angle, startCorner, endCorner, capMode, teesKey])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   useEffect(() => () => {
