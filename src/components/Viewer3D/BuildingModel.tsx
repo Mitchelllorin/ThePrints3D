@@ -13,6 +13,7 @@ import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 import { blockMaterial, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { explodeRuntime, FLOOR_SEP, systemOffset } from './explodeRuntime'
+import { cinema } from '../../cinema/cinemaRuntime'
 
 /** Reused scratch vector for the per-system explode offset (one per frame). */
 const explodeOffsetTmp = new THREE.Vector3()
@@ -1300,9 +1301,16 @@ export default function BuildingModel({ layers }: Props) {
       return
     }
 
-    explodeCurrentRef.current = THREE.MathUtils.damp(
-      explodeCurrentRef.current, explodeAmount, Math.max(0.1, explodeSpeed), delta,
-    )
+    // A shot is rolling and asserting the explode itself. Damping reads frame
+    // delta — that is wall-clock, which is right under a thumb and wrong for
+    // capture, where the same second of a shot has to produce identical
+    // geometry however long the machine took to draw the frame before it.
+    if (cinema.explode !== null) explodeCurrentRef.current = cinema.explode
+    else {
+      explodeCurrentRef.current = THREE.MathUtils.damp(
+        explodeCurrentRef.current, explodeAmount, Math.max(0.1, explodeSpeed), delta,
+      )
+    }
     const t = explodeCurrentRef.current
     const eased = t * t * (3 - 2 * t) // smoothstep
     const center = explodeCenterRef.current

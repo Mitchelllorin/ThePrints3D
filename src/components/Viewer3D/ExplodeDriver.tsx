@@ -14,6 +14,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { explodeRuntime } from './explodeRuntime'
+import { cinema } from '../../cinema/cinemaRuntime'
 
 export default function ExplodeDriver() {
   const explodeAmount = useAppStore((s) => s.explodeAmount)
@@ -26,6 +27,22 @@ export default function ExplodeDriver() {
   const cur = useRef(0)
 
   useFrame((_, delta) => {
+    // A shot is rolling and asserting the explode itself. Damping toward a
+    // slider reads frame delta, which is wall-clock — fine under a thumb,
+    // useless for capture, where the same second of a shot has to produce the
+    // same geometry however long the machine took to draw it.
+    if (cinema.explode !== null) {
+      // SMOOTHSTEPPED, exactly as the live path below does it and exactly as
+      // BuildingModel's driver does it. The director asserts shot progress, not
+      // eased progress — so skipping the curve here would make a pre-build shot
+      // explode on a different curve from a post-build one, and the same cue on
+      // two shots would produce two different geometries.
+      const t = cinema.explode
+      explodeRuntime.eased = t * t * (3 - 2 * t)
+      explodeRuntime.spread = explodeSpread
+      cur.current = t
+      return
+    }
     // Once the model is built/building, BuildingModel's driver takes over.
     if (modelStatus === 'building' || modelStatus === 'ready') {
       // SAFETY NET for the "stuck half-explode": the shared `eased` is global and

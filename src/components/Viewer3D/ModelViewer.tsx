@@ -3,6 +3,9 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { cameraControls } from './cameraControls'
+import CinemaBridge, { CinemaCaption } from '../../cinema/CinemaBridge'
+import '../../cinema/cinema.css'
+import { cinema } from '../../cinema/cinemaRuntime'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -242,7 +245,10 @@ function IdleSpin({ controlsRef, allowed, force }: {
   useFrame(() => {
     const ctrl = controlsRef.current
     if (!ctrl) return
-    const idle = allowed && (force || performance.now() - lastInput.current > IDLE_MS)
+    // A shot is rolling: the director owns the camera. Two things turning it
+    // at once is not a slow spin, it is a fight, and it shows up on camera as
+    // a drift the storyboard never asked for.
+    const idle = allowed && !cinema.active && (force || performance.now() - lastInput.current > IDLE_MS)
     if (ctrl.autoRotate !== idle) {
       ctrl.autoRotate = idle
       ctrl.autoRotateSpeed = IDLE_SPIN_SPEED
@@ -1113,6 +1119,7 @@ export default function ModelViewer() {
         {/* …and the one-shot duck underneath when the real floor lands. */}
         <TourUnderReveal />
         <ExplodeDriver />
+        <CinemaBridge />
         {/* THE BUILT MODEL, hidden in plan view.
             FloorplanOverlay stays outside this group on purpose — the print and
             the lines you have traced on it ARE the 2D view, and they are what
@@ -1176,6 +1183,10 @@ export default function ModelViewer() {
           member is selected. It replaces the labels that used to float in the
           air over every wall; see NameplateStrip for why that had to go. */}
       <NameplateStrip />
+
+      {/* The lower third. Renders nothing at all unless a shot is rolling and
+          that shot has a caption up, so it costs the live app one null. */}
+      <CinemaCaption />
 
       {/* No "Building 3D model…" popup — the 3D just updates as you trace; a
           flashing build banner on every rebuild is noise. */}

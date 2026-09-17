@@ -6,12 +6,17 @@
  * See the ambient-inference-prompts memory / product vision.
  */
 import { useAppStore } from '../../store/useAppStore'
+import { cinema } from '../../cinema/cinemaRuntime'
 
 export default function InferencePrompt() {
   const suggestion = useAppStore((s) => s.inferenceSuggestion)
   const apply = useAppStore((s) => s.applyInferenceSuggestion)
   const dismiss = useAppStore((s) => s.dismissInferenceSuggestion)
 
+  // Not during a take. A suggestion raised while the plan was being set up is
+  // still up when the shot arms, and a chrome shot then carries an offer to fix
+  // something nobody is looking at. Same gate as the G.C. bubble.
+  if (cinema.active) return null
   if (!suggestion) return null
   // Verb on the confirm button matches the suggestion kind.
   const verb = suggestion.kind === 'wall-corner' ? 'Trim'

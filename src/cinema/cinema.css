@@ -1,0 +1,102 @@
+/**
+ * CINEMA — the only two pieces of styling a shot needs.
+ *
+ * Both are scoped to a rolling take and neither exists in the app a user
+ * touches, so nothing here can regress a screen.
+ */
+
+:root {
+  /* The lower third. Darker and more opaque than a panel on purpose: it sits
+     over whatever the sweep happens to be passing, including a white roof at
+     the brightest point of the move, and a caption that is legible at one
+     azimuth and gone at the next is worse than no caption. */
+  --cine-plate-rgb: 8, 13, 20;
+  --cine-plate-a: 0.82;
+  --cine-plate-ink: #f1f5f9;
+}
+
+/**
+ * CLEAN PLATE — hide the interface, keep the model.
+ *
+ * Written as "hide everything that is neither the canvas nor an ancestor of
+ * it" rather than a list of the chrome to switch off. A list goes stale the
+ * first time a panel is added and nobody remembers this file exists — and the
+ * failure mode is silent, because it only shows up as a stray rail in the
+ * corner of footage that has already been sent out.
+ *
+ * `visibility` rather than `display`, so nothing reflows. Hiding the HUD by
+ * removing it from layout would resize the canvas, which changes the aspect
+ * and moves the model mid-shot.
+ *
+ * IT IS THE WORKSPACE CANVAS, NOT ANY CANVAS. Said loosely — keep `canvas`,
+ * hide everything else — this spares the brand badge as well, because that is
+ * an isolated <Canvas> of its own. Worse than sparing it whole: the badge is
+ * the building mark BESIDE the wordmark, the mark half is an <img>, and only
+ * the canvas half survives. Every clean-plate take then carries half a lockup
+ * in the top centre, which is the one thing the brand rules will not have. If
+ * footage is ever to be branded, it gets branded deliberately in the edit, not
+ * by a selector that happened to miss.
+ *
+ * `.workspace-canvas` is put on the canvas by CinemaBridge, which is mounted
+ * inside it — see the note there for why it is not a prop on <Canvas>.
+ */
+body.cinema-clean *:not(:has(canvas.workspace-canvas)):not(canvas.workspace-canvas) {
+  visibility: hidden !important;
+}
+body.cinema-clean canvas.workspace-canvas {
+  visibility: visible !important;
+}
+/* The caption is the exception: it is the one overlay a clean plate keeps. */
+body.cinema-clean .cinema-caption,
+body.cinema-clean .cinema-caption * {
+  visibility: visible !important;
+}
+
+.cinema-caption {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 6vh);
+  z-index: var(--z-hud);
+
+  /* It is a subtitle, not a control: it never takes a tap, and it never eats
+     an orbit drag aimed at the model behind it. */
+  pointer-events: none;
+
+  max-width: min(78vw, 720px);
+  padding: 10px 18px;
+  border-radius: 999px;
+
+  /* Tint plus blur, never alpha alone — the blur is what kills the
+     high-contrast detail behind the text as the model turns under it. */
+  background: rgba(var(--cine-plate-rgb), var(--cine-plate-a));
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+
+  color: var(--cine-plate-ink);
+  font-size: clamp(15px, 1.7vw, 22px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Android WebViews without backdrop-filter get no blur at all, so the tint has
+   to carry the contrast on its own. */
+@supports not (backdrop-filter: blur(1px)) {
+  .cinema-caption {
+    background: rgba(var(--cine-plate-rgb), 0.95);
+  }
+}
+
+/* A vertical frame is narrow and the caption is wide. Give it more of the
+   width and lift it clear of the phone's gesture bar. */
+@media (max-aspect-ratio: 3/4) {
+  .cinema-caption {
+    max-width: 88vw;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 9vh);
+    font-size: clamp(15px, 3.4vw, 26px);
+  }
+}

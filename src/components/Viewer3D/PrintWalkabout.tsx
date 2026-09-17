@@ -25,6 +25,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { cinema } from '../../cinema/cinemaRuntime'
 
 /**
  * How long the workspace has to be untouched first.
@@ -219,7 +220,16 @@ export default function PrintWalkabout({ enabled, width, depth, children }: Prop
 
     // 0 means the listeners have not mounted yet; that is not 'idle forever'.
     const idleFor = lastInput.current === 0 ? 0 : performance.now() - lastInput.current
-    const may = enabled && !reducedMotion
+    /**
+     * NOT DURING A TAKE.
+     *
+     * A capture is unattended by definition — no pointer, no keys, nothing to
+     * reset the idle timer — so the 45-second fuse always burns down and the
+     * print sprouts legs and strolls out of the hero shot. Funny once, and it
+     * has to come out of the footage every time. `cinema.active` is the same
+     * "something else owns the view" gate the spin uses.
+     */
+    const may = enabled && !reducedMotion && !cinema.active
 
     /**
      * HOME, IMMEDIATELY.
