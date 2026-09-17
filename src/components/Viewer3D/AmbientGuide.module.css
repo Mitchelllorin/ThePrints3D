@@ -666,3 +666,20 @@
   background: color-mix(in srgb, var(--bp-accent, #38bdf8) 32%, rgba(0, 0, 0, 0.5));
   border-color: var(--bp-accent, #38bdf8);
 }
+
+/* Stud packs on the selected wall — one row per pack: distance, size, remove.
+   Wraps on a narrow drawer rather than squeezing the input below a thumb. */
+.packList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.packRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.packRow .numInput { width: 88px; flex: 0 0 auto; }
+.packRow .select { flex: 1 1 96px; min-width: 0; }
+.packList > .propLabel { width: auto; }

@@ -1604,6 +1604,55 @@ export default function FloorplanPanel() {
                 {WALL_ROLES.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
               </select>
             </label>
+            {/* STUD PACKS — built-up studs under a point load: where a beam,
+                girder or post above bears on this wall. A 3-pack or a 5-pack is
+                what gets built. Placed by distance from the wall's start, the
+                way it would be laid out with a tape, and framed solid in 3D. */}
+            {(() => {
+              const w = userWalls[selectedWallIndex]
+              const lenMm = Math.hypot(w.x2 - w.x1, w.y2 - w.y1) * (drawing.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX)
+              const packs = w.studPacks ?? []
+              const save = (next: typeof packs) => { updateUserWall(drawing.id, selectedWallIndex, { studPacks: next }); if (modelReady) buildModel() }
+              const setAt = (i: number, raw: string) => {
+                const v = Number.parseFloat(raw)
+                if (!Number.isFinite(v) || lenMm <= 0) return
+                const atFrac = Math.max(0, Math.min(1, convertLength(v, activeUnit, 'mm') / lenMm))
+                save(packs.map((p, j) => (j === i ? { ...p, atFrac } : p)))
+              }
+              return (
+                <div className={styles.packList}>
+                  <span className={styles.propLabel}>Stud packs</span>
+                  {packs.map((p, i) => (
+                    <div key={i} className={styles.packRow}>
+                      <input
+                        key={`${i}-${p.atFrac}`}
+                        className={styles.numInput}
+                        type="number"
+                        min="0"
+                        step="any"
+                        aria-label={`Pack ${i + 1} distance from wall start, ${activeUnit}`}
+                        defaultValue={convertLength(p.atFrac * lenMm, 'mm', activeUnit).toFixed(unitPrecision(activeUnit))}
+                        onBlur={(e) => setAt(i, e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                      />
+                      <span className={styles.unitLabel}>{activeUnit}</span>
+                      <select
+                        className={styles.select}
+                        aria-label={`Pack ${i + 1} stud count`}
+                        value={p.studs}
+                        onChange={(e) => save(packs.map((q, j) => (j === i ? { ...q, studs: Number(e.target.value) } : q)))}
+                      >
+                        {[2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}-pack</option>)}
+                      </select>
+                      <button className={styles.secondary} onClick={() => save(packs.filter((_, j) => j !== i))} aria-label={`Remove pack ${i + 1}`}>Remove</button>
+                    </div>
+                  ))}
+                  <button className={styles.secondary} onClick={() => save([...packs, { atFrac: 0.5, studs: 3 }])}>
+                    + Add a pack
+                  </button>
+                </div>
+              )
+            })()}
             {/* SPAN — how many storeys this wall runs through.
                 A stairwell wall, a two-storey foyer, a vaulted wall or a shaft
                 does not stop at the next floor, because there is no floor there

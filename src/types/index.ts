@@ -71,6 +71,12 @@ export interface ParsedWall {
   framingType?: string
   /** Structural role chosen in the wall-type picker, e.g. 'exterior-bearing' */
   wallRole?: string
+  /**
+   * Built-up stud packs under point loads — a 3-pack or a 5-pack where a beam
+   * or girder bears on the wall. Position is a fraction along the traced line
+   * (0 = start, 1 = end), so it stays put on the plan if the scale is corrected.
+   */
+  studPacks?: Array<{ atFrac: number; studs: number }>
   /** Interior face finish preset key (see WALL_MATERIALS), e.g. 'drywall' */
   interiorMaterial?: string
   /** Exterior face cladding preset key (see WALL_MATERIALS), e.g. 'stucco' */

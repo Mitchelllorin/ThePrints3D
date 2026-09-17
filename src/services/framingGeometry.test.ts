@@ -915,3 +915,44 @@ describe('members are individually addressable', () => {
     expect(slab).toBeTruthy()
   })
 })
+
+describe('stud packs under point loads', () => {
+  const studsAt = (g: THREE.Group) => {
+    const xs: number[] = []
+    g.traverse((o) => { if (o instanceof THREE.Mesh && o.userData.info === '2×4 wood stud') xs.push(+o.position.x.toFixed(4)) })
+    return xs.sort((a, b) => a - b)
+  }
+  const base = { length: 4, height: 2.44, thickness: 0.09, material: 'wood' as const }
+
+  it('frames a 5-pack as five studs side by side, all marked pack', () => {
+    const g = buildWallFraming({ ...base, packs: [{ atM: 2, studs: 5 }] })
+    const pack: number[] = []
+    g.traverse((o) => { if (o instanceof THREE.Mesh && o.userData.member === 'pack' && Math.abs(o.position.x) < 0.2) pack.push(o.position.x) })
+    pack.sort((a, b) => a - b)
+    expect(pack).toHaveLength(5)
+    for (let i = 1; i < 5; i++) expect(pack[i] - pack[i - 1]).toBeCloseTo(0.0381, 3)
+    expect((pack[0] + pack[4]) / 2).toBeCloseTo(0, 3)
+  })
+
+  it('replaces the field studs it lands on instead of doubling them', () => {
+    const plain = studsAt(buildWallFraming(base))
+    const packed = studsAt(buildWallFraming({ ...base, packs: [{ atM: 2, studs: 3 }] }))
+    const near = (xs: number[]) => xs.filter((x) => Math.abs(x) < 0.1)
+    expect(near(packed)).toHaveLength(3)
+    expect(packed.length).toBeLessThanOrEqual(plain.length + 3)
+    // no two studs occupy the same place
+    for (let i = 1; i < packed.length; i++) expect(packed[i] - packed[i - 1]).toBeGreaterThan(0.03)
+  })
+
+  it('stays inside the wall when placed at the very end', () => {
+    const xs = studsAt(buildWallFraming({ ...base, packs: [{ atM: 4, studs: 5 }] }))
+    expect(Math.max(...xs)).toBeLessThanOrEqual(2)
+  })
+
+  it('is not framed through a rough opening', () => {
+    const g = buildWallFraming({ ...base, openings: [{ centerM: 2, widthM: 0.9, type: 'door' }], packs: [{ atM: 2, studs: 3 }] })
+    let inOpening = 0
+    g.traverse((o) => { if (o instanceof THREE.Mesh && o.userData.member === 'pack' && Math.abs(o.position.x) < 0.4) inOpening++ })
+    expect(inOpening).toBe(0)
+  })
+})

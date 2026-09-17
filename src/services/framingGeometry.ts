@@ -133,6 +133,13 @@ export interface WallFramingOpts {
    * the tees, and they get bigger as the walls they join get bigger.
    */
   tees?: number[]
+  /**
+   * STUD PACKS under point loads — studs nailed up solid where a beam, girder
+   * or post above bears on the wall. A 3-pack or a 5-pack is what gets built;
+   * on a panel layout they read from above as a solid block in the stud line.
+   * Centre measured from the wall START in metres, like a tee.
+   */
+  packs?: Array<{ atM: number; studs: number }>
 }
 
 export interface WallOpening {
@@ -165,6 +172,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     openings = [],
     capLap,
     tees = [],
+    packs = [],
   } = opts
 
   const group = new THREE.Group()
@@ -362,6 +370,27 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       new THREE.BoxGeometry(studW, studH, studW),
       x, studY, (studDepth - studW) / 2, memberInfo('tee backer'),
     )
+  }
+
+  // STUD PACKS — n studs side by side, centred where the load comes down.
+  // Clamped inside the wall, never through a rough opening (the opening's own
+  // kings and jacks carry there), and any field stud they land on is taken out
+  // rather than doubled up.
+  for (const pk of packs) {
+    const n = Math.max(2, Math.min(7, Math.round(pk.studs)))
+    const span = n * studW
+    const c = Math.max(-half + span / 2, Math.min(half - span / 2, pk.atM - half))
+    const lo = c - span / 2
+    const hi = c + span / 2
+    if (ops.some((o) => hi > o.x - o.w / 2 - studW * 2 && lo < o.x + o.w / 2 + studW * 2)) continue
+    for (let i = xs.length - 1; i >= 0; i--) {
+      if (xs[i] > lo - studW / 2 && xs[i] < hi + studW / 2 && !packKeys.has(Math.round(xs[i] * 1000))) xs.splice(i, 1)
+    }
+    for (let k = 0; k < n; k++) {
+      const x = lo + studW / 2 + k * studW
+      xs.push(x)
+      packKeys.add(Math.round(x * 1000))
+    }
   }
 
   const seen = new Set<number>()

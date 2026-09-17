@@ -82,6 +82,10 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
   }
   // A stable dep for the framing memo — the array is rebuilt every render.
   const teesKey = tees.join(',')
+  // Packs sit at a fraction of the TRACED line; the framed length also carries
+  // the corner extension at the start, so offset by it.
+  const packs = (wall.studPacks ?? []).map((p) => ({ atM: (startCorner ? ext : 0) + p.atFrac * rawLen, studs: p.studs }))
+  const packsKey = packs.map((p) => `${p.atM.toFixed(3)}x${p.studs}`).join(',')
 
   // Masonry (CMU/brick/concrete) is a solid block; framed walls get studs.
   const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
@@ -95,7 +99,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
       f = buildMasonryWall({ length, height: wallHeight, thickness: thicknessM, openings: wallOpenings, opacity, kind })
     } else {
       const heavyDuty = wall.wallRole === 'exterior-bearing' || wall.wallRole === 'interior-bearing'
-      f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity, capLap, tees: tees.map((t) => t * length) })
+      f = buildWallFraming({ length, height: wallHeight, thickness: thicknessM, material, heavyDuty, steelGauge, topTrackStyle, deflectionGapMm, openings: wallOpenings, opacity, capLap, tees: tees.map((t) => t * length), packs })
     }
     f.userData.level = wall.level ?? 0  // so the shared explode lifts it floor-by-floor
     /**
@@ -113,7 +117,7 @@ function WallMesh({ wall, pixelToWorld, scaleMmPerPx, wallHeight, material, stee
      */
     f.userData.explodeAxis = [-Math.sin(angle), 0, Math.cos(angle)]
     return f
-  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level, angle, startCorner, endCorner, capMode, teesKey])
+  }, [length, wallHeight, thicknessM, material, isMasonry, wall.wallRole, wall.exteriorMaterial, steelGauge, topTrackStyle, deflectionGapMm, openings, opacity, wall.level, angle, startCorner, endCorner, capMode, teesKey, packsKey])
 
   // Free the GPU geometry/material when this segment changes or unmounts.
   // The member colours are shared across every wall, so only the material a
