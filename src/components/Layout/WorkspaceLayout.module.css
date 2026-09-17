@@ -1125,3 +1125,31 @@
   color: var(--bp-text-dim, #97a4b6);
   font-weight: 500;
 }
+
+/* The framing colour key — read-only, two columns so nine members fit a 360px
+   drawer without scrolling past the layers it belongs to. */
+.memberKey {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0 8px 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+}
+.memberKeyItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--bp-text, #f1f5f9);
+  font-variant-numeric: tabular-nums;
+}
+/* A square, not a dot: a member is a stick, and it keeps the key from reading
+   as more of the tappable layer dots above it. */
+.memberKeySwatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}

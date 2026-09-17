@@ -61,6 +61,8 @@ export interface UISettings {
    *  was under the siding was to set the siding to 'none' and lose your choice.
    *  Every other layer has its own switch; this one now does too. */
   claddingVisible: boolean
+  /** Colour each framing member by what it is — header, jack, king, pack… — instead of all wood. */
+  memberColours: boolean
   /** WHEN the floating dimension nameplates show on walls, joists and ceilings.
    *
    *  They are the right thing while you are laying one thing out and pure
@@ -168,6 +170,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   woodSheathing: 'osb',
   cladding: 'none',
   claddingVisible: false,
+  memberColours: true,
   dimensionsMode: 'selected',
   presetMode: 'practice',
   heatingType: DEFAULT_HEATING,

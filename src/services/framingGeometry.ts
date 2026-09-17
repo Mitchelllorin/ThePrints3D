@@ -207,6 +207,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     m.userData.layer = 'framing'
     m.userData.info = info
     group.add(m)
+    return m
   }
 
   // Plates/track differ by material:
@@ -295,6 +296,11 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   const endA = -half + studW / 2
   const endB = half - studW / 2
   const xs: number[] = [endA, endB]
+  // Which of those positions are PACK studs — ends, corner posts, either side of
+  // a tee. They keep the plain "stud" label (the takeoff counts studs), and are
+  // marked separately so the member colours can draw them the way a panel
+  // layout does: the packs picked out from the field.
+  const packKeys = new Set<number>([endA, endB].map((x) => Math.round(x * 1000)))
   for (let d = spacingM; d < length - studW; d += spacingM) {
     // EXACT, not rounded to the millimetre: the claim is that a stud centre is
     // one spacing from the face, and 16" is 0.4064 m, not 0.406. The dedupe
@@ -321,6 +327,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   const cornerPost = (endX: number, sign: 1 | -1, role?: 'lap' | 'back') => {
     if (role === 'back') return          // butts into the other wall's post
     xs.push(endX + sign * endInset)      // the doubled stud
+    packKeys.add(Math.round((endX + sign * endInset) * 1000))
     if (role === 'lap') {
       // The backer, turned across the wall behind the post. Off-centre in depth
       // so it presents a nailing face to the wall arriving at right angles.
@@ -350,6 +357,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     // while every unit test passed.
     if (inClear(x)) continue
     xs.push(x - studW, x + studW)
+    packKeys.add(Math.round((x - studW) * 1000)); packKeys.add(Math.round((x + studW) * 1000))
     add(
       new THREE.BoxGeometry(studW, studH, studW),
       x, studY, (studDepth - studW) / 2, memberInfo('tee backer'),
@@ -362,7 +370,8 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     if (seen.has(key)) continue
     seen.add(key)
     if (inClear(x)) continue   // no studs through a rough opening
-    add(studGeo, Math.max(-half, Math.min(half, x)), studY)
+    const stud = add(studGeo, Math.max(-half, Math.min(half, x)), studY)
+    if (packKeys.has(key)) stud.userData.member = 'pack'
   }
 
   const ordered = [...seen].map((k) => k / 1000).sort((a, b) => a - b)

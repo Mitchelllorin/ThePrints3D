@@ -24,6 +24,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { requirePro } from '../Pro/usePro'
 import { LAYER_COLORS, PRO_TRACE_LAYERS } from '../../data/traceLayers'
 import type { TraceLayer } from '../../data/traceLayers'
+import { MEMBER_KEY } from '../../services/memberColours'
 import styles from './WorkspaceLayout.module.css'
 
 /** A row backed by the trade-layer set — tap the name to trace on it. */
@@ -234,6 +235,32 @@ export default function LayersPanel() {
               </div>
             )
           })}
+          {/* COLOUR BY MEMBER — under Structure, because it is how the framing
+              reads. The key is the legend for it and only shows while it is on,
+              so a panel of dots never sits there explaining colours nobody sees. */}
+          {g.title === 'Structure' && (
+            <>
+              <div className={styles.layerRow}>
+                <span className={styles.layerDot} style={{ background: 'conic-gradient(#16a34a 0 33%, #f97316 0 66%, #22d3ee 0)', cursor: 'default' }} />
+                <span className={styles.layerName}>Colour by member</span>
+                <button
+                  className={`${styles.layerToggle} ${ui.memberColours ? styles.layerToggleOn : ''}`}
+                  onClick={() => setUI({ memberColours: !ui.memberColours })}
+                  aria-pressed={ui.memberColours}
+                >{ui.memberColours ? 'On' : 'Off'}</button>
+              </div>
+              {ui.memberColours && (
+                <ul className={styles.memberKey} aria-label="Framing colour key">
+                  {MEMBER_KEY.map((m) => (
+                    <li key={m.kind} className={styles.memberKeyItem}>
+                      <span className={styles.memberKeySwatch} style={{ background: m.color }} />
+                      {m.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </div>
       ))}
     </div>

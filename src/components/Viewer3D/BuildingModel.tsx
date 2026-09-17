@@ -14,6 +14,8 @@ import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructio
 import { blockMaterial, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { explodeRuntime, FLOOR_SEP, systemOffset } from './explodeRuntime'
 import { cinema } from '../../cinema/cinemaRuntime'
+import { applyMemberColours, ownedMaterial } from '../../services/memberColours'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
 
 /** Reused scratch vector for the per-system explode offset (one per frame). */
 const explodeOffsetTmp = new THREE.Vector3()
@@ -50,7 +52,8 @@ function disposeObject(obj: THREE.Object3D) {
   obj.traverse((node) => {
     const mesh = node as Partial<THREE.Mesh>
     mesh.geometry?.dispose()
-    const material = mesh.material
+    // Member colours are shared by every wall; free only what the mesh owns.
+    const material = node instanceof THREE.Mesh ? ownedMaterial(node) : mesh.material
     if (Array.isArray(material)) material.forEach((m) => m.dispose())
     else material?.dispose()
   })
@@ -1204,6 +1207,8 @@ export default function BuildingModel({ layers }: Props) {
     else explodeCenterRef.current.set(overlay.position[0], 1.5, overlay.position[1])
     explodeCurrentRef.current = 0
 
+    applyMemberColours(group, useUISettingsStore.getState().memberColours)
+
     const timer = setTimeout(() => {
       setModelStatus('ready')
       logEvent('model.build.completed', {
@@ -1213,6 +1218,12 @@ export default function BuildingModel({ layers }: Props) {
     }, 1500)
     return () => clearTimeout(timer)
   }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, sceneConfig, buildResult, overlay, placedObjects, floorsAreas, granularity])
+
+  // Flipping the colours is a material swap on what is already built.
+  const memberColours = useUISettingsStore((s) => s.memberColours)
+  useEffect(() => {
+    if (groupRef.current) applyMemberColours(groupRef.current, memberColours)
+  }, [memberColours])
 
   /**
    * MEMBER ISOLATION — one stick, in the clear.
