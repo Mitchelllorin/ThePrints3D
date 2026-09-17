@@ -12,7 +12,11 @@
  */
 .plate {
   position: fixed;
-  left: calc(env(safe-area-inset-left, 0px) + 8px);
+  /* CLEAR OF THE LEFT RAIL, not over it. The plate used to sit at 8px, which
+     is inside the 44px rail, so its last row covered the CLEAR button — a
+     control and a readout in the same pixels. The rail's width is a token now
+     so this cannot drift from it. */
+  left: calc(env(safe-area-inset-left, 0px) + var(--rail-w, 44px) + 8px);
   bottom: calc(env(safe-area-inset-bottom, 0px) + 64px);
   z-index: var(--z-hud);
 

@@ -18,7 +18,7 @@
 
 /* ── level 0: the icon rail — no panel ── */
 .rail {
-  width: 44px;
+  width: var(--rail-w, 44px);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -153,7 +153,7 @@
        the flex row — opened on top of the rail's right edge; at 92px the second
        column overhung the content box by the width of the gap and CLEAR sat
        half outside the scroll port. */
-    width: 96px;
+    width: var(--rail-w, 44px);   /* :root widens the token here — see index.css */
     flex: 0 0 auto;               /* never let the cascade column squeeze it */
     flex-wrap: wrap;
     align-content: flex-start;
