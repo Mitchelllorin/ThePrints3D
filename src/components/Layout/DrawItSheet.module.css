@@ -1,0 +1,115 @@
+/* DRAW IT — a transient sheet the user opened, so it is allowed to be solid and
+   to cross the middle of the screen. It leaves in one tap (the ✕, or the scrim)
+   and the model is behind it the whole time.
+
+   MODAL LAYER, not the sheet layer. It carries a scrim, which makes it a modal
+   by the house rules, and the start card it opens from lives on the HUD above
+   the sheet layer — put this on 20 and the Browse/Scan/preset buttons print
+   straight through the middle of it. */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--bp-scrim, rgba(4, 10, 16, 0.72));   /* flat, no blur, no text */
+}
+
+.sheet {
+  position: fixed;
+  z-index: var(--z-modal);
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: min(420px, 100vw);
+  max-height: min(86vh, 720px);
+  overflow-y: auto;                       /* content grows, phones are short */
+  overscroll-behavior: contain;
+
+  display: grid;
+  gap: 8px;                               /* gap on the container, not margins */
+  padding: 14px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+
+  background: var(--bp-panel-solid, #151c25);
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 14px 14px 0 0;
+  color: var(--bp-text, #e8eef5);
+}
+
+.head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.title { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: 0.01em; }
+.close {
+  min-width: 48px; min-height: 48px;
+  background: none; border: none; border-radius: 10px;
+  color: var(--bp-text-dim, #97a4b6); font-size: 17px; cursor: pointer;
+}
+.lead { margin: 0; font-size: 13px; line-height: 1.5; color: var(--bp-text-dim, #97a4b6); }
+
+.sizes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.field { display: grid; gap: 4px; }
+.label {
+  font-size: 13px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--bp-text-dim, #97a4b6); text-transform: uppercase;
+}
+.input, .select {
+  min-height: 48px;
+  padding: 0 12px;
+  background: var(--bp-panel-2, #1e2833);
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  color: var(--bp-text, #e8eef5);
+  font-size: 16px;                        /* 16 keeps iOS from zooming the page */
+  font-variant-numeric: tabular-nums;
+  width: 100%;
+}
+.input:focus, .select:focus { outline: 2px solid var(--bp-accent, #3d9ae8); outline-offset: 1px; }
+
+.echo, .echoBad {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.echo { color: var(--bp-ok, #3fbf6e); }
+.echoBad { color: var(--bp-warn, #e0a03a); }
+
+.row { display: flex; gap: 8px; }
+.choice {
+  flex: 1;
+  min-height: 48px;
+  display: grid;
+  gap: 1px;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  color: var(--bp-text, #e8eef5);
+  cursor: pointer;
+  text-align: left;
+}
+/* On-state differs in SHAPE, not only colour: a fill, a heavier border and a
+   check in the label, so it survives sunlight and colour blindness. */
+.chosen {
+  background: rgba(61, 154, 232, 0.16);
+  border-color: var(--bp-accent, #3d9ae8);
+  border-width: 2px;
+}
+.choiceLabel { font-size: 14px; font-weight: 700; }
+.choiceNote { font-size: 13px; color: var(--bp-text-dim, #97a4b6); }
+
+.go {
+  min-height: 48px;
+  margin-top: 4px;
+  background: var(--bp-accent, #3d9ae8);
+  border: none;
+  border-radius: 10px;
+  color: #04121f;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.go:disabled { opacity: 0.55; cursor: default; }
+.after { margin: 0; font-size: 13px; color: var(--bp-text-dim, #97a4b6); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .sheet { animation: rise 180ms ease-out; }        /* transform only */
+  @keyframes rise { from { transform: translate(-50%, 12px); } to { transform: translate(-50%, 0); } }
+}

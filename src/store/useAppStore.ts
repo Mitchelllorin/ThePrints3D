@@ -153,6 +153,7 @@ function activeDrywallConfig(): DrywallConfig {
 }
 
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
+import { createDrawnProject, type DrawnProjectSpec } from '../services/drawnProject'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
 import { readCachedPro } from '../services/billing'
 import { useConfigStore } from './useConfigStore'
@@ -538,6 +539,10 @@ interface AppState {
   completeWizardGroup: (groupId: ProjectContextWizardState['currentGroup']) => void
   resetWizard: () => void
   loadPresetDrawing: (difficulty: PresetDifficulty, practiceMode: boolean) => void
+  /** DRAW IT — start a project from typed sizes instead of a print. Lays a blank
+   *  sheet at a known scale, stands the footprint on it as traced walls, and
+   *  puts the chosen floor underneath. See services/drawnProject. */
+  startDrawnProject: (spec: DrawnProjectSpec) => void
   /** Whether this device owns the one-time Pro unlock. See services/billing.ts.
    *  Seeded from the local cache so an offline launch does not lock out someone
    *  who has already paid, then reconciled with the store when it can be asked. */
@@ -1747,6 +1752,57 @@ export const useAppStore = create<AppState>()(
         }
         saveWizardState(s.wizardState)
         s.wizardInputs = wizardInputs
+        const { floorGroupingLog } = computeFloorLevels(s.drawings)
+        s.floorGroupingLog = floorGroupingLog
+        s.model = deepCopy(DEFAULT_MODEL)
+      })
+    },
+
+    /**
+     * DRAW IT — a project that starts from typed sizes.
+     *
+     * Same landing as a preset (sheet, overlay, wizard summary, clean model), so
+     * everything downstream — tracing more walls, hanging doors, the roof, the
+     * cut list — works exactly as it does on a traced print. The difference is
+     * upstream: the scale is known because this sheet was drawn at it, and the
+     * four shell walls are the user's own, so nothing was detected and nothing
+     * has to be believed.
+     */
+    startDrawnProject: (spec) => {
+      pushHistory()
+      const project = createDrawnProject(spec)
+      set((s) => {
+        const drawing: Drawing = { id: genId(), source: 'preset', ...project.drawing }
+        drawingPool.set(drawing.id, drawing)
+        s.drawings.push(drawing)
+        s.selectedDrawingId = drawing.id
+        s.floorplanOverlay = {
+          ...deepCopy(DEFAULT_FLOORPLAN_OVERLAY),
+          drawingId: drawing.id,
+          scale: project.overlayScale,
+          calibrationMode: false,
+          // Nothing to line up: the sheet IS the model's own drawing.
+          locked: true,
+        }
+        // FLOOR BEFORE WALLS, the way it is built. The slab (or the joist field)
+        // goes down first and the shell stands on it.
+        if (project.floorArea) s.floorsAreas.push(project.floorArea)
+        s.wizardState = {
+          ...DEFAULT_WIZARD_STATE,
+          currentGroup: 'group3',
+          completedGroups: ['group1', 'group2', 'group3'],
+          data: {
+            set1BuildingBasics: project.wizardInputs.set1BuildingBasics,
+            set1Clarifications: project.wizardInputs.set1Clarifications,
+            set2StructuralDetails: project.wizardInputs.set2StructuralDetails,
+            set2Clarifications: project.wizardInputs.set2Clarifications,
+            set3FinishingDetails: project.wizardInputs.set3FinishingDetails,
+            set3Clarifications: project.wizardInputs.set3Clarifications,
+          },
+          savedAt: Date.now(),
+        }
+        saveWizardState(s.wizardState)
+        s.wizardInputs = project.wizardInputs
         const { floorGroupingLog } = computeFloorLevels(s.drawings)
         s.floorGroupingLog = floorGroupingLog
         s.model = deepCopy(DEFAULT_MODEL)

@@ -7,6 +7,7 @@ import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TakeoffContent from '../Viewer3D/TakeoffPanel'
+import DrawItSheet from './DrawItSheet'
 import InferencePrompt from '../Viewer3D/InferencePrompt'
 import TopIcons from './TopIcons'
 import EdgeDrawer from './EdgeDrawer'
@@ -603,6 +604,9 @@ export default function WorkspaceLayout() {
   // existed and was already wired into DrawingUploader; the workspace chip just
   // never reached it.
   const [scanOpen, setScanOpen] = useState(false)
+  // DRAW IT — the typed-sizes way in. Opened from the start card, closes itself
+  // the moment a project exists.
+  const [drawItOpen, setDrawItOpen] = useState(false)
 
   // Auto-build DISABLED — the user builds by tracing (this "model builds itself"
   // behaviour was deliberately reverted; re-enabling it auto-laid slabs coplanar
@@ -1099,6 +1103,8 @@ export default function WorkspaceLayout() {
       <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
         multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
+      {drawItOpen && <DrawItSheet onClose={() => setDrawItOpen(false)} />}
+
       {scanOpen && (
         <CameraCapture
           onCapture={(file) => { setScanOpen(false); addDrawings([file]) }}
@@ -1208,6 +1214,13 @@ export default function WorkspaceLayout() {
           ) : (
             <p className={styles.uploadHintSub}>Drop a plan on the grid, or start from a preset</p>
           )}
+          {/* DRAW IT FIRST. A print is one way in and a guessy one — the scale
+              has to be read off a photograph. Typed sizes are exact, so this is
+              the door that leads, and Browse stays beside it for a real plan. */}
+          <button className={styles.drawItChip} onClick={() => setDrawItOpen(true)}>
+            ✏ Draw it
+            <span className={styles.drawItNote}>type the sizes</span>
+          </button>
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Browse</button>
             <button className={styles.uploadHintChip} onClick={() => setScanOpen(true)}>Scan</button>

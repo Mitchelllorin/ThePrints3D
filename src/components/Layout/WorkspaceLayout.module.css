@@ -1192,3 +1192,28 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* DRAW IT — the leading door on the start card. Sized and weighted above the
+   Browse/Scan row because typed sizes are the exact way in and a photographed
+   print is the guessy one. */
+.drawItChip {
+  min-height: 48px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+  background: var(--bp-accent, #2f80ff);
+  border: none;
+  color: #04121f;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+.drawItChip:hover { filter: brightness(1.08); }
+.drawItNote {
+  color: rgba(4, 18, 31, 0.72);
+  font-size: 13px;
+  font-weight: 600;
+}
