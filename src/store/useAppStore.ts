@@ -672,6 +672,32 @@ function inferDrawingType(name: string): DrawingType {
   return 'floor-plan'
 }
 
+/**
+ * A WALL STANDS ON THE STOREY ITS SHEET IS ON.
+ *
+ * Every renderer asks a wall which storey it is on (`wall.level`) and nothing
+ * ever told it. A sheet knows — it carries `floorNumber`, read off the sheet
+ * number or set by hand — but that never reached the walls drawn on it. So the
+ * second-floor plan framed its walls on the ground, inside the ground floor's
+ * own walls: from outside, one storey of framing with a roof floating above it,
+ * which reads as the upper floor being half-built.
+ *
+ * Levels move by DELTA, not by assignment, so a storey carried up inside a sheet
+ * (see carryWallsUp, which stamps `level` explicitly) keeps its stack when the
+ * sheet is re-assigned. A wall with no level of its own is taken to be on the
+ * sheet's current floor.
+ */
+function stampWallsToFloor(d: Drawing, floor: number): void {
+  const was = d.floorNumber ?? 0
+  const delta = floor - was
+  d.floorNumber = floor
+  if (delta === 0) {
+    for (const w of d.parsedWalls) if (w.level === undefined) w.level = floor
+    return
+  }
+  for (const w of d.parsedWalls) w.level = (w.level ?? was) + delta
+}
+
 function computeFloorLevels(drawings: Drawing[]) {
   const { groups: floorGroups, floorGroupingLog } = groupByFloorWithLog(
     drawings.map((d) => ({
@@ -1023,7 +1049,8 @@ export const useAppStore = create<AppState>()(
     assignDrawingToLevel: (id, floorNumber) =>
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
-        if (d) d.floorNumber = floorNumber
+        // The walls move with the sheet — see stampWallsToFloor.
+        if (d) stampWallsToFloor(d, floorNumber)
       }),
 
     /**
@@ -1500,6 +1527,8 @@ export const useAppStore = create<AppState>()(
             )
           }
           Object.assign(d, patch)
+          // A sheet numbered as an upper floor frames its walls up there.
+          stampWallsToFloor(d, d.floorNumber ?? 0)
           // processDrawing assigns the patch itself rather than going through
           // updateDrawing, so the overlay has to be sized here too — this is
           // the path every real upload takes.
@@ -1702,9 +1731,14 @@ export const useAppStore = create<AppState>()(
     loadPresetDrawing: (difficulty, practiceMode) => {
       pushHistory()
       const preset = createPresetDrawing(difficulty, practiceMode)
-      // The Family House ships as a 2-storey preset so the multi-floor flow can
-      // be tested out of the box: a second plan tagged to the upper floor.
-      const upper = difficulty === 'medium' ? createPresetDrawing(difficulty, practiceMode) : null
+      // THE TWO-STOREY PRESET IS THE ONE WITH TWO STOREYS.
+      //
+      // This read `=== 'medium'`, which is the Three-Bed Ranch — a single-storey
+      // plan. So the ranch quietly got a copy of itself upstairs, and "Two-Storey
+      // with Garage" ('hard') got no upper floor at all: load the two-storey
+      // preset and the second floor is simply missing, which reads as the
+      // framing stopping halfway up the building.
+      const upper = difficulty === 'hard' ? createPresetDrawing(difficulty, practiceMode) : null
       set((s) => {
         const { wizardInputs, overlayScale, ...drawingSeed } = preset
         const drawing: Drawing = {
@@ -1725,6 +1759,8 @@ export const useAppStore = create<AppState>()(
             name: `${upperSeed.name} — 2nd floor`,
             floorNumber: 1,
           }
+          // Its walls belong upstairs, or they frame inside the ground floor.
+          stampWallsToFloor(d2, 1)
           drawingPool.set(d2.id, d2)
           s.drawings.push(d2)
         }
