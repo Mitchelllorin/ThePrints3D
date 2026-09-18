@@ -1210,10 +1210,26 @@
   font-weight: 800;
   letter-spacing: 0.01em;
   cursor: pointer;
+  /* "Draw it" broke across two lines on a 360px phone, which reads as "Draw /
+     it" — a two-word label has no business wrapping. */
+  white-space: nowrap;
 }
 .drawItChip:hover { filter: brightness(1.08); }
 .drawItNote {
   color: rgba(4, 18, 31, 0.72);
   font-size: 13px;
   font-weight: 600;
+}
+
+/* The fold that holds the tour and the sample plans. A line of text, not a
+   chip: it must not compete with the three doors above it. */
+.moreWays {
+  min-height: 48px;
+  padding: 0 8px;
+  background: none;
+  border: none;
+  color: var(--bp-text-dim, #97a4b6);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }

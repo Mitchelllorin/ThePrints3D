@@ -244,6 +244,10 @@ interface FloorplanLocalState {
   settingsDrawerOpen: boolean
   placeDrawerOpen: boolean
   askDrawerOpen: boolean
+  /** The cut list has been opened once, so the step chain stops pointing at it.
+   *  Session-scoped on purpose: a new session walks the same route. */
+  cutListSeen: boolean
+  markCutListSeen: () => void
   /** A rail column (Layers or Place) is open. Those columns keep their own open
    *  state; this mirrors it so things outside the rail can stand aside. */
   railPanelOpen: boolean
@@ -450,6 +454,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   askDrawerOpen: false,
   railPanelOpen: false,
   setRailPanelOpen: (open) => set({ railPanelOpen: open }),
+  cutListSeen: false,
+  markCutListSeen: () => set({ cutListSeen: true }),
   upgradeReason: null,
   coachBand: 0,
 

@@ -607,6 +607,8 @@ export default function WorkspaceLayout() {
   // DRAW IT — the typed-sizes way in. Opened from the start card, closes itself
   // the moment a project exists.
   const [drawItOpen, setDrawItOpen] = useState(false)
+  /** The tour and the sample plans, folded away until asked for. */
+  const [moreWays, setMoreWays] = useState(false)
 
   // Auto-build DISABLED — the user builds by tracing (this "model builds itself"
   // behaviour was deliberately reverted; re-enabling it auto-laid slabs coplanar
@@ -764,13 +766,43 @@ export default function WorkspaceLayout() {
     app.finishShell(); app.buildForMe(); app.finishShell()
   }, [])
 
+  /**
+   * ONE STEP AT A TIME, ALL THE WAY TO THE CUT LIST.
+   *
+   * This said two things and then went quiet: set the scale, stand the walls up,
+   * and after that you were on your own in a workspace with eight drawers. The
+   * route through the app is not hard, but it was never shown — so it is shown,
+   * one chip at a time, in build order. Each step knows when it is done and
+   * hands over to the next.
+   *
+   * It is a SUGGESTION, not a wizard: nothing is locked, every step can be done
+   * in any order from the rails, and doing one out of turn simply retires it.
+   */
+  const openPlace = useCallback(() => {
+    useFloorplanLocalStore.getState().setDrawerOpen('place', true)
+  }, [])
+  const openCutList = useCallback(() => {
+    const fp = useFloorplanLocalStore.getState()
+    fp.markCutListSeen()
+    fp.setDrawerOpen('settings', true)
+  }, [])
+  /** A door or a window is in, so the openings step is behind us. */
+  const hasOpenings = useAppStore((st) => st.placedObjects.some((o) => o.type === 'door' || o.type === 'window'))
+  const cutListSeen = useFloorplanLocalStore((st) => st.cutListSeen)
+
   const nextStep = !planReady || traceMode || inCalibration
     ? null
     : !scaleIsRead && !calibrationHandled
       ? { label: 'Set the scale', note: "couldn't read it", run: setScale }
       : planWalls > 0 && modelIdle
         ? { label: 'Stand them up', note: `${planWalls} wall${planWalls === 1 ? '' : 's'}`, run: standThemUp }
-        : null
+        : modelIdle
+          ? null
+          : !hasOpenings
+            ? { label: 'Add doors & windows', note: 'tap a wall to place', run: openPlace }
+            : !cutListSeen
+              ? { label: 'See the cut list', note: 'every stick, per wall', run: openCutList }
+              : null
 
   // What the selection can be told to do. Buttons, not handles — see selectionEdit.
   const selectionEdit = useSelectionEdit()
@@ -1195,44 +1227,41 @@ export default function WorkspaceLayout() {
           grid itself is the drop target, so this is just a whisper + a few chips. */}
       {showUploadHint && (
         <div className={styles.uploadHint}>
-          {/* FIRST LAUNCH LEADS WITH THE TOUR.
-              Everything below this was already here, and that was the problem:
-              a person who has never seen the app was handed seven equal chips —
-              Browse, Scan, Tour, Practice, and three presets — with no way to
-              rank them. Someone who knows the trade but not this app has no
-              reason to read "Tour" as "start here". So on a first run it stops
-              being a sibling and becomes the offer, in a sentence that says what
-              they get; the other doors stay open, one line down, for anyone who
-              would rather dig in. Second launch onward, this collapses back to
-              the row it always was. */}
-          {firstRun ? (
-            <>
-              <p className={styles.uploadHintLead}>New here? I’ll build a whole house with you — floor, walls, roof, pipes and wire — one tap at a time.</p>
-              <button className={styles.uploadHintPrimary} onClick={startGuidedTour}>🎓 Show me how</button>
-              <p className={styles.uploadHintSub}>or start on your own</p>
-            </>
-          ) : (
-            <p className={styles.uploadHintSub}>Drop a plan on the grid, or start from a preset</p>
+          {/* THREE DOORS, RANKED — not eight, side by side.
+              This handed a first-time user seven equal chips (Browse, Scan,
+              Tour, Practice and three presets) and left them to rank it. There
+              are only three things anybody actually wants on this screen: draw
+              a building, open a plan they already have, or look at a finished
+              one. Everything else is still here, one line down, for the person
+              who goes looking. */}
+          {firstRun && (
+            <p className={styles.uploadHintLead}>New here? Type the size of a building and it frames itself — floor, walls, roof, cut list.</p>
           )}
-          {/* DRAW IT FIRST. A print is one way in and a guessy one — the scale
-              has to be read off a photograph. Typed sizes are exact, so this is
-              the door that leads, and Browse stays beside it for a real plan. */}
           <button className={styles.drawItChip} onClick={() => setDrawItOpen(true)}>
             ✏ Draw it
             <span className={styles.drawItNote}>type the sizes</span>
           </button>
           <div className={styles.uploadHintActions}>
-            <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Browse</button>
+            <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Open a plan</button>
             <button className={styles.uploadHintChip} onClick={() => setScanOpen(true)}>Scan</button>
-            {!firstRun && <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Tour</button>}
           </div>
           {/* The only door into a FINISHED house. Everything else here hands
               you a job; this hands you the result, to turn over and pull
               apart before deciding whether the work is worth it. */}
           <button className={styles.showcaseChip} onClick={loadShowcaseModel}>
-            Practice model
+            Show me a finished one
           </button>
-          <PresetPanel onLoad={handleLoadPreset} />
+          {/* The rest, for whoever wants it: the tour and the three sample
+              plans. Behind one line, because they are not the point. */}
+          <button className={styles.moreWays} onClick={() => setMoreWays((v) => !v)} aria-expanded={moreWays}>
+            {moreWays ? '▾' : '▸'} Other ways to start
+          </button>
+          {moreWays && (
+            <>
+              <button className={styles.uploadHintChip} onClick={startGuidedTour}>🎓 Show me how</button>
+              <PresetPanel onLoad={handleLoadPreset} />
+            </>
+          )}
         </div>
       )}
 
