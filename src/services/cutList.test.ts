@@ -110,6 +110,27 @@ describe('an opening is framed, and the framing is on the list', () => {
     expect(qty(ls, 'sill cripple')).toBeGreaterThan(0)
   })
 
+  it('grows the bearing with the span — a garage opening is not a closet door', () => {
+    const jacks = (widthM: number) =>
+      qty(cuts({ ...wall, length: Math.max(6, widthM + 2), openings: [{ centerM: Math.max(6, widthM + 2) / 2, widthM, type: 'door' }] }), 'jack stud')
+    expect(jacks(0.9)).toBe(2)     // 3 ft door — one each side
+    expect(jacks(1.8)).toBe(4)     // 6 ft patio — two each side
+    expect(jacks(4.9)).toBe(6)     // 16 ft garage — three each side
+  })
+
+  it('doubles the kings on an opening wide enough to need them', () => {
+    const kings = (widthM: number) =>
+      qty(cuts({ ...wall, length: Math.max(6, widthM + 2), openings: [{ centerM: Math.max(6, widthM + 2) / 2, widthM, type: 'door' }] }), 'king stud')
+    expect(kings(0.9)).toBe(2)
+    expect(kings(4.9)).toBe(4)
+  })
+
+  it('makes the header long enough to bear on every jack under it', () => {
+    const big = cuts({ ...wall, length: 8, openings: [{ centerM: 4, widthM: 4.9, type: 'door' }] })
+    // 16 ft opening, three jacks a side: the header runs over all six.
+    expect(line(big, 'header')[0].lengthIn).toBeCloseTo(toSixteenth((4.9 + 6 * 0.038) * IN), 1)
+  })
+
   it('three plies in a 2×6 wall, four in a 2×8', () => {
     const ply = (thickness: number) =>
       line(cuts({ ...wall, thickness, openings: doorWall.openings }), 'header')[0].qty

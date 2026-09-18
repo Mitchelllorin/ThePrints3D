@@ -530,16 +530,30 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     // Wood openings get a beefy LVL header; steel keeps the slimmer box beam.
     const headerDepth = steel ? 0.18 : 0.235
 
-    // King studs — full stud length, just outside the opening.
-    for (const s of [-1, 1]) add(studGeo, op.x + s * (hw + studW * 1.5), studY, 0, memberInfo('king stud'), cut('king stud', studH))
+    // JACKS AND KINGS BY SPAN — see jacksPerEnd / kingsPerEnd. The jacks stack
+    // outward from the opening edge and the kings stand outboard of them all, so
+    // a wide opening grows its bearing instead of framing like a closet door.
+    const nJacks = jacksPerEnd(op.w)
+    const nKings = kingsPerEnd(op.w)
 
     // Jack studs — carry the header, from the bottom plate up to the header.
     const jackH = Math.max(0.05, roTop - studBottom)
     const jackGeo = new THREE.BoxGeometry(studW, jackH, studDepth)
-    for (const s of [-1, 1]) add(jackGeo, op.x + s * (hw + studW * 0.5), studBottom + jackH / 2, 0, memberInfo('jack stud'), cut('jack stud', jackH))
+    for (const s of [-1, 1]) {
+      for (let j = 0; j < nJacks; j++) {
+        add(jackGeo, op.x + s * (hw + studW * (0.5 + j)), studBottom + jackH / 2, 0, memberInfo('jack stud'), cut('jack stud', jackH))
+      }
+    }
 
-    // Header spanning the opening, sitting on the jacks.
-    const headerLen = op.w + studW * 2
+    // King studs — full stud length, outboard of the jacks.
+    for (const s of [-1, 1]) {
+      for (let k = 0; k < nKings; k++) {
+        add(studGeo, op.x + s * (hw + studW * (nJacks + 0.5 + k)), studY, 0, memberInfo('king stud'), cut('king stud', studH))
+      }
+    }
+
+    // Header spanning the opening and bearing on every jack under it.
+    const headerLen = op.w + studW * 2 * nJacks
     add(new THREE.BoxGeometry(headerLen, headerDepth, studDepth), op.x, roTop + headerDepth / 2, 0,
       steel ? memberInfo('box-beam header') : 'LVL header', cut('header', headerLen, headerStock, headerPlies))
 
@@ -651,6 +665,33 @@ export const FLOOR_ASSEMBLY_H = 0.32
 /** A rectangular opening in a floor, in the area's LOCAL centred coords (metres):
  *  centre (x,z) and size (w,d). Used to frame a stairwell/shaft through the deck. */
 export interface FloorHole { x: number; z: number; w: number; d: number }
+
+/**
+ * HOW MANY JACKS CARRY EACH END OF A HEADER.
+ *
+ * Everything the header picks up comes down its ends, so the wider the opening
+ * the more jack there has to be under it: a 3 ft door is one jack a side, a 6 ft
+ * patio door two, a 16 ft garage opening three. One jack regardless of span —
+ * which is what this framed before — puts a garage header on the same bearing
+ * as a closet door, and it is the bearing that fails first, not the beam.
+ *
+ * The step points are the common prescriptive ones (4 ft and 8 ft of clear
+ * span). A real header schedule also reads the load above, which the app does
+ * not know yet, so this is the floor and never the last word.
+ */
+export function jacksPerEnd(spanM: number): number {
+  if (spanM <= 1.2192) return 1        // up to 4'
+  if (spanM <= 2.4384) return 2        // up to 8'
+  return 3
+}
+
+/**
+ * King studs each side — one, until the opening is wide enough that the wall
+ * either side of it is doing real work. Garage and big slider openings get two.
+ */
+export function kingsPerEnd(spanM: number): number {
+  return spanM > 3.6576 ? 2 : 1        // past 12'
+}
 
 /** IRC R502.10 — a floor opening's header may be a single member while it spans
  *  4 ft or less; past that the header AND the trimmer joists must be doubled. */
