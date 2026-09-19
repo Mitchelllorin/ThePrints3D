@@ -19,6 +19,7 @@ import AskAI from './AskAI'
 import CorpusPanel from './CorpusPanel'
 import StudioCredit from './StudioCredit'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
+import { planViewCamera } from '../../services/builtScene'
 import UpgradeSheet from '../Pro/UpgradeSheet'
 import ProSection from '../Pro/ProSection'
 import { hasToured, markToured } from '../../onboarding/firstRun'
@@ -786,6 +787,32 @@ export default function WorkspaceLayout() {
     fp.markCutListSeen()
     fp.setDrawerOpen('settings', true)
   }, [])
+  /**
+   * DRAW THE INSIDE WALLS — with a finger, not a form.
+   *
+   * The tool was always here: trace works on a Draw it sheet the same as on a
+   * print, a wall drawn across the middle is framed as an interior partition by
+   * itself, and the length reads out as you go. It was just buried — Build
+   * drawer, wall-type picker, then trace — and the route never mentioned it, so
+   * a drawn box went straight from its four outside walls to doors. Drawing is
+   * the easy way; this makes it the next step. Straight down onto the plan,
+   * because that is where a wall is drawn.
+   */
+  const drawInsideWalls = useCallback(() => {
+    const fp = useFloorplanLocalStore.getState()
+    fp.markInsideWallsSeen()
+    for (const d of ['build', 'settings', 'place', 'ask'] as const) fp.setDrawerOpen(d, false)
+    fp.setActiveTraceLayer('framing')
+    fp.setTraceStyle('line')
+    fp.setPlanView(true)
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight)
+    useAppStore.getState().setCameraPreset(planViewCamera(useAppStore.getState().floorplanOverlay, aspect))
+    fp.setTraceMode(true)
+  }, [])
+  /** Any partition in, drawn or read off the print, and the step is behind us. */
+  const hasInsideWalls = useAppStore((st) => st.drawings.some((d) =>
+    d.parsedWalls.some((w) => w.source === 'user' && (w.wallRole ?? '').startsWith('interior'))))
+  const insideWallsSeen = useFloorplanLocalStore((st) => st.insideWallsSeen)
   /** A door or a window is in, so the openings step is behind us. */
   const hasOpenings = useAppStore((st) => st.placedObjects.some((o) => o.type === 'door' || o.type === 'window'))
   const cutListSeen = useFloorplanLocalStore((st) => st.cutListSeen)
@@ -798,11 +825,13 @@ export default function WorkspaceLayout() {
         ? { label: 'Stand them up', note: `${planWalls} wall${planWalls === 1 ? '' : 's'}`, run: standThemUp }
         : modelIdle
           ? null
-          : !hasOpenings
-            ? { label: 'Add doors & windows', note: 'tap a wall to place', run: openPlace }
-            : !cutListSeen
-              ? { label: 'See the cut list', note: 'every stick, per wall', run: openCutList }
-              : null
+          : !hasInsideWalls && !insideWallsSeen && !hasOpenings
+            ? { label: 'Draw the inside walls', note: 'tap one end, then the other', run: drawInsideWalls }
+            : !hasOpenings
+              ? { label: 'Add doors & windows', note: 'tap a wall to place', run: openPlace }
+              : !cutListSeen
+                ? { label: 'See the cut list', note: 'every stick, per wall', run: openCutList }
+                : null
 
   // What the selection can be told to do. Buttons, not handles — see selectionEdit.
   const selectionEdit = useSelectionEdit()

@@ -14,12 +14,15 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import PrintWalkabout from './PrintWalkabout'
+import WallDimension from './WallDimension'
+import { formatMeasureMm } from '../../services/unitConverter'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '../../store/useFloorplanLocalStore'
 import { inferWallRole } from '../../services/wallFacing'
 import { solveStair, stairShapeFromSubtype } from '../../services/stairs'
 import { seatInGap } from '../../services/openingSeat'
+import { parseSizeMm } from '../../services/drawnProject'
 import { squarePointToAxis } from '../../services/wallTraceReducer'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
@@ -152,13 +155,21 @@ function RubberBandPreview({
   traceElevation,
   activeLineColor,
   calibrationMode,
+  mmPerPx,
+  onTypedLength,
 }: {
   planeLocalToTrace: (pixel: [number, number]) => [number, number, number]
   floorsRectWorld: (x1: number, y1: number, x2: number, y2: number) => [number, number, number][]
   traceElevation: number
   activeLineColor: string
   calibrationMode: boolean
+  /** The sheet's scale, for the live length. Null when it is not known. */
+  mmPerPx: number | null
+  /** A length typed on the dimension, toward `endPixel`. False if unreadable. */
+  onTypedLength: (text: string, endPixel: [number, number]) => boolean
 }) {
+  const activeUnit = useConfigStore((s) => s.activeUnit)
+  const lengthFormat = useConfigStore((s) => s.lengthFormat)
   const hoverPixel      = useFloorplanLocalStore((s) => s.hoverPixel)
   const traceMode       = useFloorplanLocalStore((s) => s.traceMode)
   const tracePaused     = useFloorplanLocalStore((s) => s.tracePaused)
@@ -177,8 +188,12 @@ function RubberBandPreview({
     const end = squareWalls
       ? squarePointToAxis(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
       : hoverPixel
-    return [planeLocalToTrace(traceStart), planeLocalToTrace(end)] as
-      [[number, number, number], [number, number, number]]
+    return {
+      start: planeLocalToTrace(traceStart),
+      end: planeLocalToTrace(end),
+      endPixel: end as [number, number],
+      lenPx: Math.hypot(end[0] - traceStart[0], end[1] - traceStart[1]),
+    }
   }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace, squareWalls])
 
   const floorsPreviewRect = useMemo(() => {
@@ -196,8 +211,19 @@ function RubberBandPreview({
 
   return (
     <>
-      {tracePreviewPoints && (
-        <Line points={tracePreviewPoints} color={activeLineColor} lineWidth={4} />
+      {/* A WALL gets its dimension on it and can take a typed length; a pipe
+          or a wire run keeps the plain rubber band. */}
+      {tracePreviewPoints && activeTraceLayer === 'framing' && mmPerPx ? (
+        <WallDimension
+          start={tracePreviewPoints.start}
+          end={tracePreviewPoints.end}
+          endPixel={tracePreviewPoints.endPixel}
+          color={activeLineColor}
+          label={formatMeasureMm(tracePreviewPoints.lenPx * mmPerPx, activeUnit, lengthFormat)}
+          onTyped={onTypedLength}
+        />
+      ) : tracePreviewPoints && (
+        <Line points={[tracePreviewPoints.start, tracePreviewPoints.end]} color={activeLineColor} lineWidth={4} />
       )}
       {floorsPreviewRect && (
         <Line
@@ -710,6 +736,88 @@ export default function FloorplanOverlay() {
     }
   }
 
+  /**
+   * Stamp the wall with what it is and put it in the drawing. Shared by a
+   * tapped end and a TYPED length, so a wall whose length was typed is the same
+   * wall in every way but where its end came from. `onPrint` is whether it
+   * locked onto a printed line — if not, and it lands off the sheet, ask.
+   */
+  const commitWall = (base: ParsedWall, start: [number, number], onPrint: boolean) => {
+    if (!drawing) return
+    // Stamp the picked framing/role/material onto the wall so the build frames
+    // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
+    const isMasonry = activeWallType === 'cmu'
+    // ROLE COMES FROM WHERE YOU DREW IT, unless you have picked one by hand.
+    // The picker defaults to exterior-bearing, so stamping it blindly labelled
+    // every partition an exterior bearing wall — which then got sheathed,
+    // carried up a storey, and framed in 2x8. A wall along the edge of what you
+    // have traced so far is exterior; one across the middle is interior.
+    const roleForWall = wallRoleChosen
+      ? activeWallRole
+      : inferWallRole(base, userWalls)
+    const wall: ParsedWall = {
+      ...base,
+      // Stud size follows the role unless it too was picked by hand, so an
+      // inferred interior wall gets 2x4 rather than the exterior 2x8.
+      framingType: wallTypeChosen ? activeWallType : defaultWallTypeForRole(roleForWall),
+      wallRole: roleForWall,
+      wallType: FRAMING_TO_WALLTYPE[activeWallType] ?? base.wallType,
+      exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
+      level: activeLevel,
+    }
+    // New wall is appended last among user walls, so its user-index is the
+    // count before the add — captured for the "line it up?" nudge below.
+    const newUserIndex = drawing.parsedWalls.filter((w) => w.source === 'user').length
+    addUserTracedWall(drawing.id, wall)
+    addTrace({ points: [start, [wall.x2, wall.y2]], timestamp: Date.now() })
+    // Off the print? If the wall's midpoint lands outside the plan image and it
+    // didn't snap to a print line, gently ask whether that was intended.
+    const rw = drawing.rasterWidth ?? 1400
+    const rh = drawing.rasterHeight ?? 900
+    const mx = (wall.x1 + wall.x2) / 2, my = (wall.y1 + wall.y2) / 2
+    const m = 24
+    if (!onPrint && (mx < -m || my < -m || mx > rw + m || my > rh + m)) {
+      setOffPrintWarn(true)
+    } else {
+      // Floors stack: if this upper-floor wall landed near — but not lined up
+      // with — a wall on the storey below, surface a "line it up?" prompt. The
+      // app knows floors are normally plumb and flags the drift; the user
+      // decides whether to snap it or keep the offset on purpose.
+      maybeNudgePlumb(wall, newUserIndex)
+    }
+    setTraceStart([wall.x2, wall.y2])
+  }
+
+  /**
+   * A TYPED length, laid from the anchor toward where the arrow points. The
+   * direction comes from the drawing; the length comes from the number. No
+   * snapping to print lines or to nearby walls here — those move the end, and
+   * the whole point of typing it was that the end goes exactly where it says.
+   */
+  const commitTypedWall = (text: string, endPixel: [number, number]): boolean => {
+    const mm = parseSizeMm(text)
+    if (!drawing || !traceStart || !drawing.scaleMmPerPx || mm == null || !(mm > 0)) return false
+    const dx = endPixel[0] - traceStart[0], dy = endPixel[1] - traceStart[1]
+    const d = Math.hypot(dx, dy)
+    if (d < 1e-6) return false
+    const lenPx = mm / drawing.scaleMmPerPx
+    const base = {
+      x1: traceStart[0], y1: traceStart[1],
+      x2: traceStart[0] + (dx / d) * lenPx, y2: traceStart[1] + (dy / d) * lenPx,
+      thickness: 8, source: 'user' as const, detectionConfidence: 1,
+    } as ParsedWall
+    commitWall(base, traceStart, false)
+    setHoverPixel([base.x2, base.y2])
+    return true
+  }
+  // Handed to the preview through a ref, so the preview gets one stable
+  // function and the commit (which stamps the time) is only ever run by a tap.
+  const commitTypedRef = useRef(commitTypedWall)
+  useEffect(() => { commitTypedRef.current = commitTypedWall })
+  const onTypedLength = useCallback(
+    (text: string, endPixel: [number, number]) => commitTypedRef.current(text, endPixel), [])
+
+
   // Drop a trace/calibration point — called only on a genuine tap (pointer-up
   // with no meaningful drag), so the camera is free to move between points.
   const commitTraceOrCalibrationPoint = (event: ThreeEvent<PointerEvent>) => {
@@ -895,48 +1003,7 @@ export default function FloorplanOverlay() {
       // 45° tolerance = ALWAYS snap to the nearer axis. The old 7° let anything
       // worse through as "deliberate", which is how crooked walls got in.
       const base = squareWallToAxis(extendWallToNearbyWall(snappedWall, refWalls), squareWalls ? 45 : 0)
-      // Stamp the picked framing/role/material onto the wall so the build frames
-      // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
-      const isMasonry = activeWallType === 'cmu'
-      // ROLE COMES FROM WHERE YOU DREW IT, unless you have picked one by hand.
-      // The picker defaults to exterior-bearing, so stamping it blindly labelled
-      // every partition an exterior bearing wall — which then got sheathed,
-      // carried up a storey, and framed in 2x8. A wall along the edge of what you
-      // have traced so far is exterior; one across the middle is interior.
-      const roleForWall = wallRoleChosen
-        ? activeWallRole
-        : inferWallRole(base, userWalls)
-      const wall: ParsedWall = {
-        ...base,
-        // Stud size follows the role unless it too was picked by hand, so an
-        // inferred interior wall gets 2x4 rather than the exterior 2x8.
-        framingType: wallTypeChosen ? activeWallType : defaultWallTypeForRole(roleForWall),
-        wallRole: roleForWall,
-        wallType: FRAMING_TO_WALLTYPE[activeWallType] ?? base.wallType,
-        exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
-        level: activeLevel,
-      }
-      // New wall is appended last among user walls, so its user-index is the
-      // count before the add — captured for the "line it up?" nudge below.
-      const newUserIndex = drawing.parsedWalls.filter((w) => w.source === 'user').length
-      addUserTracedWall(drawing.id, wall)
-      addTrace({ points: [traceStart, [wall.x2, wall.y2]], timestamp: Date.now() })
-      // Off the print? If the wall's midpoint lands outside the plan image and it
-      // didn't snap to a print line, gently ask whether that was intended.
-      const rw = drawing.rasterWidth ?? 1400
-      const rh = drawing.rasterHeight ?? 900
-      const mx = (wall.x1 + wall.x2) / 2, my = (wall.y1 + wall.y2) / 2
-      const m = 24
-      if (!printLine && !inkSnapped && (mx < -m || my < -m || mx > rw + m || my > rh + m)) {
-        setOffPrintWarn(true)
-      } else {
-        // Floors stack: if this upper-floor wall landed near — but not lined up
-        // with — a wall on the storey below, surface a "line it up?" prompt. The
-        // app knows floors are normally plumb and flags the drift; the user
-        // decides whether to snap it or keep the offset on purpose.
-        maybeNudgePlumb(wall, newUserIndex)
-      }
-      setTraceStart([wall.x2, wall.y2])
+      commitWall(base, traceStart, !!printLine || inkSnapped)
       return
     }
 
@@ -1690,6 +1757,8 @@ export default function FloorplanOverlay() {
         traceElevation={traceElevation}
         activeLineColor={activeLineColor}
         calibrationMode={overlay.calibrationMode}
+        mmPerPx={drawing?.scaleMmPerPx ?? null}
+        onTypedLength={onTypedLength}
       />
 
       {/* Committed floor and roof areas — outlines at each area's storey

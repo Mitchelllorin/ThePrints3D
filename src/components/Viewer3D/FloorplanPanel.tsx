@@ -267,9 +267,11 @@ export default function FloorplanPanel() {
   // which never matched line-mode tracing.)
   const hasTrace = userWallCount >= 1 || userTraces.length >= 1
 
-  // Live running length of the wall segment being traced (anchor → cursor),
-  // in real-world units via the drawing's scale. Drives the on-screen readout.
-  const liveTraceMm = (traceMode && traceStart && hoverPixel && drawing)
+  // Live running length of the run being traced (anchor → cursor), in
+  // real-world units via the drawing's scale. Drives the on-screen readout.
+  // Not for WALLS: a wall carries its own dimension on the line (WallDimension),
+  // measured to the squared end, and two numbers for one length is one too many.
+  const liveTraceMm = (traceMode && traceStart && hoverPixel && drawing && activeTraceLayer !== 'framing')
     ? Math.hypot(hoverPixel[0] - traceStart[0], hoverPixel[1] - traceStart[1]) *
       (drawing.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX)
     : null

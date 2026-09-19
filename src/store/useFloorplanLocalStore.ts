@@ -248,6 +248,10 @@ interface FloorplanLocalState {
    *  Session-scoped on purpose: a new session walks the same route. */
   cutListSeen: boolean
   markCutListSeen: () => void
+  /** The step chain has offered the inside walls once and been taken up on it.
+   *  Session-scoped like cutListSeen; a shed with no partitions is not nagged. */
+  insideWallsSeen: boolean
+  markInsideWallsSeen: () => void
   /** A rail column (Layers or Place) is open. Those columns keep their own open
    *  state; this mirrors it so things outside the rail can stand aside. */
   railPanelOpen: boolean
@@ -456,6 +460,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setRailPanelOpen: (open) => set({ railPanelOpen: open }),
   cutListSeen: false,
   markCutListSeen: () => set({ cutListSeen: true }),
+  insideWallsSeen: false,
+  markInsideWallsSeen: () => set({ insideWallsSeen: true }),
   upgradeReason: null,
   coachBand: 0,
 

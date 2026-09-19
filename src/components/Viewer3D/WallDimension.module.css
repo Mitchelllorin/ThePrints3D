@@ -1,0 +1,61 @@
+/* The length chip on a wall being drawn. Text over the canvas goes in a chip
+   with its own tint and blur (family rule 3), at or above the 0.72 alpha floor.
+   Worst case checked: #f1f5f9 on rgb(15 23 42 / .82) composited over pure white
+   is about 10:1, over pure black about 17:1. */
+.chip {
+  pointer-events: auto;
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.82);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid var(--bp-accent, #38bdf8);
+  border-radius: 10px;
+  color: var(--bp-text, #f1f5f9);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .chip { background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.94); }
+}
+.length {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 14px;
+  background: none;
+  border: 0;
+  color: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+}
+.form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 8px;
+}
+.input {
+  width: 96px;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: var(--bp-text, #f1f5f9);
+  font-size: 16px;              /* 16px stops mobile browsers zooming on focus */
+  font-variant-numeric: tabular-nums;
+}
+.input:focus { outline: none; border-color: var(--bp-accent, #38bdf8); }
+/* Unreadable input says so by shape as well as colour: a thicker border. */
+.bad { border: 2px solid #e5643f; }
+.go {
+  min-width: 48px;
+  min-height: 48px;
+  background: none;
+  border: 0;
+  color: var(--bp-accent, #38bdf8);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
