@@ -28,6 +28,7 @@ import { WALL_TYPES } from '../../data/members'
 import styles from './AmbientGuide.module.css'
 import EdgeDrawer from '../Layout/EdgeDrawer'
 import FinishesPanel from '../Layout/FinishesPanel'
+import OpeningPositionRow from './OpeningPositionRow'
 
 // ── Discipline layer tabs (Framing/Plumbing/Electrical wired; HVAC placeholder)
 const TRACE_LAYERS = TRACE_LAYER_ORDER.map((key) => ({ key, label: LAYER_LABELS[key], color: LAYER_COLORS[key] }))
@@ -1833,6 +1834,11 @@ export default function FloorplanPanel() {
               </div>
             )
           })()}
+          {/* WHERE IN THE WALL — typed, to centre, from a named end. A tap put it
+              roughly there; a print puts it at a number. */}
+          {(selectedObject.type === 'door' || selectedObject.type === 'window') && (
+            <OpeningPositionRow object={selectedObject} />
+          )}
           {/* No hinge on an overhead door, so no hand to choose. Offering LH/RH
               on a sectional garage door is a control that cannot do anything —
               worse than missing, because it implies the model is wrong. Same

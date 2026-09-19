@@ -1,0 +1,54 @@
+/* Typed position for a door or window, inside the object's property card.
+   Built to the family minimums the rest of that card predates: 48px targets,
+   8px apart, nothing under 13px. The card itself is transient — opened by the
+   user, closed by them — so these controls sit on its surface, not on the model. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--bp-text, #f1f5f9);
+}
+.label { color: var(--bp-text-dim, #94a3b8); }
+.end {
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--bp-accent, #38bdf8);
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.9);
+  color: var(--bp-text, #f1f5f9);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.fields {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 100%;
+}
+.num {
+  width: 56px;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: var(--bp-text, #f1f5f9);
+  font-size: 16px;            /* 16px stops mobile browsers zooming on focus */
+  font-variant-numeric: tabular-nums;
+  pointer-events: auto;
+}
+.num:focus { outline: none; border-color: var(--bp-accent, #38bdf8); }
+.unit { color: var(--bp-text-dim, #94a3b8); }
+.note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--bp-text-dim, #94a3b8);
+  font-variant-numeric: tabular-nums;
+}

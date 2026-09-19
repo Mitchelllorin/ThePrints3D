@@ -40,6 +40,9 @@ export interface WallOpeningAt {
   type: 'door' | 'window'
   sillM?: number
   heightM?: number
+  /** The placed door or window this came from, so it can be found again and
+   *  moved by typed position. Absent for stairs and openings read off the print. */
+  objectId?: string
 }
 
 export interface PlannedWall {
@@ -162,6 +165,7 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
     const item = getCatalogItem(o.type)
     openings[best].push({
       t,
+      objectId: o.id,
       widthM: (item?.defaultW ?? 0.9) * o.scaleX,
       type: o.type,
       sillM: o.sillM,
