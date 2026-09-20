@@ -71,6 +71,19 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # DO NOT LET IT INSTALL ITS DEFAULTS. The action's default `packages`
+          # is `tools platform-tools`, and Google has removed `tools` from the
+          # SDK repository — sdkmanager answers "Failed to find package 'tools'"
+          # and exits 1, which fails the step before a line of the app is built.
+          # Nothing here was edited to cause that; the same file built fine on
+          # 11 Sep and rotted underneath us.
+          #
+          # Empty means the action only puts the runner's existing SDK on PATH
+          # and sets ANDROID_HOME, which is all this build wants from it — the
+          # very next step installs the one platform and build-tools we need,
+          # by name.
+          packages: ''
 
       - name: Install Android SDK platform 36
         run: |
