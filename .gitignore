@@ -47,3 +47,8 @@ __pycache__/
 
 # Detached dev-server log (kept running for phone testing over the LAN)
 vite-dev.log
+
+# Build artifacts — signed bundles are 12MB binaries and belong on a release,
+# not in history. `build-android.sh` drops theprints3d-release.aab here too.
+*.aab
+*.apk
