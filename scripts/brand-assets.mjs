@@ -28,6 +28,10 @@ const TARGETS = [
   ['icon.svg', 'public/icons/icon-96.png', 96],
   ['icon.svg', 'public/icons/icon-72.png', 72],
   ['icon.svg', 'public/icons/icon-48.png', 48],
+  // Maskable PWA icons — their own source, pulled in so a circular or squircle
+  // mask cannot cut the roof or the print off. See maskable.svg.
+  ['maskable.svg', 'public/icons/maskable-512.png', 512],
+  ['maskable.svg', 'public/icons/maskable-192.png', 192],
   // Capacitor source icon — `npx cap:assets` regenerates the Android densities
   ['icon.svg', 'assets/icon/icon.png', 1024],
   // Launch splash. `drawable/splash.png` is the resource capacitor.config.ts
