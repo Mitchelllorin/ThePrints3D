@@ -17,7 +17,8 @@
 #   2. Otherwise starts `npm run dev -- --host` in the background.
 #   3. Auto-detects the Vite port from its output, falling back to a port scan.
 #   4. Opens Chrome (isolated profile) at the app with an Android UA + touch + a
-#      Pixel-sized window. Prints a LAN URL too, for testing on a real phone.
+#      Pixel-sized window. Prints the phone URLs too: the Tailscale name first
+#      (never moves, works off this Wi-Fi), then the LAN address.
 #
 # ADAPT FOR THIS PROJECT:
 #   -AppPath : if your mobile view lives behind a router route, pass it, e.g.
@@ -122,9 +123,31 @@ if (-not $port) {
 $lan = (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' } | Select-Object -First 1 -ExpandProperty IPAddress)
 $localUrl = "http://localhost:$port$AppPath"
+
+# THE NAME, NOT THE NUMBER.
+# A LAN address is a DHCP lease: it is right until the router decides
+# otherwise, and a URL typed into a phone by hand cannot be re-typed every
+# time that happens. Tailscale serves this machine under its own hostname, so
+# the phone gets an address that never moves and works off this Wi-Fi as well
+# as on it. Printed first because it is the one worth putting on a home screen.
+$tsExe = "$env:ProgramFiles\Tailscale	ailscale.exe"
+$tsName = $null
+if (Test-Path $tsExe) {
+    try {
+        $st = & $tsExe status --json 2>$null | ConvertFrom-Json
+        if ($st.Self.DNSName) { $tsName = $st.Self.DNSName.TrimEnd('.') }
+    } catch { }
+}
+
 Write-Host ''
 Write-Host "==> Dev server ready." -ForegroundColor Green
 Write-Host "    Emulated (this machine): $localUrl"
+if ($tsName) {
+    Write-Host "    Real phone (anywhere):    http://${tsName}:$port$AppPath" -ForegroundColor Cyan
+    Write-Host "                              (add it to the phone's home screen once, then it is one tap)"
+} else {
+    Write-Host "    Real phone (anywhere):    Tailscale not signed in - run 'tailscale up' to get a name that never moves." -ForegroundColor Yellow
+}
 if ($lan) { Write-Host "    Real phone (same Wi-Fi):  http://${lan}:$port$AppPath" }
 Write-Host ''
 
