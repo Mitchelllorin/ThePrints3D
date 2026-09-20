@@ -27,6 +27,7 @@ import ConstructionWizard from '../ConstructionWizard/ConstructionWizard'
 import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
+import PlanSheet from './PlanSheet'
 import NameplateStrip from './NameplateStrip'
 import FloorJoistsLayer from './FloorJoistsLayer'
 import CeilingLayer from './CeilingLayer'
@@ -1114,6 +1115,10 @@ export default function ModelViewer() {
         )}
 
         <FloorplanOverlay />
+        {/* The live drawing of the building, on the sheet under it. Outside the
+            `!planView` group with FloorplanOverlay, for the same reason: the
+            print IS the 2D view, so hiding the model must not hide it. */}
+        <PlanSheet />
         {/* The tour's worked example, drawn ON the print so it orbits with it. */}
         <TourGhost />
         {/* …and the one-shot duck underneath when the real floor lands. */}

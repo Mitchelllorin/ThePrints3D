@@ -23,6 +23,7 @@ import { inferWallRole } from '../../services/wallFacing'
 import { solveStair, stairShapeFromSubtype } from '../../services/stairs'
 import { seatInGap } from '../../services/openingSeat'
 import { parseSizeMm } from '../../services/drawnProject'
+import { usePrintDrop } from '../../services/printPlane'
 import { squarePointToAxis } from '../../services/wallTraceReducer'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
@@ -494,6 +495,10 @@ export default function FloorplanOverlay() {
   const printOpacity = deckUnderPrint && readingPlan
     ? Math.max(overlay.opacity, 0.95)
     : overlay.opacity
+
+  /** How far the sheet sits below the slab, once there is a slab. 0 while
+   *  tracing or calibrating, so a tap always lands on the plane you can see. */
+  const printDrop = usePrintDrop()
 
   const planeLocalToWorld = useCallback((pixel: [number, number]): [number, number, number] => {
     const localX = ((pixel[0] / imageWidth) - 0.5) * width
@@ -1650,8 +1655,12 @@ export default function FloorplanOverlay() {
         <group
           /* Lifted to the active storey: the print image + the edit handles in
              this group rise together, so you trace on the floor you're working
-             and the print stays coplanar with the catcher above. */
-          position={[overlay.position[0], 0.01 + traceElevation, overlay.position[1]]}
+             and the print stays coplanar with the catcher above.
+             …and DROPPED clear of the slab once a building stands on it, so the
+             drawing reads as the sheet under the work rather than a texture
+             painted on the floor. Visual only, and zero while tracing or
+             calibrating — see printPlane.ts. */
+          position={[overlay.position[0], 0.01 + traceElevation + printDrop, overlay.position[1]]}
           rotation={[0, rotationRad, 0]}
         >
           {/* Left alone for a long while, the print wanders off. Wraps the

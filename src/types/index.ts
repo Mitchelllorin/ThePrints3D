@@ -141,9 +141,21 @@ export interface PlacedObject {
   /** Window sill height (metres above finished floor). Windows default to ~0.9m;
    *  doors ignore this (they start at the floor). Adjustable per window. */
   sillM?: number
-  /** Door swing hand — 'left' (LH) or 'right' (RH) hinge. Drives the swing arc.
-   *  Doors only; defaults to 'left'. */
+  /** ── Door swing ──────────────────────────────────────────────────────────
+   *  A door takes TWO facts to describe, and the trade says them together:
+   *  which jamb it hinges on, and which way it opens. "Left hand" on its own
+   *  does not tell a framer, a supplier or anyone reading the print whether the
+   *  leaf comes at them or goes away from them, and ordering the wrong one is a
+   *  return, not an adjustment.
+   *
+   *  Hand — 'left' (LH) or 'right' (RH) hinge. Defaults to 'left'. */
   swing?: 'left' | 'right'
+  /** Which side of the wall the leaf sweeps into. 'in' opens into the room the
+   *  door faces (the +z side of its own frame), 'out' the other way. Defaults
+   *  to 'in'. Together with `swing` this gives the four real configurations —
+   *  LH in, LH out, RH in, RH out — and it is what the plan arc is drawn from,
+   *  so the print shows the door actually ordered. */
+  swingSide?: 'in' | 'out'
   /** X-ray this object — render it see-through (same as the wall flag), so you
    *  can see past/into it without deleting it. Toggled from the object panel. */
   transparent?: boolean

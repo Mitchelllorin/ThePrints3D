@@ -1,12 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <!-- Android crops an adaptive icon to as little as the central 66%. The mark
-       is scaled DOWN to 0.82 here so no mask can cut the roof or the plate. -->
-  <g transform="translate(256,262) scale(0.82) translate(-256,-250)">
-    <path d="M144 250 L256 306 L368 250 L256 194 Z" fill="#1d2d4e"/>
-    <path d="M144 250 L256 306 L256 362 L144 306 Z" fill="#3d6cc0"/>
-    <path d="M256 306 L368 250 L368 306 L256 362 Z" fill="#5687dd"/>
-    <path d="M295.2 294.4 L321 281.5 L321 329.5 L295.2 342.4 Z" fill="#16264a"/>
-    <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z" fill="#a9c6f5"/>
-    <path d="M256 131.3 L381.4 194 L318.7 137.4 L193.3 74.7 Z" fill="#6d97dd"/>
+  <!-- THE LAUNCHER FOREGROUND. Same four layers as icon.svg — print, slab,
+       walls, roof — because the launcher is exactly where the mark has to say
+       what the app does, and a plain house says nothing.
+
+       Android crops an adaptive icon to as little as the central 66%: a circle
+       of radius ~169 about the centre. The four-layer stack spans 331 tall by
+       260 wide about (256, 251.5), so its corners sit ~210 from the centre.
+       0.78 brings that inside 169 with a little to spare, so no mask can cut
+       the roof or the sheet. (It was 0.82 for the shorter three-layer art.) -->
+  <g transform="translate(256,256) scale(0.78) translate(-256,-251.5)">
+    <path d="M126 352 L256 417 L386 352 L256 287 Z" fill="#17305a" stroke="#5b8ac7" stroke-width="3"/>
+    <path d="M144 352 L256 408 L368 352 L256 296 Z" fill="none" stroke="#9dbcea" stroke-width="4.5"/>
+
+    <path d="M144 306 L256 362 L368 306 L256 250 Z" fill="#dce7f8"/>
+    <path d="M144 306 L256 362 L256 374 L144 318 Z" fill="#9fb4d6"/>
+    <path d="M256 362 L368 306 L368 318 L256 374 Z" fill="#8da5cc"/>
+
+    <path d="M144 226 L256 282 L368 226 L256 170 Z" fill="#e8effb"/>
+    <path d="M144 226 L256 170 L256 184 L144 240 Z" fill="#b9cae7"/>
+    <path d="M256 170 L368 226 L368 240 L256 184 Z" fill="#a7bbdc"/>
+    <path d="M144 226 L256 282 L256 338 L144 282 Z" fill="#3f5f9e"/>
+    <path d="M256 282 L368 226 L368 282 L256 338 Z" fill="#4d72b8"/>
+    <path d="M295.2 270.4 L321 257.5 L321 305.5 L295.2 318.4 Z" fill="#16264a"/>
+
+    <path d="M130.6 205.3 L256 268 L318.7 148.7 L193.3 86 Z" fill="#a9c6f5"/>
+    <path d="M256 142.6 L381.4 205.3 L318.7 148.7 L193.3 86 Z" fill="#6d97dd"/>
   </g>
 </svg>

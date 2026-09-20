@@ -381,6 +381,35 @@ interface FloorplanLocalState {
 
 export type { CalibrationUnit, DragKind, DragState, TraceStyle }
 
+/**
+ * THE WALL SHEET — one surface, one way in.
+ *
+ * A wall's settings (member, role, span, packs, board, finishes, trim, X-ray,
+ * nudge, delete) live in ONE place: the "Wall selected" sheet in the Build
+ * drawer. Raising it means two things at once — mark the panel AND open the
+ * drawer it lives in — and every path that selects a wall has to do both or the
+ * user taps a wall and nothing happens.
+ *
+ * That is exactly what went wrong. `selectWallExclusive` and
+ * `setSelectedWallIndex` set `activePanel: 'wall'` and stopped there, with the
+ * drawer left however it was — shut, nearly always. So outside edit mode you
+ * could tap a wall, watch it highlight, and be offered nothing to do with it.
+ * Only the rail's specs mark (openSelectionPanel) ever opened the drawer, and
+ * only in edit mode, which made a per-wall setting a thing you had to know a
+ * route to.
+ *
+ * One constant, spread by every selector, so the route cannot drift apart
+ * again. The other drawers close with it — same one-surface-at-a-time rule
+ * setDrawerOpen enforces.
+ */
+const WALL_SHEET = {
+  activePanel: 'wall',
+  buildDrawerOpen: true,
+  settingsDrawerOpen: false,
+  placeDrawerOpen: false,
+  askDrawerOpen: false,
+} as const
+
 export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => ({
   traceMode: false,
   tracePaused: false,
@@ -529,7 +558,12 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
       : [...s.ghostedLevels, level],
   })),
   setDrag: (v) => set({ drag: v }),
-  setSelectedWallIndex: (v) => set({ selectedWallIndex: v, activePanel: v != null ? 'wall' : null }),
+  // Selecting a wall RAISES THE WALL SHEET, it does not merely record an index.
+  // `activePanel: 'wall'` on its own rendered nothing: the sheet lives in the
+  // Build drawer, and nothing here opened it. See WALL_SHEET below.
+  setSelectedWallIndex: (v) => set(v != null
+    ? { selectedWallIndex: v, ...WALL_SHEET }
+    : { selectedWallIndex: null, activePanel: null }),
   setPlaceObjectType: (v) => set({ placeObjectType: v, placeGhost: null }),
   setKeepPlacing: (v) => set({ keepPlacing: v }),
   setPlaceStairCfg: (v) => set((s) => ({ placeStairCfg: { ...s.placeStairCfg, ...v } })),
@@ -567,7 +601,19 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   // Outside edit mode the card is still how you inspect what you tapped, which
   // is the whole point of tapping when you are not editing.
   selectObjectExclusive: (id) => set((s) => ({ activePanel: s.editMode ? null : 'object', selectedObjectId: id, selectedWallIndex: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'object', id } })),
-  selectWallExclusive: (i) => set((s) => ({ activePanel: s.editMode ? null : 'wall', selectedWallIndex: i, selectedObjectId: null, selectedLine: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'wall', id: String(i) } })),
+  // A TAP ON A WALL OPENS THE WALL SHEET — outside edit mode, where tapping is
+  // for inspecting and changing what you tapped. In edit mode it still stays
+  // shut: there the rail is the point, and the sheet is one deliberate tap away
+  // on the specs mark (openSelectionPanel), which raises this same one sheet.
+  selectWallExclusive: (i) => set((s) => ({
+    ...(s.editMode ? { activePanel: null } : WALL_SHEET),
+    selectedWallIndex: i,
+    selectedObjectId: null,
+    selectedLine: null,
+    selectedArea: null,
+    placeObjectType: null,
+    editSelected: { kind: 'wall', id: String(i) },
+  })),
   selectLineExclusive: (trade, id) => set((s) => ({ activePanel: s.editMode ? null : 'line', selectedLine: { trade, id }, selectedObjectId: null, selectedWallIndex: null, selectedArea: null, placeObjectType: null, editSelected: { kind: 'line', id } })),
   selectAreaExclusive: (kind, id) => set((s) => ({ activePanel: s.editMode ? null : 'area', selectedArea: { kind, id }, selectedObjectId: null, selectedWallIndex: null, selectedLine: null, placeObjectType: null, editSelected: { kind, id } })),
   /** Open the property card for whatever is currently selected — the deliberate
@@ -589,10 +635,10 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
      * Pointing the mark at the editor that exists beats building a second one
      * beside it and letting the two drift.
      */
-    const opensDrawer = k === 'wall' || k === 'line' || k === 'floor' || k === 'roof'
+    if (k === 'wall') return { ...WALL_SHEET }
+    const opensDrawer = k === 'line' || k === 'floor' || k === 'roof'
     return {
       activePanel: k === 'object' ? 'object'
-        : k === 'wall' ? 'wall'
         : k === 'line' ? 'line'
         : k === 'floor' || k === 'roof' ? 'area'
         : null,

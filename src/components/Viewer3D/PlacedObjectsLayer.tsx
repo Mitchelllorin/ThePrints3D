@@ -112,24 +112,17 @@ export default function PlacedObjectsLayer() {
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
   /**
-   * Plan symbols follow the PLAN.
+   * THE PLAN SYMBOLS ARE NOT DRAWN HERE ANY MORE. See PlanSheet.
    *
-   * Jamb marks, swing arcs and window bars are drawn flat on the floor so an
-   * opening reads from straight overhead — which is exactly right while you are
-   * working over the print, and litter once a building is standing: a scatter of
-   * little blue and amber marks around the base of every door and window,
-   * visible from every angle except the one they were drawn for.
+   * Jamb marks, swing arcs and window bars used to hang off each object's own
+   * group, which is a child of the group this layer EXPLODES. So the drawing of
+   * a door flew apart with the door — and a print that explodes is not a print.
+   * The sheet has to stay flat and whole underneath, which means its contents
+   * cannot live inside anything that moves.
    *
-   * They are annotations for the drawing, so they live and die with it. Turning
-   * the print off in the layer list takes them with it.
-   *
-   * And a STANDING BUILDING takes them with it too. Once walls are up, a door
-   * is a real hole in real framing that you can see from any angle — the marks
-   * stop being a reading aid and become litter round the base of every opening.
-   * So they belong to the phase where the print is the model, not to the model.
+   * They are drawn from the same placed objects, on the sheet's own plane, by
+   * PlanSheet — which sits outside every exploding group.
    */
-  const modelReadyForPlan = useAppStore((s) => s.model.status === 'ready')
-  const planSymbolsOn = useAppStore((s) => s.floorplanOverlay.visible) && !modelReadyForPlan
 
   const ceilingM = useSceneConfig(wizardInputs).wallHeightM
   // Same storey-to-storey rise the walls/decks use, so an object placed on an
@@ -447,89 +440,6 @@ export default function PlacedObjectsLayer() {
                 <>
                   <Line points={shift(-railX)} color="#94a3b8" lineWidth={2.5} />
                   <Line points={shift(railX)} color="#94a3b8" lineWidth={2.5} />
-                </>
-              )
-            })()}
-
-            {planSymbolsOn && isOverheadDoor && (() => {
-              // Plan symbol for an overhead: the door across the opening, and
-              // the two tracks running back INTO the garage — which is where it
-              // actually goes. No arc, because nothing swings.
-              const y = 0.07
-              const reach = Math.min(w, 2.4)   // roughly its own height back
-              const bar: [number, number, number][] = [[-w / 2, y, 0], [w / 2, y, 0]]
-              const jambL: [number, number, number][] = [[-w / 2, y, -0.12], [-w / 2, y, 0.12]]
-              const jambR: [number, number, number][] = [[w / 2, y, -0.12], [w / 2, y, 0.12]]
-              const trackL: [number, number, number][] = [[-w / 2 + 0.06, y, 0], [-w / 2 + 0.06, y, reach]]
-              const trackR: [number, number, number][] = [[w / 2 - 0.06, y, 0], [w / 2 - 0.06, y, reach]]
-              return (
-                <>
-                  <Line points={jambL} color={color} lineWidth={4} />
-                  <Line points={jambR} color={color} lineWidth={4} />
-                  <Line points={bar} color={color} lineWidth={5} />
-                  <Line points={trackL} color={color} lineWidth={2} dashed dashSize={0.12} gapSize={0.09} />
-                  <Line points={trackR} color={color} lineWidth={2} dashed dashSize={0.12} gapSize={0.09} />
-                </>
-              )
-            })()}
-
-            {planSymbolsOn && obj.type === 'door' && !isOverheadDoor && (() => {
-              const y = 0.07
-              const N = 20
-              // One leaf: hinge post, the leaf swung open, and the arc it
-              // sweeps. A pair is just this twice, mirrored, at half the reach.
-              const leafAt = (hinge: number, sign: number, reach: number) => {
-                const arc: [number, number, number][] = []
-                for (let i = 0; i <= N; i++) {
-                  const t = (i / N) * (Math.PI / 2)
-                  arc.push([hinge + sign * reach * Math.cos(t), y, reach * Math.sin(t)])
-                }
-                return {
-                  arc,
-                  leaf: [[hinge, y, 0], [hinge, y, reach]] as [number, number, number][],
-                }
-              }
-              // A pair hinges at BOTH jambs and each leaf covers half the
-              // opening — drawing one big arc across a double door is the plan
-              // symbol equivalent of hanging one big slab.
-              const leaves = isDoubleDoor
-                ? [leafAt(-w / 2, 1, w / 2), leafAt(w / 2, -1, w / 2)]
-                : [leafAt(
-                    (obj.swing ?? 'left') === 'left' ? -w / 2 : w / 2,
-                    (obj.swing ?? 'left') === 'left' ? 1 : -1,
-                    w,
-                  )]
-              const jambL: [number, number, number][] = [[-w / 2, y, -0.09], [-w / 2, y, 0.09]]
-              const jambR: [number, number, number][] = [[w / 2, y, -0.09], [w / 2, y, 0.09]]
-              return (
-                <>
-                  <Line points={jambL} color={color} lineWidth={4} />
-                  <Line points={jambR} color={color} lineWidth={4} />
-                  {leaves.map((l, i) => (
-                    <group key={i}>
-                      <Line points={l.leaf} color={color} lineWidth={4} />
-                      <Line points={l.arc} color={color} lineWidth={3} />
-                    </group>
-                  ))}
-                </>
-              )
-            })()}
-
-            {/* Window plan symbol — a double bar across the opening between two
-                jambs, flat on the floor so a window reads top-down just like a
-                door (it has no swing to draw). */}
-            {planSymbolsOn && obj.type === 'window' && (() => {
-              const y = 0.07
-              const barA: [number, number, number][] = [[-w / 2, y, -0.05], [w / 2, y, -0.05]]
-              const barB: [number, number, number][] = [[-w / 2, y, 0.05], [w / 2, y, 0.05]]
-              const jambL: [number, number, number][] = [[-w / 2, y, -0.12], [-w / 2, y, 0.12]]
-              const jambR: [number, number, number][] = [[w / 2, y, -0.12], [w / 2, y, 0.12]]
-              return (
-                <>
-                  <Line points={jambL} color={color} lineWidth={4} />
-                  <Line points={jambR} color={color} lineWidth={4} />
-                  <Line points={barA} color={color} lineWidth={3} />
-                  <Line points={barB} color={color} lineWidth={3} />
                 </>
               )
             })()}

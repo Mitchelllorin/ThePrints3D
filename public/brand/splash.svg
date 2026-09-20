@@ -10,26 +10,60 @@
   -->
   <rect width="2732" height="2732" fill="#0f172a"/>
 
-  <!-- canonical mark, centred and scaled up from the 512 frame -->
-  <g transform="translate(1366,1180) scale(2.0) translate(-256,-250)">
+  <!-- The canonical mark, centred and scaled up from the 512 frame — the same
+       four layers as mark.svg: the print on the grid, then the slab, walls and
+       roof lifted clear of it. The splash used to show the house ASSEMBLED,
+       which meant the first thing the app ever showed you was the one picture
+       that leaves out what it is for.
+
+       Scale 1.7 rather than 2.0: the stack is taller now that the print is
+       under it, and at 2.0 the front edge of the sheet crowded the wordmark. -->
+  <g transform="translate(1366,1180) scale(1.7) translate(-256,-254)">
     <g stroke="#31507f" stroke-width="2.2" fill="none" opacity=".8">
       <path d="M144 306 L368 418"/><path d="M200 278 L424 390"/><path d="M88 334 L312 446"/>
       <path d="M256 250 L480 362"/><path d="M32 362 L256 474"/>
       <path d="M368 306 L144 418"/><path d="M312 278 L88 390"/><path d="M424 334 L200 446"/>
       <path d="M256 250 L32 362"/><path d="M480 362 L256 474"/>
     </g>
-    <path d="M144 250 L256 306 L368 250 L256 194 Z" fill="#1d2d4e"/>
-    <path d="M144 250 L256 194 L256 208 L144 264 Z" fill="#2b4069"/>
-    <path d="M256 194 L368 250 L368 264 L256 208 Z" fill="#25385b"/>
-    <path d="M144 250 L256 306 L256 362 L144 306 Z" fill="#3d6cc0"/>
-    <path d="M256 306 L368 250 L368 306 L256 362 Z" fill="#5687dd"/>
-    <path d="M168.6 274.3 L195.5 287.8 L195.5 307.8 L168.6 294.3 Z" fill="#c6d9f8"/>
-    <path d="M295.2 294.4 L321 281.5 L321 329.5 L295.2 342.4 Z" fill="#16264a"/>
-    <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z" fill="#a9c6f5"/>
-    <path d="M256 131.3 L381.4 194 L318.7 137.4 L193.3 74.7 Z" fill="#6d97dd"/>
+
+    <!-- THE PRINT — the sheet, and the ASSEMBLED plan on it. It does not
+         explode; the building above it does. -->
+    <path d="M100 378 L256 456 L412 378 L256 300 Z" fill="#14294c" fill-opacity=".92" stroke="#5b8ac7" stroke-width="2"/>
+    <g stroke="#cfe0fa" stroke-width="3.4" fill="none" stroke-linecap="round">
+      <path d="M144 378 L256 322"/>
+      <path d="M256 322 L368 378"/>
+      <path d="M144 378 L256 434"/>
+      <path d="M256 434 L295.2 414.4"/>
+      <path d="M325.4 399.3 L368 378"/>
+    </g>
+    <g stroke="#8fb3e8" stroke-width="2.4" fill="none">
+      <path d="M162 378 L256 331 L350 378 L256 425 Z"/>
+    </g>
+    <g stroke="#cfe0fa" stroke-width="2.8" fill="none" stroke-linecap="round">
+      <path d="M295.2 414.4 L265.2 399.4"/>
+      <path d="M265.2 399.4 Q295.3 362.4 325.4 399.3"/>
+    </g>
+
+    <!-- FLOOR SLAB -->
+    <path d="M144 306 L256 362 L368 306 L256 250 Z" fill="#dce7f8"/>
+    <path d="M144 306 L256 362 L256 374 L144 318 Z" fill="#9fb4d6"/>
+    <path d="M256 362 L368 306 L368 318 L256 374 Z" fill="#8da5cc"/>
+
+    <!-- WALLS, open-topped -->
+    <path d="M144 204 L256 260 L368 204 L256 148 Z" fill="#e8effb"/>
+    <path d="M144 204 L256 148 L256 162 L144 218 Z" fill="#b9cae7"/>
+    <path d="M256 148 L368 204 L368 218 L256 162 Z" fill="#a7bbdc"/>
+    <path d="M144 204 L256 260 L256 316 L144 260 Z" fill="#3f5f9e"/>
+    <path d="M256 260 L368 204 L368 260 L256 316 Z" fill="#4d72b8"/>
+    <path d="M168.6 228.3 L195.5 241.8 L195.5 261.8 L168.6 248.3 Z" fill="#dce7f8"/>
+    <path d="M295.2 248.4 L321 235.5 L321 283.5 L295.2 296.4 Z" fill="#2b4478"/>
+
+    <!-- ROOF -->
+    <path d="M130.6 172 L256 234.7 L318.7 115.4 L193.3 52.7 Z" fill="#a9c6f5"/>
+    <path d="M256 109.3 L381.4 172 L318.7 115.4 L193.3 52.7 Z" fill="#6d97dd"/>
     <g stroke="#b3cdf8" stroke-width="3.2" fill="none" stroke-linejoin="round">
-      <path d="M130.6 194 L256 256.7 L318.7 137.4 L193.3 74.7 Z"/>
-      <path d="M256 131.3 L381.4 194 L318.7 137.4"/>
+      <path d="M130.6 172 L256 234.7 L318.7 115.4 L193.3 52.7 Z"/>
+      <path d="M256 109.3 L381.4 172 L318.7 115.4"/>
     </g>
   </g>
 

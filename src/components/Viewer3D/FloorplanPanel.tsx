@@ -232,6 +232,12 @@ export default function FloorplanPanel() {
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
   const objectPanelOpen = useFloorplanLocalStore((s) => s.activePanel === 'object')
   const pickerOpen = useFloorplanLocalStore((s) => s.activePanel === 'picker')
+  // The wall sheet is up when the panel says so — NOT when edit mode is on.
+  // Its old gate was `editMode`, which meant the one place a wall's member,
+  // role, span or board could be changed only existed inside a mode, while
+  // every tap that selected a wall outside that mode set `activePanel: 'wall'`
+  // and rendered nothing. Both routes land here now. See WALL_SHEET in the store.
+  const wallPanelOpen = useFloorplanLocalStore((s) => s.activePanel === 'wall')
   const panelBoardOpen = useFloorplanLocalStore((s) => s.activePanel === 'panelBoard')
   const openPicker = useFloorplanLocalStore((s) => s.openPicker)
   const openPanelBoard = useFloorplanLocalStore((s) => s.openPanelBoard)
@@ -651,7 +657,33 @@ export default function FloorplanPanel() {
    * deliberately allowed to stay open over the plan for (see the EdgeDrawer's
    * clickThrough note). While it runs it is the only thing in there.
    */
-  const showSteps = !placeObjectType && !selectedObject && !overlay.calibrationMode
+  // `editMode` here is the post-build state — not calibrating, not tracing. The
+  // sheet stands down during both: mid-trace the drawer belongs to the trace.
+  const wallSheetOpen = wallPanelOpen && editMode && selectedWallIndex != null && !!userWalls[selectedWallIndex]
+  /** The selected wall's built length, in whatever unit is on — feet and inches
+   *  written the way they are said on site, everything else as a number. */
+  const wallSheetLength = (() => {
+    if (!wallSheetOpen || selectedWallIndex == null) return ''
+    const w = userWalls[selectedWallIndex]
+    const mm = Math.hypot(w.x2 - w.x1, w.y2 - w.y1) * (drawing.scaleMmPerPx ?? DEFAULT_SCALE_MM_PER_PX)
+    if (activeUnit === 'ft') {
+      const { ft, in: inch } = metresToFtIn(mm / 1000)
+      return inch ? `${ft}′-${inch}″` : `${ft}′`
+    }
+    return `${convertLength(mm, 'mm', activeUnit).toFixed(unitPrecision(activeUnit))} ${activeUnit}`
+  })()
+  /**
+   * A SELECTED WALL OWNS THE DRAWER, the same way calibration does.
+   *
+   * The wall sheet used to be step eleven of a list — below Scale, Level,
+   * Trace, the type picker and the storey controls — so "change this wall to a
+   * 2x6" meant opening the drawer and scrolling past the whole build sequence
+   * to find the one card that was about the wall you had just tapped. That is
+   * not a per-wall settings sheet, it is a wall-shaped paragraph in a manual.
+   *
+   * Select a wall and the drawer is the wall. Deselect and the sequence is back.
+   */
+  const showSteps = !placeObjectType && !selectedObject && !overlay.calibrationMode && !wallSheetOpen
   const framingActive = activeTraceLayer === 'framing'
   // Which storey the next trace lands on — shown wherever you trace so walls
   // never silently build on a level you forgot you were on.
@@ -1574,10 +1606,24 @@ export default function FloorplanPanel() {
         )}
 
         {/* ── Selected wall (post-build edit) ── */}
-        {showSteps && editMode && selectedWallIndex != null && userWalls[selectedWallIndex] && (
+        {wallSheetOpen && selectedWallIndex != null && userWalls[selectedWallIndex] && (
           <div className={styles.step}>
-            <span className={styles.stepLabel}>Wall selected</span>
-            <span className={styles.stepHint}>Wall {selectedWallIndex + 1} of {userWalls.length}</span>
+            {/* A HEADER, because this sheet is now the whole drawer rather than
+                one card in a stack — it has to say what it is about and offer
+                the way out without hunting for Deselect at the bottom of a
+                scroll. The length is the wall's identity on a plan far more
+                than its index is, so it is read off the geometry and shown. */}
+            <div className={styles.propHeader}>
+              <span className={styles.propTitle}>
+                {roleShort(userWalls[selectedWallIndex].wallRole ?? 'interior-non-bearing')} wall · {wallSheetLength}
+              </span>
+              <button
+                className={styles.cardClose}
+                onClick={() => setSelectedWallIndex(null)}
+                aria-label="Close wall settings"
+              >✕</button>
+            </div>
+            <span className={styles.stepHint}>Wall {selectedWallIndex + 1} of {userWalls.length} · {framingShort(userWalls[selectedWallIndex].framingType ?? 'wood-2x4')}</span>
             {/* WHAT THIS WALL IS MADE OF, AND WHETHER IT HOLDS ANYTHING UP.
                 The two facts that decide how the wall gets framed, and until
                 now the only way to set either was to choose it BEFORE tracing,
@@ -1847,15 +1893,35 @@ export default function FloorplanPanel() {
               width test the 3D uses. */}
           {selectedObject.type === 'door'
             && ((selectedObject.scaleX ?? 1) * (getCatalogItem('door')?.defaultW ?? 0.9)) < 2.1 && (
-            <div className={styles.propRow}>
-              <span className={styles.propLabel}>Swing</span>
-              <div className={styles.btnRow}>
-                <button className={(selectedObject.swing ?? 'left') === 'left' ? styles.action : styles.secondary}
-                  onClick={() => updatePlacedObject(selectedObject.id, { swing: 'left' })}>LH</button>
-                <button className={selectedObject.swing === 'right' ? styles.action : styles.secondary}
-                  onClick={() => updatePlacedObject(selectedObject.id, { swing: 'right' })}>RH</button>
+            <>
+              {/* HAND AND DIRECTION, because a door needs both to be ordered.
+                  "LH" alone leaves the leaf pointing whichever way the drawing
+                  happened to be drawn; the two rows together give LH in, LH
+                  out, RH in, RH out — the four doors that exist. Both redraw
+                  the plan arc, which is where this gets read. */}
+              <div className={styles.propRow}>
+                <span className={styles.propLabel}>Hand</span>
+                <div className={styles.btnRow}>
+                  <button className={(selectedObject.swing ?? 'left') === 'left' ? styles.action : styles.secondary}
+                    onClick={() => updatePlacedObject(selectedObject.id, { swing: 'left' })}
+                    title="Hinged on the left jamb, seen from this side">LH</button>
+                  <button className={selectedObject.swing === 'right' ? styles.action : styles.secondary}
+                    onClick={() => updatePlacedObject(selectedObject.id, { swing: 'right' })}
+                    title="Hinged on the right jamb, seen from this side">RH</button>
+                </div>
               </div>
-            </div>
+              <div className={styles.propRow}>
+                <span className={styles.propLabel}>Opens</span>
+                <div className={styles.btnRow}>
+                  <button className={(selectedObject.swingSide ?? 'in') === 'in' ? styles.action : styles.secondary}
+                    onClick={() => updatePlacedObject(selectedObject.id, { swingSide: 'in' })}
+                    title="The leaf swings towards the room the door faces">In</button>
+                  <button className={selectedObject.swingSide === 'out' ? styles.action : styles.secondary}
+                    onClick={() => updatePlacedObject(selectedObject.id, { swingSide: 'out' })}
+                    title="The leaf swings away — the other side of the wall">Out</button>
+                </div>
+              </div>
+            </>
           )}
           <div className={styles.propRow}>
             <span className={styles.propLabel}>Type</span>

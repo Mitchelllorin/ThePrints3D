@@ -1,29 +1,45 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="ThePrints3D">
   <title>ThePrints3D</title>
   <!--
-    THE CANONICAL MARK. A plan on the grid, EXPLODED: floor slab down on the
-    grid, walls lifted clear of it, roof lifted clear of them. Three layers
-    with daylight between them, because the explode is the feature — the mark
-    should be the app doing its one trick, not a picture of a house.
+    THE CANONICAL MARK. The model exploded over a print that is not.
 
-    A lifted roof alone did not say that. A roof sitting on a solid box reads
-    as a house with the lid off; it is the gap under the WALLS that says the
-    whole assembly comes apart.
+    Four layers, bottom to top: the blueprint grid, THE PRINT lying on it, the
+    floor slab lifted clear, the walls lifted clear of that, the roof clear
+    again. The building comes apart; the drawing underneath it does not.
 
-    Isometric frame (centre 256,250): +x = (+112,+56), +y = (-112,+56),
-    wall height 56. A diamond at centre (cx,cy) is
-      Bk(cx, cy-56)  R(cx+112, cy)  F(cx, cy+56)  L(cx-112, cy).
+    THAT IS THE WHOLE IDEA, and it is why the print had to be added. The mark
+    already exploded — slab, walls, roof with daylight between them — but it
+    exploded over bare grid, so it read as a house in pieces and said nothing
+    about what the pieces came from. The app's trick is not that a house comes
+    apart. It is that you are holding the drawing and the building at once, and
+    the drawing keeps up as you work.
 
-    The explode is two lifts up the screen, and nothing else moves:
-      walls  46 clear of the slab   (measured at the front vertex)
-      roof   22 further still, keeping ~25 of daylight over the wall top
+    So the print carries the ASSEMBLED plan: the footprint the house has when it
+    is together, its wall thickness as a second line inside that, and a door
+    with its swing. Not the silhouette of the exploded arrangement above it —
+    that arrangement is a way of LOOKING at the building, not a thing you would
+    ever draw. You explode the model. You do not explode the print.
 
-    Every number below comes off that frame and those two lifts — change the
-    frame or the lifts, not the individual points.
+    The sheet is deliberately BIGGER than the footprint, the way paper is bigger
+    than what is drawn on it, so it reads as a sheet rather than a shadow and
+    stays visible round the edges of the slab that covers its back half.
+
+    Isometric frame: a diamond at centre (cx,cy) has
+      Bk(cx, cy-56)  R(cx+112, cy)  F(cx, cy+56)  L(cx-112, cy)
+    — edges run along (+112,+56) and (+112,-56).
+
+    The stack, as lifts UP THE SCREEN from the print at cy 378:
+      slab    72 clear of the print   (centre 306)
+      walls   46 clear of the slab    (rim 204, base 260)
+      roof    22 further still, keeping ~25 of daylight over the wall top
+
+    Every number below comes off that frame and those lifts — change the frame
+    or the lifts, not the individual points.
 
     Transparent ground on purpose: this is the mark for use on any surface.
-    For the app tile see icon.svg, which is this mark on the brand navy and
-    deliberately NOT exploded — at 48px the gaps close up into mush.
+    For the app tile see icon.svg, which is this same arrangement on the brand
+    navy with the lifts cut down, because at 48px full-size gaps read as three
+    unrelated shapes rather than one building coming apart.
   -->
   <defs>
     <linearGradient id="roofFront" x1="0.1" y1="0" x2="0.8" y2="1">
@@ -41,7 +57,7 @@
     <mask id="gridMask"><rect width="512" height="512" fill="url(#gridFalloff)"/></mask>
   </defs>
 
-  <!-- the blueprint grid the building sits on -->
+  <!-- the blueprint grid everything sits on -->
   <g mask="url(#gridMask)" stroke="#9fbdea" stroke-width="2.2" fill="none" opacity=".85">
     <path d="M144 306 L368 418"/><path d="M200 278 L424 390"/><path d="M88 334 L312 446"/>
     <path d="M256 250 L480 362"/><path d="M32 362 L256 474"/>
@@ -49,8 +65,33 @@
     <path d="M256 250 L32 362"/><path d="M480 362 L256 474"/>
   </g>
 
-  <!-- FLOOR SLAB — left on the grid, where the walls used to sit. Given real
-       thickness so the layer reads as a plate rather than a shadow. -->
+  <!-- ── THE PRINT ──────────────────────────────────────────────────────────
+       The sheet (centre 378, one and a bit times the footprint), then the
+       ASSEMBLED plan drawn on it. -->
+  <path d="M100 378 L256 456 L412 378 L256 300 Z" fill="#14294c" fill-opacity=".92" stroke="#5b8ac7" stroke-width="2"/>
+
+  <!-- The house in plan, at the size it is when it is together. Outer face,
+       broken at the front-right edge where the door goes. -->
+  <g stroke="#cfe0fa" stroke-width="3.4" fill="none" stroke-linecap="round">
+    <path d="M144 378 L256 322"/>
+    <path d="M256 322 L368 378"/>
+    <path d="M144 378 L256 434"/>
+    <path d="M256 434 L295.2 414.4"/>
+    <path d="M325.4 399.3 L368 378"/>
+  </g>
+  <!-- Inner face — the wall has a thickness, which is what makes it a plan and
+       not an outline. -->
+  <g stroke="#8fb3e8" stroke-width="2.4" fill="none">
+    <path d="M162 378 L256 331 L350 378 L256 425 Z"/>
+  </g>
+  <!-- The door: leaf on its hinge, and the quarter it sweeps. -->
+  <g stroke="#cfe0fa" stroke-width="2.8" fill="none" stroke-linecap="round">
+    <path d="M295.2 414.4 L265.2 399.4"/>
+    <path d="M265.2 399.4 Q295.3 362.4 325.4 399.3"/>
+  </g>
+
+  <!-- FLOOR SLAB — lifted 72 clear of the print. Real thickness so the layer
+       reads as a plate rather than a shadow. -->
   <path d="M144 306 L256 362 L368 306 L256 250 Z" fill="#dce7f8"/>
   <path d="M144 306 L256 362 L256 374 L144 318 Z" fill="#9fb4d6"/>
   <path d="M256 362 L368 306 L368 318 L256 374 Z" fill="#8da5cc"/>
