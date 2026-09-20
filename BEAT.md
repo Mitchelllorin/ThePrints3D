@@ -116,3 +116,61 @@ turned into fixes._
 - 2026-09-19 — route written, **not yet walked**. First walk will correct it:
   steps 27–31 are written from the code rather than from a device, so expect the
   order and the names to need adjusting.
+
+### 2026-09-20 — route audited against the code. NOT a walk.
+
+Every label on the route was checked against the source before the first real
+walk, so a wrong name in the route cannot derail it. This is not the beat: the
+beat is a cold start on the real phone at 360×640, and none of the below was
+seen on a device. Six notes, logged not fixed, per the rule.
+
+1. **Step 31 — "More from the 3D family" does not exist.** What exists is
+   `StudioCredit` ("From the makers of"), mounted on the launch screen and in
+   the workspace. Against the family rule it is wrong five ways: wrong heading;
+   lists 2 of the 8 siblings, not all 8; spells it **Automotive3D** where the
+   wordmark grammar requires **AutoMotive3D** (Auto | Motive | 3D — the capital
+   is where the mark breaks); links to Play listings where the rule says link to
+   the app's own site, never the store; and omits ThePrints3D itself, which the
+   rule wants listed-but-unlinked so the set reads as complete.
+
+2. **Step 29 describes a nameplate that was never built.** The route says cycle
+   a global tier 0→1→2→3, tap to promote, watch three crowd and draw leader
+   lines. The build has `NameplateStrip` — ONE fixed plate in a HUD corner for
+   the selected member — plus a `dimensionsMode` of `always | selected | off`.
+   No tiers, no anchored plates, no collision ranking.
+
+   Worth saying plainly: the strip is not an oversight, it is an argued
+   decision, and its own header makes the case — floating labels put a storey of
+   text in front of the model, which is rule zero. But `C:\Dev\CLAUDE.md` still
+   specifies the tiered floating plate. One of the two has to move, and that is
+   Mitchell's call, not a thing to quietly fix on a walk. **Step 29 cannot be
+   walked until it is.**
+
+3. **"Wet walls" is on screen.** `FinishesPanel.tsx:162` renders a row labelled
+   `Wet walls`, and `presetDrawings.ts:188` writes "share a wet wall with the
+   utility room". The term is **plumbing wall**, never wet wall. The store key
+   `wetWallMethod` and `services/wetWalls.ts` are internal and can follow later;
+   the two strings are what a user reads.
+
+4. **The property card breaks rule 1, and the fallback that would save it is
+   absent.** `AmbientGuide.module.css` `.propCard` sits at `rgba(..., 0.55)` —
+   under the 0.72 floor — and the file contains **zero** `@supports not
+   (backdrop-filter: …)` blocks. On an Android webview without backdrop-filter
+   that is a 55%-opacity wash with no blur behind it, over a model that changes
+   colour as it turns. That is exactly the unreadable-screen bug the rule
+   exists to stop, and it will show on a real phone and not on this laptop.
+
+5. **Text and targets in the same card are under the minimums.** Font sizes of
+   10, 11 and 12px throughout (floor is 13px on a phone), and a control at
+   `min-height: 24px` (floor is 48×48, 8px apart). Check it with a thumb at
+   step 19, not with a cursor.
+
+6. **Three `EdgeDrawer`s exist** — one in `WorkspaceLayout`, two in
+   `FloorplanPanel`. `wallSheetOpen` does hide the build sequence while the wall
+   sheet is up, which is what steps 18–21 expect, so the one-sheet rule looks
+   built. Whether two drawers can be open at once is a device question. Push on
+   it at step 21.
+
+**Not checked, and only a device can:** anything about how it actually behaves —
+cold start, the splash, gesture handling, orientation, whether the model refits
+when a sheet opens, and every one of the bug-drive items.
