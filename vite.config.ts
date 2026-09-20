@@ -26,7 +26,10 @@ export default defineConfig({
      * 5174 and wondering why the phone shows the wrong app.
      *
      * The number is per app so each one can have its own home-screen icon:
-     *   5173  ThePrints3D      5174  CircuiTry3D      5175  AutoMotive3D
+     *   3000  CircuiTry3D      5176  TheCell3D
+     *   5173  ThePrints3D      5177  ThePyramids3D
+     *   5174  AutoMotive3D     5178  AnyPlanet3D
+     *   5175  AnyBody3D
      *
      * PORT still wins when the harness assigns one.
      */
