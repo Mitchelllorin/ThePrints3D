@@ -318,12 +318,21 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* NEARLY INVISIBLE. It was 0.94 — a solid slab parked on the model. The chrome
-     is meant to read as marks floating over the workspace, not as panels sitting
-     on top of it, so the surface drops back and the blur does the separating. */
-  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.55);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(51, 65, 85, 0.35);
+  /* GLASS, AND STILL READABLE WHEN THE MODEL TURNS WHITE.
+     It went 0.94 → 0.55 to stop it reading as a slab parked on the model, which
+     was the right instinct and one step too far. 0.55 is under what body text
+     survives: composite this card over a pure-white face of the model and the
+     surface lands at rgb(68,74,89) — the label colours below were reading at
+     1.9:1 and 3.5:1 against that, which is not "subtle", it is gone.
+
+     0.78 with the blur doing the separating comes out at 5.97:1 for the body
+     colour over white and 12.6:1 over black. Same look, legible at both ends of
+     the turn. The blur is what kills the detail behind the text; alpha alone
+     never did. */
+  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.78);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid rgba(51, 65, 85, 0.55);
   border-radius: 12px;
   padding: 12px 14px;
   z-index: var(--z-hud);
@@ -332,11 +341,30 @@
 /* Re-enable the actual controls — without this the whole card is dead: you can't
    edit any field or even tap the ✕ (the re-enable rule had gone missing). The
    empty gaps stay click-through to the workspace. */
+/* NO BLUR, NO CARD — the case this stylesheet had no answer for.
+   `backdrop-filter` is unsupported on a fair number of Android webviews, and
+   there was no fallback anywhere in this file. On those phones the rule above
+   degrades to a 78%-transparent wash with the model showing straight through
+   the writing, and nothing about the laptop it was built on would ever show it.
+   Without the blur the surface has to carry the separation by itself, so it
+   goes nearly solid. */
+@supports not (backdrop-filter: blur(1px)) {
+  .propCard { background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.94); }
+}
+
 .propCard button,
 .propCard input,
 .propCard select,
 .propCard textarea,
 .propCard a { pointer-events: auto; }
+
+/* The dim ink INSIDE this card, which is not the dim ink elsewhere.
+   `--bp-text-dim` (#94a3b8) is tuned for a solid panel. On glass over a bright
+   model it reads 3.46:1, and the unit suffixes at #64748b read 1.86:1 — both
+   under the 4.5:1 body-text floor. This is the lightest value that clears it
+   (4.60:1) while still sitting back from the values it labels. Scoped to the
+   card so nothing on a solid surface changes. */
+.propCard { --card-ink-dim: #b0bcca; }
 
 .propHeader {
   display: flex;
@@ -361,13 +389,16 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: #cbd5e1;
 }
 
-.propLabel { width: 56px; flex-shrink: 0; color: var(--bp-text-dim, #94a3b8); }
+/* 60px, not 56: at 13px "Sill height" no longer fits the old width, and a fixed
+   flex-basis does not shrink to tell you so — it just runs its text under the
+   input beside it. */
+.propLabel { width: 60px; flex-shrink: 0; color: var(--card-ink-dim, #b0bcca); }
 .propVal { color: #e2e8f0; }
-.unit { color: var(--bp-text-dim, #64748b); font-size: 11px; }
+.unit { color: var(--card-ink-dim, #b0bcca); font-size: 13px; }
 
 /* Stair configurator rows.
    propRow is a single non-wrapping line with a fixed 56px label — right for
@@ -379,16 +410,16 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 8px;
-  font-size: 12px;
+  font-size: 13px;
   color: #cbd5e1;
   margin: 3px 0;
 }
-.stairRow > .propLabel { width: auto; min-width: 38px; font-size: 10px; }
+.stairRow > .propLabel { width: auto; min-width: 38px; font-size: 13px; }
 /* Chips, not buttons: the configurator sits over the model, so its controls are
    as small as they can be and still be hit on a phone. */
 .stairRow > button {
   padding: 2px 7px;
-  font-size: 11px;
+  font-size: 13px;
   min-height: 24px;
 }
 /* The computed read-outs. Allowed to wrap and to shrink, which a flex child will
@@ -397,7 +428,7 @@
   flex: 1 1 100%;
   min-width: 0;
   color: #e2e8f0;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -411,18 +442,24 @@
    near-invisible by design, but "this stair would not pass" has earned the right
    to be read. Still text on the surface, not a boxed alert. */
 .warnText {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.35;
   color: #fbbf24;
 }
 
+/* Allowed to shrink. At 13px the row (label + ft + unit + in + unit) is wider
+   than a 232px card on a 360px screen, and a fixed-width flex child will not
+   give: it pushes the units off the edge instead. A basis with room to
+   compress keeps the whole row on the card at every width. */
 .dimInput {
+  flex: 0 1 46px;
   width: 46px;
+  min-width: 0;
   background: #0f172a;
   border: 1px solid #334155;
   border-radius: 6px;
   color: var(--bp-text, #f1f5f9);
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 6px;
 }
 
@@ -432,7 +469,7 @@
   border: 1px solid #334155;
   border-radius: 6px;
   color: var(--bp-text, #f1f5f9);
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 8px;
 }
 .dimInput:focus, .brandInput:focus { outline: none; border-color: var(--bp-accent, #38bdf8); }
