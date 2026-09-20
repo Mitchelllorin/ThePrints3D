@@ -37,26 +37,52 @@ interface SheetRow {
   corrections: number
 }
 
+/** Every number the panel shows, read in one go so it can be written in one go. */
+async function readCorpus(): Promise<{ stats: CorpusStats; rows: SheetRow[] }> {
+  const [stats, sheets] = await Promise.all([corpusStats(), listSheets()])
+  const rows = await Promise.all(
+    sheets.map(async (sheet) => ({
+      sheet,
+      corrections: (await correctionsForSheet(sheet.id)).length,
+    })),
+  )
+  return { stats, rows }
+}
+
 export default function CorpusPanel() {
   const [stats, setStats] = useState<CorpusStats | null>(null)
   const [rows, setRows] = useState<SheetRow[]>([])
   /** Two taps to delete. A `confirm()` would block the whole page. */
   const [armed, setArmed] = useState(false)
 
-  const load = useCallback(async () => {
-    const [s, sheets] = await Promise.all([corpusStats(), listSheets()])
-    setStats(s)
-    setRows(
-      await Promise.all(
-        sheets.map(async (sheet) => ({
-          sheet,
-          corrections: (await correctionsForSheet(sheet.id)).length,
-        })),
-      ),
-    )
+  /**
+   * READ THE WHOLE PICTURE, THEN WRITE IT ONCE.
+   *
+   * This used to `setStats` the moment the counts came back and `setRows` a
+   * round of IndexedDB reads later, so the panel rendered a corpus size next to
+   * an empty sheet list for as long as the corrections took — and every sheet
+   * is its own read, so on a laptop with a corpus in it that gap is visible.
+   * Both reads finish before either piece of state moves.
+   *
+   * `alive` is the other half. The reads are asynchronous and the panel is a
+   * drawer: close it mid-read and the writes landed on a component that was
+   * gone. It also orders two loads racing each other — the mount read and the
+   * one `doForget` fires — so the stale one cannot overwrite the fresh one.
+   *
+   * The read itself is `readCorpus`, outside the component, because it is four
+   * database calls and none of them are React's business.
+   */
+  const refresh = useCallback(() => {
+    let alive = true
+    void readCorpus().then((next) => {
+      if (!alive) return
+      setStats(next.stats)
+      setRows(next.rows)
+    })
+    return () => { alive = false }
   }, [])
 
-  useEffect(() => { void load() }, [load])
+  useEffect(() => refresh(), [refresh])
 
   // Arming a delete should not stay armed while somebody thinks about it.
   useEffect(() => {
@@ -81,7 +107,7 @@ export default function CorpusPanel() {
   const doForget = async () => {
     await forgetEverything()
     setArmed(false)
-    void load()
+    refresh()
   }
 
   if (!stats) return <p className={styles.sectionNote}>Reading…</p>

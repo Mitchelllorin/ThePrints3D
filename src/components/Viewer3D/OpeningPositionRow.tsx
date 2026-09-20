@@ -16,7 +16,7 @@ import { useAppStore } from '../../store/useAppStore'
 import type { PlacedObject } from '../../types'
 import { locateOpening, centreFromEnd, moveOpeningTo } from '../../services/openingLayout'
 import { useWallPlans } from './useWallPlans'
-import { worldDeltaToPixel } from './editHelpers'
+import { worldDeltaToPixel } from './editMath'
 import styles from './OpeningPositionRow.module.css'
 
 const M_PER_IN = 0.0254

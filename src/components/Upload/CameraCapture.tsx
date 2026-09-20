@@ -73,7 +73,9 @@ export default function CameraCapture({
         </div>
       ) : (
         <>
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          {/* A live camera viewfinder, not media: nothing to caption. The
+              jsx-a11y disable that used to sit here named a plugin this config
+              does not load, so ESLint failed on the missing rule instead. */}
           <video ref={videoRef} playsInline muted style={VIDEO} />
           <div style={ROW}>
             <button style={PRIMARY} onClick={snap} disabled={!ready}>📷 Capture</button>

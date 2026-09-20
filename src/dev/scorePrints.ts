@@ -183,10 +183,10 @@ export async function scorePrints(only?: string[]): Promise<PrintScore[]> {
     }
   }
 
-  // eslint-disable-next-line no-console
+   
   console.table(rows)
   const withScale = rows.filter((r) => r.scale !== '—').length
-  // eslint-disable-next-line no-console
+   
   console.log(
     `${rows.length} prints · scale found on ${withScale}/${rows.length} · ` +
     `median stub% ${median(rows.map((r) => r['stub%']))}`,

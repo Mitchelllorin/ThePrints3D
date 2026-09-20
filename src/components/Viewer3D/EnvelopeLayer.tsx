@@ -83,7 +83,7 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     })
     g.userData.level = wall.level ?? 0   // so explode peels the skin per storey
     return g
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [sheathe, length, wallHeight, thickness, outward, spec.material, woodSheathing, wrapVisible, wrbKind, openings, wall.level, ghostOpacity])
 
   // Cladding sits on TOP of whatever is already on the wall, so its standoff is

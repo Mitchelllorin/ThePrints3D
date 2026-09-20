@@ -115,7 +115,8 @@ describe('estimator faults found on the real corpus', () => {
       for (let t = -2; t < core + 2; t++) {
         const v = t < 0 || t >= core ? 170 : 20   // halo vs core
         for (let k = 30; k < (vertical ? h : w) - 30; k++) {
-          vertical ? put(fixed + t, k, v) : put(k, fixed + t, v)
+          if (vertical) put(fixed + t, k, v)
+          else put(k, fixed + t, v)
         }
       }
     }

@@ -360,10 +360,17 @@ export default function FloorplanOverlay() {
   // Make sure the trace-time ink buffer exists for this drawing. It's populated
   // during processing, but a reloaded project starts with an empty cache — this
   // rebuilds it from the raster URL so snap-to-ink works without re-analysing.
+  // The three fields are pulled out first so the dep list can name exactly what
+  // the effect reads. Depending on `drawing` itself would re-read the raster
+  // every time any unrelated field on the drawing changed — which, mid-trace,
+  // is every stroke.
+  const inkDrawingId = drawing?.id
+  const inkStatus = drawing?.status
+  const inkRasterUrl = drawing?.rasterUrl
   useEffect(() => {
-    if (!drawing || drawing.status !== 'ready') return
-    void ensureInkBuffer(drawing.id, drawing.rasterUrl)
-  }, [drawing?.id, drawing?.status, drawing?.rasterUrl])
+    if (!inkDrawingId || inkStatus !== 'ready') return
+    void ensureInkBuffer(inkDrawingId, inkRasterUrl)
+  }, [inkDrawingId, inkStatus, inkRasterUrl])
 
   // Lock the camera whenever a gesture must own the pointer: tracing,
   // calibrating, placing an object, or dragging an overlay handle. The grid
@@ -576,6 +583,25 @@ export default function FloorplanOverlay() {
     ([[x1, y1], [x2, y1], [x2, y2], [x1, y2], [x1, y1]] as [number, number][])
       .map(planeLocalToWorld) as [number, number, number][],
   [planeLocalToWorld])
+
+  /**
+   * THE WALLS YOU DREW — DECLARED ABOVE THE HANDLERS THAT READ THEM.
+   *
+   * This memo used to sit 500 lines further down, next to the pick meshes,
+   * while `onDragMove` below reached back up for it. That runs fine — the
+   * handler only fires long after the body has finished — but it reads as a
+   * use-before-declare, and the React compiler will not compile past one. It
+   * gave up on this component entirely ("existing memoization could not be
+   * preserved"), so the biggest file in the viewport was also the only one
+   * getting none of the compiler's memoisation. On an EliteBook that is the
+   * file you least want hand-rolled.
+   *
+   * Declared where its first reader can see it. Nothing else changed.
+   */
+  const userWalls = useMemo(
+    () => (drawing ? drawing.parsedWalls.filter((w) => w.source === 'user') : []),
+    [drawing],
+  )
 
   // ─── drag handlers ─────────────────────────────────────────────────────
 
@@ -1152,10 +1178,6 @@ export default function FloorplanOverlay() {
   }
 
   // ─── object placement + wall selection (non-trace edit mode) ────────────
-  const userWalls = useMemo(
-    () => (drawing ? drawing.parsedWalls.filter((w) => w.source === 'user') : []),
-    [drawing],
-  )
   /**
    * EVERY WALL GETS A HIT BOX, NOT JUST THE ONES YOU DREW.
    *

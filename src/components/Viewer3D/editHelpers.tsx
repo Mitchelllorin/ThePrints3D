@@ -1,38 +1,20 @@
 /**
- * Shared helpers for "Edit Everything" mode — the post-build state where hovering
- * highlights any element and pressing drags it. Kept tiny and framework-plain so
- * every layer (floors, roofs, objects, walls, MEP) drives the SAME interaction.
+ * The COMPONENT half of "Edit Everything" mode — the post-build state where
+ * hovering highlights any element and pressing drags it. Kept tiny and
+ * framework-plain so every layer (floors, roofs, objects, walls, MEP) drives
+ * the SAME interaction.
  *
  * Drag model: project the pointer ray onto the ground plane (y=0) so the element
  * tracks the finger exactly (the "follows your finger, drop it" feel), and keep a
  * live WORLD offset during the drag — the store is written ONCE on release so the
  * undo history gets a single entry, not one per frame.
+ *
+ * The ray-cast and the world→pixel conversion live in `editMath.ts`, because a
+ * module that exports components AND plain functions cannot hot-reload: Fast
+ * Refresh remounts every importer instead, which mid-drag loses the drag.
  */
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
-
-const GROUND = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-const UP = new THREE.Vector3(0, 1, 0)
-/** Scratch plane for a floor above grade — reused so this allocates nothing. */
-const LEVEL_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-
-/**
- * World point where the pointer ray meets a horizontal floor, or null.
- *
- * `y` is the elevation of the floor you are working on, and it matters more than
- * it looks: the camera looks DOWN, so a ray hits y=0 at a completely different
- * x/z than it hits the second-floor deck. Casting everything at grade meant that
- * on an upper storey the thing you were placing landed away from your cursor,
- * and the higher the storey the further off it drifted. Defaults to 0, so every
- * ground-floor caller is unchanged.
- */
-export function rayToGround(e: ThreeEvent<PointerEvent>, y = 0): THREE.Vector3 | null {
-  const p = new THREE.Vector3()
-  if (y === 0) return e.ray.intersectPlane(GROUND, p) ? p : null
-  // Plane constant is the NEGATIVE offset along the normal.
-  LEVEL_PLANE.constant = -y
-  return e.ray.intersectPlane(LEVEL_PLANE, p) ? p : null
-}
 
 /** Movement under this (screen px, summed) counts as a tap, not a drag. */
 export const EDIT_TAP_PX = 5
@@ -48,19 +30,6 @@ export const EDIT_TAP_PX = 5
  * the whole element goes see-through, not one hidden slice of it.
  */
 export const XRAY_OPACITY = 0.16
-
-/**
- * Convert a WORLD-space delta (metres) into an image-PIXEL delta, undoing the
- * overlay rotation + scale — so an area drag tracks the cursor on the print and
- * the stored pixel rect moves the right amount.
- */
-export function worldDeltaToPixel(
-  dx: number, dz: number,
-  rotRad: number, overlayW: number, overlayD: number, imageWidth: number, imageHeight: number,
-): [number, number] {
-  const v = new THREE.Vector3(dx, 0, dz).applyAxisAngle(UP, -rotRad)
-  return [(v.x / overlayW) * imageWidth, (v.z / overlayD) * imageHeight]
-}
 
 /** Inside-out catcher sphere — keeps pointer move/up firing once the finger
  *  leaves the grabbed element. Render only while a drag is live. */

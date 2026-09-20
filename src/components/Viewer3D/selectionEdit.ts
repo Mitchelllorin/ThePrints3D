@@ -29,9 +29,7 @@ import * as THREE from 'three'
 import { useMemo } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { useSceneConfig } from '../../store/useSceneConfig'
-import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
-import { worldDeltaToPixel } from './editHelpers'
+import { worldDeltaToPixel } from './editMath'
 import { followWall, segYawDelta } from '../../services/openingFollow'
 import type { ParsedWall } from '../../types'
 
@@ -95,7 +93,6 @@ export function useSelectionEdit(): SelectionEdit | null {
   const floorsAreas = useAppStore((s) => s.floorsAreas)
   const roofAreas = useAppStore((s) => s.roofAreas)
   const placedObjects = useAppStore((s) => s.placedObjects)
-  const wizardInputs = useAppStore((s) => s.wizardInputs)
   const plumbingLines = useAppStore((s) => s.plumbingLines)
   const electricalLines = useAppStore((s) => s.electricalLines)
   const hvacLines = useAppStore((s) => s.hvacLines)
@@ -118,9 +115,29 @@ export function useSelectionEdit(): SelectionEdit | null {
   const imageWidth = drawing?.rasterWidth ?? 1400
   const imageHeight = drawing?.rasterHeight ?? 900
   const [overlayW, overlayD] = overlay.scale
+  /**
+   * THE SHEET'S ORIGIN IS A DEPENDENCY TOO.
+   *
+   * `pxToWorld` below reads `overlay.position`, but the memo's dep list only
+   * carried the scale and the rotation. Pan the print without resizing or
+   * turning it and the handlers kept the origin from before the pan: drag a
+   * wall afterwards and every door and window in it got rewritten against the
+   * old sheet position, landing exactly one pan-distance off the wall they
+   * belong to. The scale and rotation cases never showed it because those two
+   * were in the list.
+   *
+   * Pulled out as two numbers so the list can name them and so panning does not
+   * rebuild the handlers when the numbers happen not to move.
+   */
+  const [overlayX, overlayZ] = overlay.position
   const rotRad = THREE.MathUtils.degToRad(overlay.rotationDeg)
-  const ceilingM = useSceneConfig(wizardInputs).wallHeightM
-  const storeyHeight = ceilingM + FLOOR_ASSEMBLY_H
+  /* A storey height used to be computed here and handed to the dep list below,
+     and nothing inside the memo ever read it. It was propping itself up: the
+     only reference to `storeyHeight` was the dependency array, and the only
+     reference to `ceilingM` was `storeyHeight`. The cost was not the arithmetic
+     — it was `wizardInputs`, subscribed from the store, re-running this hook
+     every time any wizard field changed so it could recompute a number nobody
+     asked for. Gone, with the subscription that fed it. */
 
   return useMemo(() => {
     if (!editSelected || traceMode || placeObjectType) return null
@@ -137,8 +154,8 @@ export function useSelectionEdit(): SelectionEdit | null {
       const localZ = ((py / imageHeight) - 0.5) * overlayD
       const c = Math.cos(rotRad), s = Math.sin(rotRad)
       return {
-        x: overlay.position[0] + localX * c + localZ * s,
-        z: overlay.position[1] - localX * s + localZ * c,
+        x: overlayX + localX * c + localZ * s,
+        z: overlayZ - localX * s + localZ * c,
       }
     }
 
@@ -269,7 +286,7 @@ export function useSelectionEdit(): SelectionEdit | null {
     }
   }, [editSelected, traceMode, placeObjectType, placedObjects, floorsAreas, roofAreas,
       plumbingLines, electricalLines, hvacLines, drawing,
-      overlayW, overlayD, rotRad, imageWidth, imageHeight, storeyHeight,
+      overlayW, overlayD, overlayX, overlayZ, rotRad, imageWidth, imageHeight,
       translateFloorsArea, translateRoofArea, updateFloorsArea, updateRoofArea,
       updateUserWall, updatePlacedObject, updateTradeLine,
       removePlacedObject, removeFloorsArea, removeRoofArea, deleteUserWall,

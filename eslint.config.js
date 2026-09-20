@@ -34,5 +34,34 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      /**
+       * A LEADING UNDERSCORE MEANS "ON PURPOSE", AND TYPESCRIPT ALREADY AGREES.
+       *
+       * `tsconfig.app.json` runs with `noUnusedLocals` and `noUnusedParameters`
+       * on, and the type-check is clean — because TypeScript honours the
+       * leading underscore. ESLint's copy of the same rule did not, so the two
+       * linters held opposite opinions about the same five lines and the build
+       * only heard one of them.
+       *
+       * Every one of those five is the destructure-to-omit idiom:
+       *
+       *   const { overhangM: _drop, ...rest } = a.ridge
+       *
+       * The name is how the key gets dropped. It cannot be deleted, because
+       * deleting it puts the key back. Renaming the convention across the tree
+       * to satisfy a rule TypeScript already exempts is churn, not a fix.
+       *
+       * `ignoreRestSiblings` is the half that makes the idiom legal at all;
+       * the patterns are what let the intent be spelled out in the name.
+       */
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+        destructuredArrayIgnorePattern: '^_',
+        ignoreRestSiblings: true,
+      }],
+    },
   },
 ])

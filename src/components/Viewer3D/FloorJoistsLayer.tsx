@@ -26,7 +26,8 @@ import {
 import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import { VERTICAL_CIRCULATION, getCatalogItem } from '../../data/objectCatalog'
 import { solveStair, stairOpeningM, stairShapeFromSubtype, stairHolePlacement } from '../../services/stairs'
-import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
+import { rayToGround, worldDeltaToPixel } from './editMath'
+import { EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
 import type { FloorplanOverlayState } from '../../types'
 import type { TracedLine } from '../../types'
 

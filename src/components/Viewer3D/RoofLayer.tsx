@@ -27,7 +27,9 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useSceneConfig } from '../../store/useSceneConfig'
 import { buildRoofByType, buildRidgeRoof, ridgeIsShaped, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { pitchToRatio } from '../../data/traceLayers'
-import { rayToGround, worldDeltaToPixel, EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
+import { rayToGround, worldDeltaToPixel } from './editMath'
+import { setGripCursor } from './gripCursor'
+import { EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
 import type { RoofRidge, TracedLine } from '../../types'
 
 const RAFTER_OC_M = 0.4064   // 16" on-centre common rafters
@@ -225,7 +227,18 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, mode, onDraft, 
     return new THREE.Vector3(hit.x - centre.x, 0, hit.z - centre.z).applyAxisAngle(UP, -handleRotY)
   }
 
-  const start = (kind: 'bar' | 'endA' | 'endB') => (e: ThreeEvent<PointerEvent>) => {
+  /**
+   * ONE HANDLER, NOT A HANDLER FACTORY.
+   *
+   * This was `start(kind)(e)` — curried, so the JSX called `start('bar')`
+   * during render and got the real handler back. Correct, and unprovable: the
+   * React compiler saw a function invoked in render whose body writes
+   * `dragRef.current`, could not follow the currying to see that the write
+   * happens on pointer-down, and refused to compile the component. Taking the
+   * event first makes it an ordinary handler again, and the kind stays a
+   * parameter because `move` still reads all three.
+   */
+  const start = (e: ThreeEvent<PointerEvent>, kind: 'bar' | 'endA' | 'endB') => {
     e.stopPropagation()
     dragRef.current = {
       kind,
@@ -274,7 +287,7 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, mode, onDraft, 
     dragRef.current = null
     setDragging(false)
     useFloorplanLocalStore.getState().setGestureLock(false)   // release the camera
-    document.body.style.cursor = ''
+    setGripCursor(false)
   }
 
   return (
@@ -287,9 +300,9 @@ function RidgeHandle({ centre, eaveY, rotRad, lenX, lenZ, ridge, mode, onDraft, 
           drawing a fatter bar instead would make the roof look wrong. */}
       <mesh
         position={[(xA + xB) / 2, rise, c]}
-        onPointerDown={start('bar')}
-        onPointerOver={() => { document.body.style.cursor = 'move' }}
-        onPointerOut={() => { if (!dragging) document.body.style.cursor = '' }}
+        onPointerDown={(e) => start(e, 'bar')}
+        onPointerOver={() => setGripCursor(true)}
+        onPointerOut={() => { if (!dragging) setGripCursor(false) }}
       >
         <boxGeometry args={[ridgeLen, RIDGE_GRIP_M, RIDGE_GRIP_M]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />

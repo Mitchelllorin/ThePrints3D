@@ -173,17 +173,39 @@ export default function TutorialCoach() {
 
   // ── Track the spotlight target's on-screen rect (drawers animate, so poll) ───
   const target = current.target
-  const [rect, setRect] = useState<DOMRect | null>(null)
+  /**
+   * THE MEASUREMENT IS STORED WITH THE THING IT MEASURED.
+   *
+   * The effect used to open with `setRect(null)` and then call `update()`, both
+   * synchronously — two state writes inside an effect body, which is a render
+   * that immediately causes another render. It also meant the only thing saying
+   * "this rect belongs to the previous step" was the clearing write; miss it
+   * and the spotlight sits on the last target's coordinates.
+   *
+   * So the target's name is kept beside its rect, and the rect the component
+   * draws with is DERIVED: it is null unless the measurement on hand is of the
+   * target being pointed at right now. Nothing to clear, nothing to race, and
+   * no way to light up a hole where the last step's button used to be.
+   *
+   * First measure moves to the next frame (the drawers are mid-animation
+   * anyway, which is why this polls at all).
+   */
+  const [measured, setMeasured] = useState<{ target: string; rect: DOMRect } | null>(null)
+  const rect = active && target && measured?.target === target ? measured.rect : null
   useEffect(() => {
-    if (!active || !target) { setRect(null); return }
+    if (!active || !target) return
     const update = () => {
       const el = document.querySelector(`[data-tour="${target}"]`)
-      setRect(el ? (el.getBoundingClientRect() as DOMRect) : null)
+      setMeasured(el ? { target, rect: el.getBoundingClientRect() as DOMRect } : null)
     }
-    update()
+    const first = requestAnimationFrame(update)
     const id = window.setInterval(update, 200)
     window.addEventListener('resize', update)
-    return () => { window.clearInterval(id); window.removeEventListener('resize', update) }
+    return () => {
+      cancelAnimationFrame(first)
+      window.clearInterval(id)
+      window.removeEventListener('resize', update)
+    }
   }, [active, target, step])
 
   /**

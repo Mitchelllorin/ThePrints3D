@@ -13,6 +13,7 @@ import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 import { blockMaterial, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { explodeRuntime, FLOOR_SEP, systemOffset } from './explodeRuntime'
+import { applyFloorVisibility } from './floorVisibility'
 import { cinema } from '../../cinema/cinemaRuntime'
 import { applyMemberColours, applyTopPlatesHidden, ownedMaterial } from '../../services/memberColours'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
@@ -1277,24 +1278,7 @@ export default function BuildingModel({ layers }: Props) {
   useEffect(() => {
     const group = groupRef.current
     if (!group) return
-    for (const child of group.children) {
-      const level = (child.userData.level as number) ?? 0
-      const hidden = isolatedFloor !== null && level !== isolatedFloor
-      const ghosted = !hidden && ghostedLevels.includes(level)
-      child.visible = !hidden
-      child.traverse((node) => {
-        const mesh = node as Partial<THREE.Mesh>
-        if (!mesh.material) return
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-        for (const m of mats) {
-          const sm = m as THREE.MeshStandardMaterial
-          sm.transparent = ghosted || sm.opacity < 1
-          sm.opacity = ghosted ? 0.15 : sm.userData.baseOpacity ?? sm.opacity
-          // Store original opacity the first time we touch it so we can restore it.
-          if (sm.userData.baseOpacity === undefined && !ghosted) sm.userData.baseOpacity = sm.opacity
-        }
-      })
-    }
+    applyFloorVisibility(group, isolatedFloor, ghostedLevels)
   }, [isolatedFloor, ghostedLevels])
 
   // Explode driver: each frame, ease the current progress toward the slider
