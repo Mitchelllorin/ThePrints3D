@@ -32,6 +32,7 @@ import type { ProductCatalogItem, ProductPlacement } from '../types/products'
 import { processDrawing as runProcessor } from '../services/drawingProcessor'
 import { buildFraming } from '../services/constructionEngine'
 import { deriveBuildAreas } from '../services/autoBuildAreas'
+import { roughOpening } from '../services/roughOpening'
 import { getCatalogItem } from '../data/objectCatalog'
 import {
   groupByFloorWithLog,
@@ -883,7 +884,14 @@ function computeFramingResult(
     .filter((o) => (o.type === 'door' || o.type === 'window') && o.pxX != null && o.pxY != null)
     .map((o) => {
       const item = getCatalogItem(o.type)
-      const widthMm = (item?.defaultW ?? 0.9) * o.scaleX * 1000
+      // The rough opening, not the unit — the same rule the walls are framed
+      // by, so the engine's decisions and the 3D framing agree on the hole.
+      const widthMm = roughOpening(
+        o.type,
+        o.subtype,
+        (item?.defaultW ?? 0.9) * o.scaleX,
+        (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY,
+      ).widthM * 1000
       return {
         x: o.pxX as number,
         y: o.pxY as number,

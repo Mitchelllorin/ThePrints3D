@@ -23,7 +23,11 @@ export interface ObjectCatalogItem {
 }
 
 export const OBJECT_CATALOG: ObjectCatalogItem[] = [
-  { type: 'door',           label: 'Door',            short: 'Door',     icon: '🚪', defaultW: 0.9,  defaultD: 0.12, defaultH: 2.05, color: '#f59e0b' },
+  // A 3068 — 3'-0" x 6'-8", the door that gets hung more than any other. It
+  // was 0.9 x 2.05 m, which is 2'-11 3/8" x 6'-8 3/4": a size nobody sells,
+  // and once the card started showing the rough opening it read as an app
+  // that does not know what a door is.
+  { type: 'door',           label: 'Door',            short: 'Door',     icon: '🚪', defaultW: 0.9144, defaultD: 0.12, defaultH: 2.032, color: '#f59e0b' },
   { type: 'window',         label: 'Window',          short: 'Window',   icon: '🪟', defaultW: 1.2,  defaultD: 0.12, defaultH: 1.2,  color: '#7dd3fc' },
   { type: 'sofa',           label: 'Sofa',            short: 'Sofa',     icon: '🛋️', defaultW: 2.0,  defaultD: 0.9,  defaultH: 0.8,  color: '#6366f1' },
   { type: 'chair',          label: 'Chair',           short: 'Chair',    icon: '🪑', defaultW: 0.55, defaultD: 0.55, defaultH: 0.9,  color: '#22c55e' },
@@ -152,7 +156,11 @@ export const VERTICAL_CIRCULATION = new Set(['stairs', 'elevator'])
 
 /** Sub-type options offered in the property card, by object type. */
 export const SUBTYPES: Record<string, string[]> = {
-  door: ['Hinged Single', 'Hinged Double', 'Pocket', 'Sliding', 'Bifold'],
+  // Garage is here because the route walks a garage door and there was no way
+  // to say one was: it framed as a swing door with two inches of allowance a
+  // garage door does not take. The TYPE drives the rough opening — see
+  // services/roughOpening.
+  door: ['Hinged Single', 'Hinged Double', 'Pocket', 'Sliding', 'Bifold', 'Garage'],
   window: ['Single-hung', 'Double-hung', 'Casement', 'Fixed'],
   stairs: ['Straight', 'L-shaped', 'U-shaped', 'Switchback'],
 }

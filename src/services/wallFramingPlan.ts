@@ -12,6 +12,7 @@
  * the walls the model stands up, whether or not you are looking at them.
  */
 import type { Drawing, PlacedObject, ParsedWall } from '../types'
+import { roughOpening } from './roughOpening'
 import type { WallFramingOpts, WallOpening } from './framingGeometry'
 import { modelWalls } from './modelWalls'
 import { teesForWalls } from './wallTees'
@@ -163,13 +164,24 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
     const { best, t } = nearestWall(o.x, o.z, 0, 0, o.level ?? 0)
     if (best < 0) continue
     const item = getCatalogItem(o.type)
+    // FRAME THE HOLE, NOT THE DOOR. The object's size is the unit — the leaf,
+    // or the window's nominal size — and the framer frames whatever width it
+    // is handed as the clear span between the jacks. Handing it the door made
+    // every opening two inches tight and framed a pocket door one leaf wide.
+    // See roughOpening.
+    const ro = roughOpening(
+      o.type,
+      o.subtype,
+      (item?.defaultW ?? 0.9) * o.scaleX,
+      (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY,
+    )
     openings[best].push({
       t,
       objectId: o.id,
-      widthM: (item?.defaultW ?? 0.9) * o.scaleX,
+      widthM: ro.widthM,
       type: o.type,
       sillM: o.sillM,
-      heightM: (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY,
+      heightM: ro.heightM,
     })
   }
   // Stairs/elevators cut a full-height opening where they sit flush against a

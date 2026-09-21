@@ -11,6 +11,7 @@ import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
+import { roughOpening } from '../../services/roughOpening'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import {
   TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS, LAYER_TRACE_HINT, PRO_TRACE_LAYERS,
@@ -1936,6 +1937,30 @@ export default function FloorplanPanel() {
               <span className={styles.propVal}>{selectedObject.label}</span>
             )}
           </div>
+          {/* THE HOLE, next to the door. The size above is the unit — the leaf,
+              or the window's nominal size — and this is what actually gets
+              framed, worked out from the Type. Shown so nobody frames to the
+              door size, and so a pocket door visibly asks for twice the width.
+              Always to the sixteenth: 82½" rounded to 83" is the exact error a
+              rough opening cannot carry. */}
+          {(selectedObject.type === 'door' || selectedObject.type === 'window') && (() => {
+            const item = getCatalogItem(selectedObject.type)
+            const ro = roughOpening(
+              selectedObject.type,
+              selectedObject.subtype,
+              (item?.defaultW ?? 0.9) * selectedObject.scaleX,
+              (item?.defaultH ?? (selectedObject.type === 'door' ? 2.06 : 1.13)) * selectedObject.scaleY,
+            )
+            const fmt = (m: number) => formatMeasureMm(m * 1000, activeUnit, lengthFormat === 'decimal' ? 'decimal' : 'ft-in-frac')
+            return (
+              <div className={styles.propRow} title="Rough opening — the hole the framing leaves for this unit">
+                <span className={styles.propLabel}>R.O.</span>
+                <span className={styles.propVal} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {fmt(ro.widthM)} × {fmt(ro.heightM)}
+                </span>
+              </div>
+            )
+          })()}
           {/* ── Stair configurator ────────────────────────────────────────
               The shape lives in "Type" above; these are the numbers that make it
               a real stair. RISE is deliberately absent — a stair climbs a storey,
