@@ -161,6 +161,48 @@ export interface BuyLine {
   needed: number
   /** With the waste allowance, rounded up — what goes on the order. */
   order: number
+  /** Board feet of the ORDER — whole sticks, waste included — or null where
+   *  board feet do not apply (engineered lumber, steel). See `boardFeet`. */
+  boardFt: number | null
+}
+
+/**
+ * BOARD FEET — how a lumber yard measures and prices an order.
+ *
+ * One board foot is 144 cubic inches of wood: a board 1" thick, 12" wide and
+ * 1' long. It is always figured on the NOMINAL size — a 2x4 counts as 2" by 4"
+ * although it mills to 1-1/2" by 3-1/2" — so the arithmetic is the same at
+ * every yard:
+ *
+ *   board feet = thickness (in) x width (in) x length (ft) / 12
+ *
+ * A 2x4 x 8' is 2 x 4 x 8 / 12 = 5 1/3 BF. A 2x6 x 16' is 16 BF. Framing lumber
+ * is quoted per thousand board feet (MBF), so the total below times the MBF
+ * price is the lumber line on the quote.
+ *
+ * Only SAWN lumber has board feet. LVL and other engineered members are sold
+ * by the linear foot and steel by the piece, so they get null here rather than
+ * a number that would look like it meant something.
+ */
+export function nominalSize(member: string): { t: number; w: number } | null {
+  const m = /^(\d)×(\d+)$/.exec(member)
+  return m ? { t: Number(m[1]), w: Number(m[2]) } : null
+}
+
+/** Board feet of one piece of sawn lumber, from its nominal size and length in feet. */
+export function boardFeet(t: number, w: number, lengthFt: number): number {
+  return (t * w * lengthFt) / 12
+}
+
+/** The whole order in board feet, and which members were left out because BF does not apply to them. */
+export function orderBoardFeet(buy: readonly BuyLine[]): { total: number; notCounted: string[] } {
+  let total = 0
+  const notCounted = new Set<string>()
+  for (const b of buy) {
+    if (b.boardFt === null) notCounted.add(b.member)
+    else total += b.boardFt
+  }
+  return { total, notCounted: [...notCounted] }
 }
 
 /** Longest piece first, into the stick it wastes least in — classic first-fit
@@ -292,8 +334,13 @@ export function buyList(
       const ft = stock.find((s) => s * 12 >= p) ?? stock[stock.length - 1]
       sticks.set(ft, (sticks.get(ft) ?? 0) + 1)
     }
+    const nominal = nominalSize(g.member)
     for (const [stockFt, needed] of [...sticks].sort((a, b) => a[0] - b[0])) {
-      lines.push({ member: g.member, category: g.category, stockFt, needed, order: Math.ceil(needed * (1 + pct / 100) - 1e-9) })
+      const order = Math.ceil(needed * (1 + pct / 100) - 1e-9)
+      lines.push({
+        member: g.member, category: g.category, stockFt, needed, order,
+        boardFt: nominal ? boardFeet(nominal.t, nominal.w, stockFt) * order : null,
+      })
     }
   }
   const catOrder: WasteCategory[] = ['plates', 'studs', 'headers', 'blocking']
@@ -309,7 +356,11 @@ export function cutListCsvRows(walls: readonly WallCuts[], buy: readonly BuyLine
     if (w.masonry) { rows.push([w.name, 'Masonry', '—', '—', 0].map(q).join(',')); continue }
     for (const l of w.lines) rows.push([w.name, l.member, roleLabel(l.role), fmt(l.lengthIn), l.qty].map(q).join(','))
   }
-  rows.push('', [q('Buy list')].join(','), ['Member', 'For', 'Stock length', 'Needed', 'Order (with waste)'].map(q).join(','))
-  for (const b of buy) rows.push([b.member, WASTE_LABEL[b.category], `${b.stockFt}'`, b.needed, b.order].map(q).join(','))
+  rows.push('', [q('Buy list')].join(','), ['Member', 'For', 'Stock length', 'Needed', 'Order (with waste)', 'Board feet'].map(q).join(','))
+  for (const b of buy) {
+    rows.push([b.member, WASTE_LABEL[b.category], `${b.stockFt}'`, b.needed, b.order, b.boardFt === null ? 'by the foot' : b.boardFt.toFixed(2)].map(q).join(','))
+  }
+  const bf = orderBoardFeet(buy)
+  rows.push(['Total board feet', '', '', '', '', bf.total.toFixed(2)].map(q).join(','))
   return rows
 }

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { buildWallFraming } from './framingGeometry'
 import {
   cutsFromFraming, buyList, nestIntoStock, stockLengthsFt, toSixteenth,
-  DEFAULT_WASTE_PCT, type WallCuts,
+  DEFAULT_WASTE_PCT, type WallCuts, type BuyLine,
+  nominalSize, boardFeet, orderBoardFeet,
 } from './cutList'
 import { countBuiltMembers } from './builtScene'
 
@@ -257,5 +258,40 @@ describe('the buy list rounds UP, per kind of member', () => {
 
   it('has nothing to order for a wall with nothing cut', () => {
     expect(buyList([{ index: 0, name: 'Wall 1', level: 0, masonry: true, lines: [] }])).toEqual([])
+  })
+})
+
+describe('board feet — how the yard prices it', () => {
+  it('reads the nominal size off a sawn member, and nothing off LVL or steel', () => {
+    expect(nominalSize('2×4')).toEqual({ t: 2, w: 4 })
+    expect(nominalSize('2×10')).toEqual({ t: 2, w: 10 })
+    expect(nominalSize('LVL 1-3/4×9-1/4')).toBeNull()
+    expect(nominalSize('3-5/8" 20ga steel stud')).toBeNull()
+  })
+
+  it('figures on the nominal size: a 2x4x8 is 5 1/3, a 2x6x16 is 16', () => {
+    expect(boardFeet(2, 4, 8)).toBeCloseTo(16 / 3, 9)
+    expect(boardFeet(2, 6, 16)).toBe(16)
+  })
+
+  it('counts the ORDER — whole sticks with waste — not the pieces cut from them', () => {
+    const wall: WallCuts = {
+      index: 0, name: 'W1', level: 0, masonry: false,
+      lines: [{ member: '2×6', role: 'stud', lengthIn: 92.625, qty: 10, inPacks: 0 }],
+    }
+    const [line] = buyList([wall], { studs: 10, plates: 0, headers: 0, blocking: 0 })
+    // 10 studs nest into 10 eight-footers; +10% waste orders 11.
+    expect(line.stockFt).toBe(8)
+    expect(line.order).toBe(11)
+    expect(line.boardFt).toBeCloseTo(boardFeet(2, 6, 8) * 11, 9)   // 8 BF a stick x 11 = 88
+  })
+
+  it('totals the order and says what it left out', () => {
+    const buy: BuyLine[] = [
+      { member: '2×4', category: 'studs', stockFt: 8, needed: 3, order: 3, boardFt: 16 },
+      { member: '2×6', category: 'plates', stockFt: 16, needed: 2, order: 2, boardFt: 32 },
+      { member: 'LVL 1-3/4×9-1/4', category: 'headers', stockFt: 12, needed: 1, order: 1, boardFt: null },
+    ]
+    expect(orderBoardFeet(buy)).toEqual({ total: 48, notCounted: ['LVL 1-3/4×9-1/4'] })
   })
 })

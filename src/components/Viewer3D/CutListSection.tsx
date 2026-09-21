@@ -17,7 +17,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useCutList, formatCutLength } from './useCutList'
-import { roleLabel, WASTE_LABEL, type WasteCategory, type WallCuts } from '../../services/cutList'
+import { roleLabel, WASTE_LABEL, nominalSize, boardFeet, orderBoardFeet, type WasteCategory, type WallCuts } from '../../services/cutList'
 
 const INK = '#e5e7eb'
 const INK_2 = '#cbd5e1'
@@ -26,6 +26,9 @@ const ACCENT = '#38bdf8'
 
 const row: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13, lineHeight: 1.55 }
 const num: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }
+/** Board feet as the yard writes them: the real figure, trimmed, never rounded to look neat. */
+const bf = (v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+
 const heading: React.CSSProperties = {
   color: '#f97316', fontWeight: 700, fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 4,
 }
@@ -99,6 +102,7 @@ export default function CutListSection() {
   // The first wall opens; the rest wait to be asked for.
   const [openWall, setOpenWall] = useState<number | null>(0)
   const [showWaste, setShowWaste] = useState(false)
+  const [showBoardFeet, setShowBoardFeet] = useState(false)
 
   const framed = walls.filter((w) => !w.masonry && w.lines.length > 0)
   if (walls.length === 0) return null
@@ -139,9 +143,65 @@ export default function CutListSection() {
               <span style={{ ...num, color: '#fff' }}>
                 {b.order}
                 {b.order !== b.needed && <span style={{ color: MUTED }}> (cuts need {b.needed})</span>}
+                <span style={{ color: MUTED }}> · {b.boardFt === null ? 'by the ft' : `${bf(b.boardFt)} BF`}</span>
               </span>
             </div>
           ))}
+          {/* THE LUMBER LINE ON THE QUOTE. The order in board feet — whole
+              sticks with waste, the way a yard prices it — and a plain word on
+              anything not in it, rather than a total that quietly leaves out the
+              LVL and lets you think it did not. */}
+          {(() => {
+            const total = orderBoardFeet(buy)
+            const example = buy.find((b) => b.boardFt !== null)
+            const size = example ? nominalSize(example.member) : null
+            return (
+              <>
+                <div style={{ ...row, marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(148,163,184,0.18)' }}>
+                  <span style={{ color: INK, fontWeight: 700 }}>Board feet</span>
+                  <span style={{ ...num, color: '#fff', fontWeight: 700 }}>{bf(total.total)} BF</span>
+                </div>
+                {total.notCounted.length > 0 && (
+                  <p style={{ color: MUTED, fontSize: 13, margin: '2px 0 0', lineHeight: 1.5 }}>
+                    Not in it: {total.notCounted.join(', ')} — sold by the foot, not the board foot.
+                  </p>
+                )}
+                <button
+                  onClick={() => setShowBoardFeet(!showBoardFeet)}
+                  aria-expanded={showBoardFeet}
+                  style={{
+                    width: '100%', minHeight: 48, marginTop: 6, background: 'none',
+                    border: '1px solid rgba(148,163,184,0.22)', borderRadius: 8, color: INK_2,
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                >{showBoardFeet ? '▾' : '▸'} What&apos;s a board foot?</button>
+                {showBoardFeet && (
+                  <div style={{ color: INK_2, fontSize: 13, lineHeight: 1.55, padding: '6px 2px 2px' }}>
+                    <p style={{ margin: '0 0 6px' }}>
+                      A board foot is 144 cubic inches of lumber — a board 1&quot; thick, 12&quot; wide and 1&apos; long.
+                      It&apos;s how a yard measures and prices framing lumber, usually per thousand (MBF).
+                    </p>
+                    <p style={{ margin: '0 0 6px', ...num, whiteSpace: 'normal' }}>
+                      <b style={{ color: INK }}>Thickness × width × length in feet ÷ 12</b>, on the nominal size —
+                      a 2×4 counts as 2&quot; × 4&quot; even though it mills to 1½&quot; × 3½&quot;.
+                    </p>
+                    {example && size && (
+                      <p style={{ margin: '0 0 6px', ...num, whiteSpace: 'normal' }}>
+                        From your list: {example.member} × {example.stockFt}&apos; is {size.t} × {size.w} × {example.stockFt} ÷ 12
+                        {' '}= {bf(boardFeet(size.t, size.w, example.stockFt))} BF a stick, × {example.order} sticks
+                        {' '}= {bf(example.boardFt ?? 0)} BF.
+                      </p>
+                    )}
+                    <p style={{ margin: 0 }}>
+                      These are the board feet of what you <b style={{ color: INK }}>buy</b> — whole sticks, waste included —
+                      so the total times the yard&apos;s MBF price is the lumber on the quote. LVL and other
+                      engineered members are sold by the foot and steel by the piece, so they aren&apos;t in it.
+                    </p>
+                  </div>
+                )}
+              </>
+            )
+          })()}
           <button
             onClick={() => setShowWaste(!showWaste)}
             aria-expanded={showWaste}
