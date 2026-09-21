@@ -9,10 +9,12 @@ import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
-import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import { useFloorplanLocalStore, defaultWallTypeForRole } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
 import { roughOpening } from '../../services/roughOpening'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
+import { isDrawnSheet } from '../../services/drawnProject'
+import { planViewCamera } from '../../services/builtScene'
 import {
   TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS, LAYER_TRACE_HINT, PRO_TRACE_LAYERS,
   PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER, FLOORS_PICKER, ROOF_PICKER, LEVEL_OPTIONS,
@@ -66,6 +68,20 @@ const WALL_ROLES = [
 
 const framingShort = (key: string) => FRAMING_TYPES.find((t) => t.key === key)?.short ?? key
 const roleShort = (key: string) => WALL_ROLES.find((r) => r.key === key)?.short ?? key
+/**
+ * What the next wall will ACTUALLY be, for the chip you draw under.
+ *
+ * The chip showed the picker's settings whether or not anyone had picked them —
+ * "Wood 2x8 · Exterior" while you drew a partition across the middle of a 2x6
+ * house, which then came out a 2x4 interior wall, because an unpicked size and
+ * role are worked out from where the wall lands. The screen said one thing and
+ * did another. Now it says "Auto" for whatever it will work out itself.
+ */
+function wallChipLabel(type: string, role: string, typeChosen: boolean, roleChosen: boolean): string {
+  if (!typeChosen && !roleChosen) return 'Auto size & role'
+  const size = typeChosen ? framingShort(type) : framingShort(defaultWallTypeForRole(role))
+  return roleChosen ? `${size} · ${roleShort(role)}` : `${size} · Auto`
+}
 
 export default function FloorplanPanel() {
   const isPro           = useAppStore((s) => s.isPro)
@@ -114,6 +130,10 @@ export default function FloorplanPanel() {
   const setPlumbNudge  = useFloorplanLocalStore((s) => s.setPlumbNudge)
   const traceStyle     = useFloorplanLocalStore((s) => s.traceStyle)
   const setTraceStyle  = useFloorplanLocalStore((s) => s.setTraceStyle)
+  const wallTypeChosen = useFloorplanLocalStore((s) => s.wallTypeChosen)
+  const wallRoleChosen = useFloorplanLocalStore((s) => s.wallRoleChosen)
+  const setPlanView    = useFloorplanLocalStore((s) => s.setPlanView)
+  const setCameraPreset = useAppStore((s) => s.setCameraPreset)
   const traceStart     = useFloorplanLocalStore((s) => s.traceStart)
   const setTraceStart  = useFloorplanLocalStore((s) => s.setTraceStart)
   const hoverPixel     = useFloorplanLocalStore((s) => s.hoverPixel)
@@ -349,6 +369,30 @@ export default function FloorplanPanel() {
       setTraceStyle('line')
       setTraceMode(true)
     }
+  }
+
+  /**
+   * DRAW A WALL — the way in that was missing.
+   *
+   * On the framing layer this panel only ever showed "Tracing walls", which
+   * appears once you are ALREADY drawing. The steady-state button to start went
+   * out with the old step-by-step wizard, and nothing replaced it. The step
+   * chip's "Draw the inside walls" offers it once and then retires for good —
+   * tap it, or hang a door first, and it is gone — so a person who wanted to
+   * add a partition later had no way to begin. "I wanted to put the interior
+   * walls in but couldn't find a way to do it."
+   *
+   * Same entry as that chip: a line, looking straight down, on the plan where
+   * a wall is drawn. The ROLE is left alone on purpose — unchosen, a wall's role
+   * is worked out from where it lands, so one drawn inside the shell comes out
+   * interior on its own; setting it here would lock that off.
+   */
+  const drawWalls = () => {
+    setTraceStyle('line')
+    setPlanView(true)
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight)
+    setCameraPreset(planViewCamera(overlay, aspect))
+    confirmWallType()
   }
 
   const finalizeCalibration = () => {
@@ -795,6 +839,9 @@ export default function FloorplanPanel() {
       }
     : null
   const objSubtypes = selectedObject ? SUBTYPES[selectedObject.type] : undefined
+  /** Draw it's blank grid: no print, so nothing for Find the rest to find.
+   *  The detection code stays — it is still the tool on a real print. */
+  const onDrawnSheet = isDrawnSheet(drawing)
 
   // Walls the plan says are wet but whose board does not agree yet.
   const wetSuggestions = wetDismissed || !drawing ? [] :
@@ -847,12 +894,12 @@ export default function FloorplanPanel() {
         <div className={styles.traceBar}>
           <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
-            {framingActive ? `${activeLevel > 0 ? `L${activeLevel + 1} · ` : ''}${framingShort(activeWallType)} · ${roleShort(activeWallRole)}` : tradeIndicator}
+            {framingActive ? `${activeLevel > 0 ? `L${activeLevel + 1} · ` : ''}${wallChipLabel(activeWallType, activeWallRole, wallTypeChosen, wallRoleChosen)}` : tradeIndicator}
           </button>
           {/* "Find the rest" — reachable straight from the slim trace bar (it used
               to live only in the Build panel, which retracts while you trace, so
               you couldn't reach it mid-run). Shows once a framing wall is traced. */}
-          {framingActive && hasTrace && (
+          {framingActive && hasTrace && !onDrawnSheet && (
             <button data-tour="find-rest" className={`${styles.traceBarBtn} ${styles.traceBarBuild}`} onClick={handleSmartRefine} disabled={seedProcessing} title="Detect the matching walls across the plan">
               {seedProcessing ? 'Finding…' : '✨ Find the rest'}
             </button>
@@ -1292,6 +1339,21 @@ export default function FloorplanPanel() {
          * traced-wall count now reads off the trace bar where the tracing is.
          */}
 
+        {/* ── Not drawing yet: the way in ── */}
+        {!traceMode && !pickerOpen && drawing.status === 'ready' && !overlay.calibrationMode && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>Walls</span>
+            <span className={styles.stepText}>{userWallCount > 0 ? 'Draw more walls' : 'Draw the walls'}</span>
+            <span className={styles.stepHint}>
+              Tap one end, then the other. Run a wall into another and it frames the tee.
+            </span>
+            <div className={styles.btnRow}>
+              <button className={styles.action} onClick={drawWalls}>Draw walls →</button>
+              <button className={styles.secondary} onClick={openPicker}>Choose type</button>
+            </div>
+          </div>
+        )}
+
         {/* ── Active tracing ── */}
         {traceMode && !pickerOpen && (
           <div className={styles.step}>
@@ -1304,7 +1366,7 @@ export default function FloorplanPanel() {
               title="Change wall type"
             >
               <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
-              {framingShort(activeWallType)} · {roleShort(activeWallRole)}
+              {wallChipLabel(activeWallType, activeWallRole, wallTypeChosen, wallRoleChosen)}
             </button>
             <span className={styles.stepHint}>Level — which storey these walls stand on</span>
             <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
@@ -1342,7 +1404,7 @@ export default function FloorplanPanel() {
                       : 'Tap a wall corner to start, then tap the next corner'
                     : 'Draw a stroke along each wall — corners in the stroke become connected walls'}
                 </span>
-                {hasTrace && (
+                {hasTrace && !onDrawnSheet && (
                   <span className={styles.stepHint} style={{ color: LAYER_COLORS[activeTraceLayer] }}>
                     ✨ Traced one? Tap <strong>Find the rest</strong> and it’ll pick up the matching walls across the print.
                   </span>
@@ -1369,7 +1431,7 @@ export default function FloorplanPanel() {
                   )}
                 </div>
                 <div className={styles.btnRow}>
-                  {hasTrace && (
+                  {hasTrace && !onDrawnSheet && (
                     <button className={styles.action} onClick={handleSmartRefine} disabled={seedProcessing}>
                       {seedProcessing ? 'Finding…' : '✨ Find the rest'}
                     </button>

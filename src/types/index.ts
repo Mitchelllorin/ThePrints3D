@@ -344,7 +344,9 @@ export type { LineClassificationStats, ClassifiedLine, LineClass } from '../symb
 export interface Drawing {
   id: string
   name: string
-  source?: 'upload' | 'preset'
+  /** Where the sheet came from. 'drawn' is Draw it's blank gridded sheet —
+   *  no print on it, so nothing on it can be DETECTED. */
+  source?: 'upload' | 'preset' | 'drawn'
   presetDifficulty?: 'easy' | 'medium' | 'hard'
   type: DrawingType
   file: File

@@ -777,7 +777,6 @@ export default function FloorplanOverlay() {
     if (!drawing) return
     // Stamp the picked framing/role/material onto the wall so the build frames
     // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
-    const isMasonry = activeWallType === 'cmu'
     // ROLE COMES FROM WHERE YOU DREW IT, unless you have picked one by hand.
     // The picker defaults to exterior-bearing, so stamping it blindly labelled
     // every partition an exterior bearing wall — which then got sheathed,
@@ -786,13 +785,20 @@ export default function FloorplanOverlay() {
     const roleForWall = wallRoleChosen
       ? activeWallRole
       : inferWallRole(base, userWalls)
+    // Stud size follows the role unless it too was picked by hand, so an
+    // inferred interior wall gets 2x4 rather than the exterior 2x8.
+    const framingType = wallTypeChosen ? activeWallType : defaultWallTypeForRole(roleForWall)
+    const isMasonry = framingType === 'cmu'
     const wall: ParsedWall = {
       ...base,
-      // Stud size follows the role unless it too was picked by hand, so an
-      // inferred interior wall gets 2x4 rather than the exterior 2x8.
-      framingType: wallTypeChosen ? activeWallType : defaultWallTypeForRole(roleForWall),
+      framingType,
       wallRole: roleForWall,
-      wallType: FRAMING_TO_WALLTYPE[activeWallType] ?? base.wallType,
+      // FROM THE SIZE IT GOT, NOT THE PICKER'S. This read `activeWallType`,
+      // the picker's untouched default (2x8), even when nobody picked one — so
+      // an inferred 2x4 partition was a 2x4 to the 3D walls and the cut list
+      // (which read framingType) and a 2x8 to the materials estimate and the
+      // construction engine (which read this). One wall, two sizes.
+      wallType: FRAMING_TO_WALLTYPE[framingType] ?? base.wallType,
       exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
       level: activeLevel,
     }

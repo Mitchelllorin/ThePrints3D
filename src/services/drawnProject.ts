@@ -66,7 +66,7 @@ export interface DrawnProject {
     | 'rasterWidth' | 'rasterHeight' | 'parsedWalls' | 'parsedRooms' | 'parsedOpenings'
     | 'parsedText' | 'parsedSymbols' | 'parsedAnnotationCandidates' | 'parseProgress'
     | 'floorNumber' | 'status' | 'scaleMmPerPx' | 'scaleNotation' | 'scaleConfidence'
-    | 'uploadedAt' | 'type'>
+    | 'uploadedAt' | 'type' | 'source'>
   /** Metres, for the overlay that lays the sheet on the ground. */
   overlayScale: [number, number]
   /** The floor under it — one rectangle per box, empty when left for later. */
@@ -81,6 +81,25 @@ export function shellThicknessMm(wallTypeKey: string): number {
   const type = getWallType(wallTypeKey)
   const member = type ? getMember(type.studMemberId) : undefined
   return (member?.depthIn ?? 5.5) * MM_PER_IN
+}
+
+/**
+ * Is this Draw it's blank sheet rather than a print?
+ *
+ * It matters because the detection tools — Find the rest — read a PRINT for
+ * walls you have not traced yet. On a blank grid there is nothing to find, and
+ * offering it is a button that does nothing but look broken.
+ *
+ * New drawn sheets say so (`source: 'drawn'`). Ones started before that flag
+ * existed were saved as `source: 'preset'`, so they are told apart from the
+ * real sample plans the way they actually differ: a sample plan carries a
+ * difficulty, a drawn sheet never has one, and a drawn sheet is always at the
+ * one scale Draw it draws at.
+ */
+export function isDrawnSheet(d: { source?: string; presetDifficulty?: string; scaleMmPerPx?: number | null } | null | undefined): boolean {
+  if (!d) return false
+  if (d.source === 'drawn') return true
+  return d.source === 'preset' && d.presetDifficulty == null && d.scaleMmPerPx === DRAWN_MM_PER_PX
 }
 
 /** Feet and inches for a label, the app's one formatter, to 1/16". */
@@ -224,6 +243,7 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
       scaleConfidence: 'parsed',
       uploadedAt: Date.now(),
       type: 'floor-plan',
+      source: 'drawn',
     },
     overlayScale: [(wPx * DRAWN_MM_PER_PX) / 1000, (hPx * DRAWN_MM_PER_PX) / 1000],
     floorAreas,

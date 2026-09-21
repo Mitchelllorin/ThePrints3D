@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createDrawnProject, parseSizeMm, shellThicknessMm, DRAWN_MM_PER_PX } from './drawnProject'
+import { createDrawnProject, parseSizeMm, shellThicknessMm, DRAWN_MM_PER_PX, isDrawnSheet } from './drawnProject'
 import { modelWalls, scaleIsKnown } from './modelWalls'
 import type { Drawing } from '../types'
 
@@ -153,5 +153,22 @@ describe('sizes typed the way the trade writes them', () => {
     expect(parseSizeMm('')).toBeNull()
     expect(parseSizeMm('big')).toBeNull()
     expect(parseSizeMm('40 x 30')).toBeNull()
+  })
+})
+
+describe('isDrawnSheet — a blank grid, not a print', () => {
+  it('knows a new Draw it sheet by its flag', () => {
+    const p = createDrawnProject({ widthMm: 12000, depthMm: 9000, wallTypeKey: 'wood-2x6', floor: 'slab' })
+    expect(isDrawnSheet(p.drawing)).toBe(true)
+  })
+
+  it('still knows one drawn before the flag, saved as a preset with no difficulty', () => {
+    expect(isDrawnSheet({ source: 'preset', scaleMmPerPx: DRAWN_MM_PER_PX })).toBe(true)
+  })
+
+  it('never mistakes a real sample plan or an upload for one', () => {
+    expect(isDrawnSheet({ source: 'preset', presetDifficulty: 'easy', scaleMmPerPx: DRAWN_MM_PER_PX })).toBe(false)
+    expect(isDrawnSheet({ source: 'upload', scaleMmPerPx: DRAWN_MM_PER_PX })).toBe(false)
+    expect(isDrawnSheet(null)).toBe(false)
   })
 })

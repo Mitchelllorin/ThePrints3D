@@ -111,9 +111,12 @@ const RAIL: { id: Section; icon: ReactNode; label: string }[] = [
   // through another drawer. A thing you reach for constantly does not live two
   // levels down.
   { id: 'layers', icon: '◫', label: 'Layers' },
-  // FRAMING — the stud layout and colour-by-member, named for what they do.
-  // They were rows in Layers that nobody could find; see FramingPanel.
-  { id: 'framing', icon: <StudsIcon />, label: 'Framing' },
+  // STUDS — the stud layout and colour-by-member: ways of LOOKING at the
+  // framing. They were rows in Layers nobody could find; see FramingPanel.
+  // Not labelled "Framing": the Build panel already has a Framing tab, the one
+  // you draw walls from, and two different things with one name is how a
+  // person ends up in the wrong one.
+  { id: 'framing', icon: <StudsIcon />, label: 'Studs' },
 ]
 
 export default function RailCascade() {
