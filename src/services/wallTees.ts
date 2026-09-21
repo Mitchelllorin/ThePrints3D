@@ -23,6 +23,20 @@ export function teesForWalls(walls: readonly ParsedWall[], tolPx = 6): number[][
     const dy = wall.y2 - wall.y1
     const len2 = dx * dx + dy * dy
     if (len2 < 1) return []
+    /**
+     * LANDING ON THE WALL MEANS LANDING ANYWHERE IN ITS THICKNESS.
+     *
+     * This was a flat 6px from the centreline, which is 2 3/8" on a drawn
+     * sheet. A 2x6 is 5 1/2" thick, so its inside face is 2 3/4" off the
+     * centreline — just past the line. Run a partition up to the inside face
+     * of a 2x6 exterior, which is exactly where you tap to finish it, and no
+     * tee was framed: no pack in the exterior wall, nothing to nail the
+     * partition to. The centreline and mid-thickness worked; the face did not.
+     *
+     * So the reach is the wall's own half-thickness, plus a little for a tap
+     * that stops just short of the face. A thin wall keeps the old 6px floor.
+     */
+    const tol = Math.max(tolPx, (wall.thickness ?? 0) / 2 + 2)
     const out: number[] = []
     for (const other of walls) {
       if (other === wall) continue
@@ -33,7 +47,7 @@ export function teesForWalls(walls: readonly ParsedWall[], tolPx = 6): number[][
         if (t <= 0.02 || t >= 0.98) continue     // that end is at a corner
         const px = wall.x1 + t * dx
         const py = wall.y1 + t * dy
-        if (Math.hypot(ex - px, ey - py) > tolPx) continue
+        if (Math.hypot(ex - px, ey - py) > tol) continue
         if (!out.some((u) => Math.abs(u - t) < 0.01)) out.push(t)
       }
     }
