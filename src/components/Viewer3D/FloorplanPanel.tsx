@@ -11,7 +11,7 @@ import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore, defaultWallTypeForRole } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
-import { roughOpening } from '../../services/roughOpening'
+import { roughOpening, tubAlcoveM } from '../../services/roughOpening'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import { isDrawnSheet } from '../../services/drawnProject'
 import { planViewCamera } from '../../services/builtScene'
@@ -2019,6 +2019,20 @@ export default function FloorplanPanel() {
                 <span className={styles.propLabel}>R.O.</span>
                 <span className={styles.propVal} style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {fmt(ro.widthM)} × {fmt(ro.heightM)}
+                </span>
+              </div>
+            )
+          })()}
+          {/* The tub's rough opening: the alcove between its end walls, the
+              tub plus an inch, the way a panel layout calls it out. */}
+          {selectedObject.type === 'bathtub' && (() => {
+            const item = getCatalogItem('bathtub')
+            const m = tubAlcoveM((item?.defaultW ?? 1.524) * selectedObject.scaleX)
+            return (
+              <div className={styles.propRow} title="The framed length between the tub's end walls">
+                <span className={styles.propLabel}>Alcove</span>
+                <span className={styles.propVal} style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {formatMeasureMm(m * 1000, activeUnit, lengthFormat === 'decimal' ? 'decimal' : 'ft-in-frac')}
                 </span>
               </div>
             )

@@ -12,7 +12,10 @@
  * the walls the model stands up, whether or not you are looking at them.
  */
 import type { Drawing, PlacedObject, ParsedWall } from '../types'
-import { roughOpening } from './roughOpening'
+import { roughOpening, tubAlcoveM } from './roughOpening'
+
+/** One stud's face width: a 2-stud pack is centred this far outside the alcove face. */
+const ONE_STUD_M = 1.5 * 0.0254
 import type { WallFramingOpts, WallOpening } from './framingGeometry'
 import { modelWalls } from './modelWalls'
 import { teesForWalls } from './wallTees'
@@ -218,6 +221,37 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
     }
   }
 
+  // ── Tubs: an L at each end of the alcove, on the wall behind the tub ──
+  // Read off a real panel layout: every tub alcove is framed to the tub plus an
+  // inch, and where each end wall meets the back wall there is a pack — two
+  // L's, so the flange has something to fasten to. The framer never looked at a
+  // placed tub at all. Worked out live, like the openings, so it follows the tub
+  // when you move it.
+  //   - A 2-stud pack centred one stud outside each alcove face, so its inner
+  //     face IS the face the tub's end sits against.
+  //   - Not where an end wall is already drawn: that wall lands as a tee, and a
+  //     tee already is the L.
+  //   - Not where the alcove runs into a corner: the corner is the L.
+  const tubPacks: Array<Array<{ t: number; studs: number }>> = walls.map(() => [])
+  for (const o of placedObjects) {
+    if (o.type !== 'bathtub') continue
+    const item = getCatalogItem(o.type)
+    const lenM = (item?.defaultW ?? 1.524) * o.scaleX
+    const depthM = (item?.defaultD ?? 0.762) * o.scaleZ
+    const { best, t } = nearestWall(o.x, o.z, depthM / 2, 6 * mPerPx, o.level ?? 0)
+    if (best < 0) continue
+    const seg = wsegs[best]
+    const wallLenM = Math.hypot(seg.dx, seg.dz)
+    if (wallLenM < 0.5) continue
+    const reach = tubAlcoveM(lenM) / 2 + ONE_STUD_M
+    for (const sign of [-1, 1]) {
+      const ft = t + (sign * reach) / wallLenM
+      if (ft <= 0.01 || ft >= 0.99) continue
+      if (tees[best].some((u) => Math.abs(u - ft) * wallLenM < 0.12)) continue
+      tubPacks[best].push({ t: ft, studs: 2 })
+    }
+  }
+
   const spacingM = input.studSpacingIn * 0.0254
   return userWalls.map(({ wall, scaleMmPerPx }, i) => {
     const thicknessM = renderWallThicknessM(wall, scaleMmPerPx)
@@ -278,7 +312,10 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
         openings: wallOpenings,
         capLap: { start: startCorner ? capMode : undefined, end: endCorner ? capMode : undefined },
         tees: tees[i].map((t) => startOff + t * rawLen),
-        packs: (wall.studPacks ?? []).map((p) => ({ atM: startOff + p.atFrac * rawLen, studs: p.studs })),
+        packs: [
+          ...(wall.studPacks ?? []).map((p) => ({ atM: startOff + p.atFrac * rawLen, studs: p.studs })),
+          ...tubPacks[i].map((p) => ({ atM: startOff + p.t * rawLen, studs: p.studs })),
+        ],
         endTrim: endTrim.start || endTrim.end ? endTrim : undefined,
       },
     }

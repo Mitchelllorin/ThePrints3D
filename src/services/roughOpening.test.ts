@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { roughOpening, roughOpeningRule } from './roughOpening'
+import { roughOpening, roughOpeningRule, tubAlcoveM } from './roughOpening'
 
 const IN = 0.0254
 const inches = (m: number) => Math.round((m / IN) * 1000) / 1000
@@ -51,5 +51,11 @@ describe('windows', () => {
     const ro = roughOpening('window', 'Casement', 36 * IN, 48 * IN)
     expect(inches(ro.widthM)).toBe(36.5)
     expect(inches(ro.heightM)).toBe(48.5)
+  })
+})
+
+describe('a tub alcove is the tub plus an inch, as the panel layout calls it out', () => {
+  it('frames a 4-11-7/8 tub at 5-0-7/8', () => {
+    expect(inches(tubAlcoveM((4 * 12 + 11 + 7 / 8) * IN))).toBe(60.875)
   })
 })

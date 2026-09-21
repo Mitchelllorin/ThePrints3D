@@ -61,3 +61,20 @@ export function roughOpening(
       return { rule, widthM: widthM + 2 * IN, heightM: heightM + 2.5 * IN }
   }
 }
+
+/**
+ * THE TUB ALCOVE — a tub's rough opening.
+ *
+ * Read off a real panel layout (Giusti Wall Tech, Castle by Telus L3), where
+ * every alcove is called out the same way: "Tub 5' 0-7/8" (4' 11-7/8" + 3/8"
+ * + 5/8")". The alcove between the end walls is the tub plus an inch — 3/8"
+ * clearance and 5/8" for the board — and at each end, where the end wall meets
+ * the back wall, the layout shows a pack: two L's, so the flange has something
+ * to fasten to.
+ */
+export const TUB_ALCOVE_ALLOWANCE_M = 1 * IN
+
+/** The framed length between a tub's end walls, from the tub's own length. */
+export function tubAlcoveM(tubLengthM: number): number {
+  return tubLengthM + TUB_ALCOVE_ALLOWANCE_M
+}

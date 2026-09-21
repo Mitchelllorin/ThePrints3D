@@ -37,7 +37,10 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
   { type: 'dining-table',   label: 'Dining Table',    short: 'Table',    icon: '🍽️', defaultW: 1.6,  defaultD: 0.9,  defaultH: 0.75, color: '#b45309' },
   { type: 'kitchen-counter',label: 'Kitchen Counter', short: 'Counter',  icon: '🍳', defaultW: 2.4,  defaultD: 0.6,  defaultH: 0.9,  color: '#78716c' },
   { type: 'toilet',         label: 'Toilet',          short: 'Toilet',   icon: '🚽', defaultW: 0.4,  defaultD: 0.7,  defaultH: 0.8,  color: '#e2e8f0' },
-  { type: 'bathtub',        label: 'Bathtub',         short: 'Bath',     icon: '🛁', defaultW: 1.7,  defaultD: 0.75, defaultH: 0.6,  color: '#38bdf8' },
+  // A 60 x 30 alcove tub, the one every bathroom on a panel layout is framed
+  // for. It was 1.7 x 0.75 m — 5'-7" long, which is not an alcove tub and would
+  // have put the alcove L's seven inches past where the end walls go.
+  { type: 'bathtub',        label: 'Bathtub',         short: 'Bath',     icon: '🛁', defaultW: 1.524, defaultD: 0.762, defaultH: 0.6,  color: '#38bdf8' },
   // ── More furniture ──
   { type: 'armchair',       label: 'Armchair',        short: 'Armchair', icon: '🛋️', defaultW: 0.85, defaultD: 0.85, defaultH: 0.85, color: '#7c3aed' },
   { type: 'coffee-table',   label: 'Coffee Table',    short: 'Coffee',   icon: '🪵', defaultW: 1.1,  defaultD: 0.6,  defaultH: 0.4,  color: '#92400e' },

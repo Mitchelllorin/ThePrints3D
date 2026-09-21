@@ -25,6 +25,7 @@
  */
 import type { Drawing, ParsedWall, TracedLine, WorkspaceWizardInputs } from '../types'
 import { getWallType, getMember } from '../data/members'
+import { sectionBearingPoints, studsUnderBearing, withBearingPacks } from './bearingPacks'
 import { formatFeetInches, parseFeetInches } from './unitConverter'
 import {
   placeBoxes, footprintOutline, insetOutline, outlineBounds, translateOutline,
@@ -190,6 +191,16 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
   const outlinePx = toSheet(raw)
   const centreline = insetOutline(outlinePx, tPx / 2)
 
+  // THE PACKS THE SECTIONS ASK FOR. Each section leaves its join with the main
+  // house open, so a beam has to carry across that gap and comes down at both
+  // ends — see services/bearingPacks. Put in now, with the walls, so they are
+  // there when you stand them; editable in the wall sheet like any other pack.
+  const toSheetPt = (q: Point) => ({ x: px(q.x) + px(MARGIN_MM - bounds.x1), y: px(q.y) + px(MARGIN_MM - bounds.y1) })
+  const bearing = sectionBearingPoints(rects).map((b) => ({
+    ...toSheetPt(b), studs: studsUnderBearing(b.spanMm), along: b.along,
+  }))
+  const walls = withBearingPacks(shellWalls(spec, centreline, tPx), bearing, tPx * 0.75 + 1)
+
   const svg = sheetSvg(spec, wPx, hPx, outlinePx, tPx, sizeMm)
   let file: File
   try {
@@ -228,7 +239,7 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
       rasterUrl: url,
       rasterWidth: wPx,
       rasterHeight: hPx,
-      parsedWalls: shellWalls(spec, centreline, tPx),
+      parsedWalls: walls,
       parsedRooms: [],
       parsedOpenings: [],
       parsedText: [],

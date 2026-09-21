@@ -113,3 +113,37 @@ describe('nothing to plan', () => {
     expect(planWalls(input([]))).toEqual([])
   })
 })
+
+describe('a tub gets its two L\'s, the way the panel layout frames an alcove', () => {
+  // An 8 m wall along world z = 0 (pixel y = 500), from x = -4 to +4.
+  const back = w(100, 500, 900, 500)
+  // A 60 x 30 tub, its back against that wall's face, centred on the wall.
+  const tub = (): PlacedObject => ({
+    id: 't1', type: 'bathtub', x: 0, z: 0.762 / 2 + 0.0445, rotationY: 0,
+    scaleX: 1, scaleZ: 1, scaleY: 1, label: 'Bathtub', level: 0,
+  } as PlacedObject)
+  // The alcove is the tub plus an inch; each pack's inner face is the alcove face.
+  const half = (1.524 + 0.0254) / 2 + 0.0381
+
+  it('frames a pack at each end of the alcove on the wall behind it', () => {
+    const packs = planWalls(input([back], [tub()]))[0].opts.packs ?? []
+    expect(packs).toHaveLength(2)
+    const at = packs.map((p) => p.atM).sort((a, b) => a - b)
+    expect(at[0]).toBeCloseTo(4 - half, 3)
+    expect(at[1]).toBeCloseTo(4 + half, 3)
+    expect(packs.every((p) => p.studs === 2)).toBe(true)
+  })
+
+  it('adds nothing where the end walls are drawn — each lands as a tee, and a tee is the L', () => {
+    const endX = (1.524 + 0.0254) / 2 + 0.0445           // end wall centreline, metres off centre
+    const px = (m: number) => 500 + m * 100
+    const walls = [back, w(px(-endX), 500, px(-endX), 580), w(px(endX), 500, px(endX), 580)]
+    const plan = planWalls(input(walls, [tub()]))[0]
+    expect(plan.opts.tees).toHaveLength(2)
+    expect(plan.opts.packs ?? []).toHaveLength(0)
+  })
+
+  it('leaves a wall with no tub alone', () => {
+    expect(planWalls(input([back]))[0].opts.packs ?? []).toHaveLength(0)
+  })
+})
