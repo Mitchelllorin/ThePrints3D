@@ -107,7 +107,6 @@
   cursor: pointer;
 }
 .go:disabled { opacity: 0.55; cursor: default; }
-.after { margin: 0; font-size: 13px; color: var(--bp-text-dim, #97a4b6); }
 
 @media (prefers-reduced-motion: no-preference) {
   .sheet { animation: rise 180ms ease-out; }        /* transform only */

@@ -189,7 +189,6 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
         <button className={styles.go} onClick={start}>
           Start drawing
         </button>
-        <p className={styles.after}>Walls, doors and the roof come next — one step at a time.</p>
         </div>
       </div>
     </>
