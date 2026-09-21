@@ -174,3 +174,59 @@
   border-color: var(--bp-accent, #3d9ae8);
   border-width: 2px;
 }
+
+/* The unit toggle — same shape as the section-side chips, and it writes the
+   Settings unit, so there is one unit in the app and not a second one here. */
+.unit {
+  flex: 1;
+  min-height: 48px;
+  padding: 0 6px;
+  background: none;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  color: var(--bp-text, #e8eef5);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.unit.chosen {
+  background: rgba(61, 154, 232, 0.16);
+  border: 2px solid var(--bp-accent, #3d9ae8);
+}
+
+/* ── The three groups, and how each orientation arranges them ─────────────
+   Portrait: title and units, then the plan, then everything else — one
+   column, scrolling as one sheet, exactly as before.
+
+   LANDSCAPE IS NOT PORTRAIT SQUASHED. Held sideways, a phone is ~360px tall.
+   The title and the unit toggle took the top 200 of that, the 300px plan ran
+   off the bottom, and every grip — the only things on this sheet you are
+   meant to drag — was below the fold. You had to scroll the sheet to reach
+   the plan you were told to pull. So the plan stands full height on the left
+   and stays put, and the controls stack on the right and scroll on their own. */
+.top, .rest { display: grid; gap: 8px; min-width: 0; }
+.plan { height: 300px; min-width: 0; }
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .sheet {
+    width: min(780px, 100vw);
+    height: min(100dvh, 520px);
+    max-height: none;
+    overflow: hidden;                   /* the plan never scrolls away */
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas: "plan top" "plan rest";
+    column-gap: 16px;
+    padding-top: 12px;
+  }
+  .top { grid-area: top; }
+  .plan { grid-area: plan; height: 100%; }
+  .rest {
+    grid-area: rest;
+    min-height: 0;
+    overflow-y: auto;                   /* the controls scroll, the plan does not */
+    overscroll-behavior: contain;
+    align-content: start;
+  }
+  .lead { display: none; }              /* the plan says it: grips, numbers */
+}

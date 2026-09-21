@@ -1,33 +1,42 @@
 /**
- * DRAW IT — type the building, get the building.
+ * DRAW IT — pull the building to size.
  *
- * The first question a job asks is how big it is, and until now the only way to
- * answer it here was to photograph a drawing and hope the app read the scale
- * off it. This asks instead. Four answers, three of them already filled in:
- * how wide, how deep, what the shell is framed from, and what goes underneath.
+ * The first question a job asks is how big it is. This used to answer it with
+ * four form fields and a little preview underneath — a sheet called Draw it
+ * where nothing was drawn. Now the plan is the input: drag an edge and the
+ * building follows your finger, with a dimension on every size reading live in
+ * the unit chosen in Settings. Tap a number to type it exact. See
+ * FootprintEditor for the gesture and services/footprintEdit for the arithmetic.
  *
  * Sizes are OUTSIDE FACE TO OUTSIDE FACE, the way a tape reads across a
- * building and the way a slab is quoted. Typed the way the trade writes them —
- * 40, 40', 40' 6", 40-6, 12.2m — because a field that only takes one of those
- * is a field that gets typed into wrong.
+ * building and the way a slab is quoted.
  *
  * A transient sheet the user opened, so it is allowed to be solid and to cross
  * the middle of the screen: it goes away in one tap and the model is behind it.
  */
 import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
+import { useConfigStore } from '../../store/useConfigStore'
 import { WALL_TYPES } from '../../data/members'
-import { parseSizeMm, ftIn, type FloorChoice } from '../../services/drawnProject'
-import type { AttachSide, FootprintBox } from '../../services/footprint'
-import FootprintPreview from './FootprintPreview'
+import { type FloorChoice } from '../../services/drawnProject'
+import { placeBoxes, footprintAreaMm2, type AttachSide, type FootprintBox } from '../../services/footprint'
+import { normalizeBoxes } from '../../services/footprintEdit'
+import { formatMeasureMm } from '../../services/unitConverter'
+import FootprintEditor from './FootprintEditor'
 import styles from './DrawItSheet.module.css'
 
-/** What a first footprint is, more often than not: a 40 x 30 single storey. */
-const DEFAULT_WIDTH = "40'"
-const DEFAULT_DEPTH = "30'"
-
-/** A section, as typed. Kept as text so a half-typed size does not wipe itself. */
-interface WingDraft { id: number; width: string; depth: string; side: AttachSide; offset: string }
+const FT = 304.8
+/**
+ * What a first footprint is, more often than not: a 40 x 30 single storey — or
+ * its round-number cousin in metric, so nobody starts at 12.192 m.
+ */
+const firstBox = (metric: boolean): FootprintBox =>
+  metric ? { widthMm: 12000, depthMm: 9000 } : { widthMm: 40 * FT, depthMm: 30 * FT }
+/** A new section: 12 x 14 off the back, or 3.6 x 4.2 m. Drag it where it goes. */
+const newSection = (metric: boolean): FootprintBox => ({
+  ...(metric ? { widthMm: 3600, depthMm: 4200 } : { widthMm: 12 * FT, depthMm: 14 * FT }),
+  attach: { side: 'bottom', offsetMm: 0 },
+})
 
 /** Where a section can go, in plan words rather than screen words. */
 const SIDES: Array<{ id: AttachSide; label: string }> = [
@@ -45,45 +54,44 @@ const FLOORS: Array<{ id: FloorChoice; label: string; note: string }> = [
 
 export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   const startDrawnProject = useAppStore((s) => s.startDrawnProject)
-  const [width, setWidth] = useState(DEFAULT_WIDTH)
-  const [depth, setDepth] = useState(DEFAULT_DEPTH)
-  const [wallTypeKey, setWallTypeKey] = useState('wood-2x6')
-  const [floor, setFloor] = useState<FloorChoice>('slab')
+  const activeUnit = useConfigStore((s) => s.activeUnit)
+  const lengthFormat = useConfigStore((s) => s.lengthFormat)
+  const setConfig = useConfigStore((s) => s.set)
+  const metric = lengthFormat === 'decimal' && (activeUnit === 'mm' || activeUnit === 'cm' || activeUnit === 'm')
+  const fmt = (mm: number) => formatMeasureMm(mm, activeUnit, lengthFormat)
+  // A finger lands on clean numbers: 6" in feet and inches, 100 mm in metric.
+  // Typing a number on the dimension is never snapped.
+  const snapMm = metric ? 100 : 6 * 25.4
+
   // MOST HOUSES ARE NOT ONE BOX. An L off the back, a garage on the side, a
   // bump-out for the dining room — each of those is a section hung off the main
-  // one, and the walls follow the outline they make together.
-  const [wings, setWings] = useState<WingDraft[]>([])
+  // one, and the walls follow the outline they make together. The first box is
+  // the main one; the rest carry which side they hang off and how far along.
+  const [boxes, setBoxes] = useState<FootprintBox[]>(() => [firstBox(metric)])
+  const [wallTypeKey, setWallTypeKey] = useState('wood-2x6')
+  const [floor, setFloor] = useState<FloorChoice>('slab')
 
-  const widthMm = parseSizeMm(width)
-  const depthMm = parseSizeMm(depth)
-  // A building smaller than a shed or bigger than a city block is a typo.
-  const sane = (mm: number | null) => mm !== null && mm >= 1000 && mm <= 120000
-  const mainOk = sane(widthMm) && sane(depthMm)
+  const edit = (next: FootprintBox[]) => setBoxes(normalizeBoxes(next))
+  const addWing = () => edit([...boxes, newSection(metric)])
+  const setSide = (i: number, side: AttachSide) =>
+    edit(boxes.map((b, k) => (k === i ? { ...b, attach: { side, offsetMm: 0 } } : b)))
+  const dropWing = (i: number) => edit(boxes.filter((_, k) => k !== i))
 
-  // Only the sections that measure to something real are drawn or built; a
-  // half-typed one waits rather than throwing the shape away.
-  const boxes: FootprintBox[] = mainOk ? [
-    { widthMm: widthMm!, depthMm: depthMm! },
-    ...wings.flatMap((w) => {
-      const ww = parseSizeMm(w.width), wd = parseSizeMm(w.depth)
-      if (!sane(ww) || !sane(wd)) return []
-      const off = w.offset.trim() === '' ? 0 : parseSizeMm(w.offset.replace(/^-/, ''))
-      if (off === null) return []
-      return [{ widthMm: ww!, depthMm: wd!, attach: { side: w.side, offsetMm: w.offset.trim().startsWith('-') ? -off : off } }]
-    }),
-  ] : []
-  const ready = mainOk
+  // Metric sets the Settings unit to metres; feet-and-inches keeps any
+  // fractional format already chosen rather than rounding it away.
+  const useMetric = () => setConfig({ lengthFormat: 'decimal', activeUnit: metric ? activeUnit : 'm' })
+  const useImperial = () => { if (lengthFormat === 'decimal') setConfig({ lengthFormat: 'ft-in' }) }
 
-  const addWing = () => setWings((ws) => [...ws, { id: Date.now(), width: "12'", depth: "14'", side: 'bottom', offset: '0' }])
-  const setWing = (id: number, patch: Partial<WingDraft>) =>
-    setWings((ws) => ws.map((w) => (w.id === id ? { ...w, ...patch } : w)))
-  const dropWing = (id: number) => setWings((ws) => ws.filter((w) => w.id !== id))
+  const areaMm2 = footprintAreaMm2(placeBoxes(boxes))
+  const area = metric
+    ? `${(areaMm2 / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })} m²`
+    : `${Math.round(areaMm2 / (FT * FT)).toLocaleString()} ft²`
 
   const start = () => {
-    if (!ready) return
+    const [main, ...wings] = boxes
     startDrawnProject({
-      widthMm: widthMm!, depthMm: depthMm!, wallTypeKey, floor, name: 'New project',
-      wings: boxes.slice(1),
+      widthMm: main.widthMm, depthMm: main.depthMm, wallTypeKey, floor, name: 'New project',
+      wings,
     })
     onClose()
   }
@@ -92,85 +100,55 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
     <>
       {/* The scrim carries no text and takes the tap that dismisses this. */}
       <div className={styles.scrim} onClick={onClose} aria-hidden />
-      <div className={styles.sheet} role="dialog" aria-label="Draw it — start from typed sizes">
+      <div className={styles.sheet} role="dialog" aria-label="Draw it — drag the footprint to size">
+        <div className={styles.top}>
         <div className={styles.head}>
           <h2 className={styles.title}>Draw it</h2>
           <button className={styles.close} onClick={onClose} aria-label="Close">✕</button>
         </div>
-        <p className={styles.lead}>Outside face to outside face. Everything here is editable after.</p>
+        <p className={styles.lead}>Drag an edge to size it. Tap a number to type it exact.</p>
 
-        <div className={styles.sizes}>
-          <label className={styles.field}>
-            <span className={styles.label}>Width</span>
-            <input
-              className={styles.input}
-              value={width}
-              onChange={(e) => setWidth(e.target.value)}
-              inputMode="text"
-              autoComplete="off"
-              aria-label="Building width"
-            />
-          </label>
-          <label className={styles.field}>
-            <span className={styles.label}>Depth</span>
-            <input
-              className={styles.input}
-              value={depth}
-              onChange={(e) => setDepth(e.target.value)}
-              inputMode="text"
-              autoComplete="off"
-              aria-label="Building depth"
-            />
-          </label>
+        {/* Units live with the numbers they change. Same setting as Settings. */}
+        <div className={styles.row} role="group" aria-label="Units">
+          <button className={`${styles.unit} ${!metric ? styles.chosen : ''}`} onClick={useImperial} aria-pressed={!metric}>
+            {!metric ? '✓ ' : ''}ft-in
+          </button>
+          <button className={`${styles.unit} ${metric ? styles.chosen : ''}`} onClick={useMetric} aria-pressed={metric}>
+            {metric ? '✓ ' : ''}Metric
+          </button>
         </div>
-        {/* Read the typed size back in feet and inches, so a mistyped unit shows
-            up here rather than as a building the wrong size. */}
-        <p className={ready ? styles.echo : styles.echoBad}>
-          {ready
-            ? `${ftIn(widthMm!)} × ${ftIn(depthMm!)}`
-            : 'Type a size: 40, 40′, 40′ 6″, or 12.2m'}
-        </p>
+        </div>
 
-        {/* The shape, drawn, while it is typed. */}
-        {boxes.length > 0 && (
-          <div className={styles.preview}>
-            <FootprintPreview boxes={boxes} />
-          </div>
-        )}
+        {/* The plan. Its own box, so landscape can stand it full height on the left. */}
+        <div className={styles.plan}>
+          <FootprintEditor boxes={boxes} onChange={edit} format={fmt} snapMm={snapMm} metric={metric} />
+        </div>
+
+        <div className={styles.rest}>
+        <p className={styles.echo}>{area} · outside face to outside face</p>
 
         <span className={styles.label}>Sections</span>
-        {wings.map((w, i) => (
-          <div key={w.id} className={styles.wing}>
-            <div className={styles.wingHead}>
-              <span className={styles.wingName}>Section {i + 2}</span>
-              <button className={styles.wingDrop} onClick={() => dropWing(w.id)} aria-label={`Remove section ${i + 2}`}>Remove</button>
+        {boxes.slice(1).map((b, k) => {
+          const i = k + 1
+          return (
+            <div key={i} className={styles.wing}>
+              <div className={styles.wingHead}>
+                <span className={styles.wingName}>Section {i + 1} — hangs off the</span>
+                <button className={styles.wingDrop} onClick={() => dropWing(i)} aria-label={`Remove section ${i + 1}`}>Remove</button>
+              </div>
+              <div className={styles.row}>
+                {SIDES.map((sd) => (
+                  <button
+                    key={sd.id}
+                    className={`${styles.side} ${b.attach?.side === sd.id ? styles.chosen : ''}`}
+                    onClick={() => setSide(i, sd.id)}
+                    aria-pressed={b.attach?.side === sd.id}
+                  >{b.attach?.side === sd.id ? '✓ ' : ''}{sd.label}</button>
+                ))}
+              </div>
             </div>
-            <div className={styles.sizes}>
-              <label className={styles.field}>
-                <span className={styles.label}>Width</span>
-                <input className={styles.input} value={w.width} onChange={(e) => setWing(w.id, { width: e.target.value })} aria-label={`Section ${i + 2} width`} />
-              </label>
-              <label className={styles.field}>
-                <span className={styles.label}>Depth</span>
-                <input className={styles.input} value={w.depth} onChange={(e) => setWing(w.id, { depth: e.target.value })} aria-label={`Section ${i + 2} depth`} />
-              </label>
-            </div>
-            <div className={styles.row}>
-              {SIDES.map((sd) => (
-                <button
-                  key={sd.id}
-                  className={`${styles.side} ${w.side === sd.id ? styles.chosen : ''}`}
-                  onClick={() => setWing(w.id, { side: sd.id })}
-                  aria-pressed={w.side === sd.id}
-                >{w.side === sd.id ? '✓ ' : ''}{sd.label}</button>
-              ))}
-            </div>
-            <label className={styles.field}>
-              <span className={styles.label}>Along that side, from the corner</span>
-              <input className={styles.input} value={w.offset} onChange={(e) => setWing(w.id, { offset: e.target.value })} aria-label={`Section ${i + 2} offset`} />
-            </label>
-          </div>
-        ))}
+          )
+        })}
         <button className={styles.addWing} onClick={addWing}>+ Add a section</button>
 
         <span className={styles.label}>Shell</span>
@@ -201,10 +179,11 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
           ))}
         </div>
 
-        <button className={styles.go} onClick={start} disabled={!ready}>
+        <button className={styles.go} onClick={start}>
           Start drawing
         </button>
         <p className={styles.after}>Walls, doors and the roof come next — one step at a time.</p>
+        </div>
       </div>
     </>
   )

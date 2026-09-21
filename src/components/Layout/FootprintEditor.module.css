@@ -1,0 +1,107 @@
+/* The plan you pull to size. Sits on the solid Draw it sheet, so it needs no
+   glass: the sheet is transient and already opaque.
+
+   NO Z-INDEX IN HERE. The grips, the number chips and the edit field stack in
+   DOM order — svg, then grips, then chips, then the field — which is exactly
+   the order they need to paint in, and it keeps this component out of the
+   app's four stacking layers entirely. */
+
+.wrap {
+  position: relative;
+  height: 100%;                   /* the box it sits in decides — see DrawItSheet .plan */
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--bp-panel-2, #1e2833);
+  border: 1px solid var(--bp-line, #2c3a4a);
+  /* Bare paper still scrolls the sheet; the handles below opt out. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.svg { position: absolute; inset: 0; display: block; }
+
+/* A section's body. Dragging it slides the section along its wall. */
+.body { cursor: move; touch-action: none; }
+
+/* ── Grips: 48px to hit, 20px to see ───────────────────────────────────── */
+.grip {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;       /* centred on the edge it pulls */
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  cursor: grab;
+  touch-action: none;             /* a drag here is a drag, never a scroll */
+}
+.grip::before {
+  content: '';
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bp-accent, #3d9ae8);
+  border: 3px solid #e8eef5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+/* The corner does two things at once, so it is a different SHAPE, not only a
+   different place: a square where the edges have dots. */
+.gripCorner::before { border-radius: 5px; }
+.gripOn { cursor: grabbing; }
+.gripOn::before { transform: scale(1.25); }     /* transform only */
+.grip:focus-visible::before { outline: 2px solid #e8eef5; outline-offset: 3px; }
+
+/* ── The number on the dimension ───────────────────────────────────────── */
+.chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-height: 30px;
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  background: #0b1220;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 8px;
+  color: var(--bp-text, #e8eef5);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* 30px to see, 48px to hit: the hit area grows past the pill without making
+   it any bigger on the plan. */
+.chip::after { content: ''; position: absolute; inset: -9px -4px; }
+/* A vertical dimension reads up the page, the way it does on a print. */
+.chipV { transform: translate(-50%, -50%) rotate(-90deg); }
+/* Being pulled: a heavier border AND the accent, never colour alone. */
+.chipOn {
+  border: 2px solid var(--bp-accent, #3d9ae8);
+  color: #8ec5f5;
+}
+
+/* Typing it exact. Upright even on a vertical dimension — nobody types sideways. */
+.edit {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 128px;
+  min-height: 48px;
+  padding: 0 10px;
+  background: #0b1220;
+  border: 2px solid var(--bp-accent, #3d9ae8);
+  border-radius: 10px;
+  color: var(--bp-text, #e8eef5);
+  font-size: 16px;                /* 16 keeps a mobile browser from zooming */
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.edit:focus { outline: none; }
+.editBad { border-color: var(--bp-warn, #e0a03a); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .grip::before { transition: transform 120ms ease-out; }
+}
