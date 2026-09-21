@@ -11,10 +11,12 @@
  *  • ASK     — opens the real panel-less Ask overlay.
  */
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useAppStore } from '../../store/useAppStore'
 import { trayItems } from '../../data/objectCatalog'
 import LayersPanel from './LayersPanel'
+import FramingPanel from './FramingPanel'
 import { planViewCamera } from '../../services/builtScene'
 import { requirePro } from '../Pro/usePro'
 import styles from './RailCascade.module.css'
@@ -32,6 +34,20 @@ function BinIcon() {
       <path d="M9.5 7V5.2A1.2 1.2 0 0 1 10.7 4h2.6a1.2 1.2 0 0 1 1.2 1.2V7" />
       <path d="M6.4 7l.9 12.1A1.9 1.9 0 0 0 9.2 21h5.6a1.9 1.9 0 0 0 1.9-1.9L17.6 7" />
       <path d="M10.4 11v6M13.6 11v6" />
+    </svg>
+  )
+}
+
+/** Framing: a top plate on three studs, drawn to match the rail's thin marks. */
+function StudsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    >
+      <path d="M3.5 5h17" />
+      <path d="M3.5 19h17" />
+      <path d="M6 5v14M12 5v14M18 5v14" />
     </svg>
   )
 }
@@ -81,9 +97,9 @@ function EditIcon({ done }: { done: boolean }) {
   )
 }
 
-type Section = 'build' | 'ask' | 'settings' | 'place' | 'layers'
+type Section = 'build' | 'ask' | 'settings' | 'place' | 'layers' | 'framing'
 
-const RAIL: { id: Section; icon: string; label: string }[] = [
+const RAIL: { id: Section; icon: ReactNode; label: string }[] = [
   { id: 'build', icon: '✏', label: 'Build' },
   { id: 'ask', icon: '💬', label: 'Ask' },
   { id: 'settings', icon: '⚙', label: 'Settings' },
@@ -95,6 +111,9 @@ const RAIL: { id: Section; icon: string; label: string }[] = [
   // through another drawer. A thing you reach for constantly does not live two
   // levels down.
   { id: 'layers', icon: '◫', label: 'Layers' },
+  // FRAMING — the stud layout and colour-by-member, named for what they do.
+  // They were rows in Layers that nobody could find; see FramingPanel.
+  { id: 'framing', icon: <StudsIcon />, label: 'Framing' },
 ]
 
 export default function RailCascade() {
@@ -143,8 +162,9 @@ export default function RailCascade() {
   // Place is a cascade column (not a store drawer), so its open state is local.
   const [placeOpen, setPlaceOpen] = useState(false)
   const [layersOpen, setLayersOpen] = useState(false)
+  const [framingOpen, setFramingOpen] = useState(false)
   const setRailPanelOpen = useFloorplanLocalStore((s) => s.setRailPanelOpen)
-  useEffect(() => { setRailPanelOpen(layersOpen || placeOpen) }, [layersOpen, placeOpen, setRailPanelOpen])
+  useEffect(() => { setRailPanelOpen(layersOpen || placeOpen || framingOpen) }, [layersOpen, placeOpen, framingOpen, setRailPanelOpen])
   // First tap arms Clear, second does it. See the button for why.
   const [clearArmed, setClearArmed] = useState(false)
 
@@ -154,6 +174,7 @@ export default function RailCascade() {
     settings: settingsOpen,
     place: placeOpen,
     layers: layersOpen,
+    framing: framingOpen,
   }
 
   const closeDrawers = () => {
@@ -180,18 +201,22 @@ export default function RailCascade() {
       // Tapping the open section closes it.
       if (id === 'place') { setPlaceOpen(false); setPlaceObjectType(null) }
       else if (id === 'layers') setLayersOpen(false)
+      else if (id === 'framing') setFramingOpen(false)
       else setDrawerOpen(id, false)
       return
     }
     // Open exclusively — one surface at a time, so the workspace stays clear.
     if (id === 'place') {
-      closeDrawers(); setLayersOpen(false)
+      closeDrawers(); setLayersOpen(false); setFramingOpen(false)
       setPlaceOpen(true)
     } else if (id === 'layers') {
-      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null)
+      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null); setFramingOpen(false)
       setLayersOpen(true)
+    } else if (id === 'framing') {
+      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null); setLayersOpen(false)
+      setFramingOpen(true)
     } else {
-      setPlaceOpen(false); setLayersOpen(false)
+      setPlaceOpen(false); setLayersOpen(false); setFramingOpen(false)
       setDrawerOpen(id, true) // the store closes the other drawers
     }
   }
@@ -229,9 +254,9 @@ export default function RailCascade() {
    * with it.
    */
   return (
-    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen ? styles.wrapSheet : ''}`}>
+    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen || framingOpen ? styles.wrapSheet : ''}`}>
       <nav className={styles.rail} aria-label="Menus">
-        {RAIL.map(({ id, icon, label }) => (
+        {RAIL.filter((r) => r.id !== 'framing' || hasDrawings).map(({ id, icon, label }) => (
           <button
             key={id}
             className={`${styles.icon} ${active[id] ? styles.active : ''}`}
@@ -335,6 +360,15 @@ export default function RailCascade() {
       {layersOpen && (
         <div className={styles.col} style={{ minWidth: 168, maxHeight: '100%' }}>
           <LayersPanel />
+        </div>
+      )}
+
+      {/* Only as tall as what is in it. These switches change the model, so
+          the model has to stay in view to see them work — a full-height column
+          put glass over the very thing you had just switched. */}
+      {framingOpen && (
+        <div className={styles.col} style={{ alignSelf: 'flex-start' }}>
+          <FramingPanel />
         </div>
       )}
 

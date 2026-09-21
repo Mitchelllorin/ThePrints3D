@@ -1,0 +1,72 @@
+/* The Framing column's contents. The glass is the rail column's (.col in
+   RailCascade.module.css) — this only lays out what sits on it. */
+
+.panel {
+  display: grid;
+  gap: 8px;                          /* 8px between targets, from gap not margins */
+  width: 196px;
+  max-width: calc(100vw - 72px);
+}
+
+/* A whole row is the switch: 48px tall, the full width of the column. The
+   Layers rows these replace were 20px, which a thumb in a glove does not hit. */
+.row {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: none;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  color: var(--bp-text, #e8eef5);
+  text-align: left;
+  cursor: pointer;
+}
+/* On: a fill, a heavier accent border and a check. Shape, not only colour. */
+.on {
+  background: rgba(61, 154, 232, 0.18);
+  border: 2px solid var(--bp-accent, #3d9ae8);
+  padding: 5px 9px;                  /* keeps the text still when the border thickens */
+}
+.check {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--bp-line, #2c3a4a);
+  border-radius: 5px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--bp-accent, #3d9ae8);
+}
+.on .check { border-color: var(--bp-accent, #3d9ae8); }
+.text { display: grid; gap: 1px; min-width: 0; }
+.label { font-size: 14px; font-weight: 700; }
+.note { font-size: 13px; color: #b0bcca; }
+
+/* The key — read-only, and only there while the colours are. */
+.key {
+  list-style: none;
+  margin: 0;
+  padding: 4px 2px 2px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+.keyItem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--bp-text, #e8eef5);
+}
+/* A square, not a dot: a member is a stick. */
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
