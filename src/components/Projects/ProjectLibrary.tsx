@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useIsPro } from '../Pro/usePro'
 import {
   saveProject,
   loadProject,
@@ -33,7 +34,7 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
   const measurements = useAppStore((s) => s.measurements)
   const model = useAppStore((s) => s.model)
   const setView = useAppStore((s) => s.setView)
-  const isPro = useAppStore((s) => s.isPro)
+  const isPro = useIsPro()   // the one Pro rule — see Pro/usePro
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
 
   const refresh = async () => {

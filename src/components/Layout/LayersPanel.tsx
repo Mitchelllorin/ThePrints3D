@@ -21,7 +21,7 @@
 import { useAppStore } from '../../store/useAppStore'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
-import { requirePro } from '../Pro/usePro'
+import { requirePro, useIsPro } from '../Pro/usePro'
 import { LAYER_COLORS, PRO_TRACE_LAYERS } from '../../data/traceLayers'
 import type { TraceLayer } from '../../data/traceLayers'
 import { MEMBER_KEY } from '../../services/memberColours'
@@ -90,7 +90,7 @@ const GROUPS: Group[] = [
 ]
 
 export default function LayersPanel() {
-  const isPro = useAppStore((s) => s.isPro)
+  const isPro = useIsPro()   // the one Pro rule — see Pro/usePro
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const toggleTradeLayerVisible = useAppStore((s) => s.toggleTradeLayerVisible)
   const overlayVisible = useAppStore((s) => s.floorplanOverlay.visible)

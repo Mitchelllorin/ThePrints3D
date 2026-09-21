@@ -2,6 +2,13 @@
  * The gate. One helper, used everywhere a feature is Pro-only, so the rule lives
  * in a single place instead of eight `if (isPro)` branches drifting apart.
  *
+ * They had drifted: six screens read the raw `isPro` flag and ignored this rule
+ * entirely, so while the store was not live those screens stayed locked behind
+ * a dead button — the very thing the rule below exists to prevent. They all go
+ * through `useIsPro` now. The two places that read the flag raw are the ones
+ * that report whether a PURCHASE exists (ProSection, the Settings title): those
+ * must not claim a sale that never happened.
+ *
  * requirePro(reason, action) either runs the action or opens the upgrade sheet
  * naming the reason. Call sites read as the thing they are doing —
  * requirePro('Editing walls', () => setEditMode(true)) — which keeps the gate
@@ -25,9 +32,24 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
  * until then. Nothing to remember at release time; setting the key turns the
  * paywall on by itself.
  */
+/**
+ * FREE FOR EVERYONE WHILE THE CLOSED TEST RUNS.
+ *
+ * Mitchell, 21 Sep 2026: the closed testers get lifetime access anyway, so
+ * nothing should be locked while the test is on — every tester sees every
+ * feature. Pricing gets set when the test is over; THAT is when this goes to
+ * false. After that the gates still stay open until Play answers with a live
+ * product (the rule below), so turning this off cannot strand anyone behind a
+ * dead upgrade button.
+ *
+ * Typed `boolean`, not the literal, so flipping it is a one-word change that
+ * no linter argues with.
+ */
+export const PRO_FREE_FOR_EVERYONE: boolean = true
+
 export function useIsPro(): boolean {
   const owned = useAppStore((s) => s.isPro)
-  return owned || !billingAvailable()
+  return PRO_FREE_FOR_EVERYONE || owned || !billingAvailable()
 }
 
 export function useRequirePro(): (reason: string, action: () => void) => void {

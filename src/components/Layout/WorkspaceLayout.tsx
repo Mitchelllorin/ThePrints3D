@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useIsPro } from '../Pro/usePro'
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
 import ProjectLibrary from '../Projects/ProjectLibrary'
@@ -660,7 +661,7 @@ export default function WorkspaceLayout() {
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
   /** The one-time unlock — decides the export watermark and the gated verbs. */
-  const isPro = useAppStore((s) => s.isPro)
+  const isPro = useIsPro()   // the one Pro rule — see Pro/usePro
   // Happy-place invariant: no drawer over the workspace while tracing.
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)

@@ -4,6 +4,7 @@
  * electrical / HVAC feet by type, and fixture counts. Rendered INSIDE the
  * Settings drawer (not a floating pill) so the workspace stays clear.
  */
+import { useIsPro } from '../Pro/usePro'
 import { useMemo } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
@@ -35,7 +36,7 @@ export default function TakeoffContent() {
   // Wall height comes from the one place that decides it, so the takeoff counts
   // the walls the model actually built — see useSceneConfig.
   const sceneConfig = useSceneConfig(wizardInputs)
-  const isPro = useAppStore((s) => s.isPro)
+  const isPro = useIsPro()   // the one Pro rule — see Pro/usePro
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
 
   const allSections = useMemo(() => {

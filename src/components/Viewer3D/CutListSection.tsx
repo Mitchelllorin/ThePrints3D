@@ -12,8 +12,8 @@
  * The numbers come from cutList, which counts the members the wall builder
  * actually frames — see the header there for why this is not an estimate.
  */
+import { useIsPro } from '../Pro/usePro'
 import { useState } from 'react'
-import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useCutList, formatCutLength } from './useCutList'
@@ -95,7 +95,7 @@ function WasteRow({ cat, pct, onSet }: { cat: WasteCategory; pct: number; onSet:
 }
 
 export default function CutListSection() {
-  const isPro = useAppStore((s) => s.isPro)
+  const isPro = useIsPro()   // the one Pro rule — see Pro/usePro
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
   const setConfig = useConfigStore((s) => s.set)
   const { walls, buy, waste } = useCutList()

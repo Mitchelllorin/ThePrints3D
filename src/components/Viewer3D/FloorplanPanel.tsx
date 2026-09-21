@@ -19,7 +19,7 @@ import {
   TRACE_LAYER_ORDER, LAYER_COLORS, LAYER_LABELS, LAYER_TRACE_HINT, PRO_TRACE_LAYERS,
   PLUMBING_PICKER, ELECTRICAL_PICKER, HVAC_PICKER, FLOORS_PICKER, ROOF_PICKER, LEVEL_OPTIONS,
 } from '../../data/traceLayers'
-import { requirePro } from '../Pro/usePro'
+import { requirePro, useIsPro } from '../Pro/usePro'
 import { INTERIOR_FINISHES, EXTERIOR_CLADDINGS } from '../../services/constructionCode'
 import { suggestWetWalls } from '../../services/wetWalls'
 import {
@@ -84,7 +84,7 @@ function wallChipLabel(type: string, role: string, typeChosen: boolean, roleChos
 }
 
 export default function FloorplanPanel() {
-  const isPro           = useAppStore((s) => s.isPro)
+  const isPro = useIsPro()   // the one Pro rule — see Pro/usePro
   const drawings        = useAppStore((s) => s.drawings)
   const overlay         = useAppStore((s) => s.floorplanOverlay)
   const addDrawings     = useAppStore((s) => s.addDrawings)
