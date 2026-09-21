@@ -54,6 +54,7 @@ const FLOORS: Array<{ id: FloorChoice; label: string; note: string }> = [
 
 export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   const startDrawnProject = useAppStore((s) => s.startDrawnProject)
+  const standWalls = useAppStore((s) => s.standWalls)
   const activeUnit = useConfigStore((s) => s.activeUnit)
   const lengthFormat = useConfigStore((s) => s.lengthFormat)
   const setConfig = useConfigStore((s) => s.set)
@@ -93,6 +94,12 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
       widthMm: main.widthMm, depthMm: main.depthMm, wallTypeKey, floor, name: 'New project',
       wings,
     })
+    // THE WALLS ARE ALREADY UP. A drawn project's shell draws itself standing
+    // the moment it exists, but the model was left marked unbuilt — so the
+    // step chip asked you to "Stand them up" while you were looking at them
+    // standing. Stand them here, so what the app says matches what is on
+    // screen and the next thing it asks for is the inside walls.
+    standWalls()
     onClose()
   }
 

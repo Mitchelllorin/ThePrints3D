@@ -72,8 +72,7 @@ export default function FloorplanPanel() {
   const overlay         = useAppStore((s) => s.floorplanOverlay)
   const addDrawings     = useAppStore((s) => s.addDrawings)
   const buildModel      = useAppStore((s) => s.buildModel)
-  const buildForMe      = useAppStore((s) => s.buildForMe)
-  const finishShell     = useAppStore((s) => s.finishShell)
+  const standWalls      = useAppStore((s) => s.standWalls)
   /** Walls on the active drawing — detected or traced; both are walls. */
   const wallCount = useAppStore((st) => {
     const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
@@ -1031,7 +1030,7 @@ export default function FloorplanPanel() {
             <div className={styles.btnRow}>
               <button
                 className={styles.action}
-                onClick={() => { finishShell(); buildForMe(); finishShell() }}
+                onClick={() => standWalls()}
                 title="Frame every wall, hang the openings and put the shell on"
               >
                 Stand them up

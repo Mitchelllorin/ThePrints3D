@@ -593,10 +593,16 @@ interface AppState {
   setPreviewMode: (on: boolean) => void
   setExplodeAmount: (amount: number) => void
   // Placed objects (furniture/fixtures)
-  /** Add the roof + ceiling the build pass discards, and hang a real door or
-   *  window in every opening the plan draws. Returns how many openings it
-   *  filled. One undo step. */
-  finishShell: () => number
+  /** Hang a real door or window in every opening the plan draws, lay any
+   *  missing slab, and — unless `roof: false` — put the roof on. Returns how
+   *  many openings it filled. One undo step. */
+  finishShell: (opts?: { roof?: boolean }) => number
+  /** Stand the walls: hang the openings, frame around them. NO ROOF — the roof
+   *  is its own step, taken when the inside is in. */
+  standWalls: () => void
+  /** Put the roof on over the walls as they stand. Returns how many roof areas
+   *  it added — 0 if there was already a roof. One undo step. */
+  putRoofOn: () => number
   /** Run the General's electrical pass on a storey. Returns how many devices
    *  it placed, so the caller can say so. One undo step. */
   autoPlaceElectrical: (level?: number) => number
@@ -2443,7 +2449,7 @@ export const useAppStore = create<AppState>()(
      * intentions, and rolling them together would take the roof decision away
      * from the person tracing it.
      */
-    finishShell: () => {
+    finishShell: (opts) => {
       const s = get()
       const walls = s.drawings.flatMap((d) => d.parsedWalls)
       if (walls.length === 0) return 0
@@ -2520,10 +2526,16 @@ export const useAppStore = create<AppState>()(
       let added = 0
       pushHistory()
       set((st) => {
-        // Keep whatever the user traced; add the derived roof and ceiling that
-        // the build pass discards.
-        const userRoofs = st.roofAreas.filter((a) => !a.id.startsWith('auto-'))
-        st.roofAreas = [...userRoofs, ...shell.roofs]
+        // THE ROOF ONLY WHEN ASKED FOR. This used to put it on every time, and
+        // every "stand the walls" button runs this — so standing the walls
+        // roofed the house on the spot, before there was any chance to draw
+        // the inside walls, place anything inside, or add a second storey. The
+        // showcase still gets one, because it is meant to look finished; a
+        // build door passes `roof: false` and the roof waits for its own step.
+        if (opts?.roof !== false) {
+          const userRoofs = st.roofAreas.filter((a) => !a.id.startsWith('auto-'))
+          st.roofAreas = [...userRoofs, ...shell.roofs]
+        }
         // Add whatever the shell is MISSING, by role, rather than assuming the
         // build pass left the slab behind. It only lays one if `buildAutoShell`
         // is on, and a house that is supposed to look finished should not
@@ -2570,6 +2582,53 @@ export const useAppStore = create<AppState>()(
         }
       })
       return added
+    },
+
+    /**
+     * Stand the walls — the one sequence every build door shares.
+     *
+     * Order matters: hang the doors and windows first, THEN frame, because the
+     * framing engine reads its openings from placed objects. Frame first and the
+     * doorways get studs straight across them. The second pass fills anything
+     * the build left without a slab; openings dedupe on position, so it cannot
+     * hang a second door in the same hole.
+     *
+     * No roof. That is the whole point of this being one action instead of the
+     * three calls it replaces in three places: none of them can forget to leave
+     * the roof off again.
+     */
+    standWalls: () => {
+      const app = get()
+      app.finishShell({ roof: false })
+      app.buildForMe()
+      get().finishShell({ roof: false })
+    },
+
+    /**
+     * Put the roof on, as a step you take.
+     *
+     * It is the last thing on a real house and it is the last thing here: once
+     * it is on you are looking down at shingles instead of into the rooms you
+     * were still laying out. So it only goes on when asked — from the step chip
+     * when the inside is in, or from the roof tools — and never as a side
+     * effect of standing walls.
+     *
+     * Leaves a roof you already traced alone rather than stacking a second one
+     * on top of it.
+     */
+    putRoofOn: () => {
+      const s = get()
+      if (s.roofAreas.length > 0) return 0
+      const walls = s.drawings.flatMap((d) => d.parsedWalls)
+      if (walls.length === 0) return 0
+      const shell = deriveBuildAreas(walls, {
+        levels: Math.max(1, s.model.floorLevels?.length ?? 1),
+        makeId: (role, level) => `auto-${role}-${level}-${genId()}`,
+      })
+      if (shell.roofs.length === 0) return 0
+      pushHistory()
+      set((st) => { st.roofAreas = [...st.roofAreas, ...shell.roofs] })
+      return shell.roofs.length
     },
 
     /**

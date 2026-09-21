@@ -760,12 +760,8 @@ export default function WorkspaceLayout() {
     useAppStore.getState().updateFloorplanOverlay({ calibrationMode: true, guidedStep: 1, locked: false }, false)
   }, [])
 
-  const standThemUp = useCallback(() => {
-    // Same order as every other build door: hang the openings, frame around
-    // them, then run the shell again for the roof.
-    const app = useAppStore.getState()
-    app.finishShell(); app.buildForMe(); app.finishShell()
-  }, [])
+  const standThemUp = useCallback(() => { useAppStore.getState().standWalls() }, [])
+  const putRoofOn = useCallback(() => { useAppStore.getState().putRoofOn() }, [])
 
   /**
    * ONE STEP AT A TIME, ALL THE WAY TO THE CUT LIST.
@@ -816,6 +812,8 @@ export default function WorkspaceLayout() {
   /** A door or a window is in, so the openings step is behind us. */
   const hasOpenings = useAppStore((st) => st.placedObjects.some((o) => o.type === 'door' || o.type === 'window'))
   const cutListSeen = useFloorplanLocalStore((st) => st.cutListSeen)
+  /** A roof is on — drawn, traced, or put on from the step. */
+  const hasRoof = useAppStore((st) => st.roofAreas.length > 0)
 
   const nextStep = !planReady || traceMode || inCalibration
     ? null
@@ -829,7 +827,13 @@ export default function WorkspaceLayout() {
             ? { label: 'Draw the inside walls', note: 'tap one end, then the other', run: drawInsideWalls }
             : !hasOpenings
               ? { label: 'Add doors & windows', note: 'tap a wall to place', run: openPlace }
-              : !cutListSeen
+              // THE ROOF IS A STEP, AND IT IS LAST. It used to land the moment the
+              // walls stood, with the rooms still empty and no second floor. Now
+              // it waits here, after the openings, as a suggestion — nothing puts
+              // it on for you, and every step before it stays open underneath.
+              : !hasRoof
+                ? { label: 'Put the roof on', note: 'when the inside is in', run: putRoofOn }
+                : !cutListSeen
                 ? { label: 'See the cut list', note: 'every stick, per wall', run: openCutList }
                 : null
 
