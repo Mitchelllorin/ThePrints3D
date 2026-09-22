@@ -50,9 +50,9 @@ export const LAYER_TRACE_HINT: Record<TraceLayer, string> = {
   framing: 'Tap each wall corner — walls square up and snap to the print. Double-tap or End run to finish.',
   floors: 'Tap one corner, then the opposite corner to lay the joist field.',
   roof: 'Tap one corner, then the opposite corner to set the roof footprint.',
-  plumbing: 'Tap the pipe path — start at the source (or the outside tie-in), run up through the floor and into the walls to the fixture.',
+  plumbing: 'Tap the pipe path.',
   electrical: 'Place boxes/outlets first, then tap the run from the panel through each device.',
-  hvac: 'Tap the duct run — from the air handler out to each register.',
+  hvac: 'Tap the duct run.',
 }
 
 /** Pre-trace picker rows for plumbing. */

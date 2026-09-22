@@ -1269,7 +1269,7 @@ export default function WorkspaceLayout() {
               one. Everything else is still here, one line down, for the person
               who goes looking. */}
           {firstRun && (
-            <p className={styles.uploadHintLead}>New here? Type the size of a building and it frames itself — floor, walls, roof, cut list.</p>
+            <p className={styles.uploadHintLead}>New here? Draw the building to size and it frames itself.</p>
           )}
           <button className={styles.drawItChip} onClick={() => setDrawItOpen(true)}>
             ✏ Draw it

@@ -1181,10 +1181,7 @@ export default function FloorplanPanel() {
               {activeTraceLayer === 'electrical' && placedElecCount === 0 ? (
                 <>
                   <span className={styles.stepText}>Start with the boxes</span>
-                  <span className={styles.stepHint}>
-                    Tap one to place it — boxes/outlets/switches mount to the studs.
-                    Then wire them together. (Optional: you can wire first.)
-                  </span>
+                  <span className={styles.stepHint}>Tap one to place it.</span>
                   <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
                     {electricalTrayItems().map((item) => (
                       <button
@@ -1366,7 +1363,7 @@ export default function FloorplanPanel() {
               <span style={{ width: 10, height: 10, borderRadius: 5, background: LAYER_COLORS[activeTraceLayer], border: '1px solid rgba(255,255,255,0.4)' }} />
               {wallChipLabel(activeWallType, activeWallRole, wallTypeChosen, wallRoleChosen)}
             </button>
-            <span className={styles.stepHint}>Level — which storey these walls stand on</span>
+            <span className={styles.stepHint}>Level</span>
             <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
               {LEVEL_OPTIONS.map((lv) => (
                 <button key={lv.value} className={activeLevel === lv.value ? styles.action : styles.secondary} onClick={() => setActiveLevel(lv.value)}>{lv.label}</button>

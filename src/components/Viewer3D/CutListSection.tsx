@@ -57,7 +57,7 @@ function WallBlock({ wall, open, onToggle }: { wall: WallCuts; open: boolean; on
         <div style={{ padding: '6px 10px 2px' }}>
           {wall.masonry ? (
             <p style={{ color: MUTED, fontSize: 13, margin: 0 }}>
-              Block and brick are laid, not cut — courses are in the takeoff above.
+              Masonry — courses are in the takeoff above.
             </p>
           ) : wall.lines.length === 0 ? (
             <p style={{ color: MUTED, fontSize: 13, margin: 0 }}>Nothing framed in this wall yet.</p>
@@ -228,8 +228,7 @@ export default function CutListSection() {
         </div>
       )}
       <p style={{ color: '#6b7280', fontSize: 13, margin: '8px 0 0', lineHeight: 1.5 }}>
-        Counted off the framing, to 1/16&quot;. Header sizes are the model&apos;s default — the span and the
-        load above decide the real one.
+        Counted off the framing, to 1/16&quot;. Headers are the model&apos;s default size.
       </p>
     </div>
   )
