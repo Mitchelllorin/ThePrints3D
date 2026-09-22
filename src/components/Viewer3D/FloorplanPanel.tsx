@@ -1344,9 +1344,7 @@ export default function FloorplanPanel() {
           <div className={styles.step}>
             <span className={styles.stepLabel}>Walls</span>
             <span className={styles.stepText}>{userWallCount > 0 ? 'Draw more walls' : 'Draw the walls'}</span>
-            <span className={styles.stepHint}>
-              Tap one end, then the other. Run a wall into another and it frames the tee.
-            </span>
+            <span className={styles.stepHint}>Tap one end, then the other.</span>
             <div className={styles.btnRow}>
               <button className={styles.action} onClick={drawWalls}>Draw walls →</button>
               <button className={styles.secondary} onClick={openPicker}>Choose type</button>
