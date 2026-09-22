@@ -833,7 +833,7 @@ export default function WorkspaceLayout() {
               // it waits here, after the openings, as a suggestion — nothing puts
               // it on for you, and every step before it stays open underneath.
               : !hasRoof
-                ? { label: 'Put the roof on', note: 'when the inside is in', run: putRoofOn }
+                ? { label: 'Put the roof on', note: '', run: putRoofOn }
                 : !cutListSeen
                 ? { label: 'See the cut list', note: 'every stick, per wall', run: openCutList }
                 : null
@@ -1713,7 +1713,7 @@ export default function WorkspaceLayout() {
       {nextStep && (
         <button className={styles.standUpChip} onClick={nextStep.run}>
           {nextStep.label}
-          <span className={styles.standUpChipCount}>{nextStep.note}</span>
+          {nextStep.note && <span className={styles.standUpChipCount}>{nextStep.note}</span>}
         </button>
       )}
 
