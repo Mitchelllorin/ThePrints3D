@@ -185,7 +185,7 @@ const MEDIUM: PlanSpec = {
     set1BuildingBasics: '44ft x 28ft footprint, 9ft ceiling, 1 floor, crawlspace foundation',
     set1Clarifications: 'Single-storey ranch with a master suite at one end.',
     set2StructuralDetails: 'Exterior 2x6 bearing walls, 2x4 partitions, bearing wall on the hall line.',
-    set2Clarifications: 'Bath and ensuite share a wet wall with the utility room.',
+    set2Clarifications: 'Bath and ensuite share a plumbing wall with the utility room.',
     set3FinishingDetails: 'Brick veneer front, lap siding elsewhere, 1/2in gypsum interior.',
     set3Clarifications: 'Tile backer in both baths.',
     completedGroup: 'group3',

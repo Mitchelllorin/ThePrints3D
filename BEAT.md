@@ -174,3 +174,12 @@ seen on a device. Six notes, logged not fixed, per the rule.
 **Not checked, and only a device can:** anything about how it actually behaves —
 cold start, the splash, gesture handling, orientation, whether the model refits
 when a sheet opens, and every one of the bug-drive items.
+
+### 2026-09-22 — notes 1 and 3 fixed in code. Not seen on a device.
+
+- **Note 1:** the Settings drawer now ends in "More from the 3D family" — all
+  eight, in family order, the CircuiTry3D one-liners, links to sites not
+  stores, ThePrints3D listed unlinked. The launch screen keeps only the
+  theprints3d.com link. Check it at step 31.
+- **Note 3:** "Wet walls" reads "Plumbing walls"; the preset line says
+  "plumbing wall".

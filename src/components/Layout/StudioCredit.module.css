@@ -1,43 +1,35 @@
 /* ── Studio credit ─────────────────────────────────────────────────────────────
-   The website link plus the sibling-app line. Containerless: no card, no
-   border, no fill — only text, sized to be findable without competing with the
-   controls above it. Colours come from the live UI settings vars so it follows
-   whatever palette the user has set. */
+   The website link plus "More from the 3D family". Containerless: no card, no
+   border, no fill — only text. Colours come from the live UI settings vars so
+   it follows whatever palette the user has set. Spacing is gap, not margins. */
 
 .credit {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
   padding: 12px 16px 0;
-  text-align: center;
 }
 
 .site {
-  font-size: 12px;
+  align-self: center;
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--bp-accent, #38bdf8);
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-  transition: color 0.15s, text-shadow 0.15s;
-}
-.site:hover,
-.site:focus-visible {
-  color: var(--bp-accent, #38bdf8);
-  text-shadow: 0 0 10px color-mix(in srgb, var(--bp-accent, #38bdf8) 55%, transparent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .lead {
-  margin: 14px 0 0;
-  font-size: 9px;
+  margin: 0;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.7px;
-  color: var(--bp-text-dim, #64748b);
-  opacity: 0.8;
+  color: var(--bp-text-dim, #94a3b8);
 }
 
 .list {
@@ -46,67 +38,35 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
 .item {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0;
+  gap: 2px;
 }
 
+/* A linked name is underlined; an unlinked one is not — the difference is in
+   shape, not only colour. The link carries the 48px row height. */
+.appLink,
 .appName {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--bp-text, #cbd5e1);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bp-text, #e2e8f0);
 }
-
-/* The links sit in ONE row rather than stacked — see the phone rule at the
-   bottom of this file for why that matters. */
-.links {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  column-gap: 14px;
-  font-size: 10px;
-}
-
-.metaLink {
+.appLink {
+  min-height: 48px;
   display: inline-flex;
-  align-items: center;
-  color: var(--bp-text-dim, #64748b);
-  text-decoration: none;
-  transition: color 0.15s;
-}
-.metaLink:hover,
-.metaLink:focus-visible { color: var(--bp-accent, #38bdf8); }
-
-.metaSoon {
-  color: var(--bp-text-dim, #64748b);
-  opacity: 0.6;
-  font-style: italic;
+  align-items: flex-end;
+  align-self: flex-start;
+  color: var(--bp-accent, #38bdf8);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-/* ── Phones only ───────────────────────────────────────────────────────────────
-   mobile.css gives EVERY a[href] a 44px minimum box under 768px so touch
-   targets clear the platform guidance. That is correct, but on a stack of
-   10px links it padded this block into a wall of whitespace. Keeping the
-   links in a row means they share one 44px height, and these negative margins
-   absorb what still leaks past the text.
-
-   These MUST stay inside the media query: above 768px there is no 44px box to
-   absorb, and applying them unconditionally collapses the app name onto its
-   own links on desktop. */
-@media (max-width: 768px) {
-  .site { margin: -12px 0; }
-
-  /* -8px, not -12px: two of these rows sit one app apart, and at -12px the
-     pitch came out to 37px while the touch boxes are 44px — the bottom 7px of
-     one app's links overlapped the next app's, so a tap in that band opened
-     the wrong site. -8px keeps the pitch at 45px, clear of the box. Measured,
-     not guessed; re-measure before tightening this further. */
-  .links { margin-top: -8px; margin-bottom: -8px; }
+.line {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--bp-text-dim, #94a3b8);
 }
