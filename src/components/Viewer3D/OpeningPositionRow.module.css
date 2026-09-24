@@ -10,7 +10,7 @@
   font-size: 13px;
   color: var(--bp-text, #f1f5f9);
 }
-.label { color: var(--bp-text-dim, #94a3b8); }
+.label { color: var(--card-ink-dim, var(--bp-text-dim, #94a3b8)); }
 .end {
   min-height: 48px;
   padding: 0 12px;
@@ -43,12 +43,12 @@
   pointer-events: auto;
 }
 .num:focus { outline: none; border-color: var(--bp-accent, #38bdf8); }
-.unit { color: var(--bp-text-dim, #94a3b8); }
+.unit { color: var(--card-ink-dim, var(--bp-text-dim, #94a3b8)); }
 .note {
   flex: 1 1 100%;
   margin: 0;
   font-size: 13px;
   line-height: 1.35;
-  color: var(--bp-text-dim, #94a3b8);
+  color: var(--card-ink-dim, var(--bp-text-dim, #94a3b8));
   font-variant-numeric: tabular-nums;
 }
