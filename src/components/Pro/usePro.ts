@@ -69,6 +69,9 @@ export function useRequirePro(): (reason: string, action: () => void) => void {
  * once, a service. Reads the stores directly rather than through hooks.
  */
 export function requirePro(reason: string, action: () => void): void {
-  if (useAppStore.getState().isPro || !billingAvailable()) action()
+  // Same three reasons as useIsPro. PRO_FREE_FOR_EVERYONE was missing here, so
+  // editing, the tape, product placement and the trade layers would have locked
+  // for closed testers the moment the Play product went live.
+  if (PRO_FREE_FOR_EVERYONE || useAppStore.getState().isPro || !billingAvailable()) action()
   else useFloorplanLocalStore.getState().openUpgrade(reason)
 }
