@@ -816,13 +816,21 @@ export default function WorkspaceLayout() {
   /** A roof is on — drawn, traced, or put on from the step. */
   const hasRoof = useAppStore((st) => st.roofAreas.length > 0)
 
+  /**
+   * OFF — Mitchell, 24 Sep 2026. Once the walls stand, the chip used to name the
+   * next thing to build: inside walls, doors & windows, roof, cut list. The
+   * people using this know what comes next, so the chip stops at the two app
+   * actions (Set the scale, Stand them up). The roof has its own button in
+   * Build → Framing. The chain below is kept, switched off, not deleted.
+   */
+  const BUILD_ORDER_PROMPTS = false
   const nextStep = !planReady || traceMode || inCalibration
     ? null
     : !scaleIsRead && !calibrationHandled
       ? { label: 'Set the scale', note: "couldn't read it", run: setScale }
       : planWalls > 0 && modelIdle
         ? { label: 'Stand them up', note: `${planWalls} wall${planWalls === 1 ? '' : 's'}`, run: standThemUp }
-        : modelIdle
+        : modelIdle || !BUILD_ORDER_PROMPTS
           ? null
           : !hasInsideWalls && !insideWallsSeen && !hasOpenings
             ? { label: 'Draw the inside walls', note: 'tap one end, then the other', run: drawInsideWalls }

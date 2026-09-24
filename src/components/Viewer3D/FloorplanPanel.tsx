@@ -1349,6 +1349,18 @@ export default function FloorplanPanel() {
           </div>
         )}
 
+        {/* ── Roof: one tap, over the walls as they stand ── Its only way on
+            used to be the step chip, which no longer names build steps. Shown
+            until there is a roof; a traced roof counts. */}
+        {!traceMode && !pickerOpen && (drawing?.parsedWalls.length ?? 0) > 0 && roofAreas.length === 0 && (
+          <div className={styles.step}>
+            <span className={styles.stepLabel}>Roof</span>
+            <div className={styles.btnRow}>
+              <button className={styles.action} onClick={() => { useAppStore.getState().putRoofOn() }}>Add roof</button>
+            </div>
+          </div>
+        )}
+
         {/* ── Active tracing ── */}
         {traceMode && !pickerOpen && (
           <div className={styles.step}>
