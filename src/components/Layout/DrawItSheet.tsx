@@ -140,7 +140,7 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
           return (
             <div key={i} className={styles.wing}>
               <div className={styles.wingHead}>
-                <span className={styles.wingName}>Section {i + 1} — hangs off the</span>
+                <span className={styles.wingName}>Section {i + 1}</span>
                 <button className={styles.wingDrop} onClick={() => dropWing(i)} aria-label={`Remove section ${i + 1}`}>Remove</button>
               </div>
               <div className={styles.row}>
