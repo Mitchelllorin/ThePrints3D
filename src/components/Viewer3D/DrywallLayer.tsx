@@ -15,7 +15,7 @@ import { buildWallDrywall, FLOOR_ASSEMBLY_H, type WallOpening } from '../../serv
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../../data/objectCatalog'
 import { wallMayTakeEnvelope, boardSpec, finishesVisible, renderWallThicknessM, wallHeightM, type BoardSpec, type BoardKind } from '../../services/constructionCode'
-import { footprintCentroids, inwardSign, perimeterTest } from '../../services/wallFacing'
+import { outwardTest, perimeterTest } from '../../services/wallFacing'
 import { XRAY_OPACITY } from './editHelpers'
 import { modelWalls } from '../../services/modelWalls'
 import type { ParsedWall, PlacedObject } from '../../types'
@@ -197,10 +197,19 @@ export default function DrywallLayer() {
       && (tests.get(w.level ?? 0)?.(w) ?? false)
   }, [userWalls])
 
-  const centroids = useMemo(
-    () => footprintCentroids(userWalls.map(({ wall }) => wall).filter(isExteriorWall)),
-    [userWalls, isExteriorWall],
-  )
+  // Same answer as the envelope's, from the same walls: the face the sheathing
+  // is on is never the face the board goes on.
+  const inwardOf = useMemo(() => {
+    const byLevel = new Map<number, ParsedWall[]>()
+    for (const { wall } of userWalls) {
+      if (!isExteriorWall(wall)) continue
+      const lv = wall.level ?? 0
+      byLevel.set(lv, [...(byLevel.get(lv) ?? []), wall])
+    }
+    const tests = new Map<number, (w: ParsedWall) => 1 | -1>()
+    for (const [lv, list] of byLevel) tests.set(lv, outwardTest(list))
+    return (w: ParsedWall): 1 | -1 => ((tests.get(w.level ?? 0)?.(w) ?? 1) === 1 ? -1 : 1)
+  }, [userWalls, isExteriorWall])
 
   if (!finishesVisible(finishTiming, finishesApplied, traceMode)) return null
   if (!visible || userWalls.length === 0) return null
@@ -222,7 +231,7 @@ export default function DrywallLayer() {
             openings={openingsByWall[i] ?? []}
             storeyHeight={storeyHeight}
             bothSides={!exterior}
-            inward={exterior ? inwardSign(wall, centroids[wall.level ?? 0]) : 1}
+            inward={exterior ? inwardOf(wall) : 1}
             /* A wall's OWN board wins over the building-wide default — the wall
                behind a tub is a tile backer even when the house is gypsum. */
             boardType={wall.boardKind ? boardSpec(wall.boardKind as BoardKind) : boardType}

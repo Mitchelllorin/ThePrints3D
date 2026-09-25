@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { perimeterTest, outwardSign, inwardSign, footprintCentroids, inferWallRole } from './wallFacing'
+import { perimeterTest, outwardSign, outwardTest, inwardSign, footprintCentroids, inferWallRole } from './wallFacing'
 
 // A 800x500 rectangle with one partition straight through the middle.
 const N = { x1: 100, y1: 100, x2: 900, y2: 100, level: 0 }
@@ -72,5 +72,42 @@ describe('which face is out', () => {
     const c = footprintCentroids([...SHELL, ...upper])
     expect(c[0].x).toBeCloseTo(500, 6)
     expect(c[1].x).toBeCloseTo(1500, 6)   // judged against its OWN outline
+  })
+})
+
+describe('an L-shaped shell — every outside wall is outside, facing out', () => {
+  // Main 0..100 × 0..60, section 60..100 × 60..100, traced clockwise (y down).
+  const L = [
+    { x1: 0, y1: 0, x2: 100, y2: 0 },
+    { x1: 100, y1: 0, x2: 100, y2: 100 },
+    { x1: 100, y1: 100, x2: 60, y2: 100 },
+    { x1: 60, y1: 100, x2: 60, y2: 60 },   // inside corner
+    { x1: 60, y1: 60, x2: 0, y2: 60 },     // inside corner
+    { x1: 0, y1: 60, x2: 0, y2: 0 },
+  ]
+  const partition = { x1: 30, y1: 0, x2: 30, y2: 60 }
+  const all = [...L, partition]
+
+  it('the two inside-corner walls count as outside walls', () => {
+    const onPerimeter = perimeterTest(all)
+    for (const w of L) expect(onPerimeter(w)).toBe(true)
+    expect(onPerimeter(partition)).toBe(false)
+  })
+
+  it('every shell wall puts its outside face away from the building', () => {
+    const out = outwardTest(L)
+    // Same convention as outwardSign: on this loop the building is on every
+    // wall's +Z side, so the outside is -1 — and it must agree with the
+    // centroid rule on the four walls that rule gets right.
+    for (const w of L) expect(out(w)).toBe(-1)
+    const c = footprintCentroids(L)[0]
+    for (const w of [L[0], L[1], L[2], L[5]]) expect(out(w)).toBe(outwardSign(w, c))
+    // Traced the other way round, the answer flips with it.
+    for (const w of L) expect(out({ x1: w.x2, y1: w.y2, x2: w.x1, y2: w.y1 })).toBe(1)
+  })
+
+  it('a corner a few pixels short still reads as closed', () => {
+    const gappy = L.map((w, i) => (i === 3 ? { ...w, y2: 62 } : w))
+    expect(perimeterTest([...gappy, partition])(partition)).toBe(false)
   })
 })

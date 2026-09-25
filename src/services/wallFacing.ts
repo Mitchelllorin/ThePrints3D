@@ -9,11 +9,18 @@
  *
  * So the rule lives here once, and every layer asks this module.
  *
- * The footprint's centroid answers it: a wall's outward normal is whichever of
- * its perpendiculars points AWAY from the middle of the building. Exact for a
- * convex footprint, right almost everywhere on a real one. An L-shaped plan can
- * put one short wall's faces the wrong way round — visible and fixable, rather
- * than silently wrong.
+ * THE OUTSIDE IS WHERE YOU CAN WALK AWAY. Step a hand's width off each face of
+ * a wall and look along a spread of straight lines: if one of them reaches open
+ * ground without crossing another wall, that face is outside. A partition has
+ * the building on both faces; a shell wall has the building on one. That holds
+ * for an L, a T or a U — including the two walls at an L's inside corner, which
+ * a bounding-box test called interior and so left bare of sheathing and cladding
+ * while the rest of the section was clad.
+ *
+ * Where the walls do not close yet (half a shell traced), both faces can reach
+ * open ground and nothing is decided that way; the older rules — the storey's
+ * bounding box for "is it on the outside", its centroid for "which face" — take
+ * over until the shell closes.
  *
  * Centroids are taken PER STOREY so a smaller upper floor is judged against its
  * own outline rather than the floor below.
@@ -107,7 +114,89 @@ export function inferWallRole(wall: FacingWall, existing: FacingWall[]): string 
   return perimeterTest([...sameLevel, wall])(wall) ? 'exterior-bearing' : 'interior-bearing'
 }
 
+/** Walls that meet at a corner seldom meet to the pixel; a traced corner can be
+ *  a few pixels short. Each wall is stretched this much at both ends for the
+ *  "can I walk out" test, so a sloppy corner is not a door to the outside. */
+const JOIN_FRAC = 0.012
+/** Directions tried from each probe point. */
+const RAYS = 16
+
+type Seg = { ax: number; ay: number; bx: number; by: number }
+
+/** Does a ray from (px, py) along (dx, dy) cross this segment? */
+function rayHits(px: number, py: number, dx: number, dy: number, s: Seg): boolean {
+  const ex = s.bx - s.ax, ey = s.by - s.ay
+  const den = dx * ey - dy * ex
+  if (Math.abs(den) < 1e-12) return false
+  const qx = s.ax - px, qy = s.ay - py
+  const t = (qx * ey - qy * ex) / den
+  const u = (qx * dy - qy * dx) / den
+  return t > 1e-9 && u >= 0 && u <= 1
+}
+
+/**
+ * For one storey: which face of each wall reaches open ground.
+ * Returns +1 / -1 (the outside face, in outwardSign's convention), 0 when
+ * neither face does (an interior wall), or null when both do (the shell is not
+ * closed around it, so this test cannot tell).
+ */
+export function openFaceTest(walls: FacingWall[]): (w: FacingWall) => 1 | -1 | 0 | null {
+  if (walls.length === 0) return () => null
+  const xs = walls.flatMap((w) => [w.x1, w.x2])
+  const ys = walls.flatMap((w) => [w.y1, w.y2])
+  const diag = Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) || 1
+  const join = Math.max(4, diag * JOIN_FRAC)
+  const probe = Math.max(2, diag * 0.004)
+  const segs: Array<Seg & { w: FacingWall }> = walls.map((w) => {
+    const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1) || 1
+    const ux = (w.x2 - w.x1) / len, uy = (w.y2 - w.y1) / len
+    return { w, ax: w.x1 - ux * join, ay: w.y1 - uy * join, bx: w.x2 + ux * join, by: w.y2 + uy * join }
+  })
+  const dirs = Array.from({ length: RAYS }, (_, i) => {
+    // Offset off the axes so a ray never runs exactly along a wall.
+    const a = ((i + 0.37) / RAYS) * Math.PI * 2
+    return [Math.cos(a), Math.sin(a)] as const
+  })
+  const escapes = (px: number, py: number) => dirs.some(([dx, dy]) => !segs.some((sg) => rayHits(px, py, dx, dy, sg)))
+  return (w) => {
+    const len = Math.hypot(w.x2 - w.x1, w.y2 - w.y1)
+    if (len < 1e-9) return null
+    const mx = (w.x1 + w.x2) / 2, my = (w.y1 + w.y2) / 2
+    // Local +Z is the left-hand perpendicular of the wall's direction (y down).
+    const nx = -(w.y2 - w.y1) / len, ny = (w.x2 - w.x1) / len
+    const plus = escapes(mx + nx * probe, my + ny * probe)
+    const minus = escapes(mx - nx * probe, my - ny * probe)
+    if (plus && minus) return null
+    if (!plus && !minus) return 0
+    return plus ? 1 : -1
+  }
+}
+
+/**
+ * Which face of each wall is outside, for one storey: the open-ground test,
+ * then the centroid rule where the shell is not closed around the wall.
+ */
+export function outwardTest(walls: FacingWall[]): (w: FacingWall) => 1 | -1 {
+  const open = openFaceTest(walls)
+  const centroids = footprintCentroids(walls)
+  return (w) => {
+    const f = open(w)
+    return f === 1 || f === -1 ? f : outwardSign(w, centroids[w.level ?? 0])
+  }
+}
+
 export function perimeterTest(walls: FacingWall[]): (w: FacingWall) => boolean {
+  const open = openFaceTest(walls)
+  const box = boxPerimeterTest(walls)
+  return (w) => {
+    const f = open(w)
+    if (f === 1 || f === -1) return true
+    if (f === 0) return false
+    return box(w)
+  }
+}
+
+function boxPerimeterTest(walls: FacingWall[]): (w: FacingWall) => boolean {
   if (walls.length === 0) return () => false
   const xs = walls.flatMap((w) => [w.x1, w.x2])
   const ys = walls.flatMap((w) => [w.y1, w.y2])
