@@ -122,7 +122,8 @@ mark and need re-uploading — see [[canonical-logo]] in memory.
 |---|---|
 | Pricing | Free |
 | Contains ads | No |
-| In-app purchases | No |
+| In-app purchases | Yes — one product, no subscription |
+| Product ID | `theprints3d_pro_unlock` (one-time product, US$19.99; must match `PRO_PRODUCT_ID` in `src/services/billing.ts`) |
 
 **Free → Paid is impossible on Play.** You can move a paid app to free; you can
 never move a free app to paid. The only route to charging later is a new
