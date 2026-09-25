@@ -28,7 +28,8 @@ import FloorplanOverlay from './FloorplanOverlay'
 import FloorplanPanel from './FloorplanPanel'
 import LiveWallsLayer from './LiveWallsLayer'
 import PlanSheet from './PlanSheet'
-import NameplateStrip from './NameplateStrip'
+import FloatingNameplates from './FloatingNameplates'
+import NameplateTracker from './NameplateTracker'
 import FloorJoistsLayer from './FloorJoistsLayer'
 import CeilingLayer from './CeilingLayer'
 import RoofLayer from './RoofLayer'
@@ -1136,6 +1137,7 @@ export default function ModelViewer() {
           <CeilingLayer />
           <RoofLayer />
           <HoverNameplate />
+          <NameplateTracker />
           <DrywallLayer />
           <EnvelopeLayer />
           <PlacedObjectsLayer />
@@ -1184,10 +1186,9 @@ export default function ModelViewer() {
 
       </Canvas>
 
-      {/* The data plate — fixed HUD block, bottom-left, reading out whatever
-          member is selected. It replaces the labels that used to float in the
-          air over every wall; see NameplateStrip for why that had to go. */}
-      <NameplateStrip />
+      {/* The data plates, floating beside the parts they name and never on
+          them or on each other — laid out by NameplateTracker in the canvas. */}
+      <FloatingNameplates />
 
       {/* The lower third. Renders nothing at all unless a shot is rolling and
           that shot has a caption up, so it costs the live app one null. */}

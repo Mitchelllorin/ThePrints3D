@@ -65,19 +65,11 @@ export interface UISettings {
   memberColours: boolean
   /** Hide top/cap plates and top track so the stud heads — L's, T's, packs — read from above. */
   topPlatesHidden: boolean
-  /** WHEN the floating dimension nameplates show on walls, joists and ceilings.
-   *
-   *  They are the right thing while you are laying one thing out and pure
-   *  clutter once a storey is full of them — a finished floor is a wall of
-   *  floating text with the model somewhere behind it. So this is no longer
-   *  on/off: the useful state is the middle one, where a nameplate belongs to
-   *  the thing you have actually picked.
-   *
-   *  'always'   — every element carries its metrics. The old behaviour.
-   *  'selected' — only the current selection does. THE DEFAULT.
-   *  'off'      — never; read metrics from the property card instead.
-   */
-  dimensionsMode: DimensionsMode
+  /** How much every part's nameplate says when nothing is picked — see
+   *  NameplateTier. 0 by default: the model is clean until you ask. A finished
+   *  storey with every plate open is a wall of text with the building behind
+   *  it, so full is kept for the part you pick. */
+  nameplateTier: NameplateTier
   /** WHEN finishes appear, as opposed to which ones.
    *  'live'  — clad as soon as a wall exists (fine once you have stopped framing)
    *  'later' — keep the frame bare while you build; finishes appear only when you
@@ -138,9 +130,15 @@ export interface UISettings {
 }
 
 /** rev 2 — presets go back to PRACTICE by default. */
-export type DimensionsMode = 'always' | 'selected' | 'off'
+/**
+ * THE GLOBAL NAMEPLATE DIAL. How much every part says, all at once:
+ *   0 off · 1 name · 2 name and the one figure that matters · 3 everything.
+ * It is a floor, not a ceiling: the part you pick always reads out in full,
+ * whatever this is set to, and drops back when you let it go.
+ */
+export type NameplateTier = 0 | 1 | 2 | 3
 
-const SETTINGS_REV = 5
+const SETTINGS_REV = 6
 
 export const DEFAULT_UI_SETTINGS: UISettings = {
   // Menus/panels/toolbars default to ALMOST transparent so the workspace stays
@@ -174,7 +172,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   claddingVisible: false,
   memberColours: false,   // opt-in: not everybody wants a painted frame
   topPlatesHidden: false,
-  dimensionsMode: 'selected',
+  nameplateTier: 0,
   presetMode: 'practice',
   heatingType: DEFAULT_HEATING,
   settingsRev: SETTINGS_REV,
@@ -233,8 +231,17 @@ function load(): UISettings {
          and anyone who had deliberately turned them OFF keeps them off. */
       if ((saved.settingsRev ?? 0) < 4) {
         const legacy = (saved as { dimensionsVisible?: boolean }).dimensionsVisible
-        stored.dimensionsMode = legacy === false ? 'off' : 'selected'
+        ;(stored as { dimensionsMode?: string }).dimensionsMode = legacy === false ? 'off' : 'selected'
         delete (stored as { dimensionsVisible?: boolean }).dimensionsVisible
+      }
+      /* rev 6: the three-way Selected / Always / Off became the tier dial.
+         'always' put every metric on every part, which is tier 2 now — name
+         and the one figure — because the full plate is for the part you pick.
+         'selected' and 'off' both mean the model is quiet until you pick. */
+      if ((saved.settingsRev ?? 0) < 6) {
+        const mode = (stored as { dimensionsMode?: string }).dimensionsMode
+        stored.nameplateTier = mode === 'always' ? 2 : 0
+        delete (stored as { dimensionsMode?: string }).dimensionsMode
       }
       /* rev 5: the wordmark parks instead of swinging. Motion has defaulted ON
          since the badge existed, so every stored copy carries `true` and no

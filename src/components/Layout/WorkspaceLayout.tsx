@@ -235,15 +235,19 @@ function SettingsContent() {
         <ColorRow label="Label colour" val={ui.labelColor} onChange={(v) => setUI({ labelColor: v })} />
         <Slider label="Label size" val={Math.round(ui.labelScale * 100)} min={50} max={200} step={5} unit="%"
           onChange={(v) => setUI({ labelScale: v / 100 })} />
-        {/* Nameplates used to be on for everything, always, and a finished
-            storey came out as a wall of floating text with the model behind
-            it. "Selected" is the default: the thing you picked says what it
-            is, the rest stay out of the way. */}
+        {/* The global nameplate dial: how much every part says at once. The
+            part you pick always reads out in full on top of this, so Off
+            still names the thing you are working on. */}
         <Choice
-          label="Metric nameplates"
-          val={ui.dimensionsMode}
-          opts={[{ v: 'selected' as const, text: 'Selected' }, { v: 'always' as const, text: 'Always' }, { v: 'off' as const, text: 'Off' }]}
-          onChange={(v) => setUI({ dimensionsMode: v })}
+          label="Nameplates"
+          val={String(ui.nameplateTier) as '0' | '1' | '2' | '3'}
+          opts={[
+            { v: '0' as const, text: 'Off' },
+            { v: '1' as const, text: 'Name' },
+            { v: '2' as const, text: 'Name + size' },
+            { v: '3' as const, text: 'Full' },
+          ]}
+          onChange={(v) => setUI({ nameplateTier: Number(v) as 0 | 1 | 2 | 3 })}
         />
       </CollapsibleSection>
 

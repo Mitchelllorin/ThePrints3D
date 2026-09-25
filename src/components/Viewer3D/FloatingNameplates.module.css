@@ -1,0 +1,206 @@
+/*
+ * FLOATING NAMEPLATES. One layer over the canvas; plates, leaders, dots.
+ *
+ * The layer itself takes no touches — the canvas keeps orbit and pinch. The
+ * plates take none either: they are readouts, and a plate that ate the drag
+ * that started on it would stop you turning the model. Only dots and count
+ * markers take taps, and they are full 48px targets.
+ *
+ * The box sizes here MUST match the numbers in FloatingNameplates.tsx
+ * (PLATE_FONT_PX, PLATE_LINE_PX, PLATE_PAD_X/Y, PLATE_COL_GAP): the layout
+ * places a plate by its measured size before it is drawn.
+ */
+.layer {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-hud, 10);
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.leaders {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.leader {
+  stroke: rgba(226, 232, 240, 0.85);
+  stroke-width: 1;
+  /* A dark edge under the line, so it reads on a pale deck as well as the sky. */
+  filter: drop-shadow(0 0 1px rgba(2, 6, 23, 0.9));
+}
+
+.plate {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  padding: 4px 8px;
+
+  /* Glass: tint plus blur, never alpha alone. Composited over pure white the
+     tint lands near #444a59 and the text still clears 4.5:1; over black it is
+     darker still. */
+  background: rgba(15, 23, 42, 0.78);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+
+  font-size: 13px;
+  line-height: 17px;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  will-change: transform;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .plate { background: rgba(15, 23, 42, 0.94); }
+}
+
+/* The picked part's plate: a heavier edge, not only a colour, so it reads as
+   the selected one in sunlight and to colour-blind eyes too. */
+.selected {
+  border: 1px solid var(--bp-accent, #38bdf8);
+  box-shadow: inset 0 0 0 1px var(--bp-accent, #38bdf8);
+}
+
+.title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.figure {
+  font-weight: 600;
+  color: #e2e8f0;
+  font-variant-numeric: tabular-nums;
+}
+
+.rows {
+  display: grid;
+  gap: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+}
+
+/* Brighter than the usual dim grey: this sits on glass over a moving model,
+   and #94a3b8 falls under 4.5:1 once the backdrop turns white. */
+.label {
+  color: #cbd5e1;
+}
+
+.value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  color: #cbd5e1;
+}
+
+/* DOTS. The mark is small; the target is not. The box is centred on the part
+   by starting it half a target up and left, then translating it to the anchor. */
+.dot {
+  position: absolute;
+  left: -24px;
+  top: -24px;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+  will-change: transform;
+}
+
+.dotMark {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid #e2e8f0;
+}
+
+.clusterWrap {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+
+.clusterWrap > .dot {
+  pointer-events: auto;
+}
+
+.cluster .count {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 2px solid #e2e8f0;
+  color: #f1f5f9;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The list a count marker opens. The user asked for it and one tap closes it,
+   so it can be solid. */
+.list {
+  position: absolute;
+  top: 28px;
+  left: -24px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #151c25;
+  border: 1px solid #2c3a4a;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+.listItem {
+  min-height: 48px;
+  min-width: 140px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #f1f5f9;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.listItem:active {
+  background: #1e2833;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .plate { animation: plateIn 0.12s ease-out; }
+}
+
+@keyframes plateIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

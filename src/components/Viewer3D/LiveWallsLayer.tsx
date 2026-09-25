@@ -18,6 +18,9 @@ import { useWallPlans } from './useWallPlans'
 import { XRAY_OPACITY } from './editHelpers'
 import { applyMemberColours, applyTopPlatesHidden, ownedMaterial } from '../../services/memberColours'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useConfigStore } from '../../store/useConfigStore'
+import { wallFigure, wallNameplate, wallTitle } from '../../services/nameplate'
+import { useNameplateSource } from './nameplateRegistry'
 
 
 interface WallMeshProps {
@@ -29,9 +32,14 @@ interface WallMeshProps {
   storeyHeight: number
   /** Spread this wall's framing members apart to show the assembly. */
   detailExplode?: boolean
+  /** This is the picked wall: its plate opens to full. */
+  selected: boolean
 }
 
-function WallMesh({ plan, opacity, storeyHeight, detailExplode }: WallMeshProps) {
+/** Inches to mm — stud spacing is stored as the 16 or 24 people say out loud. */
+const IN_MM = 25.4
+
+function WallMesh({ plan, opacity, storeyHeight, detailExplode, selected }: WallMeshProps) {
   const toggleGhostedLevel = useFloorplanLocalStore((s) => s.toggleGhostedLevel)
   const { opts, length, angle, cx, cz, level, isMasonry, masonryKind } = plan
 
@@ -98,6 +106,28 @@ function WallMesh({ plan, opacity, storeyHeight, detailExplode }: WallMeshProps)
     })
   }, [framing, detailExplode])
 
+  // THE DATA PLATE, floating beside the wall — see FloatingNameplates. Real
+  // rated values: the framed length is what gets cut, so that is the span.
+  const activeUnit = useConfigStore((s) => s.activeUnit)
+  const lengthFormat = useConfigStore((s) => s.lengthFormat)
+  const studSpacingIn = useConfigStore((s) => s.studSpacingIn)
+  const fields = useMemo(() => wallNameplate({
+    framingType: plan.wall.framingType,
+    wallRole: plan.wall.wallRole,
+    lengthM: length,
+    spacingMm: studSpacingIn * IN_MM,
+    activeUnit,
+    lengthFormat,
+  }), [plan.wall.framingType, plan.wall.wallRole, length, studSpacingIn, activeUnit, lengthFormat])
+  useNameplateSource(`wall:${plan.index}`, length < 0.05 || opacity === 0 ? null : {
+    object: framing,
+    title: wallTitle(plan.wall.wallRole),
+    figure: wallFigure(fields),
+    fields,
+    selected,
+    warning: false,
+  })
+
   if (length < 0.05) return null
 
   // Upper-floor walls stand on the floor below.
@@ -111,19 +141,9 @@ function WallMesh({ plan, opacity, storeyHeight, detailExplode }: WallMeshProps)
         rotation={[0, -angle, 0]}
         onDoubleClick={(e: { stopPropagation: () => void }) => { e.stopPropagation(); toggleGhostedLevel(level) }}
       />
-      {/*
-        NO FLOATING NAMEPLATE HERE ANY MORE.
-
-        This used to hang the wall's length in the air above it while unbuilt.
-        On one wall it was a tape measure; on a traced storey it was ten labels
-        colliding with each other in front of the model — raw text sitting on
-        the canvas, unreadable the moment the view turned, and standing between
-        the user and the thing they opened the app to look at.
-
-        The readout moved to `NameplateStrip`: one fixed block in the HUD, same
-        corner every time, reading out the SELECTED member in a field order that
-        never changes. The length did not get taken away; it got a place to live.
-      */}
+      {/* The plate is not drawn here. This wall hands its figures to the one
+          nameplate layout (useNameplateSource above), which floats it beside
+          the wall and keeps it off every other plate. */}
     </>
   )
 }
@@ -182,6 +202,7 @@ export default function LiveWallsLayer() {
           })()}
           storeyHeight={storeyHeight}
           detailExplode={wallDetailExplode && i === selectedWallIndex}
+          selected={plan.index === selectedWallIndex}
         />
       ))}
     </group>
