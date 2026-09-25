@@ -3,7 +3,8 @@ import { useIsPro } from '../Pro/usePro'
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
 import ProjectLibrary from '../Projects/ProjectLibrary'
-import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
+import { listPresetDefinitions, presetStair, type PresetDifficulty } from '../../services/presetDrawings'
+import { overlayPixelToWorld } from '../../services/wallFramingPlan'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
@@ -1040,9 +1041,8 @@ export default function WorkspaceLayout() {
       // lands at level 0, underneath the second storey's walls. A house with
       // its roof in the middle of it.
       //
-      // Openings do not carry either, so the upper floor came out a windowless
-      // box. A correct one-storey house beats a broken two-storey one; proper
-      // multi-storey wants the storey list fixed first, which is its own job.
+      // The upper storey is its own drawing (see loadPresetDrawing), and its
+      // windows carry up from the plan; doors stay downstairs.
       // ORDER MATTERS, and getting it wrong is what put studs through the
       // doorways. The framing engine reads its openings from PLACED OBJECTS —
       // that is how it knows to skip studs and add king/jack/header. Build
@@ -1053,6 +1053,22 @@ export default function WorkspaceLayout() {
       // it once more for the roof, because buildForMe derives one and throws it
       // away (tracing a roof is meant to be an act). The second pass cannot
       // duplicate anything — openings dedupe on position.
+      // The stair goes in with the doors and windows, before the framing, so
+      // the deck upstairs is framed with its stairwell already cut.
+      const stair = presetStair('hard')
+      if (stair) {
+        const st = useAppStore.getState()
+        const ref = st.drawings.find((d) => d.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+        const { x, z } = overlayPixelToWorld(st.floorplanOverlay, ref?.rasterWidth ?? 1400, ref?.rasterHeight ?? 900)(stair.pxX, stair.pxY)
+        const item = getCatalogItem('stairs')
+        st.addPlacedObject({
+          id: `showcase-stair-${Date.now()}`,
+          type: 'stairs', x, z, rotationY: stair.rotationY,
+          scaleX: 1, scaleY: 1, scaleZ: 1,
+          label: item?.label ?? 'Stairs',
+          pxX: stair.pxX, pxY: stair.pxY, level: 0,
+        })
+      }
       useAppStore.getState().finishShell()
       useAppStore.getState().buildForMe()
       useAppStore.getState().finishShell()

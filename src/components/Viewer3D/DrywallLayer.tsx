@@ -128,6 +128,9 @@ export default function DrywallLayer() {
       const px = o.pxX as number, py = o.pxY as number
       let best = -1, bestPerp = Infinity, bestT = 0
       userWalls.forEach(({ wall: w }, i) => {
+        // Same storey only — an upstairs window is at the same spot on the
+        // sheet as the one below it, and must not cut the board downstairs.
+        if ((w.level ?? 0) !== (o.level ?? 0)) return
         const ddx = w.x2 - w.x1, ddy = w.y2 - w.y1
         const len2 = ddx * ddx + ddy * ddy
         if (len2 < 1e-6) return
@@ -153,6 +156,7 @@ export default function DrywallLayer() {
       const reachPx = ((item?.defaultD ?? 1) * o.scaleZ / 2) * pxPerM
       let best = -1, bestEdge = Infinity, bestT = 0
       userWalls.forEach(({ wall: w }, i) => {
+        if ((w.level ?? 0) !== (o.level ?? 0)) return
         const ddx = w.x2 - w.x1, ddy = w.y2 - w.y1
         const len2 = ddx * ddx + ddy * ddy
         if (len2 < 1e-6) return

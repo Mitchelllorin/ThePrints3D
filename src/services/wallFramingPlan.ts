@@ -213,7 +213,8 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
       // A gap that measures to nothing is a detection artefact, not a door.
       if (!(widthM > 0.3)) continue
       // The placed leaf wins over the detected gap it was dropped into.
-      if (placedObjects.some((p) => (p.type === 'door' || p.type === 'window') && Math.hypot(p.x - c.x, p.z - c.z) < 0.45)) continue
+      // Same storey only: the window downstairs does not fill the gap above it.
+      if (placedObjects.some((p) => (p.type === 'door' || p.type === 'window') && (p.level ?? 0) === (d.floorNumber ?? 0) && Math.hypot(p.x - c.x, p.z - c.z) < 0.45)) continue
       const { best, t } = nearestWall(c.x, c.z, 0, 0, d.floorNumber ?? 0)
       if (best < 0) continue
       const item = getCatalogItem(op.type)
