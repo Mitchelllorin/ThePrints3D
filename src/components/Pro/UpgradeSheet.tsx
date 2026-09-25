@@ -20,9 +20,10 @@ import styles from './UpgradeSheet.module.css'
 
 /** What the unlock buys. Kept short — a list you can read at arm's length. */
 const PRO_FEATURES = [
+  'The cut list and buy list for every wall',
   'Unlimited saved projects',
   'Full material takeoff, with CSV export',
-  'Edit and refine walls, and the measuring tape',
+  'The measuring tape',
   'Trade layers and product placement',
   'Exports without the watermark',
 ]

@@ -11,7 +11,7 @@
  *
  * requirePro(reason, action) either runs the action or opens the upgrade sheet
  * naming the reason. Call sites read as the thing they are doing —
- * requirePro('Editing walls', () => setEditMode(true)) — which keeps the gate
+ * requirePro('The measuring tape', () => setMeasureMode(true)) — which keeps the gate
  * from turning into the subject of the code around it.
  */
 import { useCallback } from 'react'
