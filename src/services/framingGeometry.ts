@@ -686,11 +686,18 @@ export function jacksPerEnd(spanM: number): number {
 }
 
 /**
- * King studs each side — one, until the opening is wide enough that the wall
- * either side of it is doing real work. Garage and big slider openings get two.
+ * KING STUDS EACH SIDE — IRC Table R602.7.5, full-height studs at each end of
+ * a header, the ≤115 mph Exposure B column (the least the table allows):
+ * one up to 8', two from 8' to 18'. Between listed spans the table says use
+ * the next larger one, so 8'-1" is two.
+ *
+ * It was "two past 12'", which framed a 10' or 12' opening with one king a
+ * side — one short of the table. Higher wind (<140 mph B, <130 mph C) asks
+ * for more: 2 at 6-8', 3 at 10-14', 4 at 16-18'. The app does not know the
+ * site's wind speed yet, so this is the floor, not the last word.
  */
 export function kingsPerEnd(spanM: number): number {
-  return spanM > 3.6576 ? 2 : 1        // past 12'
+  return spanM > 2.4384 ? 2 : 1        // past 8'
 }
 
 /** IRC R502.10 — a floor opening's header may be a single member while it spans

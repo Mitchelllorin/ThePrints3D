@@ -187,7 +187,7 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
         </div>
 
         <button className={styles.go} onClick={start}>
-          Start drawing
+          Frame it
         </button>
         </div>
       </div>

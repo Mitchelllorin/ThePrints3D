@@ -23,7 +23,7 @@ import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import { planViewCamera } from '../../services/builtScene'
 import UpgradeSheet from '../Pro/UpgradeSheet'
 import ProSection from '../Pro/ProSection'
-import { hasToured, markToured } from '../../onboarding/firstRun'
+import { markToured } from '../../onboarding/firstRun'
 import { watermarkedPng } from '../../services/watermark'
 import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/stairs'
 import { getCatalogItem } from '../../data/objectCatalog'
@@ -1069,15 +1069,11 @@ export default function WorkspaceLayout() {
     // Marked on START, not on finish — see onboarding/firstRun.ts. Someone who
     // bails three steps in has answered the question.
     markToured()
-    setFirstRun(false)
     startTutorial()
   }
   const hasDrawings = drawings.length > 0
   // Onboarding card persists until a plan is actually loaded — no dismiss.
   const showUploadHint = !hasDrawings
-  /** Never been shown around. Read once into state so the invitation cannot
-   *  flicker away mid-render when the flag is written. */
-  const [firstRun, setFirstRun] = useState(() => !hasToured())
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -1280,9 +1276,6 @@ export default function WorkspaceLayout() {
               a building, open a plan they already have, or look at a finished
               one. Everything else is still here, one line down, for the person
               who goes looking. */}
-          {firstRun && (
-            <p className={styles.uploadHintLead}>New here? Draw the building to size and it frames itself.</p>
-          )}
           <button className={styles.drawItChip} onClick={() => setDrawItOpen(true)}>
             ✏ Draw it
             <span className={styles.drawItNote}>drag it to size</span>
