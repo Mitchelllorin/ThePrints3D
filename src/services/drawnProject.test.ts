@@ -172,3 +172,26 @@ describe('isDrawnSheet — a blank grid, not a print', () => {
     expect(isDrawnSheet(null)).toBe(false)
   })
 })
+
+describe('Draw it on a page — where you put it, with its inside walls', () => {
+  const spec = {
+    widthMm: 12000, depthMm: 9000, wallTypeKey: 'wood-2x6', floor: 'slab' as const,
+    page: { originMm: { x: 5000, y: 3000 }, wMm: 30000, dMm: 20000 },
+    insideWalls: [{ x1: 10000, y1: 3200, x2: 10000, y2: 11800 }],
+  }
+
+  it('the sheet is the page, and the house sits where it was put on it', () => {
+    const p = createDrawnProject(spec)
+    expect(p.drawing.rasterWidth).toBe(3000)
+    expect(p.drawing.rasterHeight).toBe(2000)
+    const xs = p.outlinePx.map((q) => q.x), ys = p.outlinePx.map((q) => q.y)
+    expect(Math.min(...xs)).toBeCloseTo(500, 6)
+    expect(Math.min(...ys)).toBeCloseTo(300, 6)
+  })
+
+  it('inside walls come through as interior 2x4 walls, in sheet pixels', () => {
+    const inner = createDrawnProject(spec).drawing.parsedWalls.filter((w) => w.wallRole !== 'exterior-bearing')
+    expect(inner).toHaveLength(1)
+    expect(inner[0]).toMatchObject({ x1: 1000, y1: 320, x2: 1000, y2: 1180, framingType: 'wood-2x4', wallRole: 'interior-bearing', source: 'user' })
+  })
+})
