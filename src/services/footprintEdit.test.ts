@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MIN_BOX_MM, MIN_OVERLAP_MM, dimensionLanes, dragBoxes, normalizeBoxes, snapTo, typeBoxSize, typeOffset,
+  MIN_BOX_MM, MIN_OVERLAP_MM, cornerShift, dimensionLanes, dragBoxes, normalizeBoxes, snapTo, typeBoxSize, typeOffset,
 } from './footprintEdit'
 import { placeBoxes, type FootprintBox } from './footprint'
 
@@ -39,6 +39,45 @@ describe('dragging the main box', () => {
   it('will not go below the smallest box', () => {
     const out = dragBoxes([main(3000, 3000)], { box: 0, kind: 'w' }, -9000, 0, 100)
     expect(out[0].widthMm).toBe(MIN_BOX_MM)
+  })
+
+  it('pulls the LEFT edge out to the left and the width follows', () => {
+    const out = dragBoxes([main(12000, 9000)], { box: 0, kind: 'w', fromLeft: true }, -1000, 0, 100)
+    expect(out[0].widthMm).toBe(13000)
+  })
+
+  it('pulls the TOP edge up and the depth follows', () => {
+    const out = dragBoxes([main(12000, 9000)], { box: 0, kind: 'd', fromTop: true }, 0, -1500, 100)
+    expect(out[0].depthMm).toBe(10500)
+  })
+
+  it('pulls the top-left corner and both follow, outward', () => {
+    const out = dragBoxes([main(12000, 9000)], { box: 0, kind: 'wd', fromLeft: true, fromTop: true }, -500, 1000, 100)
+    expect(out[0]).toMatchObject({ widthMm: 12500, depthMm: 8000 })
+  })
+
+  it('pulling the left edge leaves a section on the back wall where it was on the ground', () => {
+    const start = [main(12000, 9000), wing(4000, 3000, 'bottom', 2000)]
+    const out = dragBoxes(start, { box: 0, kind: 'w', fromLeft: true }, -1000, 0, 100)
+    const before = placeBoxes(start)[1], after = placeBoxes(out)[1]
+    const shift = cornerShift(start, out, { box: 0, kind: 'w', fromLeft: true })
+    // The plan origin moved left by the growth; the section did not move on the ground.
+    expect(after.x1 - shift.xMm).toBeCloseTo(before.x1, 6)
+    expect(shift.xMm).toBe(1000)
+  })
+
+  it('pulling the top edge leaves a section on the right wall where it was', () => {
+    const start = [main(12000, 9000), wing(4000, 3000, 'right', 2000)]
+    const grip = { box: 0, kind: 'd' as const, fromTop: true }
+    const out = dragBoxes(start, grip, 0, -1000, 100)
+    const shift = cornerShift(start, out, grip)
+    expect(placeBoxes(out)[1].y1 - shift.yMm).toBeCloseTo(placeBoxes(start)[1].y1, 6)
+  })
+
+  it('a right or bottom edge does not move the corner', () => {
+    const start = [main(12000, 9000)]
+    const out = dragBoxes(start, { box: 0, kind: 'wd' }, 1000, 1000, 100)
+    expect(cornerShift(start, out, { box: 0, kind: 'wd' })).toEqual({ xMm: 0, yMm: 0 })
   })
 })
 

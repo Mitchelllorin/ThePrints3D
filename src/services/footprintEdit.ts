@@ -33,7 +33,14 @@ export const MIN_OVERLAP_MM = 600
 export type SizeField = 'w' | 'd'
 /** What a handle changes: the width, the depth, both (a corner), or where a section sits. */
 export type GripKind = 'w' | 'd' | 'wd' | 'slide'
-export interface Grip { box: number; kind: GripKind }
+/**
+ * A handle, and which edge of the box it is on.
+ *
+ * The main box can be pulled from any side. `fromLeft` means the handle is on
+ * its LEFT edge (so pulling left makes it wider), `fromTop` the same for the
+ * top edge. Without them a handle is on the right or bottom edge.
+ */
+export interface Grip { box: number; kind: GripKind; fromLeft?: boolean; fromTop?: boolean }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
@@ -98,9 +105,23 @@ export function dragBoxes(
   if (!b || !s0) return normalizeBoxes(start)
 
   if (grip.box === 0) {
-    if (grip.kind === 'w' || grip.kind === 'wd') b.widthMm = snapTo(s0.widthMm + dxMm, snapMm)
-    if (grip.kind === 'd' || grip.kind === 'wd') b.depthMm = snapTo(s0.depthMm + dyMm, snapMm)
-    return normalizeBoxes(next)
+    if (grip.kind === 'w' || grip.kind === 'wd') b.widthMm = snapTo(s0.widthMm + (grip.fromLeft ? -dxMm : dxMm), snapMm)
+    if (grip.kind === 'd' || grip.kind === 'wd') b.depthMm = snapTo(s0.depthMm + (grip.fromTop ? -dyMm : dyMm), snapMm)
+    const sized = normalizeBoxes(next)
+    // PULLING THE LEFT OR TOP EDGE. The plan is measured from the main box's
+    // top-left corner, so moving that corner would drag every section hung
+    // along the top or bottom wall with it — they would slide while you only
+    // meant to move one wall. Push their offsets by the same amount instead,
+    // so everything you are not holding stays where it was on the ground.
+    const grewW = grip.fromLeft ? sized[0].widthMm - s0.widthMm : 0
+    const grewD = grip.fromTop ? sized[0].depthMm - s0.depthMm : 0
+    if (!grewW && !grewD) return sized
+    for (let i = 1; i < sized.length; i++) {
+      const a = sized[i].attach
+      if (!a) continue
+      a.offsetMm += runsDown(a.side) ? grewD : grewW
+    }
+    return normalizeBoxes(sized)
   }
 
   const side: AttachSide = s0.attach?.side ?? 'right'
@@ -110,6 +131,19 @@ export function dragBoxes(
     b.attach.offsetMm = snapTo((s0.attach?.offsetMm ?? 0) + (runsDown(side) ? dyMm : dxMm), snapMm)
   }
   return normalizeBoxes(next)
+}
+
+/**
+ * How far the main box's top-left corner moved in a drag, in millimetres.
+ * The editor shifts its frame back by this much so the edge on the far side —
+ * the one you are NOT holding — stays still on screen.
+ */
+export function cornerShift(start: readonly FootprintBox[], now: readonly FootprintBox[], grip: Grip): { xMm: number; yMm: number } {
+  if (grip.box !== 0 || !start[0] || !now[0]) return { xMm: 0, yMm: 0 }
+  return {
+    xMm: grip.fromLeft ? now[0].widthMm - start[0].widthMm : 0,
+    yMm: grip.fromTop ? now[0].depthMm - start[0].depthMm : 0,
+  }
 }
 
 /** One size, typed exact. Not snapped: a typed number is the number you meant. */

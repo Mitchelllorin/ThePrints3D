@@ -1285,7 +1285,7 @@ export default function WorkspaceLayout() {
           )}
           <button className={styles.drawItChip} onClick={() => setDrawItOpen(true)}>
             ✏ Draw it
-            <span className={styles.drawItNote}>type the sizes</span>
+            <span className={styles.drawItNote}>drag it to size</span>
           </button>
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Open a plan</button>

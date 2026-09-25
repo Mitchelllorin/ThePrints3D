@@ -33,13 +33,23 @@ export function plateLine2(c: PlateContent): string {
 }
 
 const sizeCache = new Map<string, Record<1 | 2 | 3, Size>>()
+// Measured before the web font arrives, every plate is sized for the fallback
+// face and its text is cut off once Inter lands. Measure again when it does.
+if (typeof document !== 'undefined' && document.fonts?.ready) {
+  void document.fonts.ready.then(() => { sizeCache.clear(); family = ''; ctx = null; epoch++ })
+}
+let epoch = 0
+/** Changes when every plate needs measuring again, so the layout reruns. */
+export function measureEpoch(): number { return epoch }
+/** Sub-pixel rounding and hinting differ between canvas and layout; a hair spare. */
+const SPARE_PX = 3
 /** How big this plate is at each tier. */
 export function measurePlate(c: PlateContent): Record<1 | 2 | 3, Size> {
   const key = JSON.stringify(c)
   const hit = sizeCache.get(key)
   if (hit) return hit
   const frame = (w: number, lines: number): Size => ({
-    w: Math.ceil(w + PLATE_PAD_X * 2 + BORDER * 2),
+    w: Math.ceil(w + PLATE_PAD_X * 2 + BORDER * 2 + SPARE_PX),
     h: lines * PLATE_LINE_PX + PLATE_PAD_Y * 2 + BORDER * 2,
   })
   const t1 = frame(textWidth(c.title, 600), 1)

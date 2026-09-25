@@ -204,7 +204,9 @@
    the plan you were told to pull. So the plan stands full height on the left
    and stays put, and the controls stack on the right and scroll on their own. */
 .top, .rest { display: grid; gap: 8px; min-width: 0; }
-.plan { height: 300px; min-width: 0; }
+/* The plan is the input, so it gets the room: on a 640px phone that is ~400px
+   of house to grab instead of 300, which is what lets every wall keep a grip. */
+.plan { height: clamp(300px, 62vh, 480px); min-width: 0; }
 
 @media (orientation: landscape) and (max-height: 540px) {
   .sheet {

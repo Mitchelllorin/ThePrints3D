@@ -15,21 +15,36 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { convexHull, layoutNameplates, type Box, type PlateRequest, type Pt, type Tier } from '../../services/nameplateLayout'
-import { measurePlate } from './plateMeasure'
+import { measureEpoch, measurePlate } from './plateMeasure'
 import {
   expandedNameplate, nameplateSources, nameplateVersion, publishNameplateLayout,
 } from './nameplateRegistry'
 
 /**
- * THE FREE RECTANGLE. Plates stay inside the canvas less the HUD round its
- * edges — the rail on the left, the top bar, the explode slider on the right
- * and the bottom bar — so a plate never sits under a control. The rail width
- * is read from the same token the rail is drawn with.
+ * WHAT A PLATE MAY NOT COVER. The HUD's controls, read off the page: every
+ * button and slider that is on screen and not a plate's own dot. Measured
+ * rather than guessed — a fixed margin for "the right edge" kept a whole strip
+ * of open ground empty for a slider that only occupies part of it. Re-read a
+ * few times a second, not every frame; controls do not move that often.
  */
-const EDGE_TOP = 56
-const EDGE_RIGHT = 64
-const EDGE_BOTTOM = 72
 const EDGE_GAP = 8
+const OBSTACLE_MS = 400
+const CONTROLS = 'button, input, select, [role="slider"], [role="dialog"], [data-hud]'
+function readObstacles(canvas: HTMLElement, layer: Element | null): Box[] {
+  const c = canvas.getBoundingClientRect()
+  const out: Box[] = []
+  for (const el of document.querySelectorAll(CONTROLS)) {
+    if (layer && layer.contains(el)) continue
+    const r = el.getBoundingClientRect()
+    if (r.width < 1 || r.height < 1) continue
+    if (r.right < c.left || r.left > c.right || r.bottom < c.top || r.top > c.bottom) continue
+    const cs = getComputedStyle(el)
+    if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) continue
+    out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height })
+  }
+  return out
+}
+
 /** A part smaller than this on screen is a dot, not a plate of micro-text. */
 const MIN_PART_PX = 28
 
@@ -66,14 +81,9 @@ function shown(obj: THREE.Object3D): boolean {
   return true
 }
 
-function railWidth(el: HTMLElement): number {
-  const v = parseFloat(getComputedStyle(el).getPropertyValue('--rail-w'))
-  return Number.isFinite(v) && v > 0 ? v : 44
-}
-
 export default function NameplateTracker() {
   const last = useRef({ sig: NaN, prevDirs: new Map<string, number>() })
-  const rail = useRef<number | null>(null)
+  const obstacles = useRef<{ at: number; boxes: Box[] }>({ at: -Infinity, boxes: [] })
 
   useFrame(({ camera, size, gl }) => {
     const tier = useUISettingsStore.getState().nameplateTier
@@ -81,7 +91,7 @@ export default function NameplateTracker() {
     const src = nameplateSources()
 
     // Nothing moved, nothing changed: keep the last layout.
-    let sig = nameplateVersion() * 7 + tier * 13 + size.width * 17 + size.height * 19
+    let sig = nameplateVersion() * 7 + measureEpoch() * 31 + tier * 13 + size.width * 17 + size.height * 19
     const e = camera.matrixWorld.elements
     for (let i = 0; i < 16; i++) sig += e[i] * (i + 1)
     // Zoom on an orthographic camera lives in the projection, not the pose.
@@ -90,16 +100,16 @@ export default function NameplateTracker() {
       const m = s.object.matrixWorld.elements
       sig += m[12] * 3 + m[13] * 5 + m[14] * 11 + (s.object.visible ? 1 : 0)
     }
-    if (sig === last.current.sig) return
+    const now = performance.now()
+    const stale = now - obstacles.current.at > OBSTACLE_MS
+    if (sig === last.current.sig && !stale) return
     last.current.sig = sig
-
-    if (rail.current == null) rail.current = railWidth(gl.domElement)
-    const bounds: Box = {
-      x: rail.current + EDGE_GAP,
-      y: EDGE_TOP,
-      w: Math.max(0, size.width - rail.current - EDGE_GAP - EDGE_RIGHT),
-      h: Math.max(0, size.height - EDGE_TOP - EDGE_BOTTOM),
+    if (stale) {
+      const layer = document.querySelector('[data-nameplate-layer]')
+      obstacles.current = { at: now, boxes: readObstacles(gl.domElement, layer) }
     }
+
+    const bounds: Box = { x: EDGE_GAP, y: EDGE_GAP, w: Math.max(0, size.width - 2 * EDGE_GAP), h: Math.max(0, size.height - 2 * EDGE_GAP) }
 
     const project = (x: number, y: number, z: number): Pt | null => {
       _v.set(x, y, z).project(camera)
@@ -151,7 +161,7 @@ export default function NameplateTracker() {
     }
 
     const centre = n ? { x: cx / n, y: cy / n } : { x: size.width / 2, y: size.height / 2 }
-    const layout = layoutNameplates(reqs, bounds, centre, last.current.prevDirs)
+    const layout = layoutNameplates(reqs, bounds, centre, last.current.prevDirs, obstacles.current.boxes)
     last.current.prevDirs = new Map(layout.plates.map((p) => [p.id, p.dir]))
     publishNameplateLayout(layout)
   })

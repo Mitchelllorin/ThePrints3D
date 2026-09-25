@@ -174,8 +174,9 @@ function inside(b: Box, bounds: Box): boolean {
 /**
  * Lay every plate out.
  *
- * `bounds` is the free rectangle — the canvas less the HUD round its edges; a
- * plate is never placed outside it. `centre` is the model's centre on screen,
+ * `bounds` is the canvas less the safe-area edges; a plate is never placed
+ * outside it. `obstacles` are the HUD controls actually on screen — the rail,
+ * the top buttons, the explode slider — measured, not guessed. `centre` is the model's centre on screen,
  * which decides what "outward" means. `prevDirs` is the last layout's sides.
  */
 export function layoutNameplates(
@@ -183,6 +184,8 @@ export function layoutNameplates(
   bounds: Box,
   centre: Pt,
   prevDirs?: ReadonlyMap<string, number>,
+  /** The HUD's controls, on screen. A plate never sits on a control. */
+  obstacles: readonly Box[] = [],
 ): NameplateLayout {
   const plates: PlacedPlate[] = []
   const dotReqs: PlateRequest[] = []
@@ -213,6 +216,7 @@ export function layoutNameplates(
         for (const d of sideList) {
           const box = boxAt(r.anchor, DIRS[d], clear[d] + PLATE_GAP + step * PUSH_STEP, size)
           if (!inside(box, bounds)) continue
+          if (obstacles.some((o) => boxesOverlap(box, o, PLATE_GAP))) continue
           // Half the gap here: the search already starts a full gap clear of
           // the part, and testing the full gap again would reject a plate
           // sitting exactly where it was put.

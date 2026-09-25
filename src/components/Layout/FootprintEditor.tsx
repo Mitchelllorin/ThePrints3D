@@ -5,8 +5,9 @@
  * type a depth, and watch a little preview redraw underneath. The name promised
  * a gesture and the screen delivered four fields. Now the plan is the input.
  *
- *   - Grab the right edge and pull: the width follows your finger. The bottom
- *     edge is the depth, and the square corner grip does both.
+ *   - Grab any edge of the building and pull: that wall follows your finger and
+ *     the wall across from it stays put. Every corner has a square grip that
+ *     does both sizes at once.
  *   - Every section has its own two grips, on its OUTER edges, so a section on
  *     the left grows leftward and one on the front grows upward — the edge you
  *     are holding is the edge that moves.
@@ -31,7 +32,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { placeBoxes, footprintOutline, type AttachSide, type FootprintBox, type Rect } from '../../services/footprint'
 import {
-  dragBoxes, typeBoxSize, typeOffset, dimensionLanes, runsDown,
+  cornerShift, dragBoxes, typeBoxSize, typeOffset, dimensionLanes, runsDown,
   type Grip, type SizeField,
 } from '../../services/footprintEdit'
 import { parseSizeMm } from '../../services/drawnProject'
@@ -107,7 +108,7 @@ export default function FootprintEditor({
     w: Math.max(240, Math.min(420, typeof window === 'undefined' ? 360 : window.innerWidth) - 34),
     h: height,
   }))
-  const [drag, setDrag] = useState<{ grip: Grip; frame: Frame } | null>(null)
+  const [drag, setDrag] = useState<{ grip: Grip; frame: Frame; start: FootprintBox[] } | null>(null)
   const dragFrom = useRef<{ x: number; y: number; boxes: FootprintBox[]; id: number; moved: number } | null>(null)
   const [editing, setEditing] = useState<{ key: string; text: string; bad: boolean } | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
@@ -138,7 +139,11 @@ export default function FootprintEditor({
     left: padFor(laneCount.left), right: padFor(laneCount.right),
   }
   const fitted = fitFrame(size.w, size.h, bounds, pad)
-  const f = drag ? drag.frame : fitted
+  // Pulling the left or top wall moves the corner the plan is measured from.
+  // Shift the frozen frame back by the same amount, so the wall across the
+  // building stays where it is on screen and only the one in your hand moves.
+  const shift = drag ? cornerShift(drag.start, boxes, drag.grip) : { xMm: 0, yMm: 0 }
+  const f = drag ? { ...drag.frame, ox: drag.frame.ox - shift.xMm * drag.frame.s, oy: drag.frame.oy - shift.yMm * drag.frame.s } : fitted
   const X = (mm: number) => f.ox + mm * f.s
   const Y = (mm: number) => f.oy + mm * f.s
   const B = { x1: X(bounds.x1), y1: Y(bounds.y1), x2: X(bounds.x2), y2: Y(bounds.y2) }
@@ -195,27 +200,80 @@ export default function FootprintEditor({
     if (g.kind === 'slide') active.add(`${g.box}:off`)
   }
 
-  // ── Grips: on the edges that move ────────────────────────────────────────
+  // ── Grips: on every edge and every corner of the building ────────────────
   const m = placed[0]
-  const grips: GripAt[] = [
-    { grip: { box: 0, kind: 'w' }, x: X(m.x2), y: Y((m.y1 + m.y2) / 2), corner: false, label: 'Drag to change the width' },
-    { grip: { box: 0, kind: 'd' }, x: X((m.x1 + m.x2) / 2), y: Y(m.y2), corner: false, label: 'Drag to change the depth' },
-    { grip: { box: 0, kind: 'wd' }, x: X(m.x2), y: Y(m.y2), corner: true, label: 'Drag to change the width and depth together' },
-  ]
+  // Where the main box's walls are open to a section, there is no wall there
+  // to hold: find the stretch of each wall still on the outside, and put that
+  // wall's grip in the middle of the longest one.
+  const openRuns = (side: AttachSide): Array<[number, number]> => {
+    const along = runsDown(side) ? [m.y1, m.y2] : [m.x1, m.x2]
+    const cuts = boxes.slice(1).map((b, k) => ({ b, r: placed[k + 1] }))
+      .filter(({ b }) => (b.attach?.side ?? 'right') === side)
+      .map(({ r }) => (runsDown(side) ? [r.y1, r.y2] : [r.x1, r.x2]) as [number, number])
+      .sort((a, b) => a[0] - b[0])
+    const runs: Array<[number, number]> = []
+    let at = along[0]
+    for (const [a, b] of cuts) {
+      if (a > at) runs.push([at, Math.min(a, along[1])])
+      at = Math.max(at, b)
+    }
+    if (at < along[1]) runs.push([at, along[1]])
+    return runs
+  }
+  const midOfLongest = (side: AttachSide): number | null => {
+    const runs = openRuns(side)
+    if (!runs.length) return null
+    const [a, b] = runs.reduce((best, r) => (r[1] - r[0] > best[1] - best[0] ? r : best))
+    return (a + b) / 2
+  }
+  /** A corner is only a corner if no section runs past it. */
+  const cornerOpen = (x: number, y: number) => boxes.slice(1).every((_, k) => {
+    const r = placed[k + 1]
+    return !(x > r.x1 + 1e-6 && x < r.x2 - 1e-6 && y >= r.y1 - 1e-6 && y <= r.y2 + 1e-6)
+      && !(y > r.y1 + 1e-6 && y < r.y2 - 1e-6 && x >= r.x1 - 1e-6 && x <= r.x2 + 1e-6)
+  })
+
+  const candidates: GripAt[] = []
   // ONE grip per section, on its outer corner. Two edge grips each was the
   // first version, and on a 12′ section at phone scale they sat about 28px
   // apart — two 48px targets overlapping. The corner does both, in the same
-  // square shape as the main box's corner; drag straight out for one size and
+  // square shape as the main box's corners; drag straight out for one size and
   // the snap holds the other. Typing either on its dimension is the exact way.
+  // Sections go first: a section's only grip beats a main-box spare.
   boxes.forEach((b, i) => {
     if (i === 0) return
     const r = placed[i]
     const side = b.attach?.side ?? 'right'
-    grips.push({
+    candidates.push({
       grip: { box: i, kind: 'wd' }, corner: true, label: `Drag to size section ${i + 1}`,
       x: X(side === 'left' ? r.x1 : r.x2), y: Y(side === 'top' ? r.y1 : r.y2),
     })
   })
+  // The four corners, then the four walls.
+  for (const [left, top] of [[false, false], [true, false], [false, true], [true, true]] as const) {
+    const cx = left ? m.x1 : m.x2, cy = top ? m.y1 : m.y2
+    if (!cornerOpen(cx, cy)) continue
+    candidates.push({
+      grip: { box: 0, kind: 'wd', fromLeft: left, fromTop: top }, corner: true,
+      x: X(cx), y: Y(cy), label: `Drag the ${top ? 'front' : 'back'} ${left ? 'left' : 'right'} corner`,
+    })
+  }
+  for (const side of ['right', 'bottom', 'left', 'top'] as const) {
+    const mid = midOfLongest(side)
+    if (mid == null) continue
+    const w = runsDown(side)
+    candidates.push({
+      grip: { box: 0, kind: w ? 'w' : 'd', fromLeft: side === 'left', fromTop: side === 'top' }, corner: false,
+      x: w ? X(side === 'left' ? m.x1 : m.x2) : X(mid),
+      y: w ? Y(mid) : Y(side === 'top' ? m.y1 : m.y2),
+      label: `Drag the ${side === 'top' ? 'front' : side === 'bottom' ? 'back' : side} wall`,
+    })
+  }
+  // No two grips closer than a target and its spacing. On a narrow house the
+  // wall grip would sit on a corner grip; the corner already does that job.
+  const grips: GripAt[] = []
+  for (const g of candidates) if (grips.every((k) => Math.hypot(k.x - g.x, k.y - g.y) >= 56)) grips.push(g)
+  const gripKey = (g: Grip) => `${g.box}:${g.kind}:${g.fromLeft ? 'L' : ''}${g.fromTop ? 'T' : ''}`
 
   // ── Pointer: millimetres moved = pixels moved / the frozen scale ─────────
   const begin = (e: ReactPointerEvent<Element>, grip: Grip) => {
@@ -224,7 +282,7 @@ export default function FootprintEditor({
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     dragFrom.current = { x: e.clientX, y: e.clientY, boxes: boxes.slice(), id: e.pointerId, moved: 0 }
-    setDrag({ grip, frame: fitted })
+    setDrag({ grip, frame: fitted, start: boxes.slice() })
     setEditing(null)
   }
   const move = (e: ReactPointerEvent<Element>) => {
@@ -329,9 +387,9 @@ export default function FootprintEditor({
       </svg>
 
       {grips.map((g) => {
-        const on = drag !== null && drag.grip.box === g.grip.box && drag.grip.kind === g.grip.kind
+        const on = drag !== null && gripKey(drag.grip) === gripKey(g.grip)
         return (
-          <button key={`${g.grip.box}:${g.grip.kind}`} type="button"
+          <button key={gripKey(g.grip)} type="button"
             className={[styles.grip, g.corner ? styles.gripCorner : '', on ? styles.gripOn : ''].filter(Boolean).join(' ')}
             style={{ left: g.x, top: g.y }}
             aria-label={g.label}

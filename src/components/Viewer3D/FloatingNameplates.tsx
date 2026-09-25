@@ -121,7 +121,7 @@ export default function FloatingNameplates() {
   const src = nameplateSources()
 
   return (
-    <div className={styles.layer} aria-hidden={layout.plates.length === 0 && layout.dots.length === 0 && layout.clusters.length === 0}>
+    <div className={styles.layer} data-nameplate-layer aria-hidden={layout.plates.length === 0 && layout.dots.length === 0 && layout.clusters.length === 0}>
       <svg className={styles.leaders}>
         {layout.plates.filter((p) => p.leader).map((p) => (
           <line key={p.id} ref={(el) => keep(lineEls, p.id, el)} className={styles.leader} />
