@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useIsPro } from '../Pro/usePro'
+import type { SavedProject } from '../../services/projectStorage'
 import {
-  saveProject,
-  loadProject,
-  listProjects,
-  deleteProject,
-  serializeDrawing,
-  deserializeDrawing,
-  newProjectId,
-  type SavedProject,
-} from '../../services/projectStorage'
-import { useAppStore } from '../../store/useAppStore'
+  currentJobId,
+  flushJob,
+  listJobs,
+  newJob,
+  onJobSaved,
+  openJob,
+  removeJob,
+  renameJob,
+} from '../../services/currentJob'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import styles from './ProjectLibrary.module.css'
 
@@ -18,169 +18,201 @@ import styles from './ProjectLibrary.module.css'
  *  remembers your work; the second is what Pro is for. */
 const FREE_PROJECT_LIMIT = 1
 
-/** Modal-ish overlay showing saved projects + save-current button. */
+/** "just now", "4 min ago", "3 h ago", else the date. */
+function ago(t: number, now: number): string {
+  const s = Math.max(0, Math.round((now - t) / 1000))
+  if (s < 45) return 'just now'
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m} min ago`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h} h ago`
+  return new Date(t).toLocaleDateString()
+}
+
 /**
- * `inline` drops the modal shell so the library can live in a drawer section.
- * Saving a job is not a thing you do in the middle of the workspace with the
- * model hidden behind a dialog — and until now it was not a thing you could do
- * at all, because this component was never imported anywhere. An uploaded print
- * died on reload.
+ * THE JOBS ON THIS PHONE.
+ *
+ * The open job saves itself (services/currentJob), so there is no Save button
+ * here — only the things you do to jobs: start a new one, open another, rename,
+ * delete. It used to save by hand as a NEW project every time, through the
+ * browser's prompt/alert/confirm boxes, and a free user could never update the
+ * one job they had.
+ *
+ * `inline` drops the modal shell so the list can live in a drawer section.
  */
 export default function ProjectLibrary({ onClose, inline }: { onClose?: () => void; inline?: boolean }) {
   const [projects, setProjects] = useState<SavedProject[]>([])
   const [busy, setBusy] = useState(false)
-  const drawings = useAppStore((s) => s.drawings)
-  const layers = useAppStore((s) => s.layers)
-  const measurements = useAppStore((s) => s.measurements)
-  const model = useAppStore((s) => s.model)
-  const setView = useAppStore((s) => s.setView)
+  const [openId, setOpenId] = useState<string | null>(currentJobId())
+  const [now, setNow] = useState(() => Date.now())
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [draftName, setDraftName] = useState('')
+  const [armedDelete, setArmedDelete] = useState<string | null>(null)
+  const disarmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isPro = useIsPro()   // the one Pro rule — see Pro/usePro
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
 
   const refresh = async () => {
-    setProjects(await listProjects())
+    setProjects(await listJobs())
+    setOpenId(currentJobId())
+    setNow(Date.now())
   }
 
   useEffect(() => {
-    let cancelled = false
-    void listProjects().then((items) => {
-      if (!cancelled) setProjects(items)
+    let live = true
+    // Save first, so the open job's row is current when the list is read.
+    void flushJob().then(listJobs).then((items) => {
+      if (!live) return
+      setProjects(items)
+      setOpenId(currentJobId())
+    })
+    const off = onJobSaved(() => {
+      void listJobs().then((items) => {
+        if (!live) return
+        setProjects(items)
+        setOpenId(currentJobId())
+        setNow(Date.now())
+      })
     })
     return () => {
-      cancelled = true
+      live = false
+      off()
+      if (disarmTimer.current) clearTimeout(disarmTimer.current)
     }
   }, [])
 
-  const saveCurrent = async () => {
-    if (drawings.length === 0) {
-      alert('Upload at least one drawing before saving the project.')
-      return
-    }
-    // Free keeps one job on the shelf — enough to prove the app remembers your
-    // work, which is the thing that has to be believed before anyone pays. The
-    // second job is the upgrade. Overwriting the existing one still works, so
-    // nobody is stuck: this blocks a NEW save, not saving.
-    if (!isPro && projects.length >= FREE_PROJECT_LIMIT) {
-      openUpgrade('Saving more than one project')
-      return
-    }
-    const name = prompt('Project name?', `Job ${new Date().toLocaleDateString()}`)
-    if (!name) return
+  const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
-    try {
-      const id = newProjectId()
-      const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
-      let thumbnail: string | undefined
-      try {
-        thumbnail = canvas ? canvas.toDataURL('image/png') : undefined
-      } catch { /* ignore */ }
-      const serialized = await Promise.all(drawings.map(serializeDrawing))
-      await saveProject({
-        id,
-        name,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        thumbnail,
-        drawings: serialized,
-        layers,
-        measurements,
-        model,
-      })
+    try { await fn() } finally {
+      setBusy(false)
       await refresh()
-    } finally {
-      setBusy(false)
     }
   }
 
-  const openProject = async (id: string) => {
-    setBusy(true)
-    try {
-      const p = await loadProject(id)
-      if (!p) return
-      const restored = p.drawings.map(deserializeDrawing)
-      const updatedAt = typeof p.updatedAt === 'number' ? p.updatedAt : Date.now()
-      const fallbackStart = updatedAt - p.measurements.length * 1000
-      const restoredMeasurements = p.measurements.map((m, idx) => ({
-        ...m,
-        createdAt: typeof m.createdAt === 'number' ? m.createdAt : fallbackStart + idx * 1000,
-      }))
-      useAppStore.setState({
-        drawings: restored,
-        layers: p.layers,
-        measurements: restoredMeasurements,
-        model: p.model,
-        view: restored.length > 0 ? 'model' : 'upload',
-      })
-      setView(restored.length > 0 ? 'model' : 'upload')
-      // Inline there is no dialog to dismiss — the drawer stays where it is.
+  const startNew = () => {
+    // Free keeps one job. Clear on the rail starts that one over; a second job
+    // is the upgrade.
+    if (!isPro && projects.length >= FREE_PROJECT_LIMIT) {
+      openUpgrade('Keeping more than one job')
+      return
+    }
+    void run(newJob)
+  }
+
+  const open = (id: string) => {
+    void run(async () => {
+      await openJob(id)
       onClose?.()
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
-  const removeProject = async (id: string) => {
-    if (!confirm('Delete this project? This cannot be undone.')) return
-    await deleteProject(id)
-    await refresh()
+  const beginRename = (p: SavedProject) => {
+    setRenaming(p.id)
+    setDraftName(p.name)
+  }
+  const commitRename = () => {
+    const id = renaming
+    setRenaming(null)
+    if (id && draftName.trim()) void run(() => renameJob(id, draftName))
+  }
+
+  // Two taps, like Clear on the rail: the first arms it and says it can't be
+  // undone, the second deletes. It disarms itself if the second tap never comes.
+  const tapDelete = (id: string) => {
+    if (disarmTimer.current) clearTimeout(disarmTimer.current)
+    if (armedDelete === id) {
+      setArmedDelete(null)
+      void run(() => removeJob(id))
+      return
+    }
+    setArmedDelete(id)
+    disarmTimer.current = setTimeout(() => setArmedDelete(null), 3500)
   }
 
   return (
     <div className={inline ? styles.inlineWrap : styles.overlay} onClick={inline ? undefined : onClose}>
       <div className={inline ? styles.inlineBody : styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header} style={inline ? { display: 'none' } : undefined}>
-          <h2 className={styles.title}>📁 My Projects</h2>
+          <h2 className={styles.title}>Jobs</h2>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
         </div>
 
         <button
           className={styles.saveBtn}
-          onClick={saveCurrent}
-          disabled={busy || drawings.length === 0}
-          data-testid="save-current-project-btn"
+          onClick={startNew}
+          disabled={busy}
+          data-testid="new-job-btn"
         >
-          💾 Save current session as a new project
+          New job
         </button>
 
         {projects.length === 0 ? (
-          <p className={styles.empty}>No saved projects yet. Save your first one with the button above.</p>
+          <p className={styles.empty}>Jobs save as you work. Start one and it shows here.</p>
         ) : (
           <ul className={styles.list}>
-            {projects.map((p) => (
-              <li key={p.id} className={styles.item}>
-                {p.thumbnail ? (
-                  <img src={p.thumbnail} alt="" className={styles.thumb} />
-                ) : (
-                  <div className={`${styles.thumb} ${styles.thumbPlaceholder}`}>🗎</div>
-                )}
-                <div className={styles.info}>
-                  <div className={styles.name}>{p.name}</div>
-                  <div className={styles.meta}>
-                    {p.drawings.length} drawing{p.drawings.length !== 1 ? 's' : ''} ·{' '}
-                    {new Date(p.updatedAt).toLocaleString()}
+            {projects.map((p) => {
+              const isOpen = p.id === openId
+              const sheets = p.drawings.length
+              return (
+                <li key={p.id} className={`${styles.item} ${isOpen ? styles.itemOpen : ''}`}>
+                  <div className={styles.info}>
+                    {renaming === p.id ? (
+                      <input
+                        className={styles.nameInput}
+                        value={draftName}
+                        autoFocus
+                        aria-label="Job name"
+                        onChange={(e) => setDraftName(e.target.value)}
+                        onBlur={commitRename}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitRename()
+                          if (e.key === 'Escape') setRenaming(null)
+                        }}
+                      />
+                    ) : (
+                      <button
+                        className={styles.nameBtn}
+                        onClick={() => beginRename(p)}
+                        aria-label={`Rename ${p.name}`}
+                      >
+                        {p.name}
+                      </button>
+                    )}
+                    <div className={styles.meta}>
+                      {isOpen ? 'Open now · ' : ''}
+                      {sheets === 0 ? 'Empty' : `${sheets} sheet${sheets !== 1 ? 's' : ''}`}
+                      {' · saved '}{ago(p.updatedAt, now)}
+                    </div>
                   </div>
-                </div>
-                <div className={styles.actions}>
-                  <button
-                    className={styles.openBtn}
-                    onClick={() => openProject(p.id)}
-                    disabled={busy}
-                    data-testid={`open-project-${p.id}`}
-                  >
-                    Open
-                  </button>
-                  <button
-                    className={styles.deleteBtn}
-                    onClick={() => removeProject(p.id)}
-                    aria-label="Delete project"
-                    data-testid={`delete-project-${p.id}`}
-                  >
-                    🗑
-                  </button>
-                </div>
-              </li>
-            ))}
+                  <div className={styles.actions}>
+                    {!isOpen && (
+                      <button
+                        className={styles.openBtn}
+                        onClick={() => open(p.id)}
+                        disabled={busy}
+                        data-testid={`open-project-${p.id}`}
+                      >
+                        Open
+                      </button>
+                    )}
+                    <button
+                      className={`${styles.deleteBtn} ${armedDelete === p.id ? styles.deleteArmed : ''}`}
+                      onClick={() => tapDelete(p.id)}
+                      disabled={busy}
+                      aria-label={armedDelete === p.id ? `Delete ${p.name} — can't undo` : `Delete ${p.name}`}
+                      data-testid={`delete-project-${p.id}`}
+                    >
+                      {armedDelete === p.id ? "Delete — can't undo" : 'Delete'}
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
           </ul>
+        )}
+
+        {!isPro && (
+          <p className={styles.empty}>Free keeps one job. Clear on the rail starts it over.</p>
         )}
       </div>
     </div>

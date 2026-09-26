@@ -304,7 +304,7 @@ function SettingsContent() {
           ProjectLibrary is a complete save/list/load UI for it — imported by
           nothing, so an uploaded print died on reload. On a job site that is not
           a missing feature, it is losing your work. */}
-      <CollapsibleSection id="projects" title="Projects" openId={openId} setOpenId={setOpenId}>
+      <CollapsibleSection id="projects" title="Jobs" openId={openId} setOpenId={setOpenId}>
         <ProjectLibrary inline />
       </CollapsibleSection>
 

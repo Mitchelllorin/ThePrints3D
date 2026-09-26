@@ -347,7 +347,7 @@ const HISTORY_LIMIT = 80
 // round-trip. Lets undo restore a removed drawing and redo re-add one.
 const drawingPool = new Map<string, Drawing>()
 
-interface WorkspaceHistorySnapshot {
+export interface WorkspaceHistorySnapshot {
   /** Which drawings existed, in order — add/remove drawing is undoable */
   drawingIds: string[]
   drawingStates: Array<{
@@ -3027,3 +3027,61 @@ export const useAppStore = create<AppState>()(
     }
   })
 )
+
+// ─── The job, as one saveable thing ─────────────────────────────────────────
+// The undo snapshot already IS the job: every field a user builds, and none of
+// the UI around it. Saving reuses it rather than keeping a second list that
+// would drift. Drawings travel separately (they hold Files and blob URLs) — see
+// services/currentJob.
+
+/** Everything the user built, minus the drawings' files. */
+export function captureJob(): WorkspaceHistorySnapshot {
+  return captureSnapshot(useAppStore.getState())
+}
+
+/**
+ * Put a saved job on the workspace, replacing whatever is there. Undo history
+ * is cleared: undoing past the load would mix two jobs. `snapshot` is null for
+ * saves made before the snapshot was stored — those only ever kept drawings,
+ * layers, measurements and the model.
+ */
+export function restoreJob(
+  drawings: Drawing[],
+  snapshot: WorkspaceHistorySnapshot | null,
+  legacy?: Pick<AppState, 'layers' | 'measurements' | 'model'>,
+): void {
+  drawingPool.clear()
+  resetJob()
+  useAppStore.setState((s) => {
+    s.drawings = drawings
+    s.selectedDrawingId = drawings[0]?.id ?? null
+    if (snapshot) applySnapshot(s, snapshot)
+    else if (legacy) {
+      s.layers = legacy.layers
+      s.measurements = legacy.measurements
+      s.model = legacy.model
+    }
+    s.historyPast = []
+    s.historyFuture = []
+    s.explodeAmount = 0
+    s.view = 'model'
+  })
+}
+
+/** An empty workspace for a new job — the rail's Clear, plus the job's notes,
+ *  measurements and corrections, and no undo back into the last job. */
+export function resetJob(): void {
+  useAppStore.getState().clearWorkspace()
+  useAppStore.setState((s) => {
+    s.measurements = []
+    s.annotations = []
+    s.productPlacements = []
+    s.userTraces = []
+    s.corrections = []
+    s.correctionCount = 0
+    s.detectedWallTypes = []
+    s.historyPast = []
+    s.historyFuture = []
+  })
+  saveAnnotations([])
+}

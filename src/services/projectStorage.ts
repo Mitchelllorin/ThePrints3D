@@ -6,6 +6,7 @@
  */
 import { openDB, type IDBPDatabase } from 'idb'
 import type { Drawing, Layer, Measurement, Model3D } from '../types'
+import type { WorkspaceHistorySnapshot } from '../store/useAppStore'
 
 const DB_NAME = 'theprints3d'
 const DB_VERSION = 1
@@ -21,6 +22,9 @@ export interface SavedProject {
   layers: Layer[]
   measurements: Measurement[]
   model: Model3D
+  /** The whole job — walls stood, openings, roof, stairs, trades, overlay.
+   *  Absent on saves made before autosave, which kept only the four above. */
+  snapshot?: WorkspaceHistorySnapshot
 }
 
 /**
@@ -97,10 +101,16 @@ export function deserializeDrawing(sd: SerializableDrawing): Drawing {
       ? new File([fileBlob], fileName, { type: fileBlob.type })
       : (null as unknown as File)
   const rasterUrl = rasterBlob ? URL.createObjectURL(rasterBlob) : ''
+  // A blob: URL dies with the session that made it. Point the preview at the
+  // restored raster, or failing that at the restored file.
+  const previewUrl = rest.previewUrl?.startsWith('blob:')
+    ? (rasterUrl || (fileBlob instanceof Blob ? URL.createObjectURL(fileBlob) : null))
+    : rest.previewUrl
   return {
     ...rest,
     file,
     rasterUrl,
+    previewUrl,
   } as Drawing
 }
 
