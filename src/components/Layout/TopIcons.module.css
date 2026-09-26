@@ -7,7 +7,7 @@
    label under it and the zooms do not. */
 .bar {
   position: fixed;
-  top: 52px;
+  top: var(--top-icons-top);
   right: 10px;
   display: flex;
   flex-direction: row;
@@ -18,8 +18,8 @@
 
 /* No box — floating glyphs, legible from a shadow. */
 .btn {
-  width: 40px;
-  min-height: 40px;
+  width: var(--top-icons-h);
+  min-height: var(--top-icons-h);
   background: none;
   border: none;
   color: var(--bp-text, #ffffff);

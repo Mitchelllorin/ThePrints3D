@@ -678,7 +678,9 @@
    this carries the live controls (change type, pause, build, done). ── */
 .traceBar {
   position: absolute;
-  left: 12px;              /* bottom-LEFT corner — never centered over the plan */
+  /* Bottom-left, beside the rail — never on it. At left:12 it sat on top of
+     the rail's foot, so Square landed on CLEAR. */
+  left: calc(var(--rail-w, 44px) + 8px);
   bottom: 72px;            /* clear the Place tab + Explode bar along the bottom */
   z-index: var(--z-hud);
   display: flex;

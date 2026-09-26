@@ -745,10 +745,6 @@
    the space that a second bar used to cost it. */
 .floorBarLifted { bottom: auto; }
 .floorBar {
-  position: absolute;
-  top: 92px;
-  right: 6px;
-  z-index: var(--z-hud);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -764,11 +760,25 @@
    buttons, accent COLOUR on the active one rather than a filled pill. It is a
    statement of what the next tap does, so it is always legible and never a
    surface sitting on the model. */
-.grainSwitch {
+/* The right edge's one column — see the JSX. Starts under the top icons and
+   stops above the explode column (167px tall, 14px off the bottom, 20 of air),
+   so the rail can only ever grow into space that is actually free. */
+.rightStack {
   position: absolute;
-  top: 40px;
+  top: calc(var(--top-icons-top) + var(--top-icons-h) + 8px);
   right: 6px;
+  bottom: calc(201px + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-hud);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;              /* the gaps belong to the model */
+}
+.rightStack > * { pointer-events: auto; }
+
+.grainSwitch {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -792,10 +802,7 @@
 /* The picked-member rail: what you are holding, and the verb for it. Sits just
    under the grain switch on the right edge, same container-less language. */
 .memberRail {
-  position: absolute;
-  top: 66px;
-  right: 6px;
-  z-index: var(--z-hud);
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -825,10 +832,9 @@
    chrome rather than over the model, because controls anchored to the component
    you are editing cover the very thing you are looking at. */
 .editRail {
-  position: absolute;
-  top: 92px;
-  right: 6px;
-  z-index: var(--z-hud);
+  /* Shrinks to what the stack has left, then wraps into a second column. */
+  flex: 0 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -843,15 +849,7 @@
      place. A card is a second surface competing for the same edge and standing
      on the model. One scrolling rail is the same idea done once — no matter how
      many verbs a selection has, they are all in the one place, on the perimeter.
-     Bounded so it never reaches the explode column along the bottom. The old
-     sum assumed the explode column was ~126px tall; measured, it is 167 (a
-     110px slider plus its icon and padding) sitting 14 off the bottom, so the
-     reservation was ~40px short and the two overlapped by 35px on a phone.
-     Real sum: 92 (top) + 167 (explode) + 14 (its offset) + 20 (gap).
-     Top is 92 rather than 70 because the Select switch above it is 44px tall —
-     its buttons are full touch targets — so it runs to y=84 and the rail's own
-     label was printing over it. */
-  max-height: calc(100dvh - 293px);
+     Bounded by .rightStack, which already stops short of the explode column. */
   /* WRAPS INTO A SECOND COLUMN rather than scrolling its verbs out of reach.
      A full selection is label + step + pad + rotate + stretch + specs + x-ray +
      explode + delete — about 310px of controls with nowhere near that much
@@ -1045,18 +1043,9 @@
   .explodeBar { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); right: 4px; }
   .explodeBarLifted { bottom: calc(42dvh + 10px); }
   .explodeSlider { height: 96px; }
-  /* Explode is taller here (44px at bottom 100 → occupies 100–144), so 130 put
-     the floor bar 14px INSIDE it. 152 clears the top with an 8px gap. */
-  .floorBar { top: 62px; right: 2px; }
-  /* Same sum as desktop, phone numbers — and measured this time rather than
-     estimated. The old comment guessed the shorter (96px slider) explode column
-     at ~112px; it is 167 including icon and padding, which is why the rail ran
-     35px into it. Real sum: 92 (top) + 167 (explode) + 46 (its offset) + 16.
-     On a portrait handset (~915dvh) that still leaves ~590px against ~310px of
-     controls, so the rail stays ONE column there and the wrap never fires —
-     flex-wrap only breaks when the content actually exceeds the cap. The second
-     column is for short landscape windows, which is where it was seen. */
-  .editRail { top: 92px; right: 2px; gap: 8px; max-height: calc(100dvh - 321px); }
+  /* Explode sits 46 off the bottom here, so the stack stops 46 + 167 + 16 up. */
+  .rightStack { right: 2px; bottom: calc(229px + env(safe-area-inset-bottom, 0px)); }
+  .editRail { gap: 8px; }
   .floorBarLifted { bottom: calc(42dvh + 62px); }
 }
 

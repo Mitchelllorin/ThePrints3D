@@ -18,6 +18,11 @@
      ──────────────────────────────────────────────────────────────────────── */
   --rail-w: 44px;
 
+  /* The top-right icons (Undo, zoom). The right-edge column starts under them,
+     so it reads their numbers instead of guessing its own. */
+  --top-icons-top: 52px;
+  --top-icons-h: 40px;
+
   /* ─────────────────────────────────────────────────────────────────────────
      STACKING — four layers, and there is no fifth.
 
