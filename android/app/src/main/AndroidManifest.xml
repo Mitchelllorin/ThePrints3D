@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="false"
@@ -39,11 +40,16 @@
     </application>
 
     <!-- Permissions -->
-    <!-- INTERNET: WebView container load, and opening product/affiliate links. -->
-    <!-- READ_MEDIA_IMAGES: importing a drawing image the user picks. -->
-    <!-- READ_MEDIA_VIDEO intentionally NOT declared - the app accepts PDF and still
-         images only, and an unused media permission invites a Play review question. -->
+    <!-- INTERNET: WebView container load, opening product/affiliate links, and the
+         optional Ask AI feature. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!-- No photo/video permissions. Drawings are imported through the system file
+         and photo picker (the WebView file input), which needs no storage
+         permission. Google Play rejected READ_MEDIA_IMAGES under the Photo and
+         Video Permissions policy. The remove markers below stop any library from
+         merging them back in at build time. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
 
 </manifest>
