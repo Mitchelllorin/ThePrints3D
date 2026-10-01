@@ -11,18 +11,24 @@
  * Sizes are OUTSIDE FACE TO OUTSIDE FACE, the way a tape reads across a
  * building and the way a slab is quoted.
  *
- * A transient sheet the user opened, so it is allowed to be solid and to cross
- * the middle of the screen: it goes away in one tap and the model is behind it.
+ * ONE SHEET, IN BUILD ORDER. Pull the outline to size, move it where you want
+ * it, then switch to Inside walls and draw them on the same sheet — then Frame
+ * it once. Inside walls used to be a separate trip back out to the print after
+ * framing; now they are drawn where the outline was.
+ *
+ * FULL SCREEN, because the plan IS the input and a phone is small. A transient
+ * sheet the user opened, so it may be solid; it goes in one tap (the ✕).
  */
 import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { WALL_TYPES } from '../../data/members'
-import { type FloorChoice } from '../../services/drawnProject'
+import { shellThicknessMm, type FloorChoice } from '../../services/drawnProject'
 import { placeBoxes, footprintAreaMm2, type AttachSide, type FootprintBox } from '../../services/footprint'
 import { normalizeBoxes } from '../../services/footprintEdit'
+import { fitPage, initialPlan, type DrawItPlan } from '../../services/drawItPlan'
 import { formatMeasureMm } from '../../services/unitConverter'
-import FootprintEditor from './FootprintEditor'
+import FootprintEditor, { type DrawMode } from './FootprintEditor'
 import styles from './DrawItSheet.module.css'
 
 const FT = 304.8
@@ -65,18 +71,30 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   const snapMm = metric ? 100 : 6 * 25.4
 
   // MOST HOUSES ARE NOT ONE BOX. An L off the back, a garage on the side, a
-  // bump-out for the dining room — each of those is a section hung off the main
+  // bump-out for the dining room — each of those is a section off the main
   // one, and the walls follow the outline they make together. The first box is
-  // the main one; the rest carry which side they hang off and how far along.
-  const [boxes, setBoxes] = useState<FootprintBox[]>(() => [firstBox(metric)])
+  // the main one. The plan also carries where the house sits on the paper and
+  // the inside walls drawn on it — see services/drawItPlan.
+  const [plan, setPlan] = useState<DrawItPlan>(() => initialPlan(firstBox(metric)))
+  const [mode, setMode] = useState<DrawMode>('outline')
+  const [selectedWall, setSelectedWall] = useState<number | null>(null)
+  const [pickedUp, setPickedUp] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [wallTypeKey, setWallTypeKey] = useState('wood-2x6')
   const [floor, setFloor] = useState<FloorChoice>('slab')
+  const boxes = plan.boxes
 
-  const edit = (next: FootprintBox[]) => setBoxes(normalizeBoxes(next))
-  const addWing = () => edit([...boxes, newSection(metric)])
+  const editBoxes = (next: FootprintBox[]) => setPlan(fitPage({ ...plan, boxes: normalizeBoxes(next) }))
+  const addWing = () => editBoxes([...boxes, newSection(metric)])
   const setSide = (i: number, side: AttachSide) =>
-    edit(boxes.map((b, k) => (k === i ? { ...b, attach: { side, offsetMm: 0 } } : b)))
-  const dropWing = (i: number) => edit(boxes.filter((_, k) => k !== i))
+    editBoxes(boxes.map((b, k) => (k === i ? { ...b, attach: { side, offsetMm: 0 } } : b)))
+  const dropWing = (i: number) => editBoxes(boxes.filter((_, k) => k !== i))
+  const removeWall = () => {
+    if (selectedWall == null) return
+    setPlan({ ...plan, walls: plan.walls.filter((_, k) => k !== selectedWall) })
+    setSelectedWall(null)
+  }
+  const switchMode = (m: DrawMode) => { setMode(m); setSelectedWall(null); setPickedUp(false) }
 
   // Metric sets the Settings unit to metres; feet-and-inches keeps any
   // fractional format already chosen rather than rounding it away.
@@ -93,6 +111,8 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
     startDrawnProject({
       widthMm: main.widthMm, depthMm: main.depthMm, wallTypeKey, floor, name: 'New project',
       wings,
+      page: { originMm: plan.origin, wMm: plan.page.w, dMm: plan.page.d },
+      insideWalls: plan.walls,
     })
     // THE WALLS ARE ALREADY UP. A drawn project's shell draws itself standing
     // the moment it exists, but the model was left marked unbuilt — so the
@@ -103,92 +123,129 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
     onClose()
   }
 
+  const lead = mode === 'walls'
+    ? (selectedWall != null ? 'Drag the wall or an end. Tap its number to type it.' : 'Drag across the house to draw a wall.')
+    : pickedUp ? 'Drag it where you want it. Tap the paper to put it down.'
+    : 'Drag an edge to size it. Double-tap the house to move it.'
+  const wallCount = plan.walls.length ? ` · ${plan.walls.length} inside wall${plan.walls.length === 1 ? '' : 's'}` : ''
+
   return (
     <>
-      {/* The scrim carries no text and takes the tap that dismisses this. */}
-      <div className={styles.scrim} onClick={onClose} aria-hidden />
-      <div className={styles.sheet} role="dialog" aria-label="Draw it — drag the footprint to size">
+      {/* The scrim carries no text. */}
+      <div className={styles.scrim} aria-hidden />
+      <div className={styles.sheet} role="dialog" aria-label="Draw it">
         <div className={styles.top}>
-        <div className={styles.head}>
-          <h2 className={styles.title}>Draw it</h2>
-          <button className={styles.close} onClick={onClose} aria-label="Close">✕</button>
+          <div className={styles.head}>
+            <h2 className={styles.title}>Draw it</h2>
+            {/* Units live with the numbers they change. Same setting as Settings. */}
+            <div className={styles.units} role="group" aria-label="Units">
+              <button className={`${styles.unit} ${!metric ? styles.chosen : ''}`} onClick={useImperial} aria-pressed={!metric}>
+                {!metric ? '✓ ' : ''}ft-in
+              </button>
+              <button className={`${styles.unit} ${metric ? styles.chosen : ''}`} onClick={useMetric} aria-pressed={metric}>
+                {metric ? '✓ ' : ''}Metric
+              </button>
+            </div>
+            <button className={styles.close} onClick={onClose} aria-label="Close">✕</button>
+          </div>
+          <p className={styles.lead}>{lead}</p>
         </div>
-        <p className={styles.lead}>Drag an edge to size it. Tap a number to type it exact.</p>
 
-        {/* Units live with the numbers they change. Same setting as Settings. */}
-        <div className={styles.row} role="group" aria-label="Units">
-          <button className={`${styles.unit} ${!metric ? styles.chosen : ''}`} onClick={useImperial} aria-pressed={!metric}>
-            {!metric ? '✓ ' : ''}ft-in
-          </button>
-          <button className={`${styles.unit} ${metric ? styles.chosen : ''}`} onClick={useMetric} aria-pressed={metric}>
-            {metric ? '✓ ' : ''}Metric
-          </button>
-        </div>
-        </div>
-
-        {/* The plan. Its own box, so landscape can stand it full height on the left. */}
+        {/* The plan. It takes whatever height the rest leaves it. */}
         <div className={styles.plan}>
-          <FootprintEditor boxes={boxes} onChange={edit} format={fmt} snapMm={snapMm} metric={metric} />
+          <FootprintEditor
+            plan={plan} onChange={setPlan} mode={mode}
+            selectedWall={selectedWall} onSelectWall={setSelectedWall} onPickedUp={setPickedUp}
+            format={fmt} snapMm={snapMm} metric={metric} shellMm={shellThicknessMm(wallTypeKey)} />
         </div>
 
         <div className={styles.rest}>
-        <p className={styles.echo}>{area} · outside face to outside face</p>
+          <p className={styles.echo}>{area} · outside face to outside face{wallCount}</p>
 
-        <span className={styles.label}>Sections</span>
-        {boxes.slice(1).map((b, k) => {
-          const i = k + 1
-          return (
-            <div key={i} className={styles.wing}>
-              <div className={styles.wingHead}>
-                <span className={styles.wingName}>Section {i + 1} — hangs off the</span>
-                <button className={styles.wingDrop} onClick={() => dropWing(i)} aria-label={`Remove section ${i + 1}`}>Remove</button>
-              </div>
-              <div className={styles.row}>
-                {SIDES.map((sd) => (
-                  <button
-                    key={sd.id}
-                    className={`${styles.side} ${b.attach?.side === sd.id ? styles.chosen : ''}`}
-                    onClick={() => setSide(i, sd.id)}
-                    aria-pressed={b.attach?.side === sd.id}
-                  >{b.attach?.side === sd.id ? '✓ ' : ''}{sd.label}</button>
-                ))}
-              </div>
-            </div>
-          )
-        })}
-        <button className={styles.addWing} onClick={addWing}>+ Add a section</button>
-
-        <span className={styles.label}>Shell</span>
-        <select
-          className={styles.select}
-          value={wallTypeKey}
-          onChange={(e) => setWallTypeKey(e.target.value)}
-          aria-label="Shell wall type"
-        >
-          {WALL_TYPES.filter((t) => !t.isMasonry).map((t) => (
-            <option key={t.key} value={t.key}>{t.label}</option>
-          ))}
-        </select>
-
-        <span className={styles.label}>Floor</span>
-        <div className={styles.row}>
-          {FLOORS.map((f) => (
-            <button
-              key={f.id}
-              className={`${styles.choice} ${floor === f.id ? styles.chosen : ''}`}
-              onClick={() => setFloor(f.id)}
-              aria-pressed={floor === f.id}
-            >
-              {/* On-state is a fill AND a check, never colour alone. */}
-              <span className={styles.choiceLabel}>{floor === f.id ? '✓ ' : ''}{f.label}</span>
-              <span className={styles.choiceNote}>{f.note}</span>
+          {/* What a drag on the plan does. On-state is a fill, a heavier border
+              and a check, never colour alone. */}
+          <div className={styles.row} role="group" aria-label="What you are drawing">
+            <button className={`${styles.mode} ${mode === 'outline' ? styles.chosen : ''}`} onClick={() => switchMode('outline')} aria-pressed={mode === 'outline'}>
+              {mode === 'outline' ? '✓ ' : ''}Outline
             </button>
-          ))}
-        </div>
+            <button className={`${styles.mode} ${mode === 'walls' ? styles.chosen : ''}`} onClick={() => switchMode('walls')} aria-pressed={mode === 'walls'}>
+              {mode === 'walls' ? '✓ ' : ''}Inside walls
+            </button>
+          </div>
 
-        <button className={styles.go} onClick={start}>
-          Start drawing
-        </button>
+          {/* Always there in walls mode, so picking a wall does not shove the
+              plan up; it only works with a wall picked, and looks it. */}
+          {mode === 'walls' && (
+            <button className={styles.remove} onClick={removeWall} disabled={selectedWall == null}>
+              {selectedWall == null ? 'Tap a wall to pick it' : 'Remove this wall'}
+            </button>
+          )}
+
+          {mode === 'outline' && (
+            <>
+              <button className={styles.more} onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}>
+                {moreOpen ? '▾' : '▸'} Sections, shell and floor
+              </button>
+              {moreOpen && (
+                <div className={styles.options}>
+                  <span className={styles.label}>Sections</span>
+                  {boxes.slice(1).map((b, k) => {
+                    const i = k + 1
+                    return (
+                      <div key={i} className={styles.wing}>
+                        <div className={styles.wingHead}>
+                          <span className={styles.wingName}>Section {i + 1}</span>
+                          <button className={styles.wingDrop} onClick={() => dropWing(i)} aria-label={`Remove section ${i + 1}`}>Remove</button>
+                        </div>
+                        <div className={styles.row}>
+                          {SIDES.map((sd) => (
+                            <button
+                              key={sd.id}
+                              className={`${styles.side} ${b.attach?.side === sd.id ? styles.chosen : ''}`}
+                              onClick={() => setSide(i, sd.id)}
+                              aria-pressed={b.attach?.side === sd.id}
+                            >{b.attach?.side === sd.id ? '✓ ' : ''}{sd.label}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <button className={styles.addWing} onClick={addWing}>+ Add a section</button>
+
+                  <span className={styles.label}>Shell</span>
+                  <select
+                    className={styles.select}
+                    value={wallTypeKey}
+                    onChange={(e) => setWallTypeKey(e.target.value)}
+                    aria-label="Shell wall type"
+                  >
+                    {WALL_TYPES.filter((t) => !t.isMasonry).map((t) => (
+                      <option key={t.key} value={t.key}>{t.label}</option>
+                    ))}
+                  </select>
+
+                  <span className={styles.label}>Floor</span>
+                  <div className={styles.row}>
+                    {FLOORS.map((f) => (
+                      <button
+                        key={f.id}
+                        className={`${styles.choice} ${floor === f.id ? styles.chosen : ''}`}
+                        onClick={() => setFloor(f.id)}
+                        aria-pressed={floor === f.id}
+                      >
+                        <span className={styles.choiceLabel}>{floor === f.id ? '✓ ' : ''}{f.label}</span>
+                        <span className={styles.choiceNote}>{f.note}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          <button className={styles.go} onClick={start}>
+            Frame it
+          </button>
         </div>
       </div>
     </>

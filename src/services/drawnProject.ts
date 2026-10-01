@@ -59,6 +59,14 @@ export interface DrawnProjectSpec {
   floor: FloorChoice
   /** Name for the project. */
   name?: string
+  /**
+   * The sheet it was drawn on, when it was drawn on one (Draw it): where the
+   * main box's top-left corner sits on the page, and how big the page is, in
+   * millimetres. Left out, the house gets a plain margin round it.
+   */
+  page?: { originMm: Point; wMm: number; dMm: number }
+  /** Inside walls drawn on that sheet: centrelines, in page millimetres. */
+  insideWalls?: Array<{ x1: number; y1: number; x2: number; y2: number }>
 }
 
 export interface DrawnProject {
@@ -127,8 +135,8 @@ function sheetSvg(spec: DrawnProjectSpec, wPx: number, hPx: number, outline: rea
     <rect width="${wPx}" height="${hPx}" fill="#f8fafc"/>
     <rect width="${wPx}" height="${hPx}" fill="url(#ft)"/>
     <path d="${path}" fill="none" stroke="#0f172a" stroke-width="${tPx}" stroke-linejoin="miter"/>
-    <text x="${wPx / 2}" y="${bounds.y1 - 10}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${ftIn(sizeMm.w)}</text>
-    <text x="${bounds.x1 - 12}" y="${hPx / 2}" text-anchor="middle" transform="rotate(-90 ${bounds.x1 - 12} ${hPx / 2})" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${ftIn(sizeMm.d)}</text>
+    <text x="${(bounds.x1 + bounds.x2) / 2}" y="${bounds.y1 - 10}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${ftIn(sizeMm.w)}</text>
+    <text x="${bounds.x1 - 12}" y="${(bounds.y1 + bounds.y2) / 2}" text-anchor="middle" transform="rotate(-90 ${bounds.x1 - 12} ${(bounds.y1 + bounds.y2) / 2})" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${ftIn(sizeMm.d)}</text>
     <text x="14" y="${hPx - 14}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155">${spec.name ?? 'New project'}</text>
     <text x="${wPx - 14}" y="${hPx - 14}" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="12" fill="#64748b">Drawn to size · ${label}</text>
   </svg>`
@@ -162,6 +170,24 @@ export function shellWalls(spec: DrawnProjectSpec, centreline: readonly Point[],
   return out
 }
 
+/**
+ * The inside walls drawn on the Draw it sheet, as walls. Same standing as one
+ * traced in plan view: interior, and bearing until you say otherwise — wrong in
+ * the recoverable direction, a heavier stud rather than a missing one — on 2x4.
+ */
+export function insideWalls(spec: DrawnProjectSpec): ParsedWall[] {
+  const px = (mm: number) => mm / DRAWN_MM_PER_PX
+  const tPx = px(shellThicknessMm('wood-2x4'))
+  return (spec.insideWalls ?? []).map((w) => ({
+    x1: px(w.x1), y1: px(w.y1), x2: px(w.x2), y2: px(w.y2),
+    thickness: tPx,
+    source: 'user',
+    framingType: 'wood-2x4',
+    wallRole: 'interior-bearing',
+    level: 0,
+  } as ParsedWall))
+}
+
 /** Every box of the building, main first, in the shape the footprint service takes. */
 export function specBoxes(spec: DrawnProjectSpec): FootprintBox[] {
   return [{ widthMm: spec.widthMm, depthMm: spec.depthMm }, ...(spec.wings ?? [])]
@@ -180,14 +206,18 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
   const raw = footprintOutline(rects)
   const bounds = outlineBounds(raw)
   const sizeMm = { w: bounds.x2 - bounds.x1, d: bounds.y2 - bounds.y1 }
-  const wPx = Math.round(px(sizeMm.w + MARGIN_MM * 2))
-  const hPx = Math.round(px(sizeMm.d + MARGIN_MM * 2))
+  // Where the footprint lands on the sheet, in millimetres. Drawn on a page,
+  // it is where you put it; otherwise a plain margin round the house.
+  const offX = spec.page ? spec.page.originMm.x : MARGIN_MM - bounds.x1
+  const offY = spec.page ? spec.page.originMm.y : MARGIN_MM - bounds.y1
+  const wPx = Math.round(px(spec.page ? spec.page.wMm : sizeMm.w + MARGIN_MM * 2))
+  const hPx = Math.round(px(spec.page ? spec.page.dMm : sizeMm.d + MARGIN_MM * 2))
   const tPx = px(tMm)
 
-  // Onto the sheet: the outside face in pixels, margin included, then the wall
-  // centrelines half a thickness inside it.
+  // Onto the sheet: the outside face in pixels, then the wall centrelines half
+  // a thickness inside it.
   const toSheet = (poly: readonly Point[]) =>
-    translateOutline(poly.map((p) => ({ x: px(p.x), y: px(p.y) })), px(MARGIN_MM - bounds.x1), px(MARGIN_MM - bounds.y1))
+    translateOutline(poly.map((p) => ({ x: px(p.x), y: px(p.y) })), px(offX), px(offY))
   const outlinePx = toSheet(raw)
   const centreline = insetOutline(outlinePx, tPx / 2)
 
@@ -195,11 +225,14 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
   // house open, so a beam has to carry across that gap and comes down at both
   // ends — see services/bearingPacks. Put in now, with the walls, so they are
   // there when you stand them; editable in the wall sheet like any other pack.
-  const toSheetPt = (q: Point) => ({ x: px(q.x) + px(MARGIN_MM - bounds.x1), y: px(q.y) + px(MARGIN_MM - bounds.y1) })
+  const toSheetPt = (q: Point) => ({ x: px(q.x + offX), y: px(q.y + offY) })
   const bearing = sectionBearingPoints(rects).map((b) => ({
     ...toSheetPt(b), studs: studsUnderBearing(b.spanMm), along: b.along,
   }))
-  const walls = withBearingPacks(shellWalls(spec, centreline, tPx), bearing, tPx * 0.75 + 1)
+  const walls = [
+    ...withBearingPacks(shellWalls(spec, centreline, tPx), bearing, tPx * 0.75 + 1),
+    ...insideWalls(spec),
+  ]
 
   const svg = sheetSvg(spec, wPx, hPx, outlinePx, tPx, sizeMm)
   let file: File
@@ -218,10 +251,10 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
   const stamp = Date.now()
   const floorAreas: TracedLine[] = spec.floor === 'none' ? [] : rects.map((r, i) => ({
     id: `floor-drawn-${stamp}-${i}`,
-    x1: px(r.x1 - bounds.x1 + MARGIN_MM),
-    y1: px(r.y1 - bounds.y1 + MARGIN_MM),
-    x2: px(r.x2 - bounds.x1 + MARGIN_MM),
-    y2: px(r.y2 - bounds.y1 + MARGIN_MM),
+    x1: px(r.x1 + offX),
+    y1: px(r.y1 + offY),
+    x2: px(r.x2 + offX),
+    y2: px(r.y2 + offY),
     elementType: spec.floor === 'slab' ? 'Concrete Slab' : '2x10',
     size: spec.floor === 'slab' ? '4in' : '2x10',
     material: spec.floor === 'slab' ? 'Concrete' : 'Wood',

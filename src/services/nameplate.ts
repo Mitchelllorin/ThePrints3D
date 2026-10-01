@@ -154,3 +154,21 @@ export function joistNameplate(input: JoistNameplateInput): NameplateField[] {
 export function nameplateHasContent(fields: readonly NameplateField[]): boolean {
   return fields.some((f) => f.value != null)
 }
+
+/** What a wall is called on its plate — the role a framer would say out loud.
+ *  No "wall" on the end: the plate is already pointing at one, and the word
+ *  cost every plate on screen five characters of model. */
+export function wallTitle(wallRole?: string): string {
+  switch (wallRole) {
+    case 'exterior-bearing': return 'Exterior'
+    case 'interior-bearing': return 'Bearing'
+    case 'partition': return 'Partition'
+    case 'interior-non-bearing': return 'Interior'
+    default: return 'Wall'
+  }
+}
+
+/** The one figure a wall's tier-2 plate carries: its span, with its unit. */
+export function wallFigure(fields: readonly NameplateField[]): string | null {
+  return fields.find((f) => f.key === 'span')?.value ?? null
+}

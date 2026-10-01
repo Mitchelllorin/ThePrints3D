@@ -11,12 +11,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { Billboard, Text } from '@react-three/drei'
-import { labelText } from './labelStyle'
 import { explodeRuntime } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
-import { useUISettingsStore } from '../../store/useUISettingsStore'
-import { useAreaNameplateVisible } from './useNameplateVisible'
+import { useNameplateSource } from './nameplateRegistry'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useSceneConfig } from '../../store/useSceneConfig'
 import {
@@ -152,9 +149,7 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   const holeKey = JSON.stringify(holes ?? [])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const deck = useMemo(() => buildFloorDeck({ lenX, lenZ, holes }), [lenX, lenZ, holeKey])
-  const labelColor = useUISettingsStore((s) => s.labelColor)
-  const labelScale = useUISettingsStore((s) => s.labelScale)
-  const dimensionsVisible = useAreaNameplateVisible('floor', area.id)
+  const picked = useFloorplanLocalStore((s) => s.selectedArea?.kind === 'floor' && s.selectedArea.id === area.id)
   const ref = useRef<THREE.Group>(null)
   const level = area.level ?? 0
   useFloorExplode(ref, level * storeyHeight, level, DECK_LIFT)
@@ -171,8 +166,17 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
       }
     })
   }, [deck, ghostOpacity])
-  if (lenX < 0.1 || lenZ < 0.1) return null
   const sheetCount = (deck.userData.sheetCount as number) ?? 0
+  // The deck's plate floats beside it with every other plate — see FloatingNameplates.
+  useNameplateSource(`floor:${area.id ?? level}`, lenX < 0.1 || lenZ < 0.1 || sheetCount === 0 || ghostOpacity === 0 ? null : {
+    object: deck,
+    title: 'Subfloor',
+    figure: `${sheetCount} sheets · 4×8`,
+    fields: null,
+    selected: picked,
+    warning: false,
+  })
+  if (lenX < 0.1 || lenZ < 0.1) return null
   return (
     <group ref={ref}>
       <primitive
@@ -181,13 +185,6 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
         rotation={[0, rotRad, 0]}
         {...(bodyHandlers ?? {})}
       />
-      {sheetCount > 0 && dimensionsVisible && (
-        <Billboard position={[centre.x, 0.5, centre.z]}>
-          <Text {...labelText(0.40 * labelScale, labelColor)}>
-            {`${sheetCount} sheets · 4×8`}
-          </Text>
-        </Billboard>
-      )}
     </group>
   )
 }

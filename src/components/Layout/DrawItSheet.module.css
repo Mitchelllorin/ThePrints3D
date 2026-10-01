@@ -19,23 +19,27 @@
   z-index: var(--z-modal);
   left: 50%;
   transform: translateX(-50%);
+  top: 0;
   bottom: 0;
-  width: min(420px, 100vw);
-  max-height: min(86vh, 720px);
-  overflow-y: auto;                       /* content grows, phones are short */
-  overscroll-behavior: contain;
+  /* FULL SCREEN. The plan is what you work on here, so it gets the screen;
+     on a wide screen the sheet stops at a comfortable reading width. */
+  width: min(560px, 100vw);
+  overflow: hidden;                       /* the plan holds still; the controls scroll */
 
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 8px;                               /* gap on the container, not margins */
-  padding: 14px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 12px)
+           calc(env(safe-area-inset-bottom, 0px) + 12px) calc(env(safe-area-inset-left, 0px) + 12px);
 
   background: var(--bp-panel-solid, #151c25);
-  border: 1px solid var(--bp-line, #2c3a4a);
-  border-radius: 14px 14px 0 0;
+  border-left: 1px solid var(--bp-line, #2c3a4a);
+  border-right: 1px solid var(--bp-line, #2c3a4a);
   color: var(--bp-text, #e8eef5);
 }
 
 .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.units { display: flex; gap: 8px; flex: 1; max-width: 220px; margin-left: auto; }
 .title { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: 0.01em; }
 .close {
   min-width: 48px; min-height: 48px;
@@ -204,28 +208,77 @@
    the plan you were told to pull. So the plan stands full height on the left
    and stays put, and the controls stack on the right and scroll on their own. */
 .top, .rest { display: grid; gap: 8px; min-width: 0; }
-.plan { height: 300px; min-width: 0; }
+/* The plan fills whatever the header and the controls leave it. */
+.plan { min-height: 0; min-width: 0; }
+/* The controls under it scroll on their own, and never take more than a
+   little under half the screen — the plan keeps the rest. */
+.rest {
+  max-height: 44dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+}
 
+/* Outline | Inside walls. Same shape as the other two-way choices. */
+.mode {
+  flex: 1;
+  min-height: 48px;
+  padding: 0 8px;
+  background: none;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  color: var(--bp-text, #e8eef5);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.mode.chosen {
+  background: rgba(61, 154, 232, 0.16);
+  border: 2px solid var(--bp-accent, #3d9ae8);
+}
+
+.remove {
+  min-height: 48px;
+  background: none;
+  border: 1px solid var(--bp-bad, #e5643f);
+  border-radius: 10px;
+  color: var(--bp-bad, #e5643f);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.remove:disabled {
+  border-color: var(--bp-line, #2c3a4a);
+  color: var(--bp-text-dim, #97a4b6);
+  cursor: default;
+}
+
+.more {
+  min-height: 48px;
+  padding: 0 4px;
+  background: none;
+  border: none;
+  color: var(--bp-text-dim, #97a4b6);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.options { display: grid; gap: 8px; }
+
+/* LANDSCAPE: a phone on its side is ~360px tall. The plan stands full height
+   on the left and stays put; the header and controls stack on the right and
+   scroll on their own. */
 @media (orientation: landscape) and (max-height: 540px) {
   .sheet {
-    width: min(780px, 100vw);
-    height: min(100dvh, 520px);
-    max-height: none;
-    overflow: hidden;                   /* the plan never scrolls away */
-    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    width: min(820px, 100vw);
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas: "plan top" "plan rest";
     column-gap: 16px;
-    padding-top: 12px;
   }
   .top { grid-area: top; }
-  .plan { grid-area: plan; height: 100%; }
-  .rest {
-    grid-area: rest;
-    min-height: 0;
-    overflow-y: auto;                   /* the controls scroll, the plan does not */
-    overscroll-behavior: contain;
-    align-content: start;
-  }
-  .lead { display: none; }              /* the plan says it: grips, numbers */
+  .plan { grid-area: plan; }
+  .rest { grid-area: rest; max-height: none; min-height: 0; }
 }

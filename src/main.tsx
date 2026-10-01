@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { startJobAutosave } from './services/currentJob'
 import { extend } from '@react-three/fiber'
 import * as THREE from 'three'
 import './index.css'
@@ -136,6 +137,13 @@ extend(THREE as any) // eslint-disable-line @typescript-eslint/no-explicit-any
  * swallowed, so it cannot delay or break the workspace. See `corpus`.
  */
 startCorpusCapture()
+
+/**
+ * THE OPEN JOB COMES BACK. Reopens the last job and saves every change after
+ * that. Unawaited: the front door is on screen while it loads, and a save that
+ * cannot be read just means starting clean. See services/currentJob.
+ */
+void startJobAutosave()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

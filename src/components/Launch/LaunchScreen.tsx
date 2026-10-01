@@ -50,7 +50,7 @@ export default function LaunchScreen({ onLaunch }: { onLaunch: () => void }) {
           </a>
         </p>
 
-        <StudioCredit />
+        <StudioCredit variant="site" />
       </div>
     </div>
   )

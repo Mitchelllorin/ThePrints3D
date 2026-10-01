@@ -159,7 +159,7 @@ export default function FinishesPanel() {
           onChange={(v) => setUI({ boardKind: v })}
         />
       </Row>
-      <Row label="Wet walls">
+      <Row label="Plumbing walls">
         <Pick<WetWallMethod>
           value={ui.wetWallMethod}
           options={[

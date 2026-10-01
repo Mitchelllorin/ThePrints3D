@@ -185,7 +185,7 @@ const MEDIUM: PlanSpec = {
     set1BuildingBasics: '44ft x 28ft footprint, 9ft ceiling, 1 floor, crawlspace foundation',
     set1Clarifications: 'Single-storey ranch with a master suite at one end.',
     set2StructuralDetails: 'Exterior 2x6 bearing walls, 2x4 partitions, bearing wall on the hall line.',
-    set2Clarifications: 'Bath and ensuite share a wet wall with the utility room.',
+    set2Clarifications: 'Bath and ensuite share a plumbing wall with the utility room.',
     set3FinishingDetails: 'Brick veneer front, lap siding elsewhere, 1/2in gypsum interior.',
     set3Clarifications: 'Tile backer in both baths.',
     completedGroup: 'group3',
@@ -457,4 +457,21 @@ export function createPresetDrawing(difficulty: PresetDifficulty, practiceMode: 
       Math.max(4, (heightPx * MM_PER_PX) / 1000),
     ],
   }
+}
+
+/**
+ * THE STAIR IN A TWO-STOREY SAMPLE. A second floor you cannot get to is not a
+ * floor, so the Two-Storey with Garage carries one: a straight run in the STAIR
+ * room, against the left outside wall, foot at the front beside the 4' door
+ * and climbing toward the back. The stair object is what cuts the stairwell in
+ * the deck above, so placing it is all the hole needs.
+ *
+ * In sheet pixels, like every other opening here. The catalog stair is 1.0 m
+ * wide and 3.6 m long; yaw 0 climbs toward the back of the sheet.
+ */
+export function presetStair(difficulty: string): { pxX: number; pxY: number; rotationY: number } | null {
+  if (difficulty !== 'hard') return null
+  const halfWideFt = 1.0 / 0.3048 / 2
+  const halfLongFt = 3.6 / 0.3048 / 2
+  return { pxX: ft(halfWideFt + MARGIN_FT), pxY: ft(18 + halfLongFt + MARGIN_FT), rotationY: 0 }
 }

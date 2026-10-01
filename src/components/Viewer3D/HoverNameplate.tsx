@@ -1,7 +1,7 @@
 /**
  * HoverNameplate — IN EDIT MODE, point at (hover on desktop / drag-touch on
- * mobile) any built element and a nameplate pops up saying what it is + its
- * metrics, with a cyan halo on the thing you would select.
+ * mobile) any built element and it is named beside it, with a cyan halo on the
+ * thing you would select.
  *
  * One raycaster reads the mesh under the pointer and shows `userData.info` (rich
  * metrics, set by the geometry builders) or a humanised `userData.layer`
@@ -17,13 +17,11 @@
 import { useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Billboard, Text } from '@react-three/drei'
-import { labelText } from './labelStyle'
-import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { useNameplateSource } from './nameplateRegistry'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 
 interface Plate {
-  pos: [number, number, number]
+  obj: THREE.Object3D
   text: string
   /** World-AABB of the hovered element, so we can draw a highlight box on it. */
   center: [number, number, number]
@@ -53,8 +51,6 @@ function describe(ud: Record<string, unknown> | undefined): string | null {
 
 export default function HoverNameplate() {
   const { camera, scene, raycaster, pointer } = useThree()
-  const labelColor = useUISettingsStore((s) => s.labelColor)
-  const labelScale = useUISettingsStore((s) => s.labelScale)
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const [plate, setPlate] = useState<Plate | null>(null)
   const lastObj = useRef<THREE.Object3D | null>(null)
@@ -102,12 +98,18 @@ export default function HoverNameplate() {
     const c = box.getCenter(new THREE.Vector3())
     const s = box.getSize(new THREE.Vector3())
     setPlate({
-      pos: [c.x, box.max.y + 0.22, c.z],
+      obj,
       text,
       center: [c.x, c.y, c.z],
       size: [s.x, s.y, s.z],
     })
   })
+
+  // The name goes through the one nameplate layout, beside the thing and off
+  // every other plate — not as text hung on the canvas over the model.
+  useNameplateSource('hover', plate && editMode ? {
+    object: plate.obj, title: plate.text, figure: null, fields: null, selected: false, warning: false, tier: 1,
+  } : null)
 
   if (!plate || !editMode) return null
   // A small padding so the highlight box reads as a halo around the element
@@ -123,11 +125,6 @@ export default function HoverNameplate() {
         <boxGeometry args={[plate.size[0] + pad, plate.size[1] + pad, plate.size[2] + pad]} />
         <meshBasicMaterial color="#22d3ee" transparent opacity={0.22} depthWrite={false} depthTest={false} />
       </mesh>
-      <Billboard position={plate.pos}>
-        <Text {...labelText(0.40 * labelScale, labelColor)}>
-          {plate.text}
-        </Text>
-      </Billboard>
     </>
   )
 }

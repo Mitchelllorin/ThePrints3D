@@ -58,14 +58,16 @@
   font-weight: 600;
   cursor: pointer;
   font-size: 14px;
+  min-height: 48px;
 }
 .saveBtn:hover { transform: translateY(-1px); }
 .saveBtn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
 .empty {
   text-align: center;
-  padding: 40px 20px;
-  color: #64748b;
+  padding: 16px 20px;
+  font-size: 13px;
+  color: #94a3b8;
 }
 
 .list {
@@ -77,12 +79,16 @@
 
 .item {
   display: flex;
+  flex-wrap: wrap;               /* the buttons drop under the name at 360px */
   align-items: center;
-  gap: 14px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px 12px;
   border-radius: 10px;
+  border-left: 3px solid transparent;
   transition: background 0.12s;
 }
+/* The job on the workspace: a bar down its edge, not only a tint. */
+.itemOpen { border-left-color: #38bdf8; background: rgba(56, 189, 248, 0.08); }
 .item:hover { background: #1e293b; }
 
 .thumb {
@@ -103,8 +109,36 @@
 }
 
 .info {
-  flex: 1;
+  flex: 1 1 160px;
   min-width: 0;
+}
+
+/* The name is the rename control: tap it to type. */
+.nameBtn {
+  display: block;
+  max-width: 100%;
+  min-height: 48px;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: left;
+  font-weight: 600;
+  color: #f1f5f9;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.nameInput {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #38bdf8;
+  background: #0b1220;
+  color: #f1f5f9;
+  font-size: 15px;
 }
 
 .name {
@@ -117,15 +151,16 @@
 }
 
 .meta {
-  font-size: 12px;
+  font-size: 13px;
   color: #94a3b8;
-  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }
 
 .actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .openBtn {
@@ -137,7 +172,7 @@
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  min-height: 36px;
+  min-height: 48px;
 }
 .openBtn:hover { background: #7dd3fc; }
 .openBtn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -147,13 +182,16 @@
   border: 1px solid #334155;
   border-radius: 8px;
   color: #94a3b8;
-  font-size: 16px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 6px 10px;
-  min-height: 36px;
-  min-width: 36px;
+  padding: 0 14px;
+  min-height: 48px;
+  min-width: 48px;
 }
 .deleteBtn:hover { background: #7f1d1d; border-color: #b91c1c; color: #fecaca; }
+/* Armed: filled, and the label says it can't be undone. */
+.deleteArmed { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 
 @media (max-width: 768px) {
   .modal {
@@ -167,4 +205,6 @@
 
 /* Inline — no overlay, no modal shell. The drawer is the container. */
 .inlineWrap { display: block; }
-.inlineBody { display: block; padding: 2px 0 6px; }
+.inlineBody { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 6px; }
+.inlineBody .saveBtn { margin: 0; }
+.inlineBody .list { padding: 0; }

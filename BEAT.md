@@ -174,3 +174,26 @@ seen on a device. Six notes, logged not fixed, per the rule.
 **Not checked, and only a device can:** anything about how it actually behaves —
 cold start, the splash, gesture handling, orientation, whether the model refits
 when a sheet opens, and every one of the bug-drive items.
+
+### 2026-09-22 — notes 1 and 3 fixed in code. Not seen on a device.
+
+- **Note 1:** the Settings drawer now ends in "More from the 3D family" — all
+  eight, in family order, the CircuiTry3D one-liners, links to sites not
+  stores, ThePrints3D listed unlinked. The launch screen keeps only the
+  theprints3d.com link. Check it at step 31.
+- **Note 3:** "Wet walls" reads "Plumbing walls"; the preset line says
+  "plumbing wall".
+
+### 2026-09-24 — notes 4 and 5 fixed in code. Not seen on a device.
+
+- **Note 4** was already fixed in `e7676ac` (20 Sept): `.propCard` is 0.78 with
+  blur, and has a 0.94 `@supports not (backdrop-filter…)` fallback. The note
+  was written against the older file.
+- **Note 5:** every control on the property card is now 48px tall, 8px apart —
+  the stair chips (were 24px), Hand/Opens/X-ray/Rotate/Clone/Delete/Done, the
+  Type select, the ft/in and Brand fields. The ✕ (`cardClose`) is 48×48
+  wherever it is used, which includes the wall sheet, the trace-type picker
+  and the panel board. The chosen chip gets an inner ring and bold type, not
+  only a tint. Opening-position labels use the card's lighter dim ink.
+  Check at step 19: the card is taller now, so confirm it scrolls rather than
+  running under the explode bar, and that stair chips wrap cleanly at 360px.

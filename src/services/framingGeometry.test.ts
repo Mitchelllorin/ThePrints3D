@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall, buildVeneerSupport, buildBoxOut, buildBulkhead } from './framingGeometry'
+import { buildFloorDeck, buildFloorJoists, buildRoofByType, buildFinkTrussRoof, buildWallFraming, buildRidgeRoof, ridgeIsShaped, openingPlies, OPENING_DOUBLE_SPAN_M, buildWallEnvelope, buildWallCladding, buildWallDrywall, buildVeneerSupport, buildBoxOut, buildBulkhead, kingsPerEnd } from './framingGeometry'
 import {
   sheathingLayer, wrbLayer, wallTakesEnvelope, claddingSpec, recommendedWrb, boardSpec,
   finishesVisible,
@@ -954,5 +954,19 @@ describe('stud packs under point loads', () => {
     let inOpening = 0
     g.traverse((o) => { if (o instanceof THREE.Mesh && o.userData.member === 'pack' && Math.abs(o.position.x) < 0.4) inOpening++ })
     expect(inOpening).toBe(0)
+  })
+})
+
+describe('king studs at an opening — IRC Table R602.7.5, ≤115 mph Exposure B', () => {
+  const FT = 0.3048
+  it('one a side up to 8 ft', () => {
+    expect(kingsPerEnd(3 * FT)).toBe(1)
+    expect(kingsPerEnd(8 * FT)).toBe(1)
+  })
+  it('two a side past 8 ft, including the 10 and 12 ft openings it used to short', () => {
+    expect(kingsPerEnd(8.1 * FT)).toBe(2)
+    expect(kingsPerEnd(10 * FT)).toBe(2)
+    expect(kingsPerEnd(12 * FT)).toBe(2)
+    expect(kingsPerEnd(16 * FT)).toBe(2)
   })
 })

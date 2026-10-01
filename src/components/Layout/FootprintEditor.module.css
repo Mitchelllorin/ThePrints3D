@@ -13,16 +13,23 @@
   border-radius: 10px;
   background: var(--bp-panel-2, #1e2833);
   border: 1px solid var(--bp-line, #2c3a4a);
-  /* Bare paper still scrolls the sheet; the handles below opt out. */
-  touch-action: pan-y;
+  /* The sheet is full screen and the plan does not scroll: every touch on it
+     is drawing, pulling or moving. */
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .svg { position: absolute; inset: 0; display: block; }
 
-/* A section's body. Dragging it slides the section along its wall. */
+/* A section's body. Dragging it slides the section along its wall; a double
+   tap on any of the house picks the whole house up. */
 .body { cursor: move; touch-action: none; }
+
+/* In walls mode the paper is for drawing on. */
+.wrapWalls .paper { cursor: crosshair; }
+/* A finger's width either side of an inside wall. */
+.wallHit { cursor: move; touch-action: none; }
 
 /* ── Grips: 48px to hit, 20px to see ───────────────────────────────────── */
 .grip {
@@ -50,8 +57,13 @@
 /* The corner does two things at once, so it is a different SHAPE, not only a
    different place: a square where the edges have dots. */
 .gripCorner::before { border-radius: 5px; }
+/* Moves a whole inside wall: a diamond, so it reads as a different job from
+   the round ends that stretch it. */
+.gripMove::before { border-radius: 3px; transform: rotate(45deg); }
+.gripMove { cursor: move; }
 .gripOn { cursor: grabbing; }
 .gripOn::before { transform: scale(1.25); }     /* transform only */
+.gripMove.gripOn::before { transform: rotate(45deg) scale(1.25); }
 .grip:focus-visible::before { outline: 2px solid #e8eef5; outline-offset: 3px; }
 
 /* ── The number on the dimension ───────────────────────────────────────── */
@@ -82,6 +94,10 @@
   border: 2px solid var(--bp-accent, #3d9ae8);
   color: #8ec5f5;
 }
+
+/* The length of a wall still being drawn: a readout, not a button yet. */
+.chipLive { pointer-events: none; }
+.chip:disabled { opacity: 1; cursor: default; }
 
 /* Typing it exact. Upright even on a vertical dimension — nobody types sideways. */
 .edit {

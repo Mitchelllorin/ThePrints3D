@@ -347,7 +347,7 @@ const HISTORY_LIMIT = 80
 // round-trip. Lets undo restore a removed drawing and redo re-add one.
 const drawingPool = new Map<string, Drawing>()
 
-interface WorkspaceHistorySnapshot {
+export interface WorkspaceHistorySnapshot {
   /** Which drawings existed, in order — add/remove drawing is undoable */
   drawingIds: string[]
   drawingStates: Array<{
@@ -1775,6 +1775,10 @@ export const useAppStore = create<AppState>()(
           }
           // Its walls belong upstairs, or they frame inside the ground floor.
           stampWallsToFloor(d2, 1)
+          // Windows carry up — a window over a window, the way a two-storey
+          // elevation reads. Doors do not: the front door and the garage door
+          // upstairs would open onto thin air.
+          d2.parsedOpenings = d2.parsedOpenings.filter((o) => o.type === 'window')
           drawingPool.set(d2.id, d2)
           s.drawings.push(d2)
         }
@@ -2474,7 +2478,10 @@ export const useAppStore = create<AppState>()(
       const existing = new Set(
         s.placedObjects
           .filter((o) => o.type === 'door' || o.type === 'window')
-          .map((o) => `${Math.round(o.pxX ?? -1)}:${Math.round(o.pxY ?? -1)}`),
+          // Keyed by STOREY as well as spot: an upstairs window sits at the same
+          // place on the sheet as the one under it, and without the level it
+          // read as a duplicate and was never hung.
+          .map((o) => `${o.level ?? 0}:${Math.round(o.pxX ?? -1)}:${Math.round(o.pxY ?? -1)}`),
       )
 
       // The same pixel→world mapping every layer uses. Without it the openings
@@ -2563,7 +2570,7 @@ export const useAppStore = create<AppState>()(
 
         for (const d of st.drawings) {
           for (const op of d.parsedOpenings) {
-            const key = `${Math.round(op.x)}:${Math.round(op.y)}`
+            const key = `${d.floorNumber ?? 0}:${Math.round(op.x)}:${Math.round(op.y)}`
             if (existing.has(key)) continue
             existing.add(key)
             const item = getCatalogItem(op.type)
@@ -3020,3 +3027,61 @@ export const useAppStore = create<AppState>()(
     }
   })
 )
+
+// ─── The job, as one saveable thing ─────────────────────────────────────────
+// The undo snapshot already IS the job: every field a user builds, and none of
+// the UI around it. Saving reuses it rather than keeping a second list that
+// would drift. Drawings travel separately (they hold Files and blob URLs) — see
+// services/currentJob.
+
+/** Everything the user built, minus the drawings' files. */
+export function captureJob(): WorkspaceHistorySnapshot {
+  return captureSnapshot(useAppStore.getState())
+}
+
+/**
+ * Put a saved job on the workspace, replacing whatever is there. Undo history
+ * is cleared: undoing past the load would mix two jobs. `snapshot` is null for
+ * saves made before the snapshot was stored — those only ever kept drawings,
+ * layers, measurements and the model.
+ */
+export function restoreJob(
+  drawings: Drawing[],
+  snapshot: WorkspaceHistorySnapshot | null,
+  legacy?: Pick<AppState, 'layers' | 'measurements' | 'model'>,
+): void {
+  drawingPool.clear()
+  resetJob()
+  useAppStore.setState((s) => {
+    s.drawings = drawings
+    s.selectedDrawingId = drawings[0]?.id ?? null
+    if (snapshot) applySnapshot(s, snapshot)
+    else if (legacy) {
+      s.layers = legacy.layers
+      s.measurements = legacy.measurements
+      s.model = legacy.model
+    }
+    s.historyPast = []
+    s.historyFuture = []
+    s.explodeAmount = 0
+    s.view = 'model'
+  })
+}
+
+/** An empty workspace for a new job — the rail's Clear, plus the job's notes,
+ *  measurements and corrections, and no undo back into the last job. */
+export function resetJob(): void {
+  useAppStore.getState().clearWorkspace()
+  useAppStore.setState((s) => {
+    s.measurements = []
+    s.annotations = []
+    s.productPlacements = []
+    s.userTraces = []
+    s.corrections = []
+    s.correctionCount = 0
+    s.detectedWallTypes = []
+    s.historyPast = []
+    s.historyFuture = []
+  })
+  saveAnnotations([])
+}

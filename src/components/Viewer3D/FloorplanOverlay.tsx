@@ -310,6 +310,8 @@ export default function FloorplanOverlay() {
   const selectLineExclusive = useFloorplanLocalStore((s) => s.selectLineExclusive)
   const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
+  /** Floor and roof outlines are for tracing them, not for the built house. */
+  const showAreaOutlines = planView || (traceMode && (activeTraceLayer === 'roof' || activeTraceLayer === 'floors'))
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
   const squareWalls = useFloorplanLocalStore((s) => s.squareWalls)
@@ -1810,7 +1812,14 @@ export default function FloorplanOverlay() {
           thing you are actually looking at. They stay visible, because the gap
           between the two IS the eave and is worth seeing — just quiet enough to
           be context rather than the subject. */}
-      {visibleLayers.has('floors') && floorsAreas.map((a) => (
+      {/* ONLY WHILE THEY ARE THE WORK. These are tracing aids: the rectangle
+          you drew to say "a floor here", "a roof over this". Once the floor
+          and roof are built, the outline was still hung on the finished house
+          — the roof's as a hot pink band round the top of the walls, under the
+          eaves, that nobody could name and nothing turned off. Now they show
+          while you trace floors or roofs, and faintly in plan view where the
+          gap between them reads as the eave; the built model stands alone. */}
+      {showAreaOutlines && visibleLayers.has('floors') && floorsAreas.map((a) => (
         <Line
           key={`floor-${a.id}`}
           points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, CEILING_TYPES.has(a.elementType)))}
@@ -1821,7 +1830,7 @@ export default function FloorplanOverlay() {
         />
       ))}
 
-      {visibleLayers.has('roof') && roofAreas.map((a) => (
+      {showAreaOutlines && visibleLayers.has('roof') && roofAreas.map((a) => (
         <Line
           key={`roof-${a.id}`}
           points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, true))}

@@ -3,7 +3,8 @@ import { useIsPro } from '../Pro/usePro'
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
 import ProjectLibrary from '../Projects/ProjectLibrary'
-import { listPresetDefinitions, type PresetDifficulty } from '../../services/presetDrawings'
+import { listPresetDefinitions, presetStair, type PresetDifficulty } from '../../services/presetDrawings'
+import { overlayPixelToWorld } from '../../services/wallFramingPlan'
 import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
@@ -23,7 +24,7 @@ import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import { planViewCamera } from '../../services/builtScene'
 import UpgradeSheet from '../Pro/UpgradeSheet'
 import ProSection from '../Pro/ProSection'
-import { hasToured, markToured } from '../../onboarding/firstRun'
+import { markToured } from '../../onboarding/firstRun'
 import { watermarkedPng } from '../../services/watermark'
 import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/stairs'
 import { getCatalogItem } from '../../data/objectCatalog'
@@ -235,15 +236,19 @@ function SettingsContent() {
         <ColorRow label="Label colour" val={ui.labelColor} onChange={(v) => setUI({ labelColor: v })} />
         <Slider label="Label size" val={Math.round(ui.labelScale * 100)} min={50} max={200} step={5} unit="%"
           onChange={(v) => setUI({ labelScale: v / 100 })} />
-        {/* Nameplates used to be on for everything, always, and a finished
-            storey came out as a wall of floating text with the model behind
-            it. "Selected" is the default: the thing you picked says what it
-            is, the rest stay out of the way. */}
+        {/* The global nameplate dial: how much every part says at once. The
+            part you pick always reads out in full on top of this, so Off
+            still names the thing you are working on. */}
         <Choice
-          label="Metric nameplates"
-          val={ui.dimensionsMode}
-          opts={[{ v: 'selected' as const, text: 'Selected' }, { v: 'always' as const, text: 'Always' }, { v: 'off' as const, text: 'Off' }]}
-          onChange={(v) => setUI({ dimensionsMode: v })}
+          label="Nameplates"
+          val={String(ui.nameplateTier) as '0' | '1' | '2' | '3'}
+          opts={[
+            { v: '0' as const, text: 'Off' },
+            { v: '1' as const, text: 'Name' },
+            { v: '2' as const, text: 'Name + size' },
+            { v: '3' as const, text: 'Full' },
+          ]}
+          onChange={(v) => setUI({ nameplateTier: Number(v) as 0 | 1 | 2 | 3 })}
         />
       </CollapsibleSection>
 
@@ -299,7 +304,7 @@ function SettingsContent() {
           ProjectLibrary is a complete save/list/load UI for it — imported by
           nothing, so an uploaded print died on reload. On a job site that is not
           a missing feature, it is losing your work. */}
-      <CollapsibleSection id="projects" title="Projects" openId={openId} setOpenId={setOpenId}>
+      <CollapsibleSection id="projects" title="Jobs" openId={openId} setOpenId={setOpenId}>
         <ProjectLibrary inline />
       </CollapsibleSection>
 
@@ -816,13 +821,21 @@ export default function WorkspaceLayout() {
   /** A roof is on — drawn, traced, or put on from the step. */
   const hasRoof = useAppStore((st) => st.roofAreas.length > 0)
 
+  /**
+   * OFF — Mitchell, 24 Sep 2026. Once the walls stand, the chip used to name the
+   * next thing to build: inside walls, doors & windows, roof, cut list. The
+   * people using this know what comes next, so the chip stops at the two app
+   * actions (Set the scale, Stand them up). The roof has its own button in
+   * Build → Framing. The chain below is kept, switched off, not deleted.
+   */
+  const BUILD_ORDER_PROMPTS = false
   const nextStep = !planReady || traceMode || inCalibration
     ? null
     : !scaleIsRead && !calibrationHandled
       ? { label: 'Set the scale', note: "couldn't read it", run: setScale }
       : planWalls > 0 && modelIdle
         ? { label: 'Stand them up', note: `${planWalls} wall${planWalls === 1 ? '' : 's'}`, run: standThemUp }
-        : modelIdle
+        : modelIdle || !BUILD_ORDER_PROMPTS
           ? null
           : !hasInsideWalls && !insideWallsSeen && !hasOpenings
             ? { label: 'Draw the inside walls', note: 'tap one end, then the other', run: drawInsideWalls }
@@ -1028,9 +1041,8 @@ export default function WorkspaceLayout() {
       // lands at level 0, underneath the second storey's walls. A house with
       // its roof in the middle of it.
       //
-      // Openings do not carry either, so the upper floor came out a windowless
-      // box. A correct one-storey house beats a broken two-storey one; proper
-      // multi-storey wants the storey list fixed first, which is its own job.
+      // The upper storey is its own drawing (see loadPresetDrawing), and its
+      // windows carry up from the plan; doors stay downstairs.
       // ORDER MATTERS, and getting it wrong is what put studs through the
       // doorways. The framing engine reads its openings from PLACED OBJECTS —
       // that is how it knows to skip studs and add king/jack/header. Build
@@ -1041,6 +1053,22 @@ export default function WorkspaceLayout() {
       // it once more for the roof, because buildForMe derives one and throws it
       // away (tracing a roof is meant to be an act). The second pass cannot
       // duplicate anything — openings dedupe on position.
+      // The stair goes in with the doors and windows, before the framing, so
+      // the deck upstairs is framed with its stairwell already cut.
+      const stair = presetStair('hard')
+      if (stair) {
+        const st = useAppStore.getState()
+        const ref = st.drawings.find((d) => d.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+        const { x, z } = overlayPixelToWorld(st.floorplanOverlay, ref?.rasterWidth ?? 1400, ref?.rasterHeight ?? 900)(stair.pxX, stair.pxY)
+        const item = getCatalogItem('stairs')
+        st.addPlacedObject({
+          id: `showcase-stair-${Date.now()}`,
+          type: 'stairs', x, z, rotationY: stair.rotationY,
+          scaleX: 1, scaleY: 1, scaleZ: 1,
+          label: item?.label ?? 'Stairs',
+          pxX: stair.pxX, pxY: stair.pxY, level: 0,
+        })
+      }
       useAppStore.getState().finishShell()
       useAppStore.getState().buildForMe()
       useAppStore.getState().finishShell()
@@ -1057,15 +1085,11 @@ export default function WorkspaceLayout() {
     // Marked on START, not on finish — see onboarding/firstRun.ts. Someone who
     // bails three steps in has answered the question.
     markToured()
-    setFirstRun(false)
     startTutorial()
   }
   const hasDrawings = drawings.length > 0
   // Onboarding card persists until a plan is actually loaded — no dismiss.
   const showUploadHint = !hasDrawings
-  /** Never been shown around. Read once into state so the invitation cannot
-   *  flicker away mid-render when the flag is written. */
-  const [firstRun, setFirstRun] = useState(() => !hasToured())
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -1268,12 +1292,9 @@ export default function WorkspaceLayout() {
               a building, open a plan they already have, or look at a finished
               one. Everything else is still here, one line down, for the person
               who goes looking. */}
-          {firstRun && (
-            <p className={styles.uploadHintLead}>New here? Draw the building to size and it frames itself.</p>
-          )}
           <button className={styles.drawItChip} onClick={() => setDrawItOpen(true)}>
             ✏ Draw it
-            <span className={styles.drawItNote}>type the sizes</span>
+            <span className={styles.drawItNote}>drag it to size</span>
           </button>
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Open a plan</button>
@@ -1391,309 +1412,316 @@ export default function WorkspaceLayout() {
         </div>
       )}
 
-      {/* EDIT RAIL — what you can do to the selection, as buttons that do the
-          thing they are named after. This replaced a 3D gizmo (drei
-          TransformControls arrows/rings on the model): the handles were hard to
-          hit on a phone, they covered the component being edited, and they were
-          forever buried in geometry. A tap here is unambiguous and lands one
-          undo step.
+      {/* THE RIGHT EDGE, as one column: Select, the picked member, the edit
+          rail, the floor ladder. They each used to be pinned at their own
+          guessed `top`, and the guesses drifted into each other and into Undo
+          above them. Stacked in one flex column that starts under the top
+          icons, they cannot overlap by construction. */}
+      <div className={styles.rightStack}>
+        {/* EDIT RAIL — what you can do to the selection, as buttons that do the
+            thing they are named after. This replaced a 3D gizmo (drei
+            TransformControls arrows/rings on the model): the handles were hard to
+            hit on a phone, they covered the component being edited, and they were
+            forever buried in geometry. A tap here is unambiguous and lands one
+            undo step.
 
-          Only the verbs the selection can honestly express are shown — a floor
-          is an axis-aligned rect with no rotation field, so it gets Move ·
-          Stretch and no Rotate button that would spin nothing.
+            Only the verbs the selection can honestly express are shown — a floor
+            is an axis-aligned rect with no rotation field, so it gets Move ·
+            Stretch and no Rotate button that would spin nothing.
 
-          Lives in the chrome on the right edge, mirroring the left rail, so it
-          never sits on top of the thing you are editing. */}
-      {/* WHAT THE NEXT TAP WILL PICK.
-          Shown whenever edit mode is on, with or without a selection — the
-          whole value of a stated mode is knowing BEFORE you tap. Tapping a stud
-          and getting the whole wall is right most of the time and useless the
-          rest of it, and guessing from tap-length or zoom would make an already
-          sensitive editor unpredictable.
-          One switch for the entire model, because the distinction is the same
-          everywhere: wall/stud, deck/joist, roof/rafter. */}
-      {editMode && !traceMode && !calibrationMode && (
-        <div className={styles.grainSwitch}>
-          <span className={styles.grainCaption}>Select</span>
-          <button
-            className={`${styles.grainBtn} ${selectionGranularity === 'assembly' ? styles.grainBtnOn : ''}`}
-            onClick={() => setSelectionGranularity('assembly')}
-            title="Tap picks the whole wall, deck or roof"
-            aria-pressed={selectionGranularity === 'assembly'}
-          >Whole</button>
-          <button
-            className={`${styles.grainBtn} ${selectionGranularity === 'member' ? styles.grainBtnOn : ''}`}
-            onClick={() => setSelectionGranularity('member')}
-            title="Tap picks the single stud, plate, joist or rafter under it"
-            aria-pressed={selectionGranularity === 'member'}
-          >Member</button>
-        </div>
-      )}
-
-      {/* A PICKED MEMBER, named, with the one verb that matters for it.
-          The generic edit rail below is built around assemblies — move, stretch,
-          rotate a wall — and none of that is what you want from a single stud.
-          What you want is to SEE it, so this offers exactly that and says which
-          stick you are holding. */}
-      {editMode && editSelected?.kind === 'member' && !traceMode && !calibrationMode && (
-        <div className={styles.memberRail}>
-          <span className={styles.editRailLabel}>{selectedMemberLabel ?? 'Member'}</span>
-          <button
-            className={`${styles.grainBtn} ${isolatedMemberId ? styles.grainBtnOn : ''}`}
-            onClick={() => setIsolatedMember(isolatedMemberId ? null : editSelected.id)}
-            aria-pressed={!!isolatedMemberId}
-          >
-            {isolatedMemberId ? 'Show all' : 'Isolate'}
-          </button>
-        </div>
-      )}
-
-      {editMode && selectionEdit && !traceMode && !calibrationMode && (
-        <div className={styles.editRail}>
-          <span className={styles.editRailLabel}>{selectionEdit.label}</span>
-
-          {selectionEdit.verbs.includes('move') && (
-            <>
-              {/* Step size — same 1/6/12 ladder as the wall D-pad, so a "step"
-                  means one thing everywhere. Tap to cycle. */}
-              <button
-                className={styles.editRailStep}
-                onClick={() => setEditStep((s) => (s === 1 ? 6 : s === 6 ? 12 : 1))}
-                title="Change step size"
-              >
-                {editStep} {activeUnit}
-              </button>
-              <div className={styles.editRailPad}>
-                <button style={{ gridArea: 'up' }} className={styles.editRailBtn}
-                  onClick={() => selectionEdit.apply({ dz: -stepM })} aria-label="Move up">↑</button>
-                <button style={{ gridArea: 'left' }} className={styles.editRailBtn}
-                  onClick={() => selectionEdit.apply({ dx: -stepM })} aria-label="Move left">←</button>
-                <button style={{ gridArea: 'right' }} className={styles.editRailBtn}
-                  onClick={() => selectionEdit.apply({ dx: stepM })} aria-label="Move right">→</button>
-                <button style={{ gridArea: 'down' }} className={styles.editRailBtn}
-                  onClick={() => selectionEdit.apply({ dz: stepM })} aria-label="Move down">↓</button>
-              </div>
-            </>
-          )}
-
-          {selectionEdit.verbs.includes('rotate') && (
-            <div className={styles.editRailGroup}>
-              <span className={styles.editRailCaption}>Rotate</span>
-              <div className={styles.editRailPair}>
-                <button className={styles.editRailBtn} aria-label="Rotate left 15 degrees"
-                  onClick={() => selectionEdit.apply({ rot: -ROT_STEP })}>↺</button>
-                <button className={styles.editRailBtn} aria-label="Rotate right 15 degrees"
-                  onClick={() => selectionEdit.apply({ rot: ROT_STEP })}>↻</button>
-              </div>
-            </div>
-          )}
-
-          {selectionEdit.verbs.includes('stretch') && (
-            <div className={styles.editRailGroup}>
-              <span className={styles.editRailCaption}>Stretch</span>
-              <div className={styles.editRailPair}>
-                <button className={styles.editRailBtn} aria-label="Shrink"
-                  onClick={() => selectionEdit.apply({ factor: 1 / STRETCH_STEP })}>−</button>
-                <button className={styles.editRailBtn} aria-label="Grow"
-                  onClick={() => selectionEdit.apply({ factor: STRETCH_STEP })}>+</button>
-              </div>
-            </div>
-          )}
-
-          {/* SPECS — the property card, on request only.
-              Selecting something used to raise the card by itself, so you could
-              not tap a thing to nudge it without a panel landing in front of the
-              model. The rail already does move/rotate/stretch/X-ray/delete; this
-              is only for what the rail cannot say — a door's swing, a board type.
-              Tap again to put it away. */}
-          <div className={styles.editRailGroup}>
+            Lives in the chrome on the right edge, mirroring the left rail, so it
+            never sits on top of the thing you are editing. */}
+        {/* WHAT THE NEXT TAP WILL PICK.
+            Shown whenever edit mode is on, with or without a selection — the
+            whole value of a stated mode is knowing BEFORE you tap. Tapping a stud
+            and getting the whole wall is right most of the time and useless the
+            rest of it, and guessing from tap-length or zoom would make an already
+            sensitive editor unpredictable.
+            One switch for the entire model, because the distinction is the same
+            everywhere: wall/stud, deck/joist, roof/rafter. */}
+        {editMode && !traceMode && !calibrationMode && (
+          <div className={styles.grainSwitch}>
+            <span className={styles.grainCaption}>Select</span>
             <button
-              className={`${styles.editRailBtn} ${activePanel ? styles.editRailBtnOn : ''}`}
-              aria-pressed={!!activePanel}
-              aria-label={`Specs for this ${selectionEdit.label.toLowerCase()}`}
-              title={activePanel ? 'Hide specs' : `Specs for this ${selectionEdit.label.toLowerCase()}`}
-              onClick={() => openSelectionPanel()}
-            >⋯</button>
+              className={`${styles.grainBtn} ${selectionGranularity === 'assembly' ? styles.grainBtnOn : ''}`}
+              onClick={() => setSelectionGranularity('assembly')}
+              title="Tap picks the whole wall, deck or roof"
+              aria-pressed={selectionGranularity === 'assembly'}
+            >Whole</button>
+            <button
+              className={`${styles.grainBtn} ${selectionGranularity === 'member' ? styles.grainBtnOn : ''}`}
+              onClick={() => setSelectionGranularity('member')}
+              title="Tap picks the single stud, plate, joist or rafter under it"
+              aria-pressed={selectionGranularity === 'member'}
+            >Member</button>
           </div>
+        )}
 
-          {/* X-RAY — the answer to "how do I make this see-through?".
-              Captioned, not just an icon, because the whole problem was that
-              nobody could find it: it lived inside the wall panel AND the object
-              panel, worded differently in each, and floors and roofs had no way
-              to do it at all. One mark, one word, same place for everything you
-              can select. Accent when it is on, so the rail tells you the state
-              of the thing you are looking at. */}
-          {selectionEdit.xray && (
-            <div className={styles.editRailGroup}>
-              <span className={styles.editRailCaption}>X-ray</span>
-              <button
-                className={`${styles.editRailBtn} ${selectionEdit.xray.on ? styles.editRailBtnOn : ''}`}
-                aria-pressed={selectionEdit.xray.on}
-                aria-label={`X-ray this ${selectionEdit.label.toLowerCase()}`}
-                title={selectionEdit.xray.on
-                  ? 'X-ray on — tap to make solid again'
-                  : `See through this ${selectionEdit.label.toLowerCase()}`}
-                onClick={() => selectionEdit.xray!.toggle()}
-              >◐</button>
-            </div>
-          )}
+        {/* A PICKED MEMBER, named, with the one verb that matters for it.
+            The generic edit rail below is built around assemblies — move, stretch,
+            rotate a wall — and none of that is what you want from a single stud.
+            What you want is to SEE it, so this offers exactly that and says which
+            stick you are holding. */}
+        {editMode && editSelected?.kind === 'member' && !traceMode && !calibrationMode && (
+          <div className={styles.memberRail}>
+            <span className={styles.editRailLabel}>{selectedMemberLabel ?? 'Member'}</span>
+            <button
+              className={`${styles.grainBtn} ${isolatedMemberId ? styles.grainBtnOn : ''}`}
+              onClick={() => setIsolatedMember(isolatedMemberId ? null : editSelected.id)}
+              aria-pressed={!!isolatedMemberId}
+            >
+              {isolatedMemberId ? 'Show all' : 'Isolate'}
+            </button>
+          </div>
+        )}
 
-          {/* EXPLODE PARTS — the second explode, which edit mode had locked out.
-              There have always been two: the slider, which lifts the whole model
-              apart by layer, and this one, which blows a SINGLE thing into its
-              pieces — the studs out of a wall, the parts out of a fixture. But
-              its only buttons lived inside the wall panel and the object panel,
-              and selecting something in edit mode deliberately suppresses those
-              panels (`activePanel: s.editMode ? null : 'wall'`). So the mode was
-              still there and had no door: you could not reach it the new way of
-              working at all.
-              Same remedy as X-ray directly above — one mark, one word, same
-              place, for everything that can express it. */}
-          {(editSelected?.kind === 'wall' || editSelected?.kind === 'object') && (() => {
-            const isWall = editSelected.kind === 'wall'
-            const on = isWall ? wallDetailExplode : detailExplodeId === editSelected.id
-            return (
-              <div className={styles.editRailGroup}>
-                <span className={styles.editRailCaption}>Explode</span>
+        {editMode && selectionEdit && !traceMode && !calibrationMode && (
+          <div className={styles.editRail}>
+            <span className={styles.editRailLabel}>{selectionEdit.label}</span>
+
+            {selectionEdit.verbs.includes('move') && (
+              <>
+                {/* Step size — same 1/6/12 ladder as the wall D-pad, so a "step"
+                    means one thing everywhere. Tap to cycle. */}
                 <button
-                  className={`${styles.editRailBtn} ${on ? styles.editRailBtnOn : ''}`}
-                  aria-pressed={on}
-                  aria-label={`Explode this ${selectionEdit.label.toLowerCase()} into its parts`}
-                  title={on
-                    ? 'Collapse back together'
-                    : `Explode this ${selectionEdit.label.toLowerCase()} into its parts`}
-                  onClick={() => {
-                    if (isWall) setWallDetailExplode(!wallDetailExplode)
-                    else setDetailExplodeId(on ? null : editSelected.id)
-                  }}
-                >✳</button>
-              </div>
-            )
-          })()}
+                  className={styles.editRailStep}
+                  onClick={() => setEditStep((s) => (s === 1 ? 6 : s === 6 ? 12 : 1))}
+                  title="Change step size"
+                >
+                  {editStep} {activeUnit}
+                </button>
+                <div className={styles.editRailPad}>
+                  <button style={{ gridArea: 'up' }} className={styles.editRailBtn}
+                    onClick={() => selectionEdit.apply({ dz: -stepM })} aria-label="Move up">↑</button>
+                  <button style={{ gridArea: 'left' }} className={styles.editRailBtn}
+                    onClick={() => selectionEdit.apply({ dx: -stepM })} aria-label="Move left">←</button>
+                  <button style={{ gridArea: 'right' }} className={styles.editRailBtn}
+                    onClick={() => selectionEdit.apply({ dx: stepM })} aria-label="Move right">→</button>
+                  <button style={{ gridArea: 'down' }} className={styles.editRailBtn}
+                    onClick={() => selectionEdit.apply({ dz: stepM })} aria-label="Move down">↓</button>
+                </div>
+              </>
+            )}
 
-          {/* DELETE. The one verb every selection has, and it was the one the
-              rail could not do — each type's delete lived in its own panel, so
-              selecting something in edit mode meant leaving edit mode to remove
-              it. Last in the rail, away from the movement controls, because it
-              is the destructive one. */}
-          <div className={styles.editRailGroup}>
-            <button
-              className={`${styles.editRailBtn} ${styles.editRailDanger}`}
-              aria-label={`Delete ${selectionEdit.label.toLowerCase()}`}
-              title={`Delete this ${selectionEdit.label.toLowerCase()}`}
-              onClick={() => selectionEdit.remove()}
-            >🗑</button>
-          </div>
-
-          {/* STAIR CONFIGURATOR — in the rail, not in a panel.
-              It started life inside the object property card, which covers the
-              model the moment it opens: you cannot watch a stair relay while the
-              thing telling you about it is sitting on top of it. The rail is the
-              established idiom for "what you can do to the selection" — marks on
-              the chrome edge, no container, nothing over the workspace — so the
-              configurator belongs here with the rest of them. */}
-          {stairEdit && (
-            <>
+            {selectionEdit.verbs.includes('rotate') && (
               <div className={styles.editRailGroup}>
-                <span className={styles.editRailCaption}>Tread</span>
+                <span className={styles.editRailCaption}>Rotate</span>
                 <div className={styles.editRailPair}>
-                  {[10, 11, 12].map((inches) => (
-                    <button key={inches}
-                      className={`${styles.editRailBtn} ${stairEdit.treadIn === inches ? styles.editRailBtnOn : ''}`}
-                      onClick={() => stairEdit.set({ treadM: inches * 0.0254 })}
-                    >{inches}</button>
-                  ))}
+                  <button className={styles.editRailBtn} aria-label="Rotate left 15 degrees"
+                    onClick={() => selectionEdit.apply({ rot: -ROT_STEP })}>↺</button>
+                  <button className={styles.editRailBtn} aria-label="Rotate right 15 degrees"
+                    onClick={() => selectionEdit.apply({ rot: ROT_STEP })}>↻</button>
                 </div>
               </div>
-              <div className={styles.editRailGroup}>
-                <span className={styles.editRailCaption}>Width</span>
-                <div className={styles.editRailPair}>
-                  {[36, 42, 48].map((inches) => (
-                    <button key={inches}
-                      className={`${styles.editRailBtn} ${stairEdit.widthIn === inches ? styles.editRailBtnOn : ''}`}
-                      onClick={() => stairEdit.set({ stairWidthM: inches * 0.0254 })}
-                    >{inches}</button>
-                  ))}
-                </div>
-              </div>
-              <div className={styles.editRailGroup}>
-                <span className={styles.editRailCaption}>Landing</span>
-                <div className={styles.editRailPair}>
-                  {/* A turn IS a landing, so "none" only appears on a straight run. */}
-                  {stairEdit.straight && (
-                    <button
-                      className={`${styles.editRailBtn} ${stairEdit.landingIn === 0 ? styles.editRailBtnOn : ''}`}
-                      onClick={() => stairEdit.set({ landingM: null })}
-                    >∅</button>
-                  )}
-                  {[36, 48].map((inches) => (
-                    <button key={inches}
-                      className={`${styles.editRailBtn} ${stairEdit.landingIn === inches ? styles.editRailBtnOn : ''}`}
-                      onClick={() => stairEdit.set({ landingM: inches * 0.0254 })}
-                    >{inches}</button>
-                  ))}
-                </div>
-              </div>
-              {/* The solve, as a mark rather than a read-out panel. */}
-              <span className={styles.editRailNote}>
-                {stairEdit.riserCount}R @ {stairEdit.riserIn}"
-              </span>
-              {stairEdit.problems.length > 0 && (
-                <span className={styles.editRailWarn} title={stairEdit.problems.join('\n')}>
-                  ⚠ {stairEdit.problems.length}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-      )}
+            )}
 
-      {/* Floor bar — the SEE-PAST LADDER for whole floors (docs/INTERACTIONS.md).
-          Fade and isolate are the same choice at different strengths and the same
-          scope (a floor), so they are one control, not two. Tapping a floor cycles
-          it:  normal → faded (15%, see past it) → isolated (others hidden) → normal.
-          Fading used to be a double-tap on a wall or floor deck, which put a
-          floor-scoped action on a component and left it undiscoverable; it lives
-          here now, beside isolate, adding no new buttons. */}
-      {/* Stays hidden mid-trace on purpose — you're placing points, not
-          inspecting floors, and the workspace stays clear while you tap. */}
-      {/* Hidden while the EDIT RAIL is using this slot — the two share the right
-          edge and take turns rather than competing for it. */}
-      {hasDrawings && !calibrationMode && !traceMode && availableFloors.length > 1
-        && !(editMode && selectionEdit) && (
-        <div className={styles.floorBar}>
-          <span className={styles.editRailCaption}>Floor</span>
-          <button
-            className={`${styles.floorBtn} ${isolatedFloor === null && ghostedLevels.length === 0 ? styles.floorBtnActive : ''}`}
-            onClick={() => { setIsolatedFloor(null); ghostedLevels.forEach((l) => toggleGhostedLevel(l)) }}
-            aria-label="Show all floors normally"
-          >All</button>
-          {availableFloors.map((i) => {
-            const faded = ghostedLevels.includes(i)
-            const isolated = isolatedFloor === i
-            const cycle = () => {
-              if (isolated) {                       // isolated → normal
-                setIsolatedFloor(null)
-              } else if (faded) {                   // faded → isolated
-                toggleGhostedLevel(i)
-                setIsolatedFloor(i)
-              } else {                              // normal → faded
-                if (isolatedFloor !== null) setIsolatedFloor(null)
-                toggleGhostedLevel(i)
-              }
-            }
-            return (
+            {selectionEdit.verbs.includes('stretch') && (
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Stretch</span>
+                <div className={styles.editRailPair}>
+                  <button className={styles.editRailBtn} aria-label="Shrink"
+                    onClick={() => selectionEdit.apply({ factor: 1 / STRETCH_STEP })}>−</button>
+                  <button className={styles.editRailBtn} aria-label="Grow"
+                    onClick={() => selectionEdit.apply({ factor: STRETCH_STEP })}>+</button>
+                </div>
+              </div>
+            )}
+
+            {/* SPECS — the property card, on request only.
+                Selecting something used to raise the card by itself, so you could
+                not tap a thing to nudge it without a panel landing in front of the
+                model. The rail already does move/rotate/stretch/X-ray/delete; this
+                is only for what the rail cannot say — a door's swing, a board type.
+                Tap again to put it away. */}
+            <div className={styles.editRailGroup}>
               <button
-                key={i}
-                className={`${styles.floorBtn} ${isolated ? styles.floorBtnActive : faded ? styles.floorBtnFaded : ''}`}
-                onClick={cycle}
-                aria-label={`Floor ${i + 1} — ${isolated ? 'isolated, tap to show all' : faded ? 'faded, tap to isolate' : 'normal, tap to fade'}`}
-                title={isolated ? 'Isolated · tap to show all' : faded ? 'Faded · tap to isolate' : 'Tap to fade this floor'}
-              >{i + 1}</button>
-            )
-          })}
-        </div>
-      )}
+                className={`${styles.editRailBtn} ${activePanel ? styles.editRailBtnOn : ''}`}
+                aria-pressed={!!activePanel}
+                aria-label={`Specs for this ${selectionEdit.label.toLowerCase()}`}
+                title={activePanel ? 'Hide specs' : `Specs for this ${selectionEdit.label.toLowerCase()}`}
+                onClick={() => openSelectionPanel()}
+              >⋯</button>
+            </div>
+
+            {/* X-RAY — the answer to "how do I make this see-through?".
+                Captioned, not just an icon, because the whole problem was that
+                nobody could find it: it lived inside the wall panel AND the object
+                panel, worded differently in each, and floors and roofs had no way
+                to do it at all. One mark, one word, same place for everything you
+                can select. Accent when it is on, so the rail tells you the state
+                of the thing you are looking at. */}
+            {selectionEdit.xray && (
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>X-ray</span>
+                <button
+                  className={`${styles.editRailBtn} ${selectionEdit.xray.on ? styles.editRailBtnOn : ''}`}
+                  aria-pressed={selectionEdit.xray.on}
+                  aria-label={`X-ray this ${selectionEdit.label.toLowerCase()}`}
+                  title={selectionEdit.xray.on
+                    ? 'X-ray on — tap to make solid again'
+                    : `See through this ${selectionEdit.label.toLowerCase()}`}
+                  onClick={() => selectionEdit.xray!.toggle()}
+                >◐</button>
+              </div>
+            )}
+
+            {/* EXPLODE PARTS — the second explode, which edit mode had locked out.
+                There have always been two: the slider, which lifts the whole model
+                apart by layer, and this one, which blows a SINGLE thing into its
+                pieces — the studs out of a wall, the parts out of a fixture. But
+                its only buttons lived inside the wall panel and the object panel,
+                and selecting something in edit mode deliberately suppresses those
+                panels (`activePanel: s.editMode ? null : 'wall'`). So the mode was
+                still there and had no door: you could not reach it the new way of
+                working at all.
+                Same remedy as X-ray directly above — one mark, one word, same
+                place, for everything that can express it. */}
+            {(editSelected?.kind === 'wall' || editSelected?.kind === 'object') && (() => {
+              const isWall = editSelected.kind === 'wall'
+              const on = isWall ? wallDetailExplode : detailExplodeId === editSelected.id
+              return (
+                <div className={styles.editRailGroup}>
+                  <span className={styles.editRailCaption}>Explode</span>
+                  <button
+                    className={`${styles.editRailBtn} ${on ? styles.editRailBtnOn : ''}`}
+                    aria-pressed={on}
+                    aria-label={`Explode this ${selectionEdit.label.toLowerCase()} into its parts`}
+                    title={on
+                      ? 'Collapse back together'
+                      : `Explode this ${selectionEdit.label.toLowerCase()} into its parts`}
+                    onClick={() => {
+                      if (isWall) setWallDetailExplode(!wallDetailExplode)
+                      else setDetailExplodeId(on ? null : editSelected.id)
+                    }}
+                  >✳</button>
+                </div>
+              )
+            })()}
+
+            {/* DELETE. The one verb every selection has, and it was the one the
+                rail could not do — each type's delete lived in its own panel, so
+                selecting something in edit mode meant leaving edit mode to remove
+                it. Last in the rail, away from the movement controls, because it
+                is the destructive one. */}
+            <div className={styles.editRailGroup}>
+              <button
+                className={`${styles.editRailBtn} ${styles.editRailDanger}`}
+                aria-label={`Delete ${selectionEdit.label.toLowerCase()}`}
+                title={`Delete this ${selectionEdit.label.toLowerCase()}`}
+                onClick={() => selectionEdit.remove()}
+              >🗑</button>
+            </div>
+
+            {/* STAIR CONFIGURATOR — in the rail, not in a panel.
+                It started life inside the object property card, which covers the
+                model the moment it opens: you cannot watch a stair relay while the
+                thing telling you about it is sitting on top of it. The rail is the
+                established idiom for "what you can do to the selection" — marks on
+                the chrome edge, no container, nothing over the workspace — so the
+                configurator belongs here with the rest of them. */}
+            {stairEdit && (
+              <>
+                <div className={styles.editRailGroup}>
+                  <span className={styles.editRailCaption}>Tread</span>
+                  <div className={styles.editRailPair}>
+                    {[10, 11, 12].map((inches) => (
+                      <button key={inches}
+                        className={`${styles.editRailBtn} ${stairEdit.treadIn === inches ? styles.editRailBtnOn : ''}`}
+                        onClick={() => stairEdit.set({ treadM: inches * 0.0254 })}
+                      >{inches}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.editRailGroup}>
+                  <span className={styles.editRailCaption}>Width</span>
+                  <div className={styles.editRailPair}>
+                    {[36, 42, 48].map((inches) => (
+                      <button key={inches}
+                        className={`${styles.editRailBtn} ${stairEdit.widthIn === inches ? styles.editRailBtnOn : ''}`}
+                        onClick={() => stairEdit.set({ stairWidthM: inches * 0.0254 })}
+                      >{inches}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.editRailGroup}>
+                  <span className={styles.editRailCaption}>Landing</span>
+                  <div className={styles.editRailPair}>
+                    {/* A turn IS a landing, so "none" only appears on a straight run. */}
+                    {stairEdit.straight && (
+                      <button
+                        className={`${styles.editRailBtn} ${stairEdit.landingIn === 0 ? styles.editRailBtnOn : ''}`}
+                        onClick={() => stairEdit.set({ landingM: null })}
+                      >∅</button>
+                    )}
+                    {[36, 48].map((inches) => (
+                      <button key={inches}
+                        className={`${styles.editRailBtn} ${stairEdit.landingIn === inches ? styles.editRailBtnOn : ''}`}
+                        onClick={() => stairEdit.set({ landingM: inches * 0.0254 })}
+                      >{inches}</button>
+                    ))}
+                  </div>
+                </div>
+                {/* The solve, as a mark rather than a read-out panel. */}
+                <span className={styles.editRailNote}>
+                  {stairEdit.riserCount}R @ {stairEdit.riserIn}"
+                </span>
+                {stairEdit.problems.length > 0 && (
+                  <span className={styles.editRailWarn} title={stairEdit.problems.join('\n')}>
+                    ⚠ {stairEdit.problems.length}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Floor bar — the SEE-PAST LADDER for whole floors (docs/INTERACTIONS.md).
+            Fade and isolate are the same choice at different strengths and the same
+            scope (a floor), so they are one control, not two. Tapping a floor cycles
+            it:  normal → faded (15%, see past it) → isolated (others hidden) → normal.
+            Fading used to be a double-tap on a wall or floor deck, which put a
+            floor-scoped action on a component and left it undiscoverable; it lives
+            here now, beside isolate, adding no new buttons. */}
+        {/* Stays hidden mid-trace on purpose — you're placing points, not
+            inspecting floors, and the workspace stays clear while you tap. */}
+        {/* Hidden while the EDIT RAIL is using this slot — the two share the right
+            edge and take turns rather than competing for it. */}
+        {hasDrawings && !calibrationMode && !traceMode && availableFloors.length > 1
+          && !(editMode && selectionEdit) && (
+          <div className={styles.floorBar}>
+            <span className={styles.editRailCaption}>Floor</span>
+            <button
+              className={`${styles.floorBtn} ${isolatedFloor === null && ghostedLevels.length === 0 ? styles.floorBtnActive : ''}`}
+              onClick={() => { setIsolatedFloor(null); ghostedLevels.forEach((l) => toggleGhostedLevel(l)) }}
+              aria-label="Show all floors normally"
+            >All</button>
+            {availableFloors.map((i) => {
+              const faded = ghostedLevels.includes(i)
+              const isolated = isolatedFloor === i
+              const cycle = () => {
+                if (isolated) {                       // isolated → normal
+                  setIsolatedFloor(null)
+                } else if (faded) {                   // faded → isolated
+                  toggleGhostedLevel(i)
+                  setIsolatedFloor(i)
+                } else {                              // normal → faded
+                  if (isolatedFloor !== null) setIsolatedFloor(null)
+                  toggleGhostedLevel(i)
+                }
+              }
+              return (
+                <button
+                  key={i}
+                  className={`${styles.floorBtn} ${isolated ? styles.floorBtnActive : faded ? styles.floorBtnFaded : ''}`}
+                  onClick={cycle}
+                  aria-label={`Floor ${i + 1} — ${isolated ? 'isolated, tap to show all' : faded ? 'faded, tap to isolate' : 'normal, tap to fade'}`}
+                  title={isolated ? 'Isolated · tap to show all' : faded ? 'Faded · tap to isolate' : 'Tap to fade this floor'}
+                >{i + 1}</button>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Ambient inference nudge — gentle "snap flush?" prompt, bottom-centre. */}
       <InferencePrompt />

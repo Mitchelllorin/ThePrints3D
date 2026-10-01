@@ -37,8 +37,8 @@ export default function ProSection() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: '#cbd5e1' }}>
       <p style={{ margin: 0, lineHeight: 1.45 }}>
         {isPro
-          ? 'Unlimited projects, the full takeoff with export, editing and measuring, trade layers, and clean exports. Yours — one payment, no subscription.'
-          : 'Free covers scan, build and explode. Pro adds unlimited projects, the full takeoff with export, editing and measuring, trade layers, and exports without the watermark.'}
+          ? 'Unlimited saved jobs, the full cut list and takeoff with export, the measuring tape, trade layers, and clean exports. Yours — one payment, no subscription.'
+          : 'Free covers scan, draw, edit, build and explode. Pro adds unlimited saved jobs, the full cut list and takeoff with export, the measuring tape, trade layers, and exports without the watermark.'}
       </p>
 
       {!isPro && (

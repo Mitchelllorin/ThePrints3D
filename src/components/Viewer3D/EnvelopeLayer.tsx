@@ -31,7 +31,7 @@ import {
   claddingSpec, finishesVisible,
   type WrbKind, type WoodSheathing, type CladdingKind,
 } from '../../services/constructionCode'
-import { footprintCentroids, outwardSign, perimeterTest } from '../../services/wallFacing'
+import { outwardTest, perimeterTest } from '../../services/wallFacing'
 import { useExplodeChildren } from './explodeRuntime'
 import { getCatalogItem } from '../../data/objectCatalog'
 import type { ParsedWall, PlacedObject } from '../../types'
@@ -40,6 +40,10 @@ interface SkinProps {
   wall: ParsedWall
   pixelToWorld: (px: number, py: number) => THREE.Vector3
   wallHeight: number
+  /** How tall the outside skin runs. The wall's own height, or that plus the
+   *  floor between storeys where a wall stands on top of this one — the rim
+   *  and joists behind that band are sheathed and clad like the wall is. */
+  skinHeight: number
   storeyHeight: number
   outward: 1 | -1
   wrapVisible: boolean
@@ -54,7 +58,7 @@ interface SkinProps {
   openings: WallOpening[]
 }
 
-function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapVisible, wrbKind, woodSheathing, sheathe, cladding, ghostOpacity, openings }: SkinProps) {
+function WallSkin({ wall, pixelToWorld, wallHeight, skinHeight, storeyHeight, outward, wrapVisible, wrbKind, woodSheathing, sheathe, cladding, ghostOpacity, openings }: SkinProps) {
   const p1 = pixelToWorld(wall.x1, wall.y1)
   const p2 = pixelToWorld(wall.x2, wall.y2)
   const dx = p2.x - p1.x
@@ -71,7 +75,7 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     if (!sheathe) return null
     const g = buildWallEnvelope({
       length,
-      height: wallHeight,
+      height: skinHeight,
       thickness,
       outward,
       sheathing: sheathingLayer(spec.material, woodSheathing),
@@ -84,7 +88,7 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     g.userData.level = wall.level ?? 0   // so explode peels the skin per storey
     return g
      
-  }, [sheathe, length, wallHeight, thickness, outward, spec.material, woodSheathing, wrapVisible, wrbKind, openings, wall.level, ghostOpacity])
+  }, [sheathe, length, skinHeight, thickness, outward, spec.material, woodSheathing, wrapVisible, wrbKind, openings, wall.level, ghostOpacity])
 
   // Cladding sits on TOP of whatever is already on the wall, so its standoff is
   // the running total: stud face + sheathing + barrier + its own cavity. Brick's
@@ -100,13 +104,13 @@ function WallSkin({ wall, pixelToWorld, wallHeight, storeyHeight, outward, wrapV
     const cs = claddingSpec(cladding)
     if (!cs) return null
     const g = buildWallCladding({
-      length, height: wallHeight,
+      length, height: skinHeight,
       standoff: Math.max(0.038, thickness) / 2 + skinM + cs.gapM,
       outward, spec: cs, openings, opacity: ghostOpacity,
     })
     g.userData.level = wall.level ?? 0
     return g
-  }, [cladding, length, wallHeight, thickness, skinM, outward, openings, wall.level, ghostOpacity])
+  }, [cladding, length, skinHeight, thickness, skinM, outward, openings, wall.level, ghostOpacity])
 
   // What a masonry veneer stands on: ledge, flashing, weeps and ties. Only the
   // GROUND storey gets it — the shelf is cast into the foundation, so a veneer on
@@ -224,7 +228,16 @@ export default function EnvelopeLayer() {
 
   // Which way is out — shared with DrywallLayer via wallFacing, so sheathing and
   // drywall can never end up on the same face of a wall.
-  const centroidByLevel = useMemo(() => footprintCentroids(skinWalls), [skinWalls])
+  const outwardOf = useMemo(() => {
+    const byLevel = new Map<number, ParsedWall[]>()
+    for (const w of skinWalls) {
+      const lv = w.level ?? 0
+      byLevel.set(lv, [...(byLevel.get(lv) ?? []), w])
+    }
+    const tests = new Map<number, (w: ParsedWall) => 1 | -1>()
+    for (const [lv, list] of byLevel) tests.set(lv, outwardTest(list))
+    return (w: ParsedWall): 1 | -1 => tests.get(w.level ?? 0)?.(w) ?? 1
+  }, [skinWalls])
 
   // Doors/windows cut the skin too, so a window is a hole rather than a pane
   // buried behind sheathing. Nearest-wall assignment, matching DrywallLayer.
@@ -237,6 +250,10 @@ export default function EnvelopeLayer() {
       const px = o.pxX as number, py = o.pxY as number
       let best = -1, bestPerp = Infinity, bestT = 0
       skinWalls.forEach((w, i) => {
+        // Same storey only. An upstairs window sits at the same spot on the
+        // sheet as the one below it, and without this it cut its hole in the
+        // ground-floor wall instead.
+        if ((w.level ?? 0) !== (o.level ?? 0)) return
         const ddx = w.x2 - w.x1, ddy = w.y2 - w.y1
         const len2 = ddx * ddx + ddy * ddy
         if (len2 < 1e-6) return
@@ -262,6 +279,35 @@ export default function EnvelopeLayer() {
     return out
   }, [skinWalls, placedObjects, pixelToWorld])
 
+  /**
+   * THE FLOOR BETWEEN STOREYS. A wall's skin used to stop at its top plate, and
+   * the next storey's starts a floor-depth higher — so the rim and joists in
+   * between were bare, and from outside you could see into the house. Where a
+   * wall stands on this one, the skin carries up over that band, the way the
+   * sheathing and siding run past a rim joist on a real house. Where nothing
+   * stands above (the garage under its own roof), it stops at the plate, or it
+   * would poke up through the eave.
+   */
+  const hasWallAbove = useMemo(() => {
+    const shown = (lv: number) => !(isolatedFloor !== null && lv !== isolatedFloor)
+    return (w: ParsedWall): boolean => {
+      const above = (w.level ?? 0) + 1
+      if (!shown(above)) return false
+      const ddx = w.x2 - w.x1, ddy = w.y2 - w.y1
+      const len = Math.hypot(ddx, ddy)
+      if (len < 1e-6) return false
+      const tol = Math.max((w.thickness || 8) * 2.5, 28)
+      return skinWalls.some((u) => {
+        if ((u.level ?? 0) !== above) return false
+        const along = (x: number, y: number) => ((x - w.x1) * ddx + (y - w.y1) * ddy) / len
+        const off = (x: number, y: number) => Math.abs((x - w.x1) * ddy - (y - w.y1) * ddx) / len
+        if (off(u.x1, u.y1) > tol || off(u.x2, u.y2) > tol) return false
+        const a = along(u.x1, u.y1), b = along(u.x2, u.y2)
+        return Math.min(Math.max(a, b), len) - Math.max(Math.min(a, b), 0) > tol
+      })
+    }
+  }, [skinWalls, isolatedFloor])
+
   // The guardrail is not part of the envelope — it can be shown on bare studs, so
   // this layer stays mounted when only the rail is on.
   if (!finishesVisible(finishTiming, finishesApplied, traceMode)) return null
@@ -270,7 +316,7 @@ export default function EnvelopeLayer() {
   return (
     <group name="envelope" ref={groupRef}>
       {skinWalls.map((w, i) => {
-        const outward = outwardSign(w, centroidByLevel[w.level ?? 0])
+        const outward = outwardOf(w)
         const level = w.level ?? 0
         // X-ray is this wall's own setting, so it wins over the storey-wide
         // ghost: you asked to see through THIS wall, and the skin is most of
@@ -286,6 +332,7 @@ export default function EnvelopeLayer() {
             wall={w}
             pixelToWorld={pixelToWorld}
             wallHeight={wallHeightM(w, wallHeight, storeyHeight)}
+            skinHeight={wallHeightM(w, wallHeight, storeyHeight) + (hasWallAbove(w) ? FLOOR_ASSEMBLY_H : 0)}
             storeyHeight={storeyHeight}
             outward={outward}
             wrapVisible={wrapVisible}

@@ -7,12 +7,9 @@
  */
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { Billboard, Text } from '@react-three/drei'
-import { labelText } from './labelStyle'
 import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
-import { useUISettingsStore } from '../../store/useUISettingsStore'
-import { useAreaNameplateVisible } from './useNameplateVisible'
+import { useNameplateSource } from './nameplateRegistry'
 import { useSceneConfig } from '../../store/useSceneConfig'
 import { buildCeiling, FLOOR_ASSEMBLY_H, CEILING_JOIST_DEPTH } from '../../services/framingGeometry'
 import { CEILING_TYPES, ocToM } from '../../data/traceLayers'
@@ -41,9 +38,16 @@ function CeilingMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, ov
     c.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
     return c
   }, [lenX, lenZ, area.size, area.level])
-  const labelColor = useUISettingsStore((s) => s.labelColor)
-  const labelScale = useUISettingsStore((s) => s.labelScale)
-  const dimensionsVisible = useAreaNameplateVisible('floor', area.id)
+  // Its plate floats beside it with every other plate. Picking a floor area
+  // opens the SUBFLOOR's plate; the ceiling above it stays at the dial.
+  useNameplateSource(`ceiling:${area.id ?? area.level ?? 0}`, lenX < 0.1 || lenZ < 0.1 ? null : {
+    object: ceiling,
+    title: 'Ceiling',
+    figure: null,
+    fields: null,
+    selected: false,
+    warning: false,
+  })
   useEffect(() => () => disposeGroup(ceiling), [ceiling])
   if (lenX < 0.1 || lenZ < 0.1) return null
   // Joist bottoms rest on this storey's wall top plate.
@@ -52,13 +56,6 @@ function CeilingMesh({ area, pixelToWorld, imageWidth, imageHeight, overlayW, ov
   return (
     <>
       <primitive object={ceiling} position={[centre.x, y, centre.z]} rotation={[0, rotRad, 0]} />
-      {dimensionsVisible && (
-        <Billboard position={[centre.x, y + 0.45, centre.z]}>
-          <Text {...labelText(0.40 * labelScale, labelColor)}>
-            Ceiling
-          </Text>
-        </Billboard>
-      )}
     </>
   )
 }
