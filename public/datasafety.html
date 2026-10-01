@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Data Safety — ThePrints3D</title>
-  <meta name="description" content="ThePrints3D data safety: no data collected, no data shared, all processing is 100% on-device." />
+  <meta name="description" content="ThePrints3D data safety: what the app collects, what it sends, and the permissions it uses." />
   <meta property="og:title" content="Data Safety — ThePrints3D" />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://theprints3d.com/datasafety.html" />
@@ -137,10 +137,10 @@
   <main>
     <div class="container">
       <h1>Data Safety</h1>
-      <p class="updated">Last updated: June 2026 &nbsp;·&nbsp; Package: <code style="background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-size:0.85em;">com.theprints3d.app</code></p>
+      <p class="updated">Last updated: October 2026 &nbsp;·&nbsp; Package: <code style="background:rgba(255,255,255,0.07);padding:2px 6px;border-radius:4px;font-size:0.85em;">com.theprints3d.app</code></p>
 
       <div class="summary-banner">
-        <h2>✓ No data collected or shared</h2>
+        <h2>✓ What leaves your device</h2>
         <p>ThePrints3D runs entirely in the browser and on your device. Your architectural drawings are never uploaded. No account required, no analytics, no tracking.</p>
       </div>
 
@@ -203,16 +203,14 @@
 
       <h2>Security Practices</h2>
       <p>
-        All processing — including AI wall detection (U-Net ONNX model via WebGPU/WASM),
-        PDF rendering, and 3D model generation — happens locally on your device.
-        No network requests are made to external servers during normal operation.
+        All processing — including PDF rendering and 3D model generation — happens locally on your device. The one exception is the optional Ask AI feature: if you paste your own Google AI Studio key, the question you type (and, for Check my build, a text summary of your build &mdash; no drawings or images) is sent to Google's Gemini service.
       </p>
 
       <h2>Android Permissions</h2>
       <div class="perm-grid">
         <div class="perm-card">
           <h3>INTERNET</h3>
-          <p>Required by the Capacitor app container to load the web view correctly. No external network requests are made to our servers during normal use.</p>
+          <p>Required by the Capacitor app container to load the web view, to open product links, and for the optional Ask AI feature. Nothing is sent to our servers.</p>
         </div>
         <div class="perm-card">
           <h3>READ_MEDIA_IMAGES (Android 13+)</h3>
@@ -246,7 +244,7 @@
 
   <footer>
     <div class="container">
-      © 2026 ThePrints3D. All processing is 100% on-device — your drawings never leave your device.
+      © 2026 ThePrints3D.
     </div>
   </footer>
 </body>
