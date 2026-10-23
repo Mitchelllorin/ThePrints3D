@@ -135,6 +135,85 @@ export function toWorldWalls(t: PlanTransform, walls: PlanWall[]): WorldWall[] {
   })
 }
 
+/**
+ * Which transform a sheet's pixels use — the rule the 3D already renders by.
+ *
+ * Geometry from a drawing is only in the right place if it is mapped with the
+ * SAME transform the drawing is. There are two, and the choice between them is
+ * not obvious: the sheet bound to the floorplan overlay uses the overlay's own
+ * position/scale/rotation, so traced walls land exactly on the print the user
+ * calibrated, and every OTHER sheet falls back to a centred transform built
+ * from its pixel scale.
+ *
+ * This exists so the panel that jumps the camera to a wall and the layer that
+ * draws that wall cannot disagree about where the wall is — "take me to the
+ * problem" is worthless if it flies somewhere else. BuildingModel still carries
+ * its own private copy of this rule (`makeOverlayTransform` /
+ * `makeCenteredTransform`); they are the same two branches, and this one is the
+ * shared one to reach for.
+ */
+export interface PlanSheet {
+  /** Raster size in pixels. Without it there is no overlay transform to build. */
+  rasterWidth: number | null
+  rasterHeight: number | null
+  /** The sheet's own walls, in plan pixels — the centred fallback needs their centroid. */
+  walls: PlanWall[]
+  /** Millimetres per pixel, once the sheet has been calibrated. */
+  scaleMmPerPx: number | null
+}
+
+/**
+ * Pixel scale assumed when a sheet was never calibrated.
+ *
+ * 23.5 mm/px is the value this app has always fallen back to — BuildingModel,
+ * FloorplanPanel and MeasureTool each declare their own copy of it. Declared
+ * here as well because a shared helper cannot borrow a private constant, and
+ * left at the same number so all four agree.
+ */
+export const DRAWING_DEFAULT_MM_PER_PX = 23.5
+
+/**
+ * The transform that places a sheet in the world.
+ *
+ * `overlay` is the app's floorplan overlay and `isOverlaySheet` says whether
+ * THIS sheet is the one bound to it. The centred case is expressed as a
+ * PlanTransform rather than a separate closure so that every caller goes
+ * through planPixelToWorld — one mapping, not two that drift.
+ */
+export function drawingTransformFor(
+  sheet: PlanSheet,
+  overlay: Omit<PlanTransform, 'imageWidth' | 'imageHeight'>,
+  isOverlaySheet: boolean,
+): PlanTransform {
+  if (isOverlaySheet && sheet.rasterWidth && sheet.rasterHeight) {
+    return {
+      ...overlay,
+      imageWidth: sheet.rasterWidth,
+      imageHeight: sheet.rasterHeight,
+    }
+  }
+  // Centred on the sheet's own wall centroid: world = (pixel - centroid) × s.
+  // planPixelToWorld on a 1×1 image with scale [s, s] gives (pixel - 0.5) × s,
+  // so shifting the origin by (0.5 - centroid) × s reproduces the same thing.
+  const [cx, cy] = centroidOf(sheet.walls)
+  const s = (sheet.scaleMmPerPx ?? DRAWING_DEFAULT_MM_PER_PX) / 1000
+  return {
+    imageWidth: 1,
+    imageHeight: 1,
+    scale: [s, s],
+    rotationDeg: 0,
+    position: [(0.5 - cx) * s, (0.5 - cy) * s],
+  }
+}
+
+/** Average wall midpoint — the fallback transform's origin. */
+function centroidOf(walls: PlanWall[]): [number, number] {
+  if (walls.length === 0) return [0.5, 0.5]
+  let sx = 0, sy = 0
+  for (const w of walls) { sx += (w.x1 + w.x2) / 2; sy += (w.y1 + w.y2) / 2 }
+  return [sx / walls.length, sy / walls.length]
+}
+
 function nearestWall(walls: WorldWall[], x: number, z: number) {
   let best = Infinity, hit: (WorldWall & { cx: number; cz: number }) | null = null
   for (const w of walls) {

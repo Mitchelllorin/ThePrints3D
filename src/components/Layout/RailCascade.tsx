@@ -17,6 +17,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { trayItems } from '../../data/objectCatalog'
 import LayersPanel from './LayersPanel'
 import FramingPanel from './FramingPanel'
+import FusePanel from './FusePanel'
 import { planViewCamera } from '../../services/builtScene'
 import styles from './RailCascade.module.css'
 
@@ -96,11 +97,32 @@ function EditIcon({ done }: { done: boolean }) {
   )
 }
 
-type Section = 'build' | 'ask' | 'settings' | 'place' | 'layers' | 'framing'
+/**
+ * F.U.S.E.'s bolt — the same mark the wordmark opens with, drawn as a glyph so
+ * it sits with the rail's other thin monochrome marks instead of being the one
+ * coloured blob in the column. The colour belongs on the panel's own wordmark,
+ * where it is the brand; on the rail this is just the way in.
+ */
+function BoltIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    >
+      <path d="M13.4 2.5 5.6 13.2h5l-.9 8.3 8.3-11h-5.1z" />
+    </svg>
+  )
+}
+
+type Section = 'build' | 'ask' | 'fuse' | 'settings' | 'place' | 'layers' | 'framing'
 
 const RAIL: { id: Section; icon: ReactNode; label: string }[] = [
   { id: 'build', icon: '✏', label: 'Build' },
   { id: 'ask', icon: '💬', label: 'Ask' },
+  // F.U.S.E. — the years. The build review says what is wrong with the drawing
+  // today; this says what goes first and when. Both are readings of the same
+  // model, so they sit next to each other rather than in Settings.
+  { id: 'fuse', icon: <BoltIcon />, label: 'Fuse' },
   { id: 'settings', icon: '⚙', label: 'Settings' },
   { id: 'place', icon: '▦', label: 'Place' },
   // LAYERS — what the model is made of, and what you want to see of it.
@@ -165,14 +187,16 @@ export default function RailCascade() {
   const [placeOpen, setPlaceOpen] = useState(false)
   const [layersOpen, setLayersOpen] = useState(false)
   const [framingOpen, setFramingOpen] = useState(false)
+  const [fuseOpen, setFuseOpen] = useState(false)
   const setRailPanelOpen = useFloorplanLocalStore((s) => s.setRailPanelOpen)
-  useEffect(() => { setRailPanelOpen(layersOpen || placeOpen || framingOpen) }, [layersOpen, placeOpen, framingOpen, setRailPanelOpen])
+  useEffect(() => { setRailPanelOpen(layersOpen || placeOpen || framingOpen || fuseOpen) }, [layersOpen, placeOpen, framingOpen, fuseOpen, setRailPanelOpen])
   // First tap arms Clear, second does it. See the button for why.
   const [clearArmed, setClearArmed] = useState(false)
 
   const active: Record<Section, boolean> = {
     build: buildOpen,
     ask: askOpen,
+    fuse: fuseOpen,
     settings: settingsOpen,
     place: placeOpen,
     layers: layersOpen,
@@ -203,22 +227,26 @@ export default function RailCascade() {
       // Tapping the open section closes it.
       if (id === 'place') { setPlaceOpen(false); setPlaceObjectType(null) }
       else if (id === 'layers') setLayersOpen(false)
+      else if (id === 'fuse') setFuseOpen(false)
       else if (id === 'framing') setFramingOpen(false)
       else setDrawerOpen(id, false)
       return
     }
     // Open exclusively — one surface at a time, so the workspace stays clear.
     if (id === 'place') {
-      closeDrawers(); setLayersOpen(false); setFramingOpen(false)
+      closeDrawers(); setLayersOpen(false); setFramingOpen(false); setFuseOpen(false)
       setPlaceOpen(true)
     } else if (id === 'layers') {
-      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null); setFramingOpen(false)
+      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null); setFramingOpen(false); setFuseOpen(false)
       setLayersOpen(true)
     } else if (id === 'framing') {
-      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null); setLayersOpen(false)
+      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null); setLayersOpen(false); setFuseOpen(false)
       setFramingOpen(true)
+    } else if (id === 'fuse') {
+      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null); setLayersOpen(false); setFramingOpen(false)
+      setFuseOpen(true)
     } else {
-      setPlaceOpen(false); setLayersOpen(false); setFramingOpen(false)
+      setPlaceOpen(false); setLayersOpen(false); setFramingOpen(false); setFuseOpen(false)
       setDrawerOpen(id, true) // the store closes the other drawers
     }
   }
@@ -256,7 +284,7 @@ export default function RailCascade() {
    * with it.
    */
   return (
-    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen || framingOpen ? styles.wrapSheet : ''}`}>
+    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen || framingOpen || fuseOpen ? styles.wrapSheet : ''}`}>
       <nav className={styles.rail} aria-label="Menus">
         {RAIL.filter((r) => r.id !== 'framing' || hasDrawings).map(({ id, icon, label }) => (
           <button
@@ -362,6 +390,15 @@ export default function RailCascade() {
       {layersOpen && (
         <div className={styles.col} style={{ minWidth: 168, maxHeight: '100%' }}>
           <LayersPanel />
+        </div>
+      )}
+
+      {/* The timeline is tall and scrolls itself: it carries the scrubber, a
+          verdict and four answers, and it must fit on a phone without the
+          verdict being pushed off the bottom of the screen. */}
+      {fuseOpen && (
+        <div className={styles.col} style={{ minWidth: 196, maxHeight: '100%' }}>
+          <FusePanel />
         </div>
       )}
 

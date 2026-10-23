@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { WrbKind, WoodSheathing, CladdingKind, BoardKind } from '../services/constructionCode'
 import type { WetWallMethod } from '../services/wetWalls'
 import { DEFAULT_HEATING, type HeatingType } from '../services/tradeRules'
+import type { RoofCovering } from '../services/fuse'
 
 export interface UISettings {
   // Panels / toolbars / menus
@@ -114,6 +115,24 @@ export interface UISettings {
   /** Set by "Apply finishes now" — the switch the 'later' mode waits on. Reset
    *  whenever you go back to framing. */
   finishesApplied: boolean
+  // ── F.U.S.E. — the years timeline ─────────────────────────────────────────
+  //
+  // Four of these are the questions the model genuinely cannot answer: what the
+  // site is like, what the roof covering is (the app draws no covering), whether
+  // the roof space breathes, and whether anything is being kept up. They persist
+  // because they are facts about a real building, not a view setting — nobody
+  // wants to re-answer "is the attic vented" every time they open the panel.
+  /** Where the timeline's scrubber sits, 0–25 years. Persisted so closing the
+   *  panel does not throw away the year you were looking at. */
+  fuseYear: number
+  /** A site from services/fuse SITES. */
+  fuseSiteId: string
+  /** The roof covering — the app draws none, so this is the user's answer. */
+  fuseRoofing: RoofCovering
+  /** Roof space vented (or a cold, ventilated roof). */
+  fuseAtticVentilated: boolean
+  /** The exterior is being kept painted / sealed on schedule. */
+  fuseMaintained: boolean
   // Workspace lighting / background
   bgColor: string
   lightColor: string
@@ -179,6 +198,13 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   autoCarryShellUp: true,
   finishTiming: 'later',
   finishesApplied: false,
+  fuseYear: 0,
+  fuseSiteId: 'temperate',
+  fuseRoofing: 'asphalt-shingle',
+  // NOT flattered by default: an unvented roof and nothing maintained is the
+  // honest starting point, and both are a single tap from being right.
+  fuseAtticVentilated: false,
+  fuseMaintained: false,
   bgColor: '#0b0e14',
   lightColor: '#ffffff',
   dirIntensity: 1.0,

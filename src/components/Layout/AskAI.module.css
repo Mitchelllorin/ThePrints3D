@@ -62,13 +62,24 @@
 .askBtn:disabled { opacity: 0.5; cursor: default; }
 .askBtn:not(:disabled):active { transform: translateY(1px); }
 
-/* ── intro / examples (empty state) ── */
+/* ── intro / examples (empty state) ──
+   This block SCROLLS, and it has to. The overlay is bottom-anchored and capped
+   at 50dvh, so an intro taller than the cap used to overflow past its own box —
+   downward, off the bottom of the screen — which put the check button (the last
+   child) out of reach on a phone: visible enough to know it exists, impossible
+   to tap, exactly when the conversation is empty and there is a build to check.
+   Shrinking and scrolling the tall middle keeps the input row and the button
+   pinned inside the viewport instead. */
 .intro {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.intro::-webkit-scrollbar { display: none; }
 .tagline {
   margin: 0;
   align-self: flex-start;
@@ -269,6 +280,190 @@
 }
 .checkBuild:hover { background: color-mix(in srgb, #fbbf24 20%, transparent); }
 .checkBuild:disabled { opacity: 0.5; cursor: default; }
+
+/* ── the count on the button ──
+   Only ever the two grades that ask something of the builder, and it disappears
+   when they are fixed or dismissed. Its whole job is to be ignorable when there
+   is nothing to do. */
+.badgeCount {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #0b1120;
+  background: #fbbf24;
+  border-radius: 999px;
+}
+.badgeStop { color: #fff; background: #ef4444; }
+
+/* ── the findings list ──
+   Bottom-left, right above the button, NEVER centred over the model: it is a
+   glance, not a dialog. Rows are one problem and one action, ellipsised, and
+   the whole row is the tap target that flies the camera there. */
+/* With the list open the overlay is allowed to be taller — the list is the
+   thing being read, and squeezing it into the conversational cap left it a
+   17-pixel window onto one row. Still anchored bottom-left, still clear of the
+   model's centre: a finding you cannot read is not a finding. */
+.rootReview { max-height: 48dvh; }
+
+.reviewPanel {
+  pointer-events: auto;
+  /* Hug the content. One finding does not need half a screen, and a box that
+     sizes itself to the sentence in it cannot bury the model behind it. */
+  flex: 0 0 auto;
+  max-height: 44dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.97);
+  border: 1px solid var(--bp-border-strong);
+  border-radius: 12px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+.reviewHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 2px;
+}
+.reviewCount {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bp-text-dim, #94a3b8);
+}
+.reviewClose {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--bp-text-dim, #94a3b8);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.reviewClose:hover { color: var(--bp-text); background: rgba(148, 163, 184, 0.15); }
+.reviewClear {
+  margin: 0;
+  padding: 4px 8px 6px;
+  font-size: 12px;
+  color: var(--bp-text-dim, #94a3b8);
+}
+
+/* ── ONE finding at a time ──
+   The list was a page of prose you had to read before you could act. This is a
+   card the size of a sentence: the problem, the action, a way to look at it,
+   and two arrows. The reasoning is behind "Why?" — same words as before, but
+   opened against the one thing you are actually looking at, and closed again
+   the moment you move on. */
+.stepCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 0;
+  padding: 2px 6px 4px;
+}
+.dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+}
+.dot_STOP { background: #f87171; box-shadow: 0 0 0 3px color-mix(in srgb, #f87171 24%, transparent); }
+.dot_CHECK { background: #fbbf24; }
+.dot_FYI { background: #64748b; }
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.stepTitle {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--bp-text);
+}
+.stepFix {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--bp-text-dim, #94a3b8);
+}
+.stepWhy {
+  margin: 3px 0 0;
+  /* Capped: the explanation is the one thing here that can get long, so it
+     scrolls inside its own small window instead of stretching the card down
+     over the model. */
+  max-height: 24dvh;
+  overflow-y: auto;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--bp-text-dim, #94a3b8);
+}
+.stepNav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 0;
+}
+.stepGo {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0b1120;
+  background: #fbbf24;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.stepGo:hover { background: #fcd34d; }
+.stepWhyBtn {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bp-accent, #38bdf8);
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bp-accent, #38bdf8) 35%, transparent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.stepArrows { display: flex; gap: 4px; margin-left: auto; }
+.stepArrow {
+  width: 30px;
+  height: 26px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--bp-text);
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid var(--bp-border);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.stepArrow:disabled { opacity: 0.3; cursor: default; }
+
+/* "clear" under the thread — nothing you say or get told is permanent. */
+.threadTools {
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: auto;
+}
+.clearThread {
+  padding: 0 4px;
+  font-size: 10px;
+  color: var(--bp-text-dim, #94a3b8);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
 
 /* ✦ tag on brain-produced answers */
 .aiTag {

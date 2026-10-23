@@ -1,0 +1,203 @@
+/* F.U.S.E. — the years timeline. Sits inside a RailCascade column, which
+   already provides the glass; this only styles the panel's own furniture. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 9px 10px;
+  width: 196px;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 11px;
+  color: var(--bp-text, #f5f7fa);
+}
+
+/* ── The mark. The same wordmark the rest of the line uses: bolt, F.U.S.E.,
+   and the trademark — brand orange with a glow, because it is the one place in
+   this app that is branded and it should look like the family. ── */
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  padding-bottom: 6px;
+}
+.mark {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: #ff8844;              /* canonical F.U.S.E. brand orange */
+  text-shadow: 0 0 18px rgba(255, 136, 68, 0.55);
+  line-height: 1.1;
+}
+.mark sup { font-size: 9px; letter-spacing: 0; }
+.sub {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bp-text-dim, #97a4b6);
+}
+
+/* ── The timeline ── */
+.timeline { display: flex; flex-direction: column; gap: 4px; }
+.yearRow { display: flex; align-items: baseline; gap: 4px; }
+.year { font-size: 26px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+.yearUnit { font-size: 10px; color: var(--bp-text-dim, #97a4b6); }
+.spacer { flex: 1; }
+.gone { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--bp-text-dim, #97a4b6); }
+
+/* The track: a tick for every layer that goes, and a line where the scrubber
+   is. The ticks ARE the reading — four ticks close together is a bad wall. */
+.track {
+  position: relative;
+  height: 10px;
+  border-radius: 3px;
+  background: rgba(148, 163, 184, 0.18);
+}
+.tick {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 14px;
+  border-radius: 1px;
+  transform: translateX(-1px);
+}
+.now {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 16px;
+  background: var(--bp-accent, #38bdf8);
+  border-radius: 1px;
+  transform: translateX(-1px);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.8);
+}
+.range {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--bp-accent, #38bdf8);
+  cursor: pointer;
+  /* Fat enough to grab with a thumb on a phone — a 4px scrubber is a
+     trackpad-only control. */
+  height: 22px;
+}
+
+.clear {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #9ee6a8;
+}
+
+/* ── The verdict walk ── */
+.verdict { display: flex; flex-direction: column; gap: 5px; }
+.walkHead { display: flex; align-items: baseline; gap: 6px; }
+.count { font-size: 9px; font-weight: 700; letter-spacing: 0.08em; color: var(--bp-text-dim, #97a4b6); }
+.walkHint { font-size: 9px; color: rgba(151, 164, 182, 0.7); margin-left: auto; }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgba(8, 12, 20, 0.55);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+.cardTop { display: flex; align-items: center; gap: 5px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.label { font-size: 11.5px; font-weight: 700; line-height: 1.25; }
+.level { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-left: auto; }
+
+.bar {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.22);
+  overflow: hidden;
+}
+.bar span { display: block; height: 100%; border-radius: 2px; transition: width 0.18s linear; }
+
+.yearLine { margin: 0; font-size: 11px; font-weight: 600; }
+.mode { margin: 0; font-size: 11px; line-height: 1.35; color: var(--bp-text, #f5f7fa); }
+.wet { margin: 0; font-size: 10px; line-height: 1.4; color: var(--bp-text-dim, #97a4b6); }
+
+.why {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+.why p { margin: 0; font-size: 10.5px; line-height: 1.45; color: #c4cedd; }
+.cite { font-size: 9.5px !important; color: rgba(151, 164, 182, 0.85) !important; }
+.fix { font-weight: 600; color: #9ee6a8 !important; }
+
+.nav { display: flex; align-items: center; gap: 5px; }
+.go,
+.whyBtn {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--bp-text, #f5f7fa);
+  cursor: pointer;
+}
+.go:hover,
+.whyBtn:hover { background: rgba(148, 163, 184, 0.22); }
+.arrows { margin-left: auto; display: flex; gap: 3px; }
+.arrow {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--bp-text, #f5f7fa);
+  cursor: pointer;
+  line-height: 1;
+}
+.arrow:disabled { opacity: 0.35; cursor: default; }
+
+/* ── What the model cannot know ── */
+.answers {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+}
+.field { display: flex; flex-direction: column; gap: 2px; }
+.fieldLabel {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bp-text-dim, #97a4b6);
+}
+.select {
+  width: 100%;
+  font-size: 11px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(8, 12, 20, 0.7);
+  color: var(--bp-text, #f5f7fa);
+}
+.blurb { margin: 0; font-size: 10px; line-height: 1.4; color: var(--bp-text-dim, #97a4b6); }
+
+.check { display: flex; align-items: flex-start; gap: 6px; font-size: 10.5px; line-height: 1.3; cursor: pointer; }
+.check input { margin: 1px 0 0; accent-color: var(--bp-accent, #38bdf8); flex: 0 0 auto; }
+
+.foot {
+  margin: 2px 0 0;
+  font-size: 9.5px;
+  line-height: 1.4;
+  color: rgba(151, 164, 182, 0.85);
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding-top: 6px;
+}
+
+.empty { margin: 0; font-size: 11px; line-height: 1.45; color: var(--bp-text-dim, #97a4b6); }

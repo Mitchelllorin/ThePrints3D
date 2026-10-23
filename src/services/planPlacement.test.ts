@@ -4,6 +4,7 @@ import {
   worldToPlanPixel,
   placementPose,
   roomEdgeWalls,
+  drawingTransformFor,
   ORIENT_REACH_M,
   type PlanTransform,
   type PlanWall,
@@ -41,6 +42,52 @@ describe('plan <-> world transform', () => {
     const p = worldToPlanPixel(t, w.x, w.z)
     expect(p.px).toBeCloseTo(620, 6)
     expect(p.py).toBeCloseTo(210, 6)
+  })
+})
+
+/**
+ * The transform a sheet's pixels are mapped with — the overlay's own placement
+ * for the sheet bound to it, a centred scale for any other.
+ *
+ * The centred case is the one worth pinning down: it is expressed as a
+ * PlanTransform rather than a private closure, and it has to reproduce
+ * `(pixel - centroid) x scale` exactly or walls from a second sheet land in the
+ * wrong place.
+ */
+describe('drawingTransformFor — which mapping a sheet uses', () => {
+  const sheet = (over: Partial<Parameters<typeof drawingTransformFor>[0]> = {}) => ({
+    rasterWidth: 1000,
+    rasterHeight: 1000,
+    walls: [{ x1: 200, y1: 400, x2: 600, y2: 400 }],
+    scaleMmPerPx: 10,
+    ...over,
+  })
+  const overlay = { position: [3, -2] as [number, number], scale: [12, 8] as [number, number], rotationDeg: 25 }
+
+  it('uses the overlay placement for the sheet bound to the overlay', () => {
+    const t = drawingTransformFor(sheet(), overlay, true)
+    expect(t).toEqual({ ...overlay, imageWidth: 1000, imageHeight: 1000 })
+    // and the print centre lands on the overlay's position, as it renders.
+    expect(planPixelToWorld(t, 500, 500)).toEqual({ x: 3, z: -2 })
+  })
+
+  it('centres a sheet that is not the overlay sheet, on its own wall centroid', () => {
+    const t = drawingTransformFor(sheet(), overlay, false)
+    // centroid of one wall is its midpoint: (400, 400). At 10 mm/px = 0.01 m/px.
+    expect(planPixelToWorld(t, 400, 400)).toEqual({ x: 0, z: 0 })
+    const p = planPixelToWorld(t, 500, 400)
+    expect(p.x).toBeCloseTo(1, 9)
+    expect(p.z).toBeCloseTo(0, 9)
+  })
+
+  it('scales by the sheet\u2019s own mm-per-pixel, not the app default', () => {
+    const coarse = drawingTransformFor(sheet({ scaleMmPerPx: 20 }), overlay, false)
+    expect(planPixelToWorld(coarse, 500, 400).x).toBeCloseTo(2, 9)
+  })
+
+  it('falls back to the overlay when it has no raster size to work from', () => {
+    const t = drawingTransformFor(sheet({ rasterWidth: null, rasterHeight: null }), overlay, true)
+    expect(planPixelToWorld(t, 400, 400)).toEqual({ x: 0, z: 0 })
   })
 })
 
