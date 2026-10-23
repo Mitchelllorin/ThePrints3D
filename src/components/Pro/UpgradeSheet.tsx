@@ -12,7 +12,7 @@
  * it is localised, current, and correct in every country. Until it arrives the
  * button says "Unlock Pro" and nothing else — better silent than wrong.
  */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { billingAvailable, getProPrice, purchasePro, restorePro } from '../../services/billing'
@@ -30,15 +30,27 @@ const PRO_FEATURES = [
 
 type Busy = null | 'buying' | 'restoring'
 
+/** The reason passed when the sheet is opened on purpose, not by a locked tap. */
+export const PRO_REASON_GENERAL = 'Pro'
+
 export default function UpgradeSheet() {
   const reason = useFloorplanLocalStore((s) => s.upgradeReason)
-  const closeUpgrade = useFloorplanLocalStore((s) => s.closeUpgrade)
+  const closeSheet = useFloorplanLocalStore((s) => s.closeUpgrade)
   const setPro = useAppStore((s) => s.setPro)
   const [price, setPrice] = useState<string | null>(null)
   const [busy, setBusy] = useState<Busy>(null)
   const [note, setNote] = useState<string | null>(null)
+  // Set after a buy or restore lands, so the sheet says it worked before it
+  // goes, instead of vanishing and leaving them to guess.
+  const [unlocked, setUnlocked] = useState(false)
 
   const open = reason !== null
+  // Every way out goes through here, so the next opening starts clean.
+  const closeUpgrade = useCallback(() => {
+    setUnlocked(false)
+    setNote(null)
+    closeSheet()
+  }, [closeSheet])
 
   // Ask the store what it costs, but only once the sheet is actually open —
   // there is no reason to talk to billing during a trace.
@@ -72,7 +84,7 @@ export default function UpgradeSheet() {
     setBusy(null)
     if (result.status === 'purchased') {
       setPro(true)
-      closeUpgrade()
+      setUnlocked(true)
     } else if (result.status === 'cancelled') {
       // Their decision, not a failure. Close quietly rather than apologise.
       closeUpgrade()
@@ -90,7 +102,7 @@ export default function UpgradeSheet() {
     setBusy(null)
     if (result.status === 'restored' && result.isPro) {
       setPro(true)
-      closeUpgrade()
+      setUnlocked(true)
     } else if (result.status === 'restored') {
       setNote('No previous purchase found on this Google account.')
     } else if (result.status === 'unavailable') {
@@ -100,10 +112,34 @@ export default function UpgradeSheet() {
     }
   }
 
+  if (unlocked) {
+    return (
+      <div className={styles.sheet} role="dialog" aria-label="Pro unlocked">
+        <div className={styles.head}>
+          <span className={styles.reason}>Pro is unlocked. Thank you.</span>
+          <button className={styles.close} onClick={closeUpgrade} aria-label="Close">✕</button>
+        </div>
+        <ul className={styles.list}>
+          {PRO_FEATURES.map((f) => (
+            <li key={f} className={styles.item}>{f}</li>
+          ))}
+        </ul>
+        <div className={styles.actions}>
+          <button className={styles.buy} onClick={closeUpgrade}>Back to the job</button>
+        </div>
+        <p className={styles.terms}>It's tied to your Google account. On a new phone, use Restore purchase.</p>
+      </div>
+    )
+  }
+
+  const heading = reason === PRO_REASON_GENERAL
+    ? 'ThePrints3D Pro'
+    : `${reason} is part of Pro`
+
   return (
     <div className={styles.sheet} role="dialog" aria-label="Unlock Pro">
       <div className={styles.head}>
-        <span className={styles.reason}>{reason} is part of Pro</span>
+        <span className={styles.reason}>{heading}</span>
         <button className={styles.close} onClick={closeUpgrade} aria-label="Close">✕</button>
       </div>
 

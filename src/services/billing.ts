@@ -73,6 +73,24 @@ let ready = false
  */
 let productLive = false
 
+/**
+ * Who to tell when Play answers. The store subscribes once at launch (main.tsx)
+ * rather than this file importing the store, which already imports from here.
+ * Called on every answer, including a purchase that finishes after the sheet
+ * has closed, so the gates and the badge follow Play without a relaunch.
+ */
+type BillingListener = (state: { live: boolean; owned: boolean | null }) => void
+const listeners = new Set<BillingListener>()
+
+export function onBillingChange(fn: BillingListener): () => void {
+  listeners.add(fn)
+  return () => { listeners.delete(fn) }
+}
+
+function notify(owned: boolean | null): void {
+  for (const fn of listeners) fn({ live: productLive, owned })
+}
+
 export function billingAvailable(): boolean {
   return Capacitor.getPlatform() === 'android' && productLive
 }
@@ -145,10 +163,11 @@ function syncOwnership(): boolean | null {
   const CP = cdv()
   if (!CP) return null
   const product = CP.store.get(PRO_PRODUCT_ID, CP.Platform.GOOGLE_PLAY)
-  if (!product) { productLive = false; return null }
+  if (!product) { productLive = false; notify(null); return null }
   productLive = true
   const owned = !!product.owned
   writeCachedPro(owned)
+  notify(owned)
   return owned
 }
 

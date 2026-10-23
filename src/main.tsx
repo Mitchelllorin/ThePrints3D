@@ -157,8 +157,15 @@ createRoot(document.getElementById('root')!).render(
 // or missing network must never hold up the workspace. refreshEntitlement()
 // returns null when it could not ask — on the web build, or offline — and null
 // leaves the cached entitlement exactly where it was.
+// Every later answer from Play (a purchase finishing, a restore) arrives through
+// onBillingChange, so the gates follow it without waiting for a relaunch.
 void (async () => {
-  const { refreshEntitlement } = await import('./services/billing')
+  const { refreshEntitlement, onBillingChange } = await import('./services/billing')
+  onBillingChange(({ live, owned }) => {
+    const s = useAppStore.getState()
+    s.setBillingLive(live)
+    if (owned !== null) s.setPro(owned)
+  })
   const isPro = await refreshEntitlement()
   if (isPro !== null) useAppStore.getState().setPro(isPro)
 })()

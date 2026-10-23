@@ -15,15 +15,14 @@
  * from turning into the subject of the code around it.
  */
 import { useCallback } from 'react'
-import { billingAvailable } from '../../services/billing'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 
 /**
  * NO STORE, NO PAYWALL.
  *
- * A gate is only fair while there is something to buy. Until the RevenueCat key
- * is configured, `billingAvailable()` is false everywhere — so a locked feature
+ * A gate is only fair while there is something to buy. Until Play answers with
+ * a live product, `billingLive` in the app store is false everywhere — so a locked feature
  * shows an upgrade sheet with a dead button and no way through. That is not a
  * paywall, it is a broken feature, and it would have shipped that way in the
  * first build whose entire purpose is letting people learn the app.
@@ -33,23 +32,31 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
  * paywall on by itself.
  */
 /**
- * FREE FOR EVERYONE WHILE THE CLOSED TEST RUNS.
+ * THE PAYWALL IS ON.
  *
- * Mitchell, 21 Sep 2026: the closed testers get lifetime access anyway, so
- * nothing should be locked while the test is on — every tester sees every
- * feature. Pricing gets set when the test is over; THAT is when this goes to
- * false. After that the gates still stay open until Play answers with a live
- * product (the rule below), so turning this off cannot strand anyone behind a
- * dead upgrade button.
+ * Mitchell, 21 Sep 2026: everything was free while the closed test ran.
+ * Mitchell, 23 Oct 2026: that is over, Pro is for sale. The gates still stay
+ * open until Play answers with a live product (the rule above), so this cannot
+ * strand anyone behind a dead upgrade button. Testers promised lifetime access
+ * get it through Play Console promo codes for theprints3d_pro_unlock, not by
+ * leaving this on.
  *
  * Typed `boolean`, not the literal, so flipping it is a one-word change that
  * no linter argues with.
  */
-export const PRO_FREE_FOR_EVERYONE: boolean = true
+export const PRO_FREE_FOR_EVERYONE: boolean = false
 
 export function useIsPro(): boolean {
   const owned = useAppStore((s) => s.isPro)
-  return PRO_FREE_FOR_EVERYONE || owned || !billingAvailable()
+  const live = useAppStore((s) => s.billingLive)
+  return PRO_FREE_FOR_EVERYONE || owned || !live
+}
+
+/** Whether to show a way to buy: not owned yet, and there is something to buy. */
+export function useCanBuyPro(): boolean {
+  const owned = useAppStore((s) => s.isPro)
+  const live = useAppStore((s) => s.billingLive)
+  return !PRO_FREE_FOR_EVERYONE && !owned && live
 }
 
 export function useRequirePro(): (reason: string, action: () => void) => void {
@@ -72,6 +79,7 @@ export function requirePro(reason: string, action: () => void): void {
   // Same three reasons as useIsPro. PRO_FREE_FOR_EVERYONE was missing here, so
   // editing, the tape, product placement and the trade layers would have locked
   // for closed testers the moment the Play product went live.
-  if (PRO_FREE_FOR_EVERYONE || useAppStore.getState().isPro || !billingAvailable()) action()
+  const { isPro, billingLive } = useAppStore.getState()
+  if (PRO_FREE_FOR_EVERYONE || isPro || !billingLive) action()
   else useFloorplanLocalStore.getState().openUpgrade(reason)
 }

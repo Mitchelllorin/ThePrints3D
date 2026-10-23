@@ -57,6 +57,9 @@
 .railFoot { margin-top: auto; padding-top: 18px; }
 .icon:active { transform: translateY(1px); }
 .active { color: var(--bp-accent, #38bdf8); opacity: 1; }
+/* The way to buy Pro: in the accent and at full strength, so it reads as the
+   one thing on the rail that is an offer rather than a menu. */
+.proCta { color: var(--bp-accent, #38bdf8); opacity: 1; }
 
 .glyph {
   font-size: 19px;

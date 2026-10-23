@@ -18,6 +18,8 @@ import { trayItems } from '../../data/objectCatalog'
 import LayersPanel from './LayersPanel'
 import FramingPanel from './FramingPanel'
 import FusePanel from './FusePanel'
+import { useCanBuyPro } from '../Pro/usePro'
+import { PRO_REASON_GENERAL } from '../Pro/UpgradeSheet'
 import { planViewCamera } from '../../services/builtScene'
 import styles from './RailCascade.module.css'
 
@@ -189,6 +191,8 @@ export default function RailCascade() {
   const [framingOpen, setFramingOpen] = useState(false)
   const [fuseOpen, setFuseOpen] = useState(false)
   const setRailPanelOpen = useFloorplanLocalStore((s) => s.setRailPanelOpen)
+  const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
+  const canBuyPro = useCanBuyPro()
   useEffect(() => { setRailPanelOpen(layersOpen || placeOpen || framingOpen || fuseOpen) }, [layersOpen, placeOpen, framingOpen, fuseOpen, setRailPanelOpen])
   // First tap arms Clear, second does it. See the button for why.
   const [clearArmed, setClearArmed] = useState(false)
@@ -351,6 +355,24 @@ export default function RailCascade() {
           >
             <span className={styles.glyph}><EditIcon done={editMode} /></span>
             <span className={styles.iconLabel}>{editMode ? 'Done' : 'Edit'}</span>
+          </button>
+        )}
+
+        {/* PRO — the one door to buying that is always there. Every locked
+            feature opens the sheet too, but those only appear once you reach for
+            that feature; someone who already wants Pro should not have to go
+            hunting through Settings for the way to pay. Shown only while there
+            is something to buy and it is not owned, so it goes the moment they
+            buy it and never appears on a build with no store. */}
+        {canBuyPro && (
+          <button
+            className={`${styles.icon} ${styles.proCta}`}
+            onClick={() => openUpgrade(PRO_REASON_GENERAL)}
+            title="Unlock Pro: the full cut list, takeoff, tape and more"
+            data-tour="rail-pro"
+          >
+            <span className={styles.glyph}>★</span>
+            <span className={styles.iconLabel}>Pro</span>
           </button>
         )}
 

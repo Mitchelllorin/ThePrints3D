@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { billingAvailable, restorePro } from '../../services/billing'
+import { PRO_REASON_GENERAL } from './UpgradeSheet'
 
 export default function ProSection() {
   const isPro = useAppStore((s) => s.isPro)
@@ -43,13 +44,13 @@ export default function ProSection() {
 
       {!isPro && (
         <button
-          onClick={() => openUpgrade('Pro')}
+          onClick={() => openUpgrade(PRO_REASON_GENERAL)}
           style={{
             padding: '9px 12px', border: 'none', borderRadius: 9,
             background: 'var(--bp-accent, #38bdf8)', color: '#06121f',
             fontSize: 12, fontWeight: 700, cursor: 'pointer',
           }}
-        >See what Pro unlocks</button>
+        >Unlock Pro</button>
       )}
 
       <button

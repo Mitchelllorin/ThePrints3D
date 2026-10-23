@@ -549,6 +549,11 @@ interface AppState {
    *  who has already paid, then reconciled with the store when it can be asked. */
   isPro: boolean
   setPro: (isPro: boolean) => void
+  /** Whether Play has answered with a live Pro product, so there is something to
+   *  buy. Lives in the store, not only in billing.ts, so every gate re-renders
+   *  the moment Play answers rather than at whatever happens to redraw next. */
+  billingLive: boolean
+  setBillingLive: (live: boolean) => void
   // Measurements
   setMeasureMode: (active: boolean) => void
   addMeasurement: (m: Omit<Measurement, 'id' | 'createdAt'>) => void
@@ -956,6 +961,7 @@ export const useAppStore = create<AppState>()(
     // Trust the cache first. The store is asked on launch, but a store that
     // cannot be reached must not read as "never bought it".
     isPro: readCachedPro(),
+    billingLive: false,
     annotations: loadPersistedAnnotations(),
     selectedAnnotationId: null,
     annotateMode: false,
@@ -1902,6 +1908,11 @@ export const useAppStore = create<AppState>()(
     setPro: (isPro) =>
       set((s) => {
         s.isPro = isPro
+      }),
+
+    setBillingLive: (live) =>
+      set((s) => {
+        s.billingLive = live
       }),
 
     setMeasureMode: (active) =>
