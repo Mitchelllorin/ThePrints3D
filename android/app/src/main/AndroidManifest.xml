@@ -1,7 +1,6 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
-    <!-- Permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="false"
@@ -14,13 +13,13 @@
         android:largeHeap="true">
 
         <activity
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
             android:exported="true"
-            android:screenOrientation="fullUser"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density">
+            android:screenOrientation="fullUser">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -34,14 +33,23 @@
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
-
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
-
+                android:resource="@xml/file_paths"></meta-data>
         </provider>
-
     </application>
 
-</manifest>
+    <!-- Permissions -->
+    <!-- INTERNET: WebView container load, opening product/affiliate links, and the
+         optional Ask AI feature. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- No photo/video permissions. Drawings are imported through the system file
+         and photo picker (the WebView file input), which needs no storage
+         permission. Google Play rejected READ_MEDIA_IMAGES under the Photo and
+         Video Permissions policy. The remove markers below stop any library from
+         merging them back in at build time. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+
+</manifest>
