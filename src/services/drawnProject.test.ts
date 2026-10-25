@@ -195,3 +195,38 @@ describe('Draw it on a page — where you put it, with its inside walls', () => 
     expect(inner[0]).toMatchObject({ x1: 1000, y1: 320, x2: 1000, y2: 1180, framingType: 'wood-2x4', wallRole: 'interior-bearing', source: 'user' })
   })
 })
+
+describe('Draw it at any angle — the shape is the building', () => {
+  // 12 x 9 m with the bottom-right corner cut off 3 m each way, on the page.
+  const outline = [
+    { x: 5000, y: 3000 }, { x: 17000, y: 3000 }, { x: 17000, y: 9000 },
+    { x: 14000, y: 12000 }, { x: 5000, y: 12000 },
+  ]
+  const spec = {
+    widthMm: 12000, depthMm: 9000, wallTypeKey: 'wood-2x6', floor: 'slab' as const,
+    page: { originMm: { x: 5000, y: 3000 }, wMm: 30000, dMm: 20000 },
+    outline,
+  }
+
+  it('frames one wall per side, the diagonal included, inside the face', () => {
+    const p = createDrawnProject(spec)
+    const shell = p.drawing.parsedWalls.filter((w) => w.wallRole === 'exterior-bearing')
+    expect(shell).toHaveLength(5)
+    const diag = shell.filter((w) => Math.abs(w.x2 - w.x1) > 1 && Math.abs(w.y2 - w.y1) > 1)
+    expect(diag).toHaveLength(1)
+    // Centreline sits inside the outside face — the face is at 1700 px.
+    expect(Math.max(...shell.flatMap((w) => [w.x1, w.x2]))).toBeLessThan(1700)
+    expect(p.outlinePx).toHaveLength(5)
+  })
+
+  it('the floor is the shape, and the takeoff reads its real area', () => {
+    const p = createDrawnProject(spec)
+    expect(p.floorAreas).toHaveLength(1)
+    const shape = p.floorAreas[0].shape!
+    expect(shape).toHaveLength(5)
+    // 108 m² box less a 4.5 m² triangle = 103.5 m², as a share of the box.
+    let s = 0
+    shape.forEach((q, i) => { const r = shape[(i + 1) % shape.length]; s += q[0] * r[1] - r[0] * q[1] })
+    expect(Math.abs(s) / 2).toBeCloseTo(103.5 / 108, 6)
+  })
+})

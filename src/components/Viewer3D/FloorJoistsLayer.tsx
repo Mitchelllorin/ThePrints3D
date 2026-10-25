@@ -68,6 +68,19 @@ function disposeGroup(group: THREE.Group) {
 
 interface AreaDims { lenX: number; lenZ: number; centre: THREE.Vector3 }
 
+/**
+ * An angled floor's shape in the area's own metres — x across, z down, centred
+ * on the box, the space buildFloorJoists works in. Undefined for a plain box.
+ */
+function areaOutline(area: TracedLine, imageWidth: number, imageHeight: number, overlayW: number, overlayD: number): Array<[number, number]> | undefined {
+  if (!area.shape || area.shape.length < 3) return undefined
+  const cx = (area.x1 + area.x2) / 2, cy = (area.y1 + area.y2) / 2
+  return area.shape.map(([fx, fy]) => [
+    ((area.x1 + fx * (area.x2 - area.x1) - cx) / imageWidth) * overlayW,
+    ((area.y1 + fy * (area.y2 - area.y1) - cy) / imageHeight) * overlayD,
+  ])
+}
+
 function areaDims(
   area: TracedLine,
   pixelToWorld: (px: number, py: number) => THREE.Vector3,
@@ -110,12 +123,14 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
   const holeKey = JSON.stringify(holes ?? [])
+  const outline = areaOutline(area, imageWidth, imageHeight, overlayW, overlayD)
+  const outlineKey = JSON.stringify(outline ?? null)
   const joists = useMemo(
     // Namespaced by the AREA id: two decks in one scene must not hand out the
     // same member id, or isolating a joist downstairs lights up its twin above.
-    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes, idPrefix: area.id }),
+    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes, idPrefix: area.id, outline }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lenX, lenZ, area.elementType, area.size, holeKey, area.id],
+    [lenX, lenZ, area.elementType, area.size, holeKey, area.id, outlineKey],
   )
   const ref = useRef<THREE.Group>(null)
   // Deck top sits at this storey's elevation; the structure hangs below it.
@@ -147,8 +162,10 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
 function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const holeKey = JSON.stringify(holes ?? [])
+  const outline = areaOutline(area, imageWidth, imageHeight, overlayW, overlayD)
+  const outlineKey = JSON.stringify(outline ?? null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const deck = useMemo(() => buildFloorDeck({ lenX, lenZ, holes }), [lenX, lenZ, holeKey])
+  const deck = useMemo(() => buildFloorDeck({ lenX, lenZ, holes, outline }), [lenX, lenZ, holeKey, outlineKey])
   const picked = useFloorplanLocalStore((s) => s.selectedArea?.kind === 'floor' && s.selectedArea.id === area.id)
   const ref = useRef<THREE.Group>(null)
   const level = area.level ?? 0

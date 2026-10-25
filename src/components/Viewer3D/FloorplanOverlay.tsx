@@ -1897,7 +1897,10 @@ export default function FloorplanOverlay() {
       {showAreaOutlines && visibleLayers.has('floors') && floorsAreas.map((a) => (
         <Line
           key={`floor-${a.id}`}
-          points={raiseRectPts(floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, CEILING_TYPES.has(a.elementType)))}
+          points={raiseRectPts(a.shape && a.shape.length >= 3
+            // An angled floor's outline is its shape, closed back on itself.
+            ? [...a.shape, a.shape[0]].map(([fx, fy]) => planeLocalToWorld([a.x1 + fx * (a.x2 - a.x1), a.y1 + fy * (a.y2 - a.y1)]) as [number, number, number])
+            : floorsRectWorld(a.x1, a.y1, a.x2, a.y2), areaElevation(a.level ?? 0, CEILING_TYPES.has(a.elementType)))}
           color={LAYER_COLORS.floors}
           lineWidth={planView ? 1.2 : 2.5}
           transparent={planView}

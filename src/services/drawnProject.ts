@@ -67,6 +67,12 @@ export interface DrawnProjectSpec {
   page?: { originMm: Point; wMm: number; dMm: number }
   /** Inside walls drawn on that sheet: centrelines, in page millimetres. */
   insideWalls?: Array<{ x1: number; y1: number; x2: number; y2: number }>
+  /**
+   * The outside face drawn at any angle, corner by corner, in PAGE millimetres
+   * (the same space as `insideWalls`). When it is here it is the building; the
+   * boxes only say how big the first one was.
+   */
+  outline?: Point[]
 }
 
 export interface DrawnProject {
@@ -202,14 +208,17 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
 
   // Every box, unioned into one outside face. A shared edge between two boxes is
   // not a wall — you do not frame the join between a house and its own wing.
-  const rects = placeBoxes(specBoxes(spec))
-  const raw = footprintOutline(rects)
+  // A shape drawn at any angle is already on the page; boxes are placed from
+  // the main box's corner.
+  const shaped = !!spec.outline && spec.outline.length >= 3
+  const rects = shaped ? [] : placeBoxes(specBoxes(spec))
+  const raw = shaped ? spec.outline! : footprintOutline(rects)
   const bounds = outlineBounds(raw)
   const sizeMm = { w: bounds.x2 - bounds.x1, d: bounds.y2 - bounds.y1 }
   // Where the footprint lands on the sheet, in millimetres. Drawn on a page,
   // it is where you put it; otherwise a plain margin round the house.
-  const offX = spec.page ? spec.page.originMm.x : MARGIN_MM - bounds.x1
-  const offY = spec.page ? spec.page.originMm.y : MARGIN_MM - bounds.y1
+  const offX = spec.page ? (shaped ? 0 : spec.page.originMm.x) : MARGIN_MM - bounds.x1
+  const offY = spec.page ? (shaped ? 0 : spec.page.originMm.y) : MARGIN_MM - bounds.y1
   const wPx = Math.round(px(spec.page ? spec.page.wMm : sizeMm.w + MARGIN_MM * 2))
   const hPx = Math.round(px(spec.page ? spec.page.dMm : sizeMm.d + MARGIN_MM * 2))
   const tPx = px(tMm)
@@ -249,7 +258,8 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
   // One rectangle per box, because a floor area is a rectangle: an L gets two,
   // which lay down as one continuous floor.
   const stamp = Date.now()
-  const floorAreas: TracedLine[] = spec.floor === 'none' ? [] : rects.map((r, i) => ({
+  const floorRects = shaped ? [bounds] : rects
+  const floorAreas: TracedLine[] = spec.floor === 'none' ? [] : floorRects.map((r, i) => ({
     id: `floor-drawn-${stamp}-${i}`,
     x1: px(r.x1 + offX),
     y1: px(r.y1 + offY),
@@ -259,6 +269,11 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
     size: spec.floor === 'slab' ? '4in' : '2x10',
     material: spec.floor === 'slab' ? 'Concrete' : 'Wood',
     level: 0,
+    // An angled house's floor is its shape, not its bounding box.
+    ...(shaped ? { shape: raw.map((q) => [
+      (q.x - bounds.x1) / Math.max(1e-9, bounds.x2 - bounds.x1),
+      (q.y - bounds.y1) / Math.max(1e-9, bounds.y2 - bounds.y1),
+    ] as [number, number]) } : {}),
   }))
 
   const wallType = getWallType(spec.wallTypeKey)

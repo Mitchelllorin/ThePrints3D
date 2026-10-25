@@ -48,7 +48,7 @@ import { suggestAllCornerTrims } from '../services/cornerInference'
 import { suggestLineSnap } from '../services/lineSnapInference'
 import { autoPlaceOutlets } from '../services/autoPlaceTrades'
 import { useUISettingsStore } from './useUISettingsStore'
-import { pitchToRatio } from '../data/traceLayers'
+import { pitchToRatio, CEILING_TYPES } from '../data/traceLayers'
 
 /** A rectangle/segment in image pixels (opposite corners or endpoints). */
 interface InferRect { x1: number; y1: number; x2: number; y2: number }
@@ -1660,7 +1660,13 @@ export const useAppStore = create<AppState>()(
           // user traces (like the roof, a ceiling shouldn't appear on its own), so
           // drop every auto-ceiling here and every auto-roof below. Any stale one
           // from a previous build is cleared because it isn't re-added.
-          const shellFloors = shell.floors.filter((a) => !a.id.startsWith('auto-ceiling'))
+          // …and only on a storey with no floor of its own. A floor you drew
+          // (Draw it's slab or joists, an angled house's shaped slab) IS what
+          // the walls stand on; the auto one is the wall box, and laid as well
+          // it was a second slab under joists, or a rectangle poking out past
+          // an angled wall.
+          const hasOwnFloor = (level: number) => userFloors.some((a) => (a.level ?? 0) === level && !CEILING_TYPES.has(a.elementType))
+          const shellFloors = shell.floors.filter((a) => !a.id.startsWith('auto-ceiling') && !hasOwnFloor(a.level ?? 0))
           s.floorsAreas = [...userFloors, ...shellFloors]
           s.roofAreas = userRoofs
         }
@@ -2575,7 +2581,9 @@ export const useAppStore = create<AppState>()(
         const missing = shell.floors.filter((a) => {
           if (a.id.startsWith('auto-ceiling')) return false
           const role = a.id.split('-').slice(0, 2).join('-')  // 'auto-slab', 'auto-deck', …
-          return !haveRole(role)
+          // A storey with a floor of its own — Draw it's — needs no auto one.
+          const own = st.floorsAreas.some((f) => !f.id.startsWith('auto-') && (f.level ?? 0) === (a.level ?? 0) && !CEILING_TYPES.has(f.elementType))
+          return !haveRole(role) && !own
         })
         st.floorsAreas = [...st.floorsAreas, ...missing]
 

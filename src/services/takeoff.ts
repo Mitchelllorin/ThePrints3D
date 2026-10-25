@@ -51,8 +51,19 @@ export interface TakeoffInput {
 const lineFt = (l: { x1: number; y1: number; x2: number; y2: number }, mmPerPx: number): number =>
   (Math.hypot(l.x2 - l.x1, l.y2 - l.y1) * mmPerPx) / MM_PER_FT
 
-const rectSqFt = (a: { x1: number; y1: number; x2: number; y2: number }, mmPerPx: number): number =>
-  (Math.abs(a.x2 - a.x1) * Math.abs(a.y2 - a.y1) * mmPerPx * mmPerPx) / (MM_PER_FT * MM_PER_FT)
+/** An area's sq ft — its shape's when it has one (an angled floor), else its box's. */
+const rectSqFt = (a: { x1: number; y1: number; x2: number; y2: number; shape?: Array<[number, number]> }, mmPerPx: number): number => {
+  let frac = 1
+  if (a.shape && a.shape.length >= 3) {
+    let s = 0
+    for (let i = 0; i < a.shape.length; i++) {
+      const p = a.shape[i], q = a.shape[(i + 1) % a.shape.length]
+      s += p[0] * q[1] - q[0] * p[1]
+    }
+    frac = Math.abs(s) / 2
+  }
+  return (Math.abs(a.x2 - a.x1) * Math.abs(a.y2 - a.y1) * frac * mmPerPx * mmPerPx) / (MM_PER_FT * MM_PER_FT)
+}
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
 

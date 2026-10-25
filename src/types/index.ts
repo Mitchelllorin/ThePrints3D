@@ -222,6 +222,12 @@ export interface TracedLine {
   /** Height band the run lives in — drives its 3D elevation; risers connect
    *  bands and drop open ends to the floor. */
   band?: 'under-floor' | 'in-wall' | 'ceiling'
+  /**
+   * A floor that is not a rectangle: its corners, as fractions (0..1) of the
+   * x1→x2 / y1→y2 box, so moving or resizing the box carries the shape with
+   * it. Left out, the floor is the box.
+   */
+  shape?: Array<[number, number]>
   /** Storey this area belongs to (0 = ground, 1 = 2nd floor, …). Floors/roofs
    *  use it to sit at the right elevation on top of the walls below. */
   level?: number

@@ -932,14 +932,83 @@ export function buildBulkhead(opts: BulkheadOpts): THREE.Group {
   return g
 }
 
+/**
+ * A FLOOR AT ANY ANGLE. A floor area is a box; an angled house's floor is a
+ * polygon inside that box, in the area's own metres (x across, z down, centred
+ * on the box). These are the few pieces of geometry that need: where a line
+ * across the floor is inside it, a polygon clipped to a rectangle, and a flat
+ * slab of polygon.
+ */
+type FloorPoly = ReadonlyArray<readonly [number, number]>
+
+/** Where the line (z = at, or x = at) is inside the polygon: spans along it. */
+function insideSpans(poly: FloorPoly, alongX: boolean, at: number): Array<[number, number]> {
+  const hits: number[] = []
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length]
+    const [pu, pv] = alongX ? [p[0], p[1]] : [p[1], p[0]]
+    const [qu, qv] = alongX ? [q[0], q[1]] : [q[1], q[0]]
+    if ((pv > at) !== (qv > at)) hits.push(pu + ((at - pv) * (qu - pu)) / (qv - pv))
+  }
+  hits.sort((a, b) => a - b)
+  const out: Array<[number, number]> = []
+  for (let i = 0; i + 1 < hits.length; i += 2) out.push([hits[i], hits[i + 1]])
+  return out
+}
+
+/** The polygon cut to an axis-aligned rectangle (Sutherland–Hodgman). */
+function clipPolyToRect(poly: FloorPoly, x0: number, z0: number, x1: number, z1: number): Array<[number, number]> {
+  let out: Array<[number, number]> = poly.map((p) => [p[0], p[1]])
+  const planes: Array<[(p: [number, number]) => number]> = [
+    [(p) => p[0] - x0], [(p) => x1 - p[0]], [(p) => p[1] - z0], [(p) => z1 - p[1]],
+  ]
+  for (const [side] of planes) {
+    const inp = out
+    out = []
+    for (let i = 0; i < inp.length; i++) {
+      const a = inp[i], b = inp[(i + 1) % inp.length]
+      const da = side(a), db = side(b)
+      if (da >= 0) out.push(a)
+      if ((da >= 0) !== (db >= 0)) {
+        const t = da / (da - db)
+        out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
+      }
+    }
+    if (out.length === 0) break
+  }
+  return out
+}
+
+function polyArea(poly: FloorPoly): number {
+  let a = 0
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i], q = poly[(i + 1) % poly.length]
+    a += p[0] * q[1] - q[0] * p[1]
+  }
+  return Math.abs(a) / 2
+}
+
+/** A flat plate of the polygon's shape, `thick` deep, centred on y = 0. */
+function polyPlate(poly: FloorPoly, thick: number): THREE.BufferGeometry {
+  // Drawn in the shape's own x/y, then laid down: rotateX(-90°) sends a shape
+  // point (x, y) to (x, ·, -y), so y is the NEGATED z.
+  const shape = new THREE.Shape(poly.map(([x, z]) => new THREE.Vector2(x, -z)))
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: thick, bevelEnabled: false })
+  geo.rotateX(-Math.PI / 2)
+  geo.translate(0, -thick / 2, 0)
+  return geo
+}
+
 export function buildFloorJoists(opts: {
   lenX: number; lenZ: number; element: string; ocM: number; opacity?: number; holes?: FloorHole[]
   /** Prefix for per-member ids, so a single joist can be picked and isolated
    *  the same way a stud can. Without an id a member is just anonymous
    *  geometry: you can see it and you cannot select it. */
   idPrefix?: string
+  /** The floor's shape when it is not the box — see FloorPoly. */
+  outline?: FloorPoly
 }): THREE.Group {
-  const { lenX, lenZ, element, ocM, opacity = 1, holes = [], idPrefix = 'joist' } = opts
+  const { lenX, lenZ, element, ocM, opacity = 1, holes = [], idPrefix = 'joist', outline } = opts
   let memberNo = 0
   const g = new THREE.Group()
   if (lenX < 0.1 || lenZ < 0.1) return g
@@ -948,7 +1017,7 @@ export function buildFloorJoists(opts: {
   // sits at grade). Rebar + in-floor radiant PEX are later detail.
   if (FLOOR_SLAB_TYPES.has(element)) {
     const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(lenX, SLAB_T, lenZ),
+      outline ? polyPlate(outline, SLAB_T) : new THREE.BoxGeometry(lenX, SLAB_T, lenZ),
       new THREE.MeshStandardMaterial({ color: new THREE.Color('#b9bcc2'), roughness: 0.95, metalness: 0, transparent: opacity < 1, opacity }),
     )
     slab.castShadow = true; slab.receiveShadow = true
@@ -1002,12 +1071,19 @@ export function buildFloorJoists(opts: {
     const plies = openingPlies(m.p1 - m.p0)
     return { ...m, plies, out: plies * width }
   })
-  // A joist segment from a→b along the span axis at run-position p.
-  const addJoistSeg = (p: number, a: number, b: number) => {
-    if (b - a < 0.05) return
-    const mid = (a + b) / 2, len = b - a
-    if (spanAlongX) addJoist(len, width, mid, p)
-    else            addJoist(width, len, p, mid)
+  // A joist segment from a→b along the span axis at run-position p. On an
+  // angled floor it is cut to the shape, and its ends are where hangers go.
+  const segEnds: Array<{ p: number; e: number; s: number }> = []
+  const addJoistSeg = (p: number, a: number, b: number, info?: string) => {
+    const spans = outline ? insideSpans(outline, spanAlongX, p) : [[a, b] as [number, number]]
+    for (const [c, d] of spans) {
+      const lo = Math.max(a, c), hi = Math.min(b, d)
+      if (hi - lo < 0.05) continue
+      const mid = (lo + hi) / 2, len = hi - lo
+      if (spanAlongX) addJoist(len, width, mid, p, info)
+      else            addJoist(width, len, p, mid, info)
+      if (outline && !info) segEnds.push({ p, e: lo, s: -1 }, { p, e: hi, s: 1 })
+    }
   }
   for (const p of positions) {
     // Span-axis cuts from any hole whose run-range straddles this joist. The cut
@@ -1026,11 +1102,37 @@ export function buildFloorJoists(opts: {
     for (const [a, b] of cuts) { addJoistSeg(p, cursor, a); cursor = Math.max(cursor, b) }
     addJoistSeg(p, cursor, spanHalf)
   }
-  // Rim/band joists capping the joist ends (perpendicular to the joists).
-  for (const s of [-1, 1]) {
-    const e = s * (spanLen / 2 - width / 2)
-    if (spanAlongX) addJoist(width, runLen, e, 0)
-    else            addJoist(runLen, width, 0, e)
+  // Rim/band joists capping the joist ends (perpendicular to the joists). An
+  // angled floor's rim runs round its shape, a board along every edge.
+  if (outline) {
+    let a2 = 0
+    for (let i = 0; i < outline.length; i++) {
+      const p = outline[i], q = outline[(i + 1) % outline.length]
+      a2 += p[0] * q[1] - q[0] * p[1]
+    }
+    for (let i = 0; i < outline.length; i++) {
+      const p = outline[i], q = outline[(i + 1) % outline.length]
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1])
+      if (len < 0.05) continue
+      const ux = (q[0] - p[0]) / len, uz = (q[1] - p[1]) / len
+      // Inward is the left normal when the loop runs clockwise (+z down).
+      const nx = a2 < 0 ? uz : -uz, nz = a2 < 0 ? -ux : ux
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len, depth, width), joistMat)
+      m.position.set((p[0] + q[0]) / 2 + nx * width / 2, 0, (p[1] + q[1]) / 2 + nz * width / 2)
+      m.rotation.y = -Math.atan2(uz, ux)
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = 'floors'
+      m.userData.info = `Rim joist · ${element}`
+      m.userData.id = `${idPrefix}-${memberNo++}`
+      m.userData.label = `Rim joist · ${element}`
+      g.add(m)
+    }
+  } else {
+    for (const s of [-1, 1]) {
+      const e = s * (spanLen / 2 - width / 2)
+      if (spanAlongX) addJoist(width, runLen, e, 0)
+      else            addJoist(runLen, width, 0, e)
+    }
   }
   // ── Framing each opening: HEADERS + TRIMMERS (IRC R502.10) ─────────────────
   //
@@ -1056,8 +1158,7 @@ export function buildFloorJoists(opts: {
       for (let i = 0; i < o.plies; i++) {
         const p = edge + dir * (width / 2 + i * width)
         if (Math.abs(p) > halfRun) continue          // past the floor edge
-        if (spanAlongX) addJoist(spanLen, width, 0, p, trimmerInfo)
-        else            addJoist(width, spanLen, p, 0, trimmerInfo)
+        addJoistSeg(p, -spanHalf, spanHalf, trimmerInfo)
       }
     }
     // Headers span the opening plus both trimmer packs, so their ends land on
@@ -1092,9 +1193,11 @@ export function buildFloorJoists(opts: {
     m.userData.info = 'Joist hanger (galv.)'
     g.add(m)
   }
-  for (const p of positions) {
-    for (const s of [-1, 1]) {
-      const end = s * half
+  const hangerAt = outline
+    ? segEnds
+    : positions.flatMap((p) => [-1, 1].map((s) => ({ p, e: s * half, s })))
+  for (const { p, e: end, s } of hangerAt) {
+    {
       if (spanAlongX) {
         addHanger(HDEPTH, HSEAT, width + 2 * HFLANGE, end - s * HDEPTH / 2, -depth / 2 - HSEAT / 2, p)
         for (const sj of [-1, 1]) addHanger(HDEPTH, depth * 0.8, HFLANGE, end - s * HDEPTH / 2, -depth * 0.1, p + sj * (width / 2 + HFLANGE / 2))
@@ -1114,9 +1217,9 @@ export function buildFloorJoists(opts: {
  * y=0; the caller seats it just above the joists. The sheet COUNT is stashed on
  * `group.userData.sheetCount` for the material takeoff / nameplate.
  */
-export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: number; holes?: FloorHole[] }): THREE.Group {
+export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: number; holes?: FloorHole[]; outline?: FloorPoly }): THREE.Group {
   const g = new THREE.Group()
-  const { lenX, lenZ, opacity = 1, holes = [] } = opts
+  const { lenX, lenZ, opacity = 1, holes = [], outline } = opts
   if (lenX < 0.1 || lenZ < 0.1) { g.userData.sheetCount = 0; return g }
   // Sheets are CUT around an opening, not thrown away.
   //
@@ -1171,20 +1274,36 @@ export function buildFloorDeck(opts: { lenX: number; lenZ: number; opacity?: num
       const wholeSheet = pieces.length === 1
         && pieces[0].x1 - pieces[0].x0 >= w - 1e-6
         && pieces[0].z1 - pieces[0].z0 >= d - 1e-6
+      let laid = 0
       for (const p of pieces) {
         const pw = p.x1 - p.x0, pd = p.z1 - p.z0
-        const sheet = new THREE.Mesh(new THREE.BoxGeometry(pw - SHEET_GAP, SUBFLOOR_T, pd - SHEET_GAP), mat)
-        sheet.position.set((p.x0 + p.x1) / 2, 0, (p.z0 + p.z1) / 2)
+        // An angled floor: a sheet the edge crosses is cut along it; one
+        // wholly outside is not laid.
+        let cut: Array<[number, number]> | null = null
+        if (outline) {
+          const g2 = SHEET_GAP / 2
+          cut = clipPolyToRect(outline, p.x0 + g2, p.z0 + g2, p.x1 - g2, p.z1 - g2)
+          const a = cut.length >= 3 ? polyArea(cut) : 0
+          if (a < 0.0025) continue
+          if (a >= (pw - SHEET_GAP) * (pd - SHEET_GAP) - 1e-6) cut = null
+        }
+        laid++
+        const sheet = cut
+          ? new THREE.Mesh(polyPlate(cut, SUBFLOOR_T), mat)
+          : new THREE.Mesh(new THREE.BoxGeometry(pw - SHEET_GAP, SUBFLOOR_T, pd - SHEET_GAP), mat)
+        if (!cut) sheet.position.set((p.x0 + p.x1) / 2, 0, (p.z0 + p.z1) / 2)
         sheet.castShadow = true; sheet.receiveShadow = true
         sheet.userData.layer = 'floor-sheeting'
-        sheet.userData.info = wholeSheet
-          ? 'Subfloor · 3/4" ply · 4×8'
-          : 'Subfloor · 3/4" ply · cut to opening'
+        sheet.userData.info = cut
+          ? 'Subfloor · 3/4" ply · cut to the wall'
+          : wholeSheet
+            ? 'Subfloor · 3/4" ply · 4×8'
+            : 'Subfloor · 3/4" ply · cut to opening'
         g.add(sheet)
       }
       // One SHEET is consumed whether or not it got cut — that is what a takeoff
       // needs to order, so count sheets used, not pieces laid.
-      count++
+      if (laid > 0) count++
     }
   }
   g.userData.sheetCount = count

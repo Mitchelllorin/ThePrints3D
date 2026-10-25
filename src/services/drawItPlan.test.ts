@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  acceptsWall, clipToShell, fitPage, houseRects, initialPlan, insideHouse, movedHouse, resized, snapWallPoint,
+  acceptsWall, addCorner, cleanShape, clipToShell, fitPage, houseRects, initialPlan, insideHouse, movedCorner, movedHouse,
+  removeCorner, resized, shapeOk, snapWallPoint, toBoxes, toShape, withEdgeLength,
   withLength, wallLength, MIN_WALL_MM, PAGE_MARGIN_MM, type DrawItPlan,
 } from './drawItPlan'
 
@@ -151,5 +152,60 @@ describe('a wall dragged past the shell', () => {
     const [r] = houseRects(p)
     expect(acceptsWall(p, { x1: r.x1 + 4000, y1: r.y1 + 3000, x2: r.x2 + 3000, y2: r.y1 + 3000 })).toBe(false)
     expect(acceptsWall(p, { x1: r.x1 + 4000, y1: r.y1 + 3000, x2: r.x2 - 150, y2: r.y1 + 3000 })).toBe(true)
+  })
+})
+
+describe('the house at any angle', () => {
+  const shaped = () => toShape(plan())
+  it('starts as the boxes’ own outline, so switching changes nothing', () => {
+    const p = shaped()
+    expect(p.shape).toHaveLength(4)
+    expect(toBoxes(p)).toEqual(plan())
+  })
+
+  // Cut the bottom-right corner 3 m each way: a corner on the bottom wall,
+  // then pull the old corner up the right wall and the new one along the bottom.
+  const cutCorner = () => {
+    const p = shaped()
+    const [r] = houseRects(p)
+    const q = addCorner(p, 2)                                                   // bottom wall
+    const a = movedCorner(q, 2, { x: r.x2 + 30, y: r.y2 - 3000 }, 100)          // 30 mm off → square
+    return { r, q: movedCorner(a, 3, { x: r.x2 - 3000, y: r.y2 + 40 }, 100) }   // 40 mm off → square
+  }
+
+  it('a dragged corner lands where it is put, and a nearly square wall stays square', () => {
+    const { r, q } = cutCorner()
+    expect(q.shape![2]).toEqual({ x: r.x2, y: r.y2 - 3000 })
+    expect(q.shape![3]).toEqual({ x: r.x2 - 3000, y: r.y2 })
+    expect(shapeOk(q.shape!)).toBe(true)
+  })
+
+  it('a wall typed to a length moves its far corner along it', () => {
+    const p = shaped()
+    const s = p.shape!
+    const len = Math.hypot(s[1].x - s[0].x, s[1].y - s[0].y)
+    const q = withEdgeLength(p, 0, len + 1000)
+    expect(Math.hypot(q.shape![1].x - s[0].x, q.shape![1].y - s[0].y)).toBeCloseTo(len + 1000, 6)
+  })
+
+  it('a corner dragged so the walls cross is not a house', () => {
+    const p = shaped()
+    const s = p.shape!
+    // Swap two corners' places: a bow tie.
+    expect(shapeOk([s[0], s[2], s[1], s[3]])).toBe(false)
+    expect(removeCorner(removeCorner(p, 0), 0).shape).toHaveLength(3)
+    expect(removeCorner(removeCorner(removeCorner(p, 0), 0), 0).shape).toHaveLength(3)
+  })
+
+  it('inside walls stop at the angled shell', () => {
+    const { r, q } = cutCorner()
+    expect(insideHouse(q, { x: r.x2 - 300, y: r.y2 - 300 })).toBe(false)
+    expect(insideHouse(q, { x: r.x2 - 3000, y: r.y2 - 1000 })).toBe(true)
+  })
+
+  it('a corner left on a straight wall is dropped before it is framed', () => {
+    const p = addCorner(shaped(), 0)
+    expect(p.shape).toHaveLength(5)
+    expect(cleanShape(p.shape!)).toHaveLength(4)
   })
 })

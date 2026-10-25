@@ -12,6 +12,14 @@
  *   - Double-tap the house to pick it up, then drag it anywhere on the paper.
  *     Its inside walls go with it. Tap the paper to put it down.
  *
+ * OUTLINE AT ANY ANGLE (`plan.shape`)
+ *   - Every corner is a handle: drag it anywhere. A wall off it that is nearly
+ *     square stays square, so pulling one corner out cuts a clean diagonal.
+ *   - A + sits in the middle of every wall: pull it out to put a corner there
+ *     (a bay, a point), or tap it and drag the corner it leaves.
+ *   - Tap a corner to pick it; its ✕ takes it out. Tap a wall's number to type
+ *     that wall's length. A drag that would cross the walls is put back.
+ *
  * INSIDE WALLS
  *   - Drag across the house to draw a wall. Nearly square is square; an end
  *     lands on another wall's end, on the inside face of the shell, or on the
@@ -36,13 +44,14 @@
  */
 import { useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
-import { footprintOutline, type AttachSide, type Point, type Rect } from '../../services/footprint'
+import { type AttachSide, type Point, type Rect } from '../../services/footprint'
 import {
   dragBoxes, typeBoxSize, typeOffset, dimensionLanes, runsDown,
   type Grip, type SizeField,
 } from '../../services/footprintEdit'
 import {
-  acceptsWall, clipToShell, fitPage, houseRects, movedHouse, resized, snapWallPoint, withLength, wallLength,
+  acceptsWall, addCorner, clipToShell, fitPage, houseOutline, houseRects, movedCorner, movedHouse, removeCorner, resized,
+  shapeOk, snapWallPoint, withEdgeLength, withLength, wallLength,
   type DrawItPlan, type InsideWall,
 } from '../../services/drawItPlan'
 import { parseSizeMm } from '../../services/drawnProject'
@@ -96,6 +105,8 @@ type Drag =
    *  drag, selects that wall instead of drawing. */
   | { kind: 'draw'; from: Point; to: Point; tapped?: number }
   | { kind: 'wall'; index: number; part: 'body' | 'a' | 'b'; start: DrawItPlan }
+  /** A corner of the shape at any angle. */
+  | { kind: 'corner'; index: number; start: DrawItPlan }
 
 /** Fit the paper into the box it sits in. */
 function fitFrame(w: number, h: number, pageW: number, pageD: number): Frame {
@@ -146,6 +157,8 @@ export default function FootprintEditor({
   const [editing, setEditing] = useState<{ key: string; text: string; bad: boolean } | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
   const [pickedUp, setPickedUpState] = useState(false)
+  /** The shape's corner tapped, showing its ✕. */
+  const [corner, setCorner] = useState<number | null>(null)
   const setPickedUp = (up: boolean) => { setPickedUpState(up); onPickedUp?.(up) }
 
   useEffect(() => {
@@ -162,9 +175,12 @@ export default function FootprintEditor({
   const boxes = plan.boxes
   const placed = houseRects(plan)
   if (placed.length === 0) return null
+  const shape = plan.shape
+  // The extent of the house: its shape's, when it has one.
+  const ext = shape ? shape.map((q) => ({ x1: q.x, y1: q.y, x2: q.x, y2: q.y })) : placed
   const bounds: Rect = {
-    x1: Math.min(...placed.map((r) => r.x1)), y1: Math.min(...placed.map((r) => r.y1)),
-    x2: Math.max(...placed.map((r) => r.x2)), y2: Math.max(...placed.map((r) => r.y2)),
+    x1: Math.min(...ext.map((r) => r.x1)), y1: Math.min(...ext.map((r) => r.y1)),
+    x2: Math.max(...ext.map((r) => r.x2)), y2: Math.max(...ext.map((r) => r.y2)),
   }
 
   const f = fitFrame(size.w, size.h, plan.page.w, plan.page.d)
@@ -182,7 +198,8 @@ export default function FootprintEditor({
   // ── Dimensions ──────────────────────────────────────────────────────────
   const { lanes } = dimensionLanes(boxes)
   const dims: Dim[] = []
-  boxes.forEach((b, i) => {
+  // A shape at any angle carries a length on each wall instead (see edgeChips).
+  if (!shape) boxes.forEach((b, i) => {
     const r = placed[i]
     const L = lanes[i]
     {
@@ -299,7 +316,7 @@ export default function FootprintEditor({
   // No two grips closer than a target and its spacing. On a narrow house the
   // wall grip would sit on a corner grip; the corner already does that job.
   const grips: GripAt[] = []
-  if (outlineMode && !pickedUp) {
+  if (outlineMode && !pickedUp && !shape) {
     for (const g of candidates) if (grips.every((k) => Math.hypot(k.x - g.x, k.y - g.y) >= 56)) grips.push(g)
   }
   const gripKey = (g: Grip) => `${g.box}:${g.kind}:${g.fromLeft ? 'L' : ''}${g.fromTop ? 'T' : ''}`
@@ -331,6 +348,8 @@ export default function FootprintEditor({
       onChange(movedHouse(drag.start, dx, dy, snapMm))
     } else if (drag.kind === 'draw') {
       setDrag({ ...drag, to: clipToShell(plan, drag.from, snapWallPoint(plan, toMm(e), { ...snapOpts, from: drag.from }), shellMm) })
+    } else if (drag.kind === 'corner' && from.moved >= TAP_SLOP_PX) {
+      onChange(movedCorner(drag.start, drag.index, toMm(e), snapMm))
     } else if (drag.kind === 'wall' && from.moved >= TAP_SLOP_PX) {
       const w0 = drag.start.walls[drag.index]
       let w: InsideWall
@@ -354,6 +373,14 @@ export default function FootprintEditor({
     setDrag(null)
     if (!d) return
     if (d.kind === 'slide' && tapped) setPicked(shown === d.box ? null : d.box)
+    if (d.kind === 'corner') {
+      if (tapped) { setCorner(corner === d.index ? null : d.index); return }
+      setCorner(null)
+      // Walls crossing, or one shrunk to nothing: put it back.
+      if (!plan.shape || !shapeOk(plan.shape)) { onChange(d.start); return }
+      onChange(fitPage(plan))
+      return
+    }
     if (d.kind === 'draw') {
       const w = { x1: d.from.x, y1: d.from.y, x2: d.to.x, y2: d.to.y }
       if (tapped && d.tapped != null) { onSelectWall(d.tapped); return }
@@ -399,6 +426,7 @@ export default function FootprintEditor({
       return
     }
     setPicked(null)
+    setCorner(null)
     if (pickedUp) setPickedUp(false)
   }
 
@@ -419,6 +447,14 @@ export default function FootprintEditor({
   const tryCommit = (): boolean => {
     if (!editing) return true
     const raw = editing.text.trim()
+    if (editing.key.startsWith('edge:')) {
+      const mm = parseSizeMm(raw)
+      if (mm === null || !(mm > 0)) return false
+      const next = withEdgeLength(plan, Number(editing.key.slice(5)), mm)
+      if (!next.shape || !shapeOk(next.shape)) return false
+      onChange(fitPage(next))
+      return true
+    }
     if (editing.key.startsWith('wall:')) {
       const i = Number(editing.key.slice(5))
       const mm = parseSizeMm(raw)
@@ -440,7 +476,7 @@ export default function FootprintEditor({
   }
 
   const step = gridStepMm(f.s, metric)
-  const outline = footprintOutline(placed)
+  const outline = houseOutline(plan)
   const outlinePath = outline.map((p, i) => `${i === 0 ? 'M' : 'L'}${X(p.x).toFixed(1)} ${Y(p.y).toFixed(1)}`).join(' ') + ' Z'
   // An inside wall drawn at its real thickness — a 2x4 with board both sides,
   // about 4-1/2" — and never thinner than a line you can see.
@@ -469,6 +505,47 @@ export default function FootprintEditor({
     index: sel,
   })) : []
 
+  // The shape's walls: each one's length on it, and a + to pull a corner out.
+  const shapeOn = outlineMode && !!shape && !pickedUp
+  const edges = shapeOn && shape ? shape.map((a, i) => {
+      const b = shape[(i + 1) % shape.length]
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+      const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len
+      const mx = X((a.x + b.x) / 2), my = Y((a.y + b.y) / 2)
+      // The number sits ON its wall, the way an inside wall's does — off the
+      // wall it ran off the plan or into its neighbour's — and the wall's + sits
+      // beside it along the wall. A wall too short for both shows its + and
+      // only shows its number while one of its corners is being dragged —
+      // not on a tap, or the number pops up under the finger that tapped.
+      // How far along the + sits: clear of a number that is wide on a wall
+      // across the page and only its height on one up the page.
+      const along = 34 + 22 * Math.abs(ux)
+      const roomy = len * f.s >= 2 * along + 24
+      const atEnd = (k: number) => k === i || k === (i + 1) % shape.length
+      const live = drag?.kind === 'corner' && atEnd(drag.index)
+      const show = roomy || live
+      const plus = len * f.s > 56 && (roomy || !live)
+      const px = roomy ? mx + ux * along : mx, py = roomy ? my + uy * along : my
+      const cx = mx, cy = my
+      return { i, a, b, len, px, py, cx, cy, show, plus }
+  }) : []
+  // The picked corner's ✕ sits just outside it, away from the middle of the
+  // house, where no wall's number is.
+  const cornerAt = corner != null && shape && shape[corner] ? (() => {
+    const c = shape[corner]
+    const gx = shape.reduce((t, q) => t + q.x, 0) / shape.length
+    const gy = shape.reduce((t, q) => t + q.y, 0) / shape.length
+    const d = Math.hypot(c.x - gx, c.y - gy) || 1
+    const at = (k: number) => ({
+      x: Math.min(size.w - 50, Math.max(50, X(c.x) + ((c.x - gx) / d) * 52 * k)),
+      y: Math.min(size.h - 22, Math.max(22, Y(c.y) + ((c.y - gy) / d) * 52 * k)),
+    })
+    // No room outside — the plan's edge would push it back ONTO the corner,
+    // and the tap that picked the corner would take it out — so inside.
+    const out = at(1)
+    return Math.hypot(out.x - X(c.x), out.y - Y(c.y)) >= 44 ? out : at(-1)
+  })() : null
+
   if (drawing) chipFor(drawing, 'drawing', true)
   else if (selectedWall != null && plan.walls[selectedWall]) chipFor(plan.walls[selectedWall], `wall:${selectedWall}`, false)
 
@@ -495,7 +572,10 @@ export default function FootprintEditor({
         <rect x={X(0)} y={Y(0)} width={plan.page.w * f.s} height={plan.page.d * f.s}
           fill="none" stroke="#3a4a63" strokeWidth={1} strokeDasharray="6 4" pointerEvents="none" />
 
-        {placed.map((r, i) => (
+        {shape && (
+          <path d={outlinePath} fill={pickedUp ? 'rgba(61,154,232,0.32)' : 'rgba(61,154,232,0.20)'} pointerEvents="none" />
+        )}
+        {!shape && placed.map((r, i) => (
           <rect key={i}
             x={X(r.x1)} y={Y(r.y1)} width={(r.x2 - r.x1) * f.s} height={(r.y2 - r.y1) * f.s}
             fill={pickedUp ? 'rgba(61,154,232,0.32)'
@@ -509,7 +589,17 @@ export default function FootprintEditor({
           strokeLinejoin="miter" pointerEvents="none" />
 
         {/* The house's body: double-tap to pick it up; a section's body slides it. */}
-        {outlineMode && placed.map((r, i) => (
+        {outlineMode && shape && (
+          <path d={outlinePath} className={styles.body} fill="transparent"
+            onPointerDown={(e) => { setCorner(null); pressHouse(e, 0) }}
+            onPointerMove={move}
+            onPointerUp={(e) => {
+              if ((dragFrom.current?.moved ?? 0) < TAP_SLOP_PX) lastTap.current = { t: e.timeStamp, x: e.clientX, y: e.clientY }
+              end(e)
+            }}
+            onPointerCancel={end} />
+        )}
+        {outlineMode && !shape && placed.map((r, i) => (
           <rect key={`h${i}`} className={styles.body}
             x={X(r.x1)} y={Y(r.y1)} width={(r.x2 - r.x1) * f.s} height={(r.y2 - r.y1) * f.s}
             fill="transparent"
@@ -598,6 +688,43 @@ export default function FootprintEditor({
         )
       })}
 
+      {/* AT ANY ANGLE: a + on each wall pulls out a new corner… */}
+      {edges.map((e) => (e.plus && (
+        <button key={`add${e.i}`} type="button" className={`${styles.grip} ${styles.gripAdd}`}
+          style={{ left: e.px, top: e.py }}
+          aria-label="Pull out a new corner here"
+          onPointerDown={(ev) => {
+            const next = addCorner(plan, e.i)
+            onChange(next)
+            setCorner(null)
+            begin(ev, { kind: 'corner', index: e.i + 1, start: next })
+          }}
+          onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+      )))}
+      {/* …and every corner drags anywhere. */}
+      {shapeOn && shape?.map((q, i) => {
+        const on = drag?.kind === 'corner' && drag.index === i
+        return (
+          <button key={`c${i}`} type="button"
+            className={[styles.grip, styles.gripCorner, on ? styles.gripOn : '', corner === i ? styles.gripPicked : ''].filter(Boolean).join(' ')}
+            style={{ left: X(q.x), top: Y(q.y) }}
+            aria-label={`Corner ${i + 1}: drag it anywhere`}
+            onPointerDown={(e) => begin(e, { kind: 'corner', index: i, start: plan })}
+            onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+        )
+      })}
+      {shapeOn && cornerAt && corner != null && (shape?.length ?? 0) > 3 && (
+        <button type="button" className={styles.cornerX}
+          style={{ left: cornerAt.x, top: cornerAt.y }}
+          onClick={() => {
+            const next = removeCorner(plan, corner)
+            if (next.shape && shapeOk(next.shape)) onChange(fitPage(next))
+            setCorner(null)
+          }}>
+          ✕ Corner
+        </button>
+      )}
+
       {/* The picked wall's two ends: drag one to stretch or swing the wall. */}
       {wallEnds.map((g) => (
         <button key={g.part} type="button"
@@ -616,6 +743,10 @@ export default function FootprintEditor({
         key: c.key, x: c.x, y: c.y, valueMm: wallLength(c.w), vertical: false, live: c.live, on: true, what: 'Wall',
         // A diagonal reads its angle off square beside its length.
         angle: wallAngleOffSquareDeg(c.w.x1, c.w.y1, c.w.x2, c.w.y2) % 90,
+      })), ...edges.filter((e) => e.show).map((e) => ({
+        key: `edge:${e.i}`, x: e.cx, y: e.cy, valueMm: e.len, vertical: false,
+        live: drag?.kind === 'corner', on: false, what: 'Wall',
+        angle: wallAngleOffSquareDeg(e.a.x, e.a.y, e.b.x, e.b.y) % 90,
       }))].map((c) => {
         if (editing?.key === c.key) {
           return (

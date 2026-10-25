@@ -32,6 +32,14 @@ export interface DrawItPlan {
   page: { w: number; d: number }
   /** Centrelines, in page millimetres. */
   walls: InsideWall[]
+  /**
+   * THE HOUSE AT ANY ANGLE. Left out, the outline is the boxes. Set, it is this
+   * shape instead — the outside face, corner by corner, in page millimetres —
+   * and the boxes wait underneath for "Square" to put them back. It starts as
+   * the boxes' own outline, so switching over changes nothing until a corner
+   * is dragged.
+   */
+  shape?: Point[]
 }
 
 /** Paper round the house on a new sheet: room to move it, room for dimensions.
@@ -64,7 +72,7 @@ export function houseRects(plan: DrawItPlan): Rect[] {
 
 /** The outside face of the house, on the page. */
 export function houseOutline(plan: DrawItPlan): Point[] {
-  return footprintOutline(houseRects(plan))
+  return plan.shape ?? footprintOutline(houseRects(plan))
 }
 
 function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[]): Rect {
@@ -80,7 +88,7 @@ function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[]): Rect {
  * the left or top, everything shifts right or down by the same amount.
  */
 export function fitPage(plan: DrawItPlan): DrawItPlan {
-  const b = boundsOf(houseRects(plan), plan.walls)
+  const b = boundsOf(plan.shape ? [shapeBounds(plan.shape)] : houseRects(plan), plan.walls)
   const dx = Math.max(0, MIN_CLEAR_MM - b.x1)
   const dy = Math.max(0, MIN_CLEAR_MM - b.y1)
   const w = Math.max(plan.page.w + dx, b.x2 + dx + MIN_CLEAR_MM)
@@ -91,7 +99,13 @@ export function fitPage(plan: DrawItPlan): DrawItPlan {
     origin: { x: plan.origin.x + dx, y: plan.origin.y + dy },
     page: { w, d },
     walls: plan.walls.map((k) => ({ x1: k.x1 + dx, y1: k.y1 + dy, x2: k.x2 + dx, y2: k.y2 + dy })),
+    ...(plan.shape ? { shape: plan.shape.map((q) => ({ x: q.x + dx, y: q.y + dy })) } : {}),
   }
+}
+
+function shapeBounds(shape: readonly Point[]): Rect {
+  const xs = shape.map((q) => q.x), ys = shape.map((q) => q.y)
+  return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) }
 }
 
 /**
@@ -111,7 +125,9 @@ export function resized(start: DrawItPlan, nextBoxes: FootprintBox[], grip: Grip
  * go with it. Snapped, and kept on the paper.
  */
 export function movedHouse(start: DrawItPlan, dxMm: number, dyMm: number, snapMm: number): DrawItPlan {
-  const rel = placeBoxes(start.boxes)
+  const rel = start.shape
+    ? [shapeBounds(start.shape.map((q) => ({ x: q.x - start.origin.x, y: q.y - start.origin.y })))]
+    : placeBoxes(start.boxes)
   const minX = Math.min(...rel.map((r) => r.x1)), maxX = Math.max(...rel.map((r) => r.x2))
   const minY = Math.min(...rel.map((r) => r.y1)), maxY = Math.max(...rel.map((r) => r.y2))
   // The DISTANCE moved is snapped, not where the corner lands — a house at
@@ -124,6 +140,7 @@ export function movedHouse(start: DrawItPlan, dxMm: number, dyMm: number, snapMm
     ...start,
     origin: { x, y },
     walls: start.walls.map((k) => ({ x1: k.x1 + mx, y1: k.y1 + my, x2: k.x2 + mx, y2: k.y2 + my })),
+    ...(start.shape ? { shape: start.shape.map((q) => ({ x: q.x + mx, y: q.y + my })) } : {}),
   }
 }
 
@@ -324,4 +341,112 @@ export function clipToShell(plan: DrawItPlan, from: Point, to: Point, shellMm: n
     if (t > 1e-6 && t < best && u >= -1e-6 && u <= 1 + 1e-6) best = t
   }
   return { x: from.x + dx * best, y: from.y + dy * best }
+}
+
+// ── The house at any angle ─────────────────────────────────────────────────
+
+/** Switch the outline to a shape you can bend: the boxes' outline, as corners. */
+export function toShape(plan: DrawItPlan): DrawItPlan {
+  return plan.shape ? plan : { ...plan, shape: footprintOutline(houseRects(plan)) }
+}
+
+/** Back to boxes: the shape goes, the boxes underneath were never touched. */
+export function toBoxes(plan: DrawItPlan): DrawItPlan {
+  if (!plan.shape) return plan
+  const rest = { ...plan }
+  delete rest.shape
+  return rest
+}
+
+/** Within this many degrees of square, a wall dragged by its corner is square. */
+const CORNER_SQUARE_DEG = 4
+
+/**
+ * Where a dragged corner lands. In clean steps, and then — the part that makes it
+ * easy — a wall off it that is nearly square to its neighbour corner IS square,
+ * so pulling one corner out to cut a diagonal does not knock the walls either
+ * side of it off by a hair. Anything further off is the angle you meant.
+ */
+export function placeCorner(shape: readonly Point[], i: number, p: Point, gridMm: number): Point {
+  const n = shape.length
+  // The DISTANCE moved is snapped, from where the corner was — a house sitting
+  // off the grid moves its corners in clean steps from where they are.
+  const o0 = shape[i]
+  const q = { x: o0.x + snapTo(p.x - o0.x, gridMm), y: o0.y + snapTo(p.y - o0.y, gridMm) }
+  for (const k of [(i - 1 + n) % n, (i + 1) % n]) {
+    const o = shape[k]
+    const ang = (Math.atan2(Math.abs(q.y - o.y), Math.abs(q.x - o.x)) * 180) / Math.PI
+    if (ang < CORNER_SQUARE_DEG) q.y = o.y
+    else if (ang > 90 - CORNER_SQUARE_DEG) q.x = o.x
+  }
+  return q
+}
+
+export function movedCorner(plan: DrawItPlan, i: number, p: Point, gridMm: number): DrawItPlan {
+  if (!plan.shape) return plan
+  const at = placeCorner(plan.shape, i, p, gridMm)
+  return { ...plan, shape: plan.shape.map((q, k) => (k === i ? at : q)) }
+}
+
+/** A new corner in the middle of wall `i` — drag it out for a bay or a point. */
+export function addCorner(plan: DrawItPlan, i: number): DrawItPlan {
+  if (!plan.shape) return plan
+  const a = plan.shape[i], b = plan.shape[(i + 1) % plan.shape.length]
+  const shape = [...plan.shape]
+  shape.splice(i + 1, 0, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
+  return { ...plan, shape }
+}
+
+/** Take a corner out; its two walls become one. A house keeps at least three. */
+export function removeCorner(plan: DrawItPlan, i: number): DrawItPlan {
+  if (!plan.shape || plan.shape.length <= 3) return plan
+  return { ...plan, shape: plan.shape.filter((_, k) => k !== i) }
+}
+
+/** Wall `i` of the shape typed to a length: its far corner moves along it. */
+export function withEdgeLength(plan: DrawItPlan, i: number, mm: number): DrawItPlan {
+  if (!plan.shape || !(mm > 0)) return plan
+  const n = plan.shape.length
+  const a = plan.shape[i], j = (i + 1) % n, b = plan.shape[j]
+  const len = Math.hypot(b.x - a.x, b.y - a.y)
+  if (len < 1e-9) return plan
+  const at = { x: a.x + ((b.x - a.x) / len) * mm, y: a.y + ((b.y - a.y) / len) * mm }
+  return { ...plan, shape: plan.shape.map((q, k) => (k === j ? at : q)) }
+}
+
+/**
+ * A shape a house can be: three corners or more, no wall shorter than a
+ * wall, and no wall crossing another. A drag that breaks it is put back.
+ */
+export function shapeOk(shape: readonly Point[]): boolean {
+  const n = shape.length
+  if (n < 3) return false
+  for (let i = 0; i < n; i++) {
+    const a = shape[i], b = shape[(i + 1) % n]
+    if (Math.hypot(b.x - a.x, b.y - a.y) < MIN_WALL_MM) return false
+  }
+  const cross = (p: Point, q: Point, r: Point) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (j === i + 1 || (i === 0 && j === n - 1)) continue   // neighbours share a corner
+      const a = shape[i], b = shape[(i + 1) % n], c = shape[j], d = shape[(j + 1) % n]
+      const d1 = cross(c, d, a), d2 = cross(c, d, b), d3 = cross(a, b, c), d4 = cross(a, b, d)
+      if (((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0))) return false
+    }
+  }
+  return true
+}
+
+/**
+ * The shape ready to build: a corner with its two walls running straight on
+ * (a + tapped and left where it was) is not a corner, and would frame one wall
+ * as two.
+ */
+export function cleanShape(shape: readonly Point[]): Point[] {
+  const out = shape.filter((b, i) => {
+    const a = shape[(i - 1 + shape.length) % shape.length], c = shape[(i + 1) % shape.length]
+    const cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
+    return Math.abs(cross) > 1e-6 * Math.hypot(b.x - a.x, b.y - a.y) * Math.hypot(c.x - b.x, c.y - b.y)
+  })
+  return out.length >= 3 ? out : [...shape]
 }

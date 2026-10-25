@@ -970,3 +970,53 @@ describe('king studs at an opening — IRC Table R602.7.5, ≤115 mph Exposure B
     expect(kingsPerEnd(16 * FT)).toBe(2)
   })
 })
+
+describe('a floor at any angle', () => {
+  // An 8 x 6 box with its far-right corner cut off at 45°, 2 m back each way.
+  const outline: Array<[number, number]> = [[-4, -3], [4, -3], [4, 1], [2, 3], [-4, 3]]
+  const inside = (x: number, z: number) => {
+    let c = false
+    for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+      const [xi, zi] = outline[i], [xj, zj] = outline[j]
+      if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) c = !c
+    }
+    return c
+  }
+
+  it('cuts every joist to the shape, so none runs out past the diagonal', () => {
+    const g = buildFloorJoists({ lenX: 8, lenZ: 6, element: '2x10', ocM: 0.4064, outline })
+    const joists = g.children.filter((o) => /OC/.test(String(o.userData.info))) as THREE.Mesh[]
+    expect(joists.length).toBeGreaterThan(5)
+    for (const m of joists) {
+      const box = new THREE.Box3().setFromObject(m)
+      // Both ends of the joist's centreline are in the floor (a hair of slack).
+      const c = box.getCenter(new THREE.Vector3())
+      const alongX = box.max.x - box.min.x > box.max.z - box.min.z
+      const ends = alongX ? [[box.min.x + 0.01, c.z], [box.max.x - 0.01, c.z]] : [[c.x, box.min.z + 0.01], [c.x, box.max.z - 0.01]]
+      for (const [x, z] of ends) expect(inside(x, z)).toBe(true)
+    }
+    // A rim board along the diagonal too.
+    expect(g.children.filter((o) => /Rim joist/.test(String(o.userData.info))).length).toBe(outline.length)
+  })
+
+  it('a slab is the shape, not the box', () => {
+    const g = buildFloorJoists({ lenX: 8, lenZ: 6, element: 'Concrete Slab', ocM: 0.4, outline })
+    const box = new THREE.Box3().setFromObject(g.children[0])
+    expect(box.max.x).toBeCloseTo(4, 3)
+    expect(box.max.z).toBeCloseTo(3, 3)
+    // …and the cut corner is gone: no slab at (3.5, 2.5).
+    const ray = new THREE.Raycaster(new THREE.Vector3(3.5, 5, 2.5), new THREE.Vector3(0, -1, 0))
+    expect(ray.intersectObject(g, true).length).toBe(0)
+    const hit = new THREE.Raycaster(new THREE.Vector3(0, 5, 0), new THREE.Vector3(0, -1, 0))
+    expect(hit.intersectObject(g, true).length).toBeGreaterThan(0)
+  })
+
+  it('subfloor sheets stop at the diagonal, and fewer are used', () => {
+    const square = buildFloorDeck({ lenX: 8, lenZ: 6 })
+    const cut = buildFloorDeck({ lenX: 8, lenZ: 6, outline })
+    expect(cut.userData.sheetCount).toBeLessThanOrEqual(square.userData.sheetCount)
+    expect(cut.children.some((o) => /cut to the wall/.test(String(o.userData.info)))).toBe(true)
+    const ray = new THREE.Raycaster(new THREE.Vector3(3.7, 5, 2.7), new THREE.Vector3(0, -1, 0))
+    expect(ray.intersectObject(cut, true).length).toBe(0)
+  })
+})

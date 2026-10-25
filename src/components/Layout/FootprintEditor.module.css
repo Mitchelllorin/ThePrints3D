@@ -62,6 +62,40 @@
 .gripMove::before { border-radius: 3px; transform: rotate(45deg); }
 .gripMove { cursor: move; }
 .gripOn { cursor: grabbing; }
+/* A + in the middle of a wall of a shape: pull it to make a corner there.
+   Dashed and hollow, so it reads as "a corner could go here", not as one. */
+.gripAdd { cursor: copy; }
+.gripAdd::before {
+  content: '+';
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  background: #0b1220;
+  border: 2px dashed #8ec5f5;
+  color: #e8eef5;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+/* The corner tapped: filled orange as well as bigger — shape, not colour alone. */
+.gripPicked::before { background: #f97316; transform: scale(1.2); }
+/* Takes the picked corner out. */
+.cornerX {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-height: 36px;
+  padding: 0 12px;
+  background: #0b1220;
+  border: 2px solid #f97316;
+  border-radius: 8px;
+  color: #fdba74;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.cornerX::after { content: ''; position: absolute; inset: -6px -4px; }
 .gripOn::before { transform: scale(1.25); }     /* transform only */
 .gripMove.gripOn::before { transform: rotate(45deg) scale(1.25); }
 .grip:focus-visible::before { outline: 2px solid #e8eef5; outline-offset: 3px; }

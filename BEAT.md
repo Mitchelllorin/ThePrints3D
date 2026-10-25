@@ -34,6 +34,14 @@ weren't looking.
 5. **Draw it** → type a width and a depth. Check both units parse: `24`,
    `24 6`, `24'6"`, `7.3 m`.
 6. Shell wall type and floor choice (slab / joists / later).
+   - **Outline → ∠ Any angle**: every corner is a square handle — drag the
+     back-right one in and the right wall goes diagonal, reading `· 72°` on
+     it. Pull a **+** off a wall for a bay point. Tap a corner → **✕ Corner**
+     takes it out (never lands on the corner). Tap a wall's number, type 44 —
+     that wall is 44′. Drag a corner across the house — it goes back.
+     **Frame it**: one wall per side, the diagonal framed, the slab (or joists
+     and subfloor) cut to the shape, no rectangle of slab poking past it.
+     **⊾ Square** puts the boxes back.
    - **Inside walls** on the sheet: pick **∠ Any angle**, drag a diagonal —
      a stretchy arrow on it, reading length and angle; it lands at that angle.
      **⊾ Square** keeps a nearly-square drag square.

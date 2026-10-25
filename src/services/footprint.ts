@@ -183,6 +183,11 @@ function signedArea2(poly: readonly Point[]): number {
  */
 export function insetOutline(poly: readonly Point[], byMm: number): Point[] {
   const n = poly.length
+  // A shape drawn at any angle is not rectilinear: offset it the general way.
+  if (n >= 3 && byMm !== 0 && poly.some((a, i) => {
+    const b = poly[(i + 1) % n]
+    return Math.abs(b.x - a.x) > EPS && Math.abs(b.y - a.y) > EPS
+  })) return insetPolygon(poly, byMm)
   if (n < 4 || byMm === 0) return [...poly]
   // With +y down, a clockwise loop has negative signed area; inward is then the
   // left-hand normal of each edge. Work it out rather than assume it.
@@ -215,4 +220,34 @@ export function outlineBounds(poly: readonly Point[]): Rect {
 /** Move every point so the whole footprint starts at (dx, dy). */
 export function translateOutline(poly: readonly Point[], dx: number, dy: number): Point[] {
   return poly.map((p) => ({ x: p.x + dx, y: p.y + dy }))
+}
+
+/**
+ * Inset ANY simple polygon by `byMm`: every edge moves inward by that much and
+ * each corner is where its two moved edges meet (a mitre). A corner whose two
+ * edges run straight on keeps its place, moved in along the normal.
+ */
+export function insetPolygon(poly: readonly Point[], byMm: number): Point[] {
+  const n = poly.length
+  const inwardLeft = signedArea2(poly) < 0
+  const edges = poly.map((a, i) => {
+    const b = poly[(i + 1) % n]
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1
+    const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len
+    // Left normal of (ux,uy) is (uy,-ux) with +y down; right is (-uy,ux).
+    const nx = inwardLeft ? uy : -uy, ny = inwardLeft ? -ux : ux
+    return { px: a.x + nx * byMm, py: a.y + ny * byMm, ux, uy, nx, ny }
+  })
+  return poly.map((v, i) => {
+    const e0 = edges[(i - 1 + n) % n], e1 = edges[i]
+    const den = e0.ux * e1.uy - e0.uy * e1.ux
+    if (Math.abs(den) < 1e-9) return { x: v.x + e1.nx * byMm, y: v.y + e1.ny * byMm }
+    const t = ((e1.px - e0.px) * e1.uy - (e1.py - e0.py) * e1.ux) / den
+    return { x: e0.px + e0.ux * t, y: e0.py + e0.uy * t }
+  })
+}
+
+/** The area inside any simple polygon (shoelace). */
+export function polygonAreaMm2(poly: readonly Point[]): number {
+  return Math.abs(signedArea2(poly)) / 2
 }

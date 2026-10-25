@@ -25,9 +25,9 @@ import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { WALL_TYPES } from '../../data/members'
 import { shellThicknessMm, type FloorChoice } from '../../services/drawnProject'
-import { placeBoxes, footprintAreaMm2, type AttachSide, type FootprintBox } from '../../services/footprint'
+import { placeBoxes, footprintAreaMm2, polygonAreaMm2, type AttachSide, type FootprintBox } from '../../services/footprint'
 import { normalizeBoxes } from '../../services/footprintEdit'
-import { fitPage, initialPlan, type DrawItPlan } from '../../services/drawItPlan'
+import { cleanShape, fitPage, initialPlan, toBoxes, toShape, type DrawItPlan } from '../../services/drawItPlan'
 import { formatMeasureMm } from '../../services/unitConverter'
 import FootprintEditor, { type DrawMode } from './FootprintEditor'
 import styles from './DrawItSheet.module.css'
@@ -105,7 +105,8 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   const useMetric = () => setConfig({ lengthFormat: 'decimal', activeUnit: metric ? activeUnit : 'm' })
   const useImperial = () => { if (lengthFormat === 'decimal') setConfig({ lengthFormat: 'ft-in' }) }
 
-  const areaMm2 = footprintAreaMm2(placeBoxes(boxes))
+  const shaped = !!plan.shape
+  const areaMm2 = plan.shape ? polygonAreaMm2(plan.shape) : footprintAreaMm2(placeBoxes(boxes))
   const area = metric
     ? `${(areaMm2 / 1e6).toLocaleString(undefined, { maximumFractionDigits: 1 })} m²`
     : `${Math.round(areaMm2 / (FT * FT)).toLocaleString()} ft²`
@@ -117,6 +118,7 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
       wings,
       page: { originMm: plan.origin, wMm: plan.page.w, dMm: plan.page.d },
       insideWalls: plan.walls,
+      outline: plan.shape ? cleanShape(plan.shape) : undefined,
     })
     // THE WALLS ARE ALREADY UP. A drawn project's shell draws itself standing
     // the moment it exists, but the model was left marked unbuilt — so the
@@ -131,6 +133,7 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
     ? (selectedWall != null ? 'Drag the wall or an end. Tap its number to type it.'
       : squareWalls ? 'Drag across the house to draw a wall.' : 'Drag across the house to draw a wall, at any angle.')
     : pickedUp ? 'Drag it where you want it. Tap the paper to put it down.'
+    : shaped ? 'Drag any corner anywhere. Pull a + to add a corner.'
     : 'Drag an edge to size it. Double-tap the house to move it.'
   const wallCount = plan.walls.length ? ` · ${plan.walls.length} inside wall${plan.walls.length === 1 ? '' : 's'}` : ''
 
@@ -201,13 +204,24 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
 
           {mode === 'outline' && (
             <>
+              {/* THE HOUSE AT ANY ANGLE. Square is boxes you pull to size; Any
+                  angle turns that outline into corners you can drag anywhere.
+                  Back to Square puts the boxes back as they were. */}
+              <div className={styles.row} role="group" aria-label="Outline shape">
+                <button className={`${styles.mode} ${!shaped ? styles.chosen : ''}`} onClick={() => setPlan(fitPage(toBoxes(plan)))} aria-pressed={!shaped}>
+                  {!shaped ? '✓ ' : ''}⊾ Square
+                </button>
+                <button className={`${styles.mode} ${shaped ? styles.chosen : ''}`} onClick={() => setPlan(toShape(plan))} aria-pressed={shaped}>
+                  {shaped ? '✓ ' : ''}∠ Any angle
+                </button>
+              </div>
               <button className={styles.more} onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen}>
-                {moreOpen ? '▾' : '▸'} Sections, shell and floor
+                {moreOpen ? '▾' : '▸'} {shaped ? 'Shell and floor' : 'Sections, shell and floor'}
               </button>
               {moreOpen && (
                 <div className={styles.options}>
-                  <span className={styles.label}>Sections</span>
-                  {boxes.slice(1).map((b, k) => {
+                  {!shaped && <span className={styles.label}>Sections</span>}
+                  {!shaped && boxes.slice(1).map((b, k) => {
                     const i = k + 1
                     return (
                       <div key={i} className={styles.wing}>
@@ -228,7 +242,7 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
                       </div>
                     )
                   })}
-                  <button className={styles.addWing} onClick={addWing}>+ Add a section</button>
+                  {!shaped && <button className={styles.addWing} onClick={addWing}>+ Add a section</button>}
 
                   <span className={styles.label}>Shell</span>
                   <select
