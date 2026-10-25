@@ -24,7 +24,7 @@ import { solveStair, stairShapeFromSubtype } from '../../services/stairs'
 import { seatInGap } from '../../services/openingSeat'
 import { parseSizeMm } from '../../services/drawnProject'
 import { usePrintDrop } from '../../services/printPlane'
-import { squarePointToAxis } from '../../services/wallTraceReducer'
+import { freeAnglePoint, squarePointToAxis, wallAngleOffSquareDeg } from '../../services/wallTraceReducer'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
 
@@ -186,14 +186,17 @@ function RubberBandPreview({
     // The rubber band shows the SQUARED line. Previewing the raw pointer and then
     // squaring on commit means the wall jumps at the moment you let go, so you
     // are aiming at something that is not what you will get.
+    // Free angle previews the same whole-degree end the commit will lay down.
     const end = squareWalls
       ? squarePointToAxis(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
-      : hoverPixel
+      : freeAnglePoint(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
     return {
       start: planeLocalToTrace(traceStart),
       end: planeLocalToTrace(end),
       endPixel: end as [number, number],
       lenPx: Math.hypot(end[0] - traceStart[0], end[1] - traceStart[1]),
+      // Free angle only: a diagonal reads its angle on the chip next to its length.
+      angleDeg: squareWalls ? 0 : wallAngleOffSquareDeg(traceStart[0], traceStart[1], end[0], end[1]),
     }
   }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace, squareWalls])
 
@@ -220,7 +223,8 @@ function RubberBandPreview({
           end={tracePreviewPoints.end}
           endPixel={tracePreviewPoints.endPixel}
           color={activeLineColor}
-          label={formatMeasureMm(tracePreviewPoints.lenPx * mmPerPx, activeUnit, lengthFormat)}
+          label={formatMeasureMm(tracePreviewPoints.lenPx * mmPerPx, activeUnit, lengthFormat)
+            + (tracePreviewPoints.angleDeg % 90 ? ` · ${tracePreviewPoints.angleDeg}°` : '')}
           onTyped={onTypedLength}
         />
       ) : tracePreviewPoints && (
@@ -686,12 +690,45 @@ export default function FloorplanOverlay() {
   // double-tap that ENDS the run, so the rubber-band cursor stops trailing you.
   const lastTapRef = useRef<{ t: number; x: number; y: number; count: number } | null>(null)
 
+  /**
+   * DRAG A WALL. The stretchy arrow follows a finger, so letting go should put
+   * the wall there. It did not: a drag counted as moving the camera and was
+   * thrown away on release, so on a phone — no hover, nothing between taps — the
+   * arrow never had anything to stretch to. Looking straight down while drawing
+   * walls the camera does not move on one finger anyway, so the drag is free:
+   * press, stretch, let go, and the wall is down; the next drag carries on from
+   * its end. Two fingers are still pinch and nothing else.
+   */
+  const pressPixel = useRef<[number, number] | null>(null)
+  /** The anchor was dropped by this drag, so a pinch can take it back. */
+  const dragAnchored = useRef(false)
+  const fingers = useRef(new Set<number>())
+  const pinched = useRef(false)
+  useEffect(() => {
+    // Down in the capture phase so a second finger counts before the canvas
+    // hears it; up in the bubble phase so the canvas still sees the pinch.
+    const down = (e: PointerEvent) => { fingers.current.add(e.pointerId); if (fingers.current.size > 1) pinched.current = true }
+    const up = (e: PointerEvent) => { fingers.current.delete(e.pointerId); if (fingers.current.size === 0) pinched.current = false }
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return () => {
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+  }, [])
+  const dragDrawsWalls = () =>
+    traceMode && !tracePaused && traceStyle === 'line' && activeTraceLayer === 'framing' && planView
+
   // Press: remember where the finger landed so pointer-up can tell a tap (place
   // a point) from a drag (the user moved the camera — OrbitControls handled it).
   // Freehand is the exception: it draws WITH the drag, so it starts on press.
   const handleWorkspacePointerDown = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     pointerDownScreen.current = { x: event.nativeEvent.clientX, y: event.nativeEvent.clientY }
+    pressPixel.current = toPixel(rayToTracePlane(event) ?? event.point)
+    dragAnchored.current = false
     if (traceMode && traceStyle === 'freehand') {
       event.stopPropagation()
       const pixel = worldToPixel(rayToTracePlane(event) ?? event.point)
@@ -859,10 +896,9 @@ export default function FloorplanOverlay() {
 
   // Drop a trace/calibration point — called only on a genuine tap (pointer-up
   // with no meaningful drag), so the camera is free to move between points.
-  const commitTraceOrCalibrationPoint = (event: ThreeEvent<PointerEvent>) => {
+  const commitTraceOrCalibrationPoint = (event: ThreeEvent<PointerEvent>, at?: [number, number]) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
-    const hit = rayToTracePlane(event) ?? event.point
-    const pixel = toPixel(hit)
+    const pixel = at ?? toPixel(rayToTracePlane(event) ?? event.point)
 
     if (traceMode) {
       // Area layers (floors / roof): tap one corner, tap the opposite corner —
@@ -1012,13 +1048,21 @@ export default function FloorplanOverlay() {
       // (so a trace a hair off the printed wall lands exactly on it, at the
       // print's real angle). Generous tolerances so you don't have to be exact;
       // only fall back to ortho squaring when nothing parallel is reasonably near.
-      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, [...refWalls, ...belowWalls], 28, 42)
+      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, [...refWalls, ...belowWalls], squareWalls ? 28 : 4, 42)
+      // FREE ANGLE lays the wall where the arrow pointed. reduceStrokeToWall
+      // rounds every stroke to 0/45/90, which is how "Angle" used to give you a
+      // 45 when you drew a 30. An end that caught a corner keeps the corner.
+      const caught = snapped.x !== pixel[0] || snapped.y !== pixel[1]
+      const freeEnd = caught ? [snapped.x, snapped.y] : freeAnglePoint(traceStart[0], traceStart[1], snapped.x, snapped.y)
       const reduced = printLine
         ? { x1: printLine.x1, y1: printLine.y1, x2: printLine.x2, y2: printLine.y2, thickness: 8, source: 'user' as const, detectionConfidence: 1 }
-        : reduceStrokeToWall([
-            { x: traceStart[0], y: traceStart[1] },
-            { x: snapped.x, y: snapped.y },
-          ])
+        : !squareWalls
+          ? (Math.hypot(freeEnd[0] - traceStart[0], freeEnd[1] - traceStart[1]) < 12 ? null
+            : { x1: traceStart[0], y1: traceStart[1], x2: freeEnd[0], y2: freeEnd[1], thickness: 8, source: 'user' as const, detectionConfidence: 1 })
+          : reduceStrokeToWall([
+              { x: traceStart[0], y: traceStart[1] },
+              { x: snapped.x, y: snapped.y },
+            ])
       if (!reduced || Math.hypot(reduced.x2 - reduced.x1, reduced.y2 - reduced.y1) < 12) {
         // Tap landed on the anchor — treat as "end this wall run"
         setTraceStart(null)
@@ -1062,6 +1106,22 @@ export default function FloorplanOverlay() {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     event.stopPropagation()
     const pixel = toPixel(rayToTracePlane(event) ?? event.point)
+    if (dragDrawsWalls() && pointerDownScreen.current) {
+      // A pinch is not a wall: give back an anchor this gesture dropped, and
+      // keep the arrow still while the fingers zoom.
+      if (pinched.current) {
+        if (dragAnchored.current) { setTraceStart(null); setHoverPixel(null); dragAnchored.current = false }
+        return
+      }
+      // First real move of a drag with no run going: the press is the corner.
+      const down = pointerDownScreen.current
+      const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
+      const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
+      if (!traceStart && pressPixel.current && moved > limit) {
+        commitTraceOrCalibrationPoint(event, pressPixel.current)
+        dragAnchored.current = true
+      }
+    }
     // While tracing WALLS, freeze the rubber-band once the cursor leaves the
     // drawing (headed for a menu): don't drag the preview line out across the
     // screen after the finger. It stays put on the plan until you come back —
@@ -1149,10 +1209,25 @@ export default function FloorplanOverlay() {
     // drifting cursor can no longer commit a point.
     const down = pointerDownScreen.current
     pointerDownScreen.current = null
+    // A pinch is never a tap. The second finger's press takes over the press
+    // point, so the first finger up uses it up and the last one up arrived
+    // with nothing to measure against — and read as a tap, dropping a corner.
+    if (pinched.current) return
     if (down) {
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
-      if (moved > limit) return
+      if (moved > limit) {
+        // A drag drawing a wall puts it down where the finger let go.
+        if (dragDrawsWalls() && traceStart) {
+          event.stopPropagation()
+          lastTapRef.current = null
+          dragAnchored.current = false
+          commitTraceOrCalibrationPoint(event)
+          // The finger is gone: no arrow left hanging off the new corner.
+          setHoverPixel(null)
+        }
+        return
+      }
     }
     event.stopPropagation()
     // Tap model while a run is active:

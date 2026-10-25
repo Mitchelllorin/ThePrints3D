@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   extendWallToNearbyWall,
+  freeAnglePoint,
   inferCorners,
   mergeAutoAndUserWalls,
   reduceStrokeToWall,
@@ -8,6 +9,7 @@ import {
   simplifyStroke,
   squarePointToAxis,
   squareWallToAxis,
+  wallAngleOffSquareDeg,
 } from './wallTraceReducer'
 import type { ParsedWall } from '../types'
 
@@ -164,5 +166,45 @@ describe('square by default', () => {
     expect(squareWallToAxis(crooked, 45).y2).toBe(0)
     // …and with squaring off, the wall is left exactly as drawn.
     expect(squareWallToAxis(crooked, 0)).toEqual(crooked)
+  })
+})
+
+describe('free angle', () => {
+  const angleOf = (ax: number, ay: number, [x, y]: [number, number]) =>
+    (Math.atan2(y - ay, x - ax) * 180) / Math.PI
+
+  it('keeps a real diagonal at the angle it was drawn, not 45', () => {
+    // 30° — the old reducer forced this to 45°.
+    const end = freeAnglePoint(0, 0, Math.cos(Math.PI / 6) * 500, Math.sin(Math.PI / 6) * 500)
+    expect(angleOf(0, 0, end)).toBeCloseTo(30, 6)
+  })
+
+  it('rounds to a whole degree and keeps the length', () => {
+    const end = freeAnglePoint(10, 10, 10 + Math.cos(0.4) * 300, 10 + Math.sin(0.4) * 300)
+    expect(angleOf(10, 10, end)).toBeCloseTo(Math.round((0.4 * 180) / Math.PI), 6)
+    expect(Math.hypot(end[0] - 10, end[1] - 10)).toBeCloseTo(300, 6)
+  })
+
+  it('a wall nearly square or nearly 45 lands exactly on it', () => {
+    const r = (d: number) => (d * Math.PI) / 180
+    const flat = freeAnglePoint(0, 0, Math.cos(r(2)) * 400, Math.sin(r(2)) * 400)
+    expect(flat[1]).toBeCloseTo(0, 6)
+    expect(angleOf(0, 0, freeAnglePoint(0, 0, Math.cos(r(47)) * 400, Math.sin(r(47)) * 400))).toBeCloseTo(45, 6)
+  })
+
+  it('reads the angle off square the way a print does', () => {
+    expect(wallAngleOffSquareDeg(0, 0, 100, 0)).toBe(0)
+    expect(wallAngleOffSquareDeg(0, 0, 0, -100)).toBe(90)
+    expect(wallAngleOffSquareDeg(0, 0, -100, 58)).toBe(30)
+  })
+})
+
+describe('inferCorners and angled walls', () => {
+  it('leaves a diagonal alone when the next wall starts on its end', () => {
+    const a: ParsedWall = { x1: 0, y1: 0, x2: 300, y2: 173, thickness: 8, source: 'user' }
+    const b: ParsedWall = { x1: 300, y1: 173, x2: 350, y2: 60, thickness: 8, source: 'user' }
+    const [ra, rb] = inferCorners([a, b], 20)
+    expect(ra).toMatchObject({ x2: 300, y2: 173 })
+    expect(rb).toMatchObject({ x1: 300, y1: 173 })
   })
 })

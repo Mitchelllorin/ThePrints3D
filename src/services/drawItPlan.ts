@@ -20,6 +20,7 @@
  */
 import { placeBoxes, footprintOutline, type FootprintBox, type Point, type Rect } from './footprint'
 import { cornerShift, normalizeBoxes, snapTo, type Grip } from './footprintEdit'
+import { freeAnglePoint } from './wallTraceReducer'
 
 export interface InsideWall { x1: number; y1: number; x2: number; y2: number }
 
@@ -180,6 +181,8 @@ export interface SnapOpts {
   from?: Point
   /** An inside wall to leave out (the one being edited). */
   skip?: number
+  /** Any angle: the wall keeps the angle it was dragged at (see freeWallPoint). */
+  free?: boolean
 }
 
 /**
@@ -189,6 +192,7 @@ export interface SnapOpts {
  * it slides along its own axis to meet it, rather than kinking to reach it.
  */
 export function snapWallPoint(plan: DrawItPlan, p: Point, o: SnapOpts): Point {
+  if (o.free && o.from) return freeWallPoint(plan, p, { ...o, from: o.from })
   const q = { ...p }
   let lock: 'x' | 'y' | null = null
   if (o.from) {
@@ -235,6 +239,45 @@ export function snapWallPoint(plan: DrawItPlan, p: Point, o: SnapOpts): Point {
   if (o.from && lock === 'y') q.y = o.from.y
   if (o.from && lock === 'x') q.x = o.from.x
   return q
+}
+
+/**
+ * ANY ANGLE. The grid would bend a diagonal — snapping both ends to squared
+ * paper turns a 30° drag into whatever angle the nearest grid point makes — so
+ * a free wall is snapped the way a carpenter lays one out: a whole-degree angle
+ * (square and 45 pull in from a few degrees off) and a clean length along it.
+ * It still lands on another wall's end, and still meets a wall or the shell
+ * face, sliding along its own line to get there rather than kinking.
+ */
+function freeWallPoint(plan: DrawItPlan, p: Point, o: SnapOpts & { from: Point }): Point {
+  const { from } = o
+  for (const [i, k] of plan.walls.entries()) {
+    if (i === o.skip) continue
+    for (const e of [{ x: k.x1, y: k.y1 }, { x: k.x2, y: k.y2 }]) {
+      if (Math.hypot(e.x - p.x, e.y - p.y) < o.tolMm) return e
+    }
+  }
+  const [ax, ay] = freeAnglePoint(from.x, from.y, p.x, p.y)
+  const len = Math.hypot(ax - from.x, ay - from.y)
+  if (len < 1e-6) return { ...p }
+  const ux = (ax - from.x) / len, uy = (ay - from.y) / len
+  // Meet a line: where the wall's own line crosses it, if that is near.
+  let best: Point | null = null
+  let bestD = o.tolMm
+  for (const { a, b } of landingLines(plan, o.shellMm, o.skip)) {
+    const ex = b.x - a.x, ey = b.y - a.y
+    const den = ux * ey - uy * ex
+    if (Math.abs(den) < 1e-9) continue
+    const qx = a.x - from.x, qy = a.y - from.y
+    const t = (qx * ey - qy * ex) / den
+    const u = (qx * uy - qy * ux) / den
+    if (t <= 0 || u < -1e-6 || u > 1 + 1e-6) continue
+    const d = Math.abs(t - len)
+    if (d < bestD) { bestD = d; best = { x: from.x + ux * t, y: from.y + uy * t } }
+  }
+  if (best) return best
+  const l = Math.max(o.gridMm, snapTo(len, o.gridMm))
+  return { x: from.x + ux * l, y: from.y + uy * l }
 }
 
 export function wallLength(w: InsideWall): number {

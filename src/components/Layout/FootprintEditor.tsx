@@ -15,7 +15,9 @@
  * INSIDE WALLS
  *   - Drag across the house to draw a wall. Nearly square is square; an end
  *     lands on another wall's end, on the inside face of the shell, or on the
- *     grid. The length reads live on the wall as you draw it.
+ *     grid. A stretchy arrow reads the length live on the wall as you draw it.
+ *   - Any angle (`free`): the wall keeps the angle you drag it at, to the whole
+ *     degree, and the arrow reads the angle too.
  *   - Tap a wall to pick it: drag it to move it, drag an end to stretch it,
  *     tap its number to type the length exact.
  *
@@ -44,6 +46,7 @@ import {
   type DrawItPlan, type InsideWall,
 } from '../../services/drawItPlan'
 import { parseSizeMm } from '../../services/drawnProject'
+import { wallAngleOffSquareDeg } from '../../services/wallTraceReducer'
 import styles from './FootprintEditor.module.css'
 
 export type DrawMode = 'outline' | 'walls'
@@ -109,7 +112,7 @@ function gridStepMm(scale: number, metric: boolean): number {
 }
 
 export default function FootprintEditor({
-  plan, onChange, mode, selectedWall, onSelectWall, onPickedUp, format, snapMm, metric, shellMm, height = 300,
+  plan, onChange, mode, selectedWall, onSelectWall, onPickedUp, format, snapMm, metric, shellMm, free = false, height = 300,
 }: {
   plan: DrawItPlan
   onChange: (next: DrawItPlan) => void
@@ -124,6 +127,8 @@ export default function FootprintEditor({
   metric: boolean
   /** The shell's thickness: an inside wall stops at its inside face. */
   shellMm: number
+  /** Any angle: inside walls keep the angle they are dragged at. */
+  free?: boolean
   /** First-frame guess only. The box it sits in sets the real height. */
   height?: number
 }) {
@@ -300,7 +305,7 @@ export default function FootprintEditor({
   const gripKey = (g: Grip) => `${g.box}:${g.kind}:${g.fromLeft ? 'L' : ''}${g.fromTop ? 'T' : ''}`
 
   // ── Pointer ───────────────────────────────────────────────────────────────
-  const snapOpts = { gridMm: snapMm, tolMm: REACH_PX / f.s, shellMm }
+  const snapOpts = { gridMm: snapMm, tolMm: REACH_PX / f.s, shellMm, free }
   const begin = (e: ReactPointerEvent<Element>, d: Drag) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
     e.preventDefault()
@@ -474,10 +479,10 @@ export default function FootprintEditor({
           <pattern id={`${ids}g`} width={step * f.s} height={step * f.s} x={f.ox} y={f.oy} patternUnits="userSpaceOnUse">
             <path d={`M ${step * f.s} 0 L 0 0 0 ${step * f.s}`} fill="none" stroke="#2b3b5c" strokeWidth={1} />
           </pattern>
-          {(['n', 'a'] as const).map((k) => (
+          {(['n', 'a', 'w'] as const).map((k) => (
             <marker key={k} id={`${ids}${k}`} markerWidth={10} markerHeight={10} refX={9} refY={5}
               orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-              <path d="M0,1.5 L9,5 L0,8.5 Z" fill={k === 'a' ? '#3d9ae8' : '#aebccd'} />
+              <path d="M0,1.5 L9,5 L0,8.5 Z" fill={k === 'a' ? '#3d9ae8' : k === 'w' ? '#e6f1fd' : '#aebccd'} />
             </marker>
           ))}
         </defs>
@@ -553,6 +558,13 @@ export default function FootprintEditor({
           <line x1={X(drawing.x1)} y1={Y(drawing.y1)} x2={X(drawing.x2)} y2={Y(drawing.y2)}
             stroke="#3d9ae8" strokeWidth={wallPx} strokeDasharray="8 4" pointerEvents="none" />
         )}
+        {/* The stretchy arrow: end to end on the wall being drawn, the way the
+            dimension sits on a print, stretching with the finger. */}
+        {drawing && wallLength(drawing) * f.s > 12 && (
+          <line x1={X(drawing.x1)} y1={Y(drawing.y1)} x2={X(drawing.x2)} y2={Y(drawing.y2)}
+            stroke="#e6f1fd" strokeWidth={2} pointerEvents="none"
+            markerStart={`url(#${ids}w)`} markerEnd={`url(#${ids}w)`} />
+        )}
 
         {dims.map((d) => {
           const on = active.has(d.key) || editing?.key === d.key
@@ -602,6 +614,8 @@ export default function FootprintEditor({
         what: d.field === 'w' ? 'Width' : d.field === 'd' ? 'Depth' : 'From the corner',
       })), ...wallChips.map((c) => ({
         key: c.key, x: c.x, y: c.y, valueMm: wallLength(c.w), vertical: false, live: c.live, on: true, what: 'Wall',
+        // A diagonal reads its angle off square beside its length.
+        angle: wallAngleOffSquareDeg(c.w.x1, c.w.y1, c.w.x2, c.w.y2) % 90,
       }))].map((c) => {
         if (editing?.key === c.key) {
           return (
@@ -632,7 +646,7 @@ export default function FootprintEditor({
             disabled={c.live}
             aria-label={`${c.what} ${labelFor(c.valueMm)}. Tap to type it.`}
             onClick={() => setEditing({ key: c.key, text: labelFor(c.valueMm), bad: false })}>
-            {labelFor(c.valueMm)}
+            {labelFor(c.valueMm)}{'angle' in c && c.angle ? ` · ${c.angle}°` : ''}
           </button>
         )
       })}

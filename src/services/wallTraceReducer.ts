@@ -52,6 +52,31 @@ export function squarePointToAxis(
   return Math.abs(px - ax) >= Math.abs(py - ay) ? [px, ay] : [ax, py]
 }
 
+/**
+ * FREE ANGLE — the wall goes where the finger points, at any angle.
+ *
+ * Any angle, but not any fraction of one: the angle rounds to a whole degree,
+ * and within `magnetDeg` of square or 45° it lands exactly there, so a wall that
+ * is MEANT to be square still comes out square in free mode. Length is kept.
+ */
+export function freeAnglePoint(
+  ax: number, ay: number, px: number, py: number, magnetDeg = 3,
+): [number, number] {
+  const len = Math.hypot(px - ax, py - ay)
+  if (len < 1e-6) return [px, py]
+  const raw = (Math.atan2(py - ay, px - ax) * 180) / Math.PI
+  const on45 = Math.round(raw / 45) * 45
+  const deg = Math.abs(raw - on45) <= magnetDeg ? on45 : Math.round(raw)
+  const r = (deg * Math.PI) / 180
+  return [ax + Math.cos(r) * len, ay + Math.sin(r) * len]
+}
+
+/** A wall's angle off square, 0–90°, the way you would read it off a print. */
+export function wallAngleOffSquareDeg(ax: number, ay: number, bx: number, by: number): number {
+  const a = Math.abs((Math.atan2(by - ay, bx - ax) * 180) / Math.PI) % 180
+  return Math.round(a > 90 ? 180 - a : a)
+}
+
 export function squareWallToAxis(w: ParsedWall, tolDeg = 7): ParsedWall {
   const deg = Math.abs((Math.atan2(w.y2 - w.y1, w.x2 - w.x1) * 180) / Math.PI)
   const offH = Math.min(deg, Math.abs(deg - 180))
@@ -430,6 +455,12 @@ export function snapTraceWallToExisting(
  * tolerance, extend/trim them so they meet exactly (clean 90° corner).
  * Returns the adjusted wall list.
  */
+/** Within a degree of horizontal or vertical. */
+function isSquare(w: ParsedWall): boolean {
+  const deg = Math.abs((Math.atan2(w.y2 - w.y1, w.x2 - w.x1) * 180) / Math.PI) % 90
+  return deg < 1 || deg > 89
+}
+
 export function inferCorners(walls: ParsedWall[], tolerancePx = 20): ParsedWall[] {
   const result = walls.map((w) => ({ ...w }))
   for (let i = 0; i < result.length; i++) {
@@ -439,6 +470,12 @@ export function inferCorners(walls: ParsedWall[], tolerancePx = 20): ParsedWall[
       // Different storeys never form a corner — a 2nd-floor wall must not snap to
       // the ground-floor wall directly beneath it (same footprint, other level).
       if ((a.level ?? 0) !== (b.level ?? 0)) continue
+      // ONLY SQUARE WALLS. The meeting point below is "the vertical one's x, the
+      // horizontal one's y", which is only true when they are. A 30° wall
+      // counted as "horizontal", so drawing the next wall off its end flattened
+      // it — angled walls came out square the moment you carried on from them.
+      // A diagonal's corner is already exact: the next wall starts on its end.
+      if (!isSquare(a) || !isSquare(b)) continue
       const aHoriz = Math.abs(a.y2 - a.y1) < Math.abs(a.x2 - a.x1)
       const bHoriz = Math.abs(b.y2 - b.y1) < Math.abs(b.x2 - b.x1)
       if (aHoriz === bHoriz) continue // parallel — skip

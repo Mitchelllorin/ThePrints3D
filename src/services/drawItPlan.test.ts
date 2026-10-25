@@ -98,6 +98,44 @@ describe('drawing an inside wall', () => {
   })
 })
 
+describe('drawing an inside wall at any angle', () => {
+  const FREE = { ...SNAP, free: true }
+  const deg = (a: { x: number; y: number }, b: { x: number; y: number }) => (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
+
+  it('keeps the angle it was dragged at, where the grid would have bent it', () => {
+    const p = plan()
+    const from = { x: 10000, y: 8000 }
+    const r = (30 * Math.PI) / 180
+    const to = snapWallPoint(p, { x: from.x + Math.cos(r) * 3030, y: from.y + Math.sin(r) * 3030 }, { ...FREE, from })
+    expect(deg(from, to)).toBeCloseTo(30, 6)
+    // …and a clean length along it.
+    expect(Math.hypot(to.x - from.x, to.y - from.y)).toBeCloseTo(3000, 6)
+  })
+
+  it('a drag a hair off square is still square', () => {
+    const from = { x: 10000, y: 8000 }
+    expect(snapWallPoint(plan(), { x: 14000, y: 8100 }, { ...FREE, from }).y).toBeCloseTo(8000, 6)
+  })
+
+  it('meets the shell face along its own line, without kinking', () => {
+    const p = plan()
+    const [r] = houseRects(p)
+    const from = { x: r.x1 + 3000, y: r.y1 + 3000 }
+    const face = r.y2 - SNAP.shellMm
+    const r40 = (40 * Math.PI) / 180
+    // Aimed at 40°, stopping a little short of the face.
+    const t = (face - from.y) / Math.sin(r40) - 150
+    const to = snapWallPoint(p, { x: from.x + Math.cos(r40) * t, y: from.y + Math.sin(r40) * t }, { ...FREE, from })
+    expect(to.y).toBeCloseTo(face, 6)
+    expect(deg(from, to)).toBeCloseTo(40, 6)
+  })
+
+  it('still lands on another wall’s end', () => {
+    const p = { ...plan(), walls: [{ x1: 10000, y1: 8000, x2: 14000, y2: 8000 }] }
+    expect(snapWallPoint(p, { x: 14150, y: 8100 }, { ...FREE, from: { x: 11000, y: 11000 } })).toEqual({ x: 14000, y: 8000 })
+  })
+})
+
 describe('a wall dragged past the shell', () => {
   it('stops at the shell’s inside face', () => {
     const p = plan()

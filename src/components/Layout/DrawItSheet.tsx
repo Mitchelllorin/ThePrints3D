@@ -22,6 +22,7 @@
 import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { WALL_TYPES } from '../../data/members'
 import { shellThicknessMm, type FloorChoice } from '../../services/drawnProject'
 import { placeBoxes, footprintAreaMm2, type AttachSide, type FootprintBox } from '../../services/footprint'
@@ -64,6 +65,9 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   const activeUnit = useConfigStore((s) => s.activeUnit)
   const lengthFormat = useConfigStore((s) => s.lengthFormat)
   const setConfig = useConfigStore((s) => s.set)
+  // The same Square / Any angle switch as the trace bar: one choice, both places.
+  const squareWalls = useFloorplanLocalStore((s) => s.squareWalls)
+  const setSquareWalls = useFloorplanLocalStore((s) => s.setSquareWalls)
   const metric = lengthFormat === 'decimal' && (activeUnit === 'mm' || activeUnit === 'cm' || activeUnit === 'm')
   const fmt = (mm: number) => formatMeasureMm(mm, activeUnit, lengthFormat)
   // A finger lands on clean numbers: 6" in feet and inches, 100 mm in metric.
@@ -124,7 +128,8 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   }
 
   const lead = mode === 'walls'
-    ? (selectedWall != null ? 'Drag the wall or an end. Tap its number to type it.' : 'Drag across the house to draw a wall.')
+    ? (selectedWall != null ? 'Drag the wall or an end. Tap its number to type it.'
+      : squareWalls ? 'Drag across the house to draw a wall.' : 'Drag across the house to draw a wall, at any angle.')
     : pickedUp ? 'Drag it where you want it. Tap the paper to put it down.'
     : 'Drag an edge to size it. Double-tap the house to move it.'
   const wallCount = plan.walls.length ? ` · ${plan.walls.length} inside wall${plan.walls.length === 1 ? '' : 's'}` : ''
@@ -156,7 +161,7 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
           <FootprintEditor
             plan={plan} onChange={setPlan} mode={mode}
             selectedWall={selectedWall} onSelectWall={setSelectedWall} onPickedUp={setPickedUp}
-            format={fmt} snapMm={snapMm} metric={metric} shellMm={shellThicknessMm(wallTypeKey)} />
+            format={fmt} snapMm={snapMm} metric={metric} shellMm={shellThicknessMm(wallTypeKey)} free={!squareWalls} />
         </div>
 
         <div className={styles.rest}>
@@ -176,9 +181,22 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
           {/* Always there in walls mode, so picking a wall does not shove the
               plan up; it only works with a wall picked, and looks it. */}
           {mode === 'walls' && (
-            <button className={styles.remove} onClick={removeWall} disabled={selectedWall == null}>
-              {selectedWall == null ? 'Tap a wall to pick it' : 'Remove this wall'}
-            </button>
+            <>
+              {/* SQUARE OR ANY ANGLE, right under the plan where the drawing is.
+                  Square keeps a wobbly drag square; Any angle keeps a diagonal at
+                  the angle it was drawn, to the whole degree. */}
+              <div className={styles.row} role="group" aria-label="Wall angle">
+                <button className={`${styles.mode} ${squareWalls ? styles.chosen : ''}`} onClick={() => setSquareWalls(true)} aria-pressed={squareWalls}>
+                  {squareWalls ? '✓ ' : ''}⊾ Square
+                </button>
+                <button className={`${styles.mode} ${!squareWalls ? styles.chosen : ''}`} onClick={() => setSquareWalls(false)} aria-pressed={!squareWalls}>
+                  {!squareWalls ? '✓ ' : ''}∠ Any angle
+                </button>
+              </div>
+              <button className={styles.remove} onClick={removeWall} disabled={selectedWall == null}>
+                {selectedWall == null ? 'Tap a wall to pick it' : 'Remove this wall'}
+              </button>
+            </>
           )}
 
           {mode === 'outline' && (

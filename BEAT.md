@@ -34,6 +34,9 @@ weren't looking.
 5. **Draw it** → type a width and a depth. Check both units parse: `24`,
    `24 6`, `24'6"`, `7.3 m`.
 6. Shell wall type and floor choice (slab / joists / later).
+   - **Inside walls** on the sheet: pick **∠ Any angle**, drag a diagonal —
+     a stretchy arrow on it, reading length and angle; it lands at that angle.
+     **⊾ Square** keeps a nearly-square drag square.
 7. The blank gridded sheet lands. Grid visible, scale known.
 8. **Stand them up** — the four outside walls frame themselves.
 9. **Draw the inside walls** — the chip drops you into plan view, drawing walls.
@@ -42,6 +45,12 @@ weren't looking.
    - Tap the chip, type an exact length, commit. The wall goes down at that
      length, the run carries on from its end.
    - Tap the chip and cancel — no stray wall underneath.
+   - **Drag** a wall with one finger: the arrow stretches, let go and the wall
+     is down; the next drag carries on from its end. A two-finger pinch zooms
+     and drops nothing.
+   - Flip **⊾ Square** to **∠ Any angle** on the trace bar. Drag a 30° wall —
+     the chip reads `· 30°`, it goes down at 30°, and stays 30° when the next
+     wall is drawn off its end. Flip back: a wobbly drag comes out square.
 10. **Add doors & windows** — place a door, a window, and a garage-width door.
 11. **See the cut list** — every stick, per wall. Scroll it. Export it.
 

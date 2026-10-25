@@ -913,9 +913,10 @@ export default function FloorplanPanel() {
             <button
               className={`${styles.traceBarBtn} ${squareWalls ? styles.traceBarBuild : ''}`}
               onClick={() => setSquareWalls(!squareWalls)}
-              title={squareWalls ? 'Walls snap square — tap for free angle' : 'Free angle — tap to snap square'}
+              title={squareWalls ? 'Walls snap square — tap to draw at any angle' : 'Any angle — tap to snap square again'}
+              aria-pressed={!squareWalls}
             >
-              {squareWalls ? '⊾ Square' : '∠ Angle'}
+              {squareWalls ? '⊾ Square' : '∠ Any angle'}
             </button>
           )}
           {/* No "End run" button — double-tapping the workspace ends the current
