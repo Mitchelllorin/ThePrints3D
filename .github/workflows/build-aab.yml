@@ -22,7 +22,7 @@ name: Build Android AAB
 #                              account that has been invited in Play Console →
 #                              Users and permissions, with release rights.
 # With it set, every run also sends the signed bundle to the track chosen when
-# the run starts (closed testing by default). Without it, the run just builds
+# the run starts (production — the live app — by default). Without it, the run just builds
 # the bundle as before and you upload it by hand.
 
 on:
@@ -33,11 +33,11 @@ on:
         required: false
         default: ''
       track:
-        description: 'Play track to upload to (needs GOOGLE_PLAY_SERVICE_ACCOUNT_JSON). alpha = closed testing.'
+        description: 'Play track to upload to (needs GOOGLE_PLAY_SERVICE_ACCOUNT_JSON). production = the live app.'
         required: false
-        default: 'alpha'
+        default: 'production'
         type: choice
-        options: [alpha, internal, beta, production]
+        options: [production, alpha, internal, beta]
   push:
     tags:
       - 'v*'
@@ -165,5 +165,5 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.theprints3d.app
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
-          track: ${{ github.event.inputs.track || 'alpha' }}
+          track: ${{ github.event.inputs.track || 'production' }}
           status: completed
