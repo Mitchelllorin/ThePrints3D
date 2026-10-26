@@ -18,7 +18,7 @@ name: Build Android AAB
 # the ANDROID_KEYSTORE_PATH / ANDROID_KEY_* env vars set below.
 #
 # ── Optional: upload straight to Google Play ──
-#   PLAY_SERVICE_ACCOUNT_JSON  the whole JSON key of a Google Cloud service
+#   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON  the whole JSON key of a Google Cloud service
 #                              account that has been invited in Play Console →
 #                              Users and permissions, with release rights.
 # With it set, every run also sends the signed bundle to the track chosen when
@@ -33,7 +33,7 @@ on:
         required: false
         default: ''
       track:
-        description: 'Play track to upload to (needs PLAY_SERVICE_ACCOUNT_JSON). alpha = closed testing.'
+        description: 'Play track to upload to (needs GOOGLE_PLAY_SERVICE_ACCOUNT_JSON). alpha = closed testing.'
         required: false
         default: 'alpha'
         type: choice
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Read by the upload step's `if`, which cannot see secrets directly.
-      PLAY_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+      PLAY_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -162,7 +162,7 @@ jobs:
         if: env.PLAY_JSON != ''
         uses: r0adkll/upload-google-play@v1.1.3
         with:
-          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.theprints3d.app
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
           track: ${{ github.event.inputs.track || 'alpha' }}
