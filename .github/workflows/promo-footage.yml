@@ -1,0 +1,90 @@
+name: Promo footage
+
+# The promo bot. Films the shot library in scripts/cinema.mjs (hero, explode,
+# storeys, trades, plan-to-model, turntable, vertical, nameplate) from the real
+# app build, in the cloud, and posts the clips to the "footage" release:
+#   https://github.com/Mitchelllorin/ThePrints3D/releases/tag/footage
+#
+# Nothing runs on RainMaker. Frames are stepped, not screen-recorded, so a slow
+# software GPU costs time and nothing else — every clip comes out an even frame
+# rate. Clips are silent on purpose: each app gets its own track in the edit.
+#
+# Weekly on its own, or any time from Actions → Promo footage → Run workflow.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'      # Mondays 06:17 UTC — Sunday night in Vancouver
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Shot ids, comma-separated (blank = the whole library)'
+        required: false
+        default: ''
+  push:
+    branches: [promo-bot]     # test runs while this is still on its branch
+    paths: ['.github/workflows/promo-footage.yml', 'scripts/cinema.mjs']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promo-footage
+  cancel-in-progress: false
+
+jobs:
+  film:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      ONLY: ${{ github.event.inputs.only || (github.event_name == 'push' && 'turntable,vertical') || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y -qq ffmpeg > /dev/null
+
+      - name: Build the app
+        run: npm run build
+
+      - name: Serve the build
+        run: |
+          npx vite preview --port 4173 --strictPort --host 127.0.0.1 > preview.log 2>&1 &
+          for i in $(seq 60); do curl -sf http://127.0.0.1:4173/ > /dev/null && exit 0; sleep 1; done
+          cat preview.log; exit 1
+
+      - name: Film
+        run: |
+          node scripts/cinema.mjs --url http://127.0.0.1:4173/ \
+            --fps 30 --scale 1.5 --stills --out footage ${ONLY:+--only "$ONLY"}
+
+      - name: Keep the run's clips
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: theprints3d-footage
+          path: |
+            footage/*.mp4
+            footage/*.png
+            footage/manifest.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Post to the footage release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          stamp=$(date -u +%Y-%m-%d)
+          gh release view footage > /dev/null 2>&1 || \
+            gh release create footage --prerelease --title "Promo footage" --notes "Filmed by the promo bot."
+          gh release edit footage --title "Promo footage — $stamp" \
+            --notes "Filmed $stamp from commit ${GITHUB_SHA::7} by .github/workflows/promo-footage.yml. Silent 1080p clips from the real app; vertical is 1080×1920 for Reels, Shorts and TikTok."
+          gh release upload footage footage/*.mp4 footage/*.png footage/manifest.json --clobber

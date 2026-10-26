@@ -81,6 +81,7 @@ function ffmpeg(ffArgs, what) {
 mkdirSync(OUT, { recursive: true })
 
 const browser = await chromium.launch({
+  executablePath: process.env.CHROME_PATH || undefined,
   headless: !HEADED,
   args: [
     // Headless Chromium falls back to SwiftShader for WebGL, which renders
@@ -159,10 +160,21 @@ async function openPage(frame, plan = 'medium') {
   page.on('pageerror', (e) => errors.push(String(e).split('\n')[0]))
 
   await page.goto(URL_, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+  // Wait for the front door to actually render before knocking: on a cold,
+  // software-rendered start the Launch button lands a couple of seconds after
+  // domcontentloaded, and a click before then finds nothing and moves on.
+  await page.getByRole('button', { name: /^Launch$/ }).waitFor({ timeout: 60_000 })
   await click(page, /^Launch$/)
   await page.waitForTimeout(1500)
 
   const label = PLAN_LABEL[plan] ?? PLAN_LABEL.medium
+  // The start page ranks Draw it / Open a plan / Scan first and keeps the three
+  // sample plans folded under "Other ways to start". Unfold it when the preset
+  // isn't already on screen.
+  if (!(await click(page, new RegExp(label)))) {
+    await click(page, /Other ways to start/)
+    await page.waitForTimeout(600)
+  }
   if (!(await click(page, new RegExp(label)))) {
     throw new Error(`preset "${label}" not offered — did the workspace open?`)
   }
