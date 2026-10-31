@@ -31,6 +31,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { worldDeltaToPixel } from './editMath'
 import { followWall, segYawDelta } from '../../services/openingFollow'
+import { getCatalogItem } from '../../data/objectCatalog'
 import type { ParsedWall } from '../../types'
 
 export type EditVerb = 'move' | 'rotate' | 'stretch'
@@ -48,6 +49,21 @@ export interface EditStep {
 }
 
 export interface SelectionEdit {
+  /**
+   * SIZE, BY THE AXIS YOU MEAN — placed objects only.
+   *
+   * Stretch scaled all three axes by one factor, so a countertop could only be
+   * made uniformly bigger: lengthening it also deepened and heightened it, and
+   * there was no way to fit one to a run. These are the object's real sizes
+   * (catalog default × its own scale) with a setter per axis, so the rail can
+   * offer "wider" and "deeper" as separate, honest controls.
+   */
+  size?: {
+    w: number
+    d: number
+    h: number
+    set: (axis: 'W' | 'D' | 'H', metres: number) => void
+  }
   /** Human name of what's selected, for the rail's caption. */
   label: string
   /** Only the verbs this selection can actually express. */
@@ -162,8 +178,21 @@ export function useSelectionEdit(): SelectionEdit | null {
     if (kind === 'object') {
       const o = placedObjects.find((x) => x.id === id)
       if (!o) return null
+      const item = getCatalogItem(o.type)
       return {
         label, verbs: ['move', 'rotate', 'stretch'] as EditVerb[],
+        size: item ? {
+          w: item.defaultW * o.scaleX,
+          d: item.defaultD * o.scaleZ,
+          h: item.defaultH * o.scaleY,
+          set: (axis, metres) => {
+            const base = axis === 'W' ? item.defaultW : axis === 'D' ? item.defaultD : item.defaultH
+            if (!(base > 0) || !(metres > 0)) return
+            updatePlacedObject(o.id, axis === 'W'
+              ? { scaleX: metres / base }
+              : axis === 'D' ? { scaleZ: metres / base } : { scaleY: metres / base })
+          },
+        } : undefined,
         remove: () => removePlacedObject(o.id),
         xray: {
           on: !!o.transparent,

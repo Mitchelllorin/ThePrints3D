@@ -13,6 +13,9 @@ import { useFloorplanLocalStore, defaultWallTypeForRole } from '../../store/useF
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
 import { roughOpening, tubAlcoveM } from '../../services/roughOpening'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
+import { stockSizes } from '../../data/objectSizes'
+import { pocketConflictsIn } from '../../services/pocketWall'
+import { doorStyle, doorTypeName, isHinged, isSlider } from '../../services/doorStyle'
 import { isDrawnSheet } from '../../services/drawnProject'
 import { planViewCamera } from '../../services/builtScene'
 import {
@@ -31,6 +34,8 @@ import { WALL_TYPES } from '../../data/members'
 import styles from './AmbientGuide.module.css'
 import EdgeDrawer from '../Layout/EdgeDrawer'
 import FinishesPanel from '../Layout/FinishesPanel'
+import MepSteps from './MepSteps'
+import type { Trade } from '../../services/mepWorkflow'
 import OpeningPositionRow from './OpeningPositionRow'
 
 // ── Discipline layer tabs (Framing/Plumbing/Electrical wired; HVAC placeholder)
@@ -808,12 +813,9 @@ export default function FloorplanPanel() {
   const areaActive = floorsActive || roofActive
   // Floors/roofs reuse the same trace flow as the trades (start/pause/picker/done),
   // just committing rectangles instead of lines.
-  const tradeActive = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac' || areaActive
+  const isMepTrade = activeTraceLayer === 'plumbing' || activeTraceLayer === 'electrical' || activeTraceLayer === 'hvac'
+  const tradeActive = isMepTrade || areaActive
   const layerLabel = LAYER_LABELS[activeTraceLayer]
-  // Devices-first nudge: how many electrical devices are already placed. The
-  // gentle prompt shows only until the first one is placed, then steps aside.
-  const elecTypes = electricalTrayItems().map((i) => i.type)
-  const placedElecCount = placedObjects.filter((o) => elecTypes.includes(o.type)).length
   // Compact indicator of what a trade trace will stamp.
   const tradeIndicator = activeTraceLayer === 'plumbing'
     ? `${plumbElement}${plumbElement === 'Supply Line' ? ` (${plumbTemp})` : ''} · ${plumbSize} · ${plumbMaterial}`
@@ -839,6 +841,14 @@ export default function FloorplanPanel() {
       }
     : null
   const objSubtypes = selectedObject ? SUBTYPES[selectedObject.type] : undefined
+  // What the door actually IS — the Type set on it, or its width when none is —
+  // so the card shows the door that is drawn and offers only its controls.
+  const selectedDoorStyle = selectedObject ? doorStyle(selectedObject) : null
+  // What is in this pocket door's pocket — a box, a fixture, a run. Read off
+  // the store directly: it is only wanted while a pocket door's card is open.
+  const pocketBlockers = selectedDoorStyle === 'pocket' && selectedObject
+    ? pocketConflictsIn(useAppStore.getState()).filter((c) => c.doorId === selectedObject.id)
+    : []
   /** Draw it's blank grid: no print, so nothing for Find the rest to find.
    *  The detection code stays — it is still the tool on a real print. */
   const onDrawnSheet = isDrawnSheet(drawing)
@@ -1176,27 +1186,23 @@ export default function FloorplanPanel() {
               </div>
             </div>
             )
+          ) : isMepTrade ? (
+            // The MEP standard: the same three steps for every trade.
+            <MepSteps
+              // A fresh card per trade: its step and its last message are its own.
+              key={activeTraceLayer}
+              trade={activeTraceLayer as Trade}
+              level={activeLevel}
+              armedType={placeObjectType}
+              // Clear the plan for the tap that places it.
+              onPlace={(t) => { armPlace(t); if (placeObjectType !== t) setDrawerOpen('build', false) }}
+              onDrawRun={confirmWallType}
+              onPanelBoard={activeTraceLayer === 'electrical' ? openPanelBoard : undefined}
+            />
           ) : (
             <div className={styles.step}>
               <span className={styles.stepLabel}>{layerLabel}</span>
-              {activeTraceLayer === 'electrical' && placedElecCount === 0 ? (
-                <>
-                  <span className={styles.stepText}>Start with the boxes</span>
-                  <span className={styles.stepHint}>Tap one to place it.</span>
-                  <div className={styles.btnRow} style={{ flexWrap: 'wrap' }}>
-                    {electricalTrayItems().map((item) => (
-                      <button
-                        key={item.type}
-                        className={placeObjectType === item.type ? styles.action : styles.secondary}
-                        onClick={() => armPlace(item.type)}
-                        title={item.label}
-                      >
-                        {item.short}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : floorsActive ? (
+              {floorsActive ? (
                 <span className={styles.stepText}>Pull a floor — tap opposite corners to lay joists</span>
               ) : roofActive ? (
                 <span className={styles.stepText}>Pull a roof — tap opposite corners for a gable</span>
@@ -1222,7 +1228,6 @@ export default function FloorplanPanel() {
                   {floorsActive ? 'Pull a floor →' : roofActive ? 'Pull a roof →' : `Trace ${layerLabel.toLowerCase()} →`}
                 </button>
                 <button className={styles.secondary} onClick={openPicker}>Choose type</button>
-                {activeTraceLayer === 'electrical' && <button className={styles.secondary} onClick={openPanelBoard}>Panel board</button>}
               </div>
             </div>
           )
@@ -1902,7 +1907,9 @@ export default function FloorplanPanel() {
             in Settings next to the grid colour, which meant leaving the thing you
             were doing to decide about the thing you were doing. Last in the
             drawer because it is the last stage of the work. */}
-        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && !traceMode && (
+        {/* Not under a trade: finishes are not MEP, and they made the trade
+            view a long scroll. */}
+        {showSteps && drawing.status === 'ready' && !overlay.calibrationMode && !traceMode && !isMepTrade && (
           <div className={styles.step}>
             <span className={styles.stepLabel}>Finishes</span>
             <FinishesPanel />
@@ -1923,6 +1930,12 @@ export default function FloorplanPanel() {
             <span className={styles.propTitle}>{selectedObject.label}</span>
             <button className={styles.cardClose} onClick={() => setSelectedObjectId(null)} aria-label="Close">✕</button>
           </div>
+          {/* REMOVE, FIRST — Mitchell, 26 Oct 2026: tap a wall and it offers to
+              remove it; a door should do the same. The Delete here was the last
+              of four buttons at the foot of a long card. One undo brings it back. */}
+          <button className={styles.removeBtn} onClick={deleteSelectedObject}>
+            Remove this {selectedObject.label.toLowerCase()}
+          </button>
           {(['W', 'D', 'H'] as const).map((axis) => {
             const { ft, in: inch } = metresToFtIn(objDims[axis])
             const labelMap = { W: 'Width', D: 'Depth', H: 'Height' }
@@ -1938,6 +1951,46 @@ export default function FloorplanPanel() {
               </div>
             )
           })}
+          {/* STOCK SIZES, PER AXIS.
+              Every catalogue item had exactly one size and no way to fit it to a
+              room, so a countertop could only be the length the catalogue felt
+              like. These are the sizes the thing is bought in — a 5' alcove tub,
+              a 6' slider, a 30" vanity, a 6" can — one tap each, on whichever
+              axes that item is actually sold by (see data/objectSizes: a door has
+              no bought depth, a case has no bought height, and no button is
+              offered for an axis that has no sizes). The steps are the stock
+              list; typing is still there for a size that is not on it.
+              The chip that matches the current size lights up, so you can see
+              which stock size the thing in front of you is. */}
+          {(() => {
+            const sizes = stockSizes(selectedObject.type)
+            if (!sizes) return null
+            const rows: Array<['W' | 'D' | 'H', number[] | undefined, string]> = [
+              ['W', sizes.w, 'Length'],
+              ['D', sizes.d, 'Depth'],
+              ['H', sizes.h, 'Height'],
+            ]
+            return rows.map(([axis, values, label]) => {
+              if (!values?.length) return null
+              return (
+                <div key={axis} className={styles.propRow}>
+                  <span className={styles.propLabel}>{label}</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, minWidth: 0 }}>
+                    {values.map((inches) => (
+                      <button
+                        key={inches}
+                        className={Math.abs(objDims[axis] - inches * 0.0254) < 0.003 ? styles.action : styles.secondary}
+                        style={{ padding: '5px 9px', fontSize: 12 }}
+                        onClick={() => setObjectDim(axis, inches * 0.0254)}
+                      >
+                        {inches}″
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })
+          })()}
           {selectedObject.type === 'window' && (() => {
             const { ft, in: inch } = metresToFtIn(selectedObject.sillM ?? 0.9)
             return (
@@ -1960,9 +2013,31 @@ export default function FloorplanPanel() {
           {/* No hinge on an overhead door, so no hand to choose. Offering LH/RH
               on a sectional garage door is a control that cannot do anything —
               worse than missing, because it implies the model is wrong. Same
-              width test the 3D uses. */}
-          {selectedObject.type === 'door'
-            && ((selectedObject.scaleX ?? 1) * (getCatalogItem('door')?.defaultW ?? 0.9)) < 2.1 && (
+              style the 3D draws (services/doorStyle). */}
+          {/* SLIDERS AND POCKETS have a side, not a hand: which panel moves, or
+              which side of the opening the pocket is in. Same `swing` field, so
+              flipping a door's Type keeps the side it was set to. */}
+          {(isSlider(selectedDoorStyle) || selectedDoorStyle === 'pocket') && (
+            <div className={styles.propRow}>
+              <span className={styles.propLabel}>{selectedDoorStyle === 'pocket' ? 'Pocket' : 'Moves'}</span>
+              <div className={styles.btnRow}>
+                <button className={(selectedObject.swing ?? 'left') === 'left' ? styles.action : styles.secondary}
+                  onClick={() => updatePlacedObject(selectedObject.id, { swing: 'left' })}
+                  title={selectedDoorStyle === 'pocket' ? 'The door slides into the wall on the left' : 'The left panel slides'}>Left</button>
+                <button className={selectedObject.swing === 'right' ? styles.action : styles.secondary}
+                  onClick={() => updatePlacedObject(selectedObject.id, { swing: 'right' })}
+                  title={selectedDoorStyle === 'pocket' ? 'The door slides into the wall on the right' : 'The right panel slides'}>Right</button>
+              </div>
+            </div>
+          )}
+          {pocketBlockers.length > 0 && (
+            <p className={styles.warnText} style={{ margin: '2px 0' }}>
+              ⚠ In the pocket: {[...new Set(pocketBlockers.map((c) => c.what))].join(', ')}. The pocket
+              wall is hollow, so move {pocketBlockers.length === 1 ? 'it' : 'them'} past the end of the
+              pocket or flip the pocket to the other side.
+            </p>
+          )}
+          {isHinged(selectedDoorStyle) && (
             <>
               {/* HAND AND DIRECTION, because a door needs both to be ordered.
                   "LH" alone leaves the leaf pointing whichever way the drawing
@@ -1998,7 +2073,7 @@ export default function FloorplanPanel() {
             {objSubtypes ? (
               <select
                 className={styles.select}
-                value={selectedObject.subtype ?? objSubtypes[0]}
+                value={selectedDoorStyle ? doorTypeName(selectedDoorStyle) : (selectedObject.subtype ?? objSubtypes[0])}
                 onChange={(e) => updatePlacedObject(selectedObject.id, { subtype: e.target.value })}
               >
                 {objSubtypes.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -2166,7 +2241,6 @@ export default function FloorplanPanel() {
             >
               {detailExplodeId === selectedObject.id ? 'Collapse' : 'Explode parts'}
             </button>
-            <button className={styles.secondary} onClick={deleteSelectedObject}>Delete</button>
           </div>
           {/* No re-build step: moving a door or window re-frames the opening on
               its own (useAutoBuild tracks placed openings). Done just closes

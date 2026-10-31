@@ -224,7 +224,7 @@
   border: 1px solid color-mix(in srgb, var(--bp-accent, #38bdf8) 35%, transparent);
   border-radius: 999px;
   cursor: pointer;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--ink-on-model);
 }
 .enableAi:hover { background: color-mix(in srgb, var(--bp-accent, #38bdf8) 20%, transparent); }
 
@@ -252,7 +252,7 @@
   pointer-events: auto;
   font-size: 11px;
   color: var(--bp-accent, #38bdf8);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  text-shadow: var(--ink-on-model);
 }
 .aiLink {
   background: none;
@@ -276,7 +276,7 @@
   border: 1px solid color-mix(in srgb, #fbbf24 40%, transparent);
   border-radius: 999px;
   cursor: pointer;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  text-shadow: var(--ink-on-model);
 }
 .checkBuild:hover { background: color-mix(in srgb, #fbbf24 20%, transparent); }
 .checkBuild:disabled { opacity: 0.5; cursor: default; }
@@ -462,7 +462,7 @@
   border: none;
   cursor: pointer;
   text-decoration: underline;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  text-shadow: var(--ink-on-model);
 }
 
 /* ✦ tag on brain-produced answers */

@@ -40,7 +40,7 @@
   font-size: 11px;
   color: var(--bp-text-dim, #94a3b8);
   text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  text-shadow: var(--ink-on-model);
 }
 
 /* First launch only: the sentence that says what they're being offered, and the
@@ -54,7 +54,7 @@
   font-weight: 600;
   color: var(--bp-text, #f1f5f9);
   text-align: center;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
 }
 
 .uploadHintPrimary {
@@ -89,7 +89,7 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--ink-on-model);
   transition: background 0.12s;
 }
 .uploadHintChip:hover { background: color-mix(in srgb, var(--bp-accent, #38bdf8) 24%, transparent); }
@@ -108,7 +108,7 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--ink-on-model);
   transition: color 0.12s, border-color 0.12s;
 }
 .showcaseChip:hover {
@@ -146,7 +146,7 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--bp-text, #e2e8f0);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--ink-on-model);
   white-space: nowrap;
 }
 
@@ -170,7 +170,7 @@
   font-weight: 500;
   cursor: pointer;
   text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--ink-on-model);
   transition: background 0.12s, border-color 0.12s;
 }
 /* Back out of a picked plan. Quiet — it is an escape hatch, not an action —
@@ -557,7 +557,7 @@
   text-transform: uppercase;
   letter-spacing: 0.6px;
   opacity: 0.82;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
   transition: opacity 0.12s, color 0.12s;
 }
 .editToggle:hover { opacity: 1; color: var(--bp-text, #f1f5f9); }
@@ -608,7 +608,7 @@
   font-weight: 700;
   letter-spacing: 0.4px;
   color: var(--bp-text-dim, #94a3b8);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
   white-space: nowrap;
   pointer-events: auto;
 }
@@ -694,7 +694,7 @@
   letter-spacing: 0.6px;
   color: var(--bp-text-dim, #94a3b8);
   white-space: nowrap;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
   opacity: 0;
   transition: opacity 0.12s;
   pointer-events: none;
@@ -724,7 +724,7 @@
   letter-spacing: 0.4px;
   text-transform: uppercase;
   cursor: pointer;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
 }
 .explodeReset:hover { color: var(--bp-text, #f1f5f9); }
 /* When the bottom Place sheet is open, float the explode control ABOVE it so it
@@ -797,7 +797,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--bp-text-dim, #94a3b8);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
 }
 /* The picked-member rail: what you are holding, and the verb for it. Sits just
    under the grain switch on the right edge, same container-less language. */
@@ -820,7 +820,7 @@
   letter-spacing: 0.3px;
   color: var(--bp-text-dim, #94a3b8);
   opacity: 0.8;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
   transition: color 0.12s, opacity 0.12s;
 }
 .grainBtn:hover { opacity: 1; color: var(--bp-text, #f1f5f9); }
@@ -876,6 +876,91 @@
 }
 .editRail::-webkit-scrollbar { width: 0; height: 0; }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   THE EDIT DOCK — Mitchell, 26 Oct 2026: "the rotating and the directional
+   arrows, you can't see any of that." The rail above was 20px dim-grey marks
+   with no surface, floating down the right edge over the model: invisible on
+   white siding or the print, and standing on the building it was editing.
+
+   So the same controls dock along the BOTTOM edge, on one glass strip: the
+   perimeter, where the thumb already is, clear of the left rail and the
+   explode column. Real buttons (36px, bright glyphs) on a tinted, blurred
+   surface read over anything. One row; it scrolls sideways on a narrow phone
+   rather than climbing into the model. Same markup, so every verb that was in
+   the rail (stairs included) comes along.
+   ──────────────────────────────────────────────────────────────────────────── */
+.editRail {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  top: auto;
+  max-width: calc(100vw - 112px);
+  max-height: none;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  align-content: normal;
+  gap: 12px;
+  padding: 6px 12px 7px;
+  border-radius: 14px;
+  background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.84);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  overflow-x: auto;
+  overflow-y: hidden;
+  z-index: var(--z-hud);
+}
+.editRail .editRailLabel {
+  align-self: center;
+  max-width: 72px;
+  font-size: 10px;
+  line-height: 1.15;
+  white-space: normal;
+  text-align: center;
+}
+.editRail .editRailGroup { flex: 0 0 auto; gap: 3px; }
+.editRail .editRailCaption { font-size: 9px; color: #cbd5e1; }
+.editRail .editRailBtn,
+.editRail .editRailPad .editRailBtn,
+.editRail .editRailPair .editRailBtn {
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  border-radius: 9px;
+  background: rgba(148, 163, 184, 0.14);
+  color: #f1f5f9;
+  font-size: 19px;
+  font-weight: 600;
+}
+.editRail .editRailBtn:active { background: rgba(56, 189, 248, 0.3); color: #fff; }
+.editRail .editRailBtnOn { background: rgba(56, 189, 248, 0.28); color: var(--bp-accent, #38bdf8); }
+.editRail .editRailDanger { color: #fca5a5; }
+/* The move pad, laid flat: ← ↑ ↓ → in one row of real buttons. */
+.editRail .editRailPad {
+  grid-template-areas: 'left up down right';
+  grid-template-columns: repeat(4, 36px);
+  grid-template-rows: 36px;
+  gap: 4px;
+}
+.editRail .editRailPair { gap: 4px; }
+.editRail .editRailStep {
+  align-self: center;
+  min-width: 40px;
+  padding: 6px 4px;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.14);
+  color: #e2e8f0;
+  font-size: 11px;
+}
+.editRail .editRailNote,
+.editRail .editRailWarn { align-self: center; font-size: 11px; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .editRail { background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.95); }
+}
+
 /* What's selected — the rail's only prose, so you know what the buttons act on. */
 .editRailLabel {
   color: var(--bp-accent, #38bdf8);
@@ -925,7 +1010,7 @@
   color: var(--bp-text-dim, #94a3b8);
   font-size: 16px;
   line-height: 1;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
   transition: color 0.12s;
 }
 .editRailBtn:hover { color: var(--bp-text, #f1f5f9); }
@@ -974,7 +1059,7 @@
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
 }
 /* Code failures, collapsed to a count. The detail is on hover rather than
    spread across the workspace. */
@@ -983,7 +1068,7 @@
   font-size: 10px;
   font-weight: 700;
   cursor: help;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
 }
 
 /* Step chip — tap to cycle 1/6/12 of the active unit. */
@@ -996,7 +1081,7 @@
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.4px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
 }
 .editRailStep:hover { color: var(--bp-accent, #38bdf8); }
 
@@ -1013,7 +1098,7 @@
   padding: 3px 0;
   text-align: center;
   border-radius: 4px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
   transition: background 0.12s, color 0.12s;
 }
 .floorBtn:hover { color: var(--bp-text, #f1f5f9); }
@@ -1221,4 +1306,26 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* ── ON THE MODEL: LIGHT INK, DARK EDGE ─────────────────────────────────────
+   These labels float over the 3D view with no box of their own, in the dim
+   theme grey. Over the white print, grey on white was half gone even with a
+   shadow (Mitchell, 26 Oct 2026). They stay container-less, but in near-white
+   ink with the hard outline from --ink-on-model, which reads over any colour.
+   The accent and warning tints keep their colour; only the grey goes. */
+.sheetNote,
+.editToggle,
+.explodeLabel,
+.explodeReset,
+.grainCaption,
+.grainBtn,
+.floorBtn,
+.showcaseChip,
+.moreWays {
+  color: #e8eef5;
+  text-shadow: var(--ink-on-model);
+}
+.uploadHintChip {
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 22%, var(--hud-plate));
 }

@@ -666,12 +666,9 @@ export default function ModelViewer() {
   // Zoom is driven from TopIcons (DOM) via the cameraControls singleton, which
   // mirrors the OrbitControls ref above — so the +/- sat inline with Undo/Redo.
 
-  // The camera stays free to orbit even mid-trace — it's only locked while a
-  // gesture must own the pointer (dragging an overlay handle or freehand-drawing).
-  // Pan is disabled while actively tracing (not paused) so accidental two-finger
-  // swipes don't shift the camera target while tapping trace points. When trace
-  // is paused (double-tap to look around) pan is re-enabled so users can
-  // re-center the print if it has drifted out of view.
+  // Mid-trace the camera zooms and pans but does not rotate — see drawingLocked
+  // below. It locks entirely only while a gesture must own the pointer
+  // (dragging an overlay handle or freehand-drawing).
   // LOCK the workspace while an object is armed for placement — the action owns
   // the pointer, so a tap/drag places precisely instead of orbiting the camera
   // (fighting the workspace). Same "action locks, idle unlocks" model as tracing.
@@ -740,7 +737,18 @@ export default function ModelViewer() {
       window.removeEventListener('blur', release)
     }
   }, [])
-  const panEnabled = (!traceMode || tracePaused) && !placing
+  /**
+   * DRAWING WALLS: ZOOM AND PAN, NEVER TURN — Mitchell, 25 Oct 2026.
+   *
+   * While tracing, one finger (or the left button) is the pencil, so the view
+   * does not rotate under it: a drag that used to orbit the model mid-trace now
+   * does nothing, and a tap still drops a point. Two fingers pinch to zoom and
+   * drag to pan; on a mouse the wheel zooms and the right button pans. Pan used
+   * to be off mid-trace, which left a zoomed-in plan with no way to slide along
+   * to the next wall. Pausing (double-tap to look around) gives rotation back.
+   */
+  const drawingLocked = traceMode && !tracePaused
+  const panEnabled = !placing
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault()
@@ -1004,8 +1012,12 @@ export default function ModelViewer() {
         <FloorplanPanel />
       </div>
 
+      {/* SHADOW FILTER — three r184 deprecated PCFSoftShadowMap: WebGLShadowMap
+          warns and then filters as PCFShadowMap anyway. R3F's bare `shadows`
+          shorthand asks for the soft type, so name the replacement explicitly.
+          Same filtering, one less warning on every load. */}
       <Canvas
-        shadows
+        shadows="percentage"
         dpr={[1, 2]}
         /* DEPTH PRECISION — the "flashy glitches", and the reason they change as
            you orbit.
@@ -1160,7 +1172,7 @@ export default function ModelViewer() {
           enabled={orbitEnabled}
           /* Straight down and STAYS down. Orbiting a plan view is how you end
              up unsure whether a line sits on the drawing or above it. */
-          enableRotate={!planView}
+          enableRotate={!planView && !drawingLocked}
           enableDamping
           dampingFactor={0.12}
           rotateSpeed={0.6}

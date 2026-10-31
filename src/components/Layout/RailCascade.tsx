@@ -18,7 +18,8 @@ import { trayItems } from '../../data/objectCatalog'
 import LayersPanel from './LayersPanel'
 import FramingPanel from './FramingPanel'
 import FusePanel from './FusePanel'
-import { useCanBuyPro } from '../Pro/usePro'
+import { useCanBuyPro, useIsPro } from '../Pro/usePro'
+import { sharePicture, type ShareOutcome } from '../../services/sharePicture'
 import { PRO_REASON_GENERAL } from '../Pro/UpgradeSheet'
 import { planViewCamera } from '../../services/builtScene'
 import styles from './RailCascade.module.css'
@@ -50,6 +51,38 @@ function StudsIcon() {
       <path d="M3.5 5h17" />
       <path d="M3.5 19h17" />
       <path d="M6 5v14M12 5v14M18 5v14" />
+    </svg>
+  )
+}
+
+/** Share: the usual box with an arrow leaving it, in the rail's thin marks. */
+function ShareIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    >
+      <path d="M12 3.5v11" />
+      <path d="M8 7.5 12 3.5l4 4" />
+      <path d="M8.5 11H6.2A1.2 1.2 0 0 0 5 12.2v7.1A1.2 1.2 0 0 0 6.2 20.5h11.6a1.2 1.2 0 0 0 1.2-1.2v-7.1A1.2 1.2 0 0 0 17.8 11h-2.3" />
+    </svg>
+  )
+}
+
+/** Patio door: two glass panels lapping on one track, seen square on. The tray
+ *  used to show 🚪 for this — the same glyph as a plain swing door, which is the
+ *  one thing a patio slider is not. Two panes at different fills say "one slides
+ *  past the other" even at 16px, which no emoji door can. */
+function SliderDoorIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinejoin="round" aria-hidden
+    >
+      <rect x="2" y="5" width="20" height="14" rx="1" />
+      <rect x="4" y="7" width="8.4" height="10" fill="currentColor" opacity="0.18" stroke="none" />
+      <rect x="12.6" y="7" width="7.4" height="10" fill="currentColor" opacity="0.34" stroke="none" />
+      <path d="M12.6 5v14" />
     </svg>
   )
 }
@@ -193,6 +226,19 @@ export default function RailCascade() {
   const setRailPanelOpen = useFloorplanLocalStore((s) => s.setRailPanelOpen)
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
   const canBuyPro = useCanBuyPro()
+  const isPro = useIsPro()
+  // What the last share did, said on the button for a moment instead of a dialog.
+  const [shareSaid, setShareSaid] = useState<ShareOutcome | null>(null)
+  // The native sheet takes a beat to open; a second tap in that beat is not a second share.
+  const [sharing, setSharing] = useState(false)
+  const share = async () => {
+    if (sharing) return
+    setSharing(true)
+    const outcome = await sharePicture(isPro).finally(() => setSharing(false))
+    if (outcome === 'cancelled' || outcome === 'shared') return
+    setShareSaid(outcome)
+    window.setTimeout(() => setShareSaid(null), 2500)
+  }
   useEffect(() => { setRailPanelOpen(layersOpen || placeOpen || framingOpen || fuseOpen) }, [layersOpen, placeOpen, framingOpen, fuseOpen, setRailPanelOpen])
   // First tap arms Clear, second does it. See the button for why.
   const [clearArmed, setClearArmed] = useState(false)
@@ -335,6 +381,26 @@ export default function RailCascade() {
           </button>
         )}
 
+        {/* SHARE — the picture, straight to the phone's share sheet.
+            Mitchell, 25 Oct 2026: he drew a layout on a real job, framed it and
+            screenshotted it to his boss. The screenshot was the workaround; the
+            old Share PNG was a download buried in Settings. One tap here, from
+            whatever the view is showing. See services/sharePicture. */}
+        {hasDrawings && !traceMode && (
+          <button
+            className={styles.icon}
+            onClick={share}
+            disabled={sharing}
+            aria-busy={sharing}
+            title="Share a picture of this view — text, email, anywhere"
+          >
+            <span className={styles.glyph}><ShareIcon /></span>
+            <span className={styles.iconLabel}>
+              {sharing ? 'Wait' : shareSaid === 'downloaded' ? 'Saved' : shareSaid === 'failed' ? 'Retry' : 'Share'}
+            </span>
+          </button>
+        )}
+
         {/* EDIT — a verb, so it belongs with the other verbs.
             It used to float on its own at bottom-left, which put it directly
             beside CLEAR: the exact adjacency Clear was moved to the foot to
@@ -442,7 +508,9 @@ export default function RailCascade() {
               onClick={() => armObject(item.type)}
               title={item.label}
             >
-              <span className={styles.rowGlyph}>{item.icon}</span>
+              <span className={styles.rowGlyph}>
+                {item.glyph === 'patio-slider' ? <SliderDoorIcon /> : item.icon}
+              </span>
               <span className={styles.rowLabel}>{item.short}</span>
             </button>
           ))}

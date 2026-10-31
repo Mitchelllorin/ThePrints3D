@@ -21,6 +21,9 @@ const OWN_SITE = {
   href: 'https://theprints3d.com',
 } as const
 
+/** The family's own site: every app in one place. Shown after the list, not in it. */
+const FAMILY_HOME = 'https://3dlearningfamily.com'
+
 type SiblingApp = {
   name: string
   line: string
@@ -72,6 +75,12 @@ export default function StudioCredit({ className, variant = 'full' }: Props) {
                 </span>
               </li>
             ))}
+            <li className={styles.item}>
+              <a className={styles.appLink} href={FAMILY_HOME} target="_blank" rel="noopener noreferrer">
+                The 3D Learning Family
+              </a>
+              <span className={styles.line}>Every app, in one place.</span>
+            </li>
           </ul>
         </>
       )}

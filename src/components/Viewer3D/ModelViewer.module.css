@@ -184,7 +184,7 @@
   white-space: nowrap;
   min-height: 32px;
   opacity: 0.85;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  text-shadow: var(--ink-on-model);
 }
 
 .toolBtn:hover {
@@ -227,7 +227,7 @@
   color: #cbd5e1;
   padding-left: 4px;
   white-space: nowrap;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  text-shadow: var(--ink-on-model);
 }
 
 .explodeSlider {

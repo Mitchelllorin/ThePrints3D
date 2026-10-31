@@ -18,14 +18,13 @@ import TutorialCoach from './TutorialCoach'
 import Logo3DBadge from './Logo3DBadge'
 import AnnotationPanel from '../Annotations/AnnotationPanel'
 import AskAI from './AskAI'
-import CorpusPanel from './CorpusPanel'
 import StudioCredit from './StudioCredit'
 import { useSelectionEdit } from '../Viewer3D/selectionEdit'
 import { planViewCamera } from '../../services/builtScene'
 import UpgradeSheet from '../Pro/UpgradeSheet'
 import ProSection from '../Pro/ProSection'
 import { markToured } from '../../onboarding/firstRun'
-import { watermarkedPng } from '../../services/watermark'
+import { sharePicture } from '../../services/sharePicture'
 import { solveStair, stairIssues, stairShapeFromSubtype } from '../../services/stairs'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { useAppStore } from '../../store/useAppStore'
@@ -273,13 +272,6 @@ function SettingsContent() {
         <Select label="Corner" val={cfg.cornerType} options={[{ value: 'three-stud', label: 'Three-stud' }, { value: 'california', label: 'California (2-stud)' }]} onChange={(v) => setCfg({ cornerType: v as 'three-stud' | 'california' })} />
       </CollapsibleSection>
 
-      {/* The corpus has been recording since it was built and had no surface at
-          all — including no way to reach `forgetEverything`. A delete you can
-          only perform by editing the source is not a delete. */}
-      <CollapsibleSection id="kept" title="What this app keeps" openId={openId} setOpenId={setOpenId}>
-        <CorpusPanel />
-      </CollapsibleSection>
-
       <CollapsibleSection id="roof" title="Roof" openId={openId} setOpenId={setOpenId}>
         <Slider label="Eave / soffit overhang" val={cfg.roofOverhangIn} min={0} max={36} step={1} unit={'"'} onChange={(v) => setCfg({ roofOverhangIn: v })} />
       </CollapsibleSection>
@@ -304,7 +296,7 @@ function SettingsContent() {
           ProjectLibrary is a complete save/list/load UI for it — imported by
           nothing, so an uploaded print died on reload. On a job site that is not
           a missing feature, it is losing your work. */}
-      <CollapsibleSection id="projects" title="Jobs" openId={openId} setOpenId={setOpenId}>
+      <CollapsibleSection id="projects" title="Jobs — save & load" openId={openId} setOpenId={setOpenId}>
         <ProjectLibrary inline />
       </CollapsibleSection>
 
@@ -325,6 +317,11 @@ function SettingsContent() {
             and it now actually drives the model (see useSceneConfig). Range is
             7ft to 13ft — a residential 8ft default sits near the bottom. */}
         <Slider label="Ceiling height" val={cfg.ceilingHeightM ?? 2.44} min={2.1} max={4} step={0.05} unit="m" onChange={(v) => setCfg({ ceilingHeightM: v })} />
+        {/* BULKHEAD HEIGHT AND DEPTH. The soffit the model drew was a fixed box;
+            these are the two numbers that decide whether it clears a duct, a
+            beam, or the head of the door beside it. */}
+        <Slider label="Bulkhead drop" val={cfg.bulkheadDropIn} min={4} max={24} step={1} unit={'"'} onChange={(v) => setCfg({ bulkheadDropIn: v })} />
+        <Slider label="Bulkhead depth" val={cfg.bulkheadDepthIn} min={12} max={48} step={1} unit={'"'} onChange={(v) => setCfg({ bulkheadDepthIn: v })} />
         <Select label="Type" val={cfg.buildType} options={BUILD_TYPE_OPTIONS} onChange={(v) => setCfg({ buildType: v as BuildingType })} />
         <Toggle label="Auto framing" val={cfg.buildAutoEnableFraming} onChange={(v) => setCfg({ buildAutoEnableFraming: v })} />
         <Toggle label="Auto shell (slab → fascia)" val={cfg.buildAutoShell} onChange={(v) => setCfg({ buildAutoShell: v })} />
@@ -631,11 +628,9 @@ export default function WorkspaceLayout() {
   const setUI               = useUISettingsStore((s) => s.set)
   const showcaseCladding    = useUISettingsStore((s) => s.cladding)
   const hasHistory = useAppStore((s) => s.historyPast.length > 0)
-  const selectionGranularity = useFloorplanLocalStore((s) => s.selectionGranularity)
   const selectedMemberLabel = useFloorplanLocalStore((s) => s.selectedMemberLabel)
   const isolatedMemberId = useFloorplanLocalStore((s) => s.isolatedMemberId)
   const setIsolatedMember = useFloorplanLocalStore((s) => s.setIsolatedMember)
-  const setSelectionGranularity = useFloorplanLocalStore((s) => s.setSelectionGranularity)
   const traceModeActive = useFloorplanLocalStore((s) => s.traceMode)
   const traceStartPt = useFloorplanLocalStore((s) => s.traceStart)
   const pendingTrace = useFloorplanLocalStore((s) => s.pendingWalls)
@@ -829,11 +824,18 @@ export default function WorkspaceLayout() {
    * Build → Framing. The chain below is kept, switched off, not deleted.
    */
   const BUILD_ORDER_PROMPTS = false
+  /**
+   * "STAND THEM UP" IS OFF THE CHIP — Mitchell, 25 Oct 2026. It sat at the foot
+   * of the screen saying "Stand them up · 9 walls" over walls already standing,
+   * and it was in the very screenshot he sent his boss. Standing walls is one
+   * button in Build (FloorplanPanel), where it was all along.
+   */
+  const STAND_THEM_UP_CHIP = false
   const nextStep = !planReady || traceMode || inCalibration
     ? null
     : !scaleIsRead && !calibrationHandled
       ? { label: 'Set the scale', note: "couldn't read it", run: setScale }
-      : planWalls > 0 && modelIdle
+      : STAND_THEM_UP_CHIP && planWalls > 0 && modelIdle
         ? { label: 'Stand them up', note: `${planWalls} wall${planWalls === 1 ? '' : 's'}`, run: standThemUp }
         : modelIdle || !BUILD_ORDER_PROMPTS
           ? null
@@ -935,20 +937,9 @@ export default function WorkspaceLayout() {
 
   // Free exports carry a corner mark; Pro exports the canvas untouched. The
   // export itself is never blocked — a share is how other trades find the app,
-  // so the free tier keeps it and simply signs it.
-  const sharePng = () => {
-    const canvas = document.querySelector('canvas') as HTMLCanvasElement | null
-    if (!canvas) return
-    try {
-      const a = document.createElement('a')
-      a.href = isPro ? canvas.toDataURL('image/png') : watermarkedPng(canvas)
-      a.download = `theprints3d-${Date.now()}.png`
-      a.click()
-    } catch (e) {
-      console.error('Snapshot failed', e)
-      alert('Snapshot failed — orbit the view once, then retry.')
-    }
-  }
+  // so the free tier keeps it and simply signs it. Same path as the rail's
+  // Share button — see services/sharePicture.
+  const sharePng = () => { void sharePicture(isPro) }
 
   // Re-run Wizard — ensure a build (so decisions exist), then open the wizard
   // panel (mounted by ModelViewer) and close the chrome panel.
@@ -1429,31 +1420,16 @@ export default function WorkspaceLayout() {
             is an axis-aligned rect with no rotation field, so it gets Move ·
             Stretch and no Rotate button that would spin nothing.
 
-            Lives in the chrome on the right edge, mirroring the left rail, so it
-            never sits on top of the thing you are editing. */}
-        {/* WHAT THE NEXT TAP WILL PICK.
-            Shown whenever edit mode is on, with or without a selection — the
-            whole value of a stated mode is knowing BEFORE you tap. Tapping a stud
-            and getting the whole wall is right most of the time and useless the
-            rest of it, and guessing from tap-length or zoom would make an already
-            sensitive editor unpredictable.
-            One switch for the entire model, because the distinction is the same
-            everywhere: wall/stud, deck/joist, roof/rafter. */}
+            Docked along the bottom edge on its own glass strip (26 Oct 2026) —
+            it used to float down this right edge as dim marks nobody could see.
+            The markup stays here; .editRail positions it. */}
+        {/* TAP AGAIN TO GO DEEPER. There used to be a Whole / Member switch
+            here; tapping the same spot again now steps through everything
+            under the finger — wall, stud, floor, joist — and round again
+            (see Viewer3D/tapCycle). All that is left to say is that it does. */}
         {editMode && !traceMode && !calibrationMode && (
           <div className={styles.grainSwitch}>
-            <span className={styles.grainCaption}>Select</span>
-            <button
-              className={`${styles.grainBtn} ${selectionGranularity === 'assembly' ? styles.grainBtnOn : ''}`}
-              onClick={() => setSelectionGranularity('assembly')}
-              title="Tap picks the whole wall, deck or roof"
-              aria-pressed={selectionGranularity === 'assembly'}
-            >Whole</button>
-            <button
-              className={`${styles.grainBtn} ${selectionGranularity === 'member' ? styles.grainBtnOn : ''}`}
-              onClick={() => setSelectionGranularity('member')}
-              title="Tap picks the single stud, plate, joist or rafter under it"
-              aria-pressed={selectionGranularity === 'member'}
-            >Member</button>
+            <span className={styles.grainCaption}>Tap again for what's behind</span>
           </div>
         )}
 
@@ -1527,6 +1503,55 @@ export default function WorkspaceLayout() {
               </div>
             )}
 
+            {/* SIZE, BY AXIS — Mitchell, 31 Oct 2026: a countertop could only be
+                stretched uniformly, so it could never be fitted to a run. These
+                are the object's real Width and Depth, stepped in 6" — the same
+                six inches a cabinet is sold in — and read back on the caption
+                so you can see what the thing actually is while you size it.
+                The card (⋯) still has the exact ft/in fields for a typed size. */}
+            {selectionEdit.size && (() => {
+              /* THE STEP MATCHES THE THING. Six inches is how a cabinet is sold
+                 and the right nudge for a counter — on a 4" recessed can it is
+                 not a nudge, it is a different fixture. So the step is roughly a
+                 tenth of what is selected, rounded to a number a person would
+                 say out loud: 1", 2", 3", 6", 12". A can moves in inches, a
+                 sofa in feet, one control. */
+              const stepFor = (metres: number) => {
+                const raw = (metres / 0.0254) * 0.1
+                const inches = raw <= 1 ? 1 : raw <= 2 ? 2 : raw <= 4 ? 3 : raw <= 8 ? 6 : 12
+                return inches * 0.0254
+              }
+              const size = selectionEdit.size
+              const sw = stepFor(size.w)
+              const sd = stepFor(size.d)
+              return (
+                <>
+                  <div className={styles.editRailGroup}>
+                    <span className={styles.editRailCaption}>
+                      W {Math.round(size.w / 0.0254)}″
+                    </span>
+                    <div className={styles.editRailPair}>
+                      <button className={styles.editRailBtn} aria-label={`Narrower by ${Math.round(sw / 0.0254)} inches`}
+                        onClick={() => size.set('W', size.w - sw)}>−</button>
+                      <button className={styles.editRailBtn} aria-label={`Wider by ${Math.round(sw / 0.0254)} inches`}
+                        onClick={() => size.set('W', size.w + sw)}>+</button>
+                    </div>
+                  </div>
+                  <div className={styles.editRailGroup}>
+                    <span className={styles.editRailCaption}>
+                      D {Math.round(size.d / 0.0254)}″
+                    </span>
+                    <div className={styles.editRailPair}>
+                      <button className={styles.editRailBtn} aria-label={`Shallower by ${Math.round(sd / 0.0254)} inches`}
+                        onClick={() => size.set('D', size.d - sd)}>−</button>
+                      <button className={styles.editRailBtn} aria-label={`Deeper by ${Math.round(sd / 0.0254)} inches`}
+                        onClick={() => size.set('D', size.d + sd)}>+</button>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+
             {/* SPECS — the property card, on request only.
                 Selecting something used to raise the card by itself, so you could
                 not tap a thing to nudge it without a panel landing in front of the
@@ -1534,6 +1559,7 @@ export default function WorkspaceLayout() {
                 is only for what the rail cannot say — a door's swing, a board type.
                 Tap again to put it away. */}
             <div className={styles.editRailGroup}>
+              <span className={styles.editRailCaption}>Specs</span>
               <button
                 className={`${styles.editRailBtn} ${activePanel ? styles.editRailBtnOn : ''}`}
                 aria-pressed={!!activePanel}

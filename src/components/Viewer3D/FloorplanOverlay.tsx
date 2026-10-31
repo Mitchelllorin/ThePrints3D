@@ -9,6 +9,7 @@
  * useFloorplanLocalStore so both reconcilers can read/write it.
  */
 
+import { tapCycle } from './tapCycle'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ThreeEvent } from '@react-three/fiber'
 import { Line, Edges } from '@react-three/drei'
@@ -90,6 +91,10 @@ function rayToGround(e: ThreeEvent<PointerEvent>, y = 0): THREE.Vector3 | null {
   LEVEL_PLANE.constant = -y   // plane constant is the NEGATIVE offset along the normal
   return e.ray.intersectPlane(LEVEL_PLANE, p) ? p : null
 }
+
+/** Where the finger was on the floor at the last move of a wall drag. One
+ *  drag at a time, so it lives here rather than in a ref. See onDragStart. */
+const wallDragGround: { current: THREE.Vector3 | null } = { current: null }
 
 const DEFAULT_WIDTH = 12
 const DEFAULT_DEPTH = 8
@@ -633,11 +638,26 @@ export default function FloorplanOverlay() {
   // calibrating, or placing — a different gate than the calibration-only canEdit.
   const canEditWalls = !traceMode && !overlay.calibrationMode && !placeObjectType && !overlay.locked
 
+  /**
+   * FREE MOVE FOR WALLS — Mitchell, 26 Oct 2026: "select it and just move it
+   * with a drag." A wall drag used to scale raw screen movement by a constant,
+   * so the wall slid at its own speed in screen directions whatever the camera
+   * was doing, and nothing stopped the camera orbiting underneath. Now it
+   * follows the point on the floor under your finger, and the camera holds
+   * still for the drag (the gesture lock ModelViewer drops on release).
+   */
+  const wallBaseY = (wallIndex: number | undefined) =>
+    ((wallIndex != null ? userWalls[wallIndex]?.level : 0) ?? 0) * storeyHeight
+
   const onDragStart = (event: ThreeEvent<PointerEvent>, next: DragState) => {
     const isWall = next.kind === 'wall' || next.kind === 'wall-end'
     if (isWall ? !canEditWalls : !canEdit) return
     event.stopPropagation()
     checkpointHistory()
+    if (isWall) {
+      wallDragGround.current = rayToGround(event, wallBaseY(next.wallIndex))
+      useFloorplanLocalStore.getState().setGestureLock(true)
+    }
     setDrag(next)
   }
 
@@ -661,7 +681,14 @@ export default function FloorplanOverlay() {
     if ((drag.kind === 'wall' || drag.kind === 'wall-end') && drawing && drag.wallIndex != null) {
       const w = userWalls[drag.wallIndex]
       if (!w) return
-      const [dpx, dpy] = worldDeltaToPixel(dx, dz)
+      // Follow the floor point under the finger; fall back to screen movement
+      // only when the ray misses the floor (looking at the horizon).
+      const g = rayToGround(event, wallBaseY(drag.wallIndex))
+      const last = wallDragGround.current
+      let wx = dx, wz = dz
+      if (g && last) { wx = g.x - last.x; wz = g.z - last.z }
+      if (g) wallDragGround.current = g
+      const [dpx, dpy] = worldDeltaToPixel(wx, wz)
       if (drag.kind === 'wall') {
         moveUserWall(drawing.id, drag.wallIndex, { x1: w.x1 + dpx, y1: w.y1 + dpy, x2: w.x2 + dpx, y2: w.y2 + dpy })
       } else if (drag.end === 'start') {
@@ -675,6 +702,7 @@ export default function FloorplanOverlay() {
   const onDragEnd = (event: ThreeEvent<PointerEvent>) => {
     if (!drag) return
     event.stopPropagation()
+    wallDragGround.current = null
     setDrag(null)
   }
 
@@ -1591,17 +1619,24 @@ export default function FloorplanOverlay() {
     }
 
     const [opx, opy] = worldToPixel(new THREE.Vector3(pose.x, 0, pose.z))
+    // A preset (Patio Door, Closet Door) lands as the type it stands for, Type
+    // already set, sized against THAT type's catalog width.
+    const as = item?.placesAs
+    const base = as ? getCatalogItem(as.type) : item
+    const widthM = pose.fitWidthM ?? item?.defaultW
+    const heightM = item?.defaultH
     addPlacedObject({
       id,
-      type: placeObjectType,
+      type: as?.type ?? placeObjectType,
+      ...(as ? { subtype: as.subtype } : {}),
       x: pose.x,
       z: pose.z,
       rotationY: pose.rotationY,
       // Seated into an existing gap? Fill it, rather than dropping a stock-width
       // leaf into an opening that was framed for something else.
-      scaleX: pose.fitWidthM && item?.defaultW ? pose.fitWidthM / item.defaultW : 1,
+      scaleX: widthM && base?.defaultW ? widthM / base.defaultW : 1,
       scaleZ: 1,
-      scaleY: 1,
+      scaleY: heightM && base?.defaultH ? heightM / base.defaultH : 1,
       label: item?.label ?? placeObjectType,
       circuitId,
       pxX: opx,
@@ -1632,7 +1667,7 @@ export default function FloorplanOverlay() {
   const ghostDims = (() => {
     const w = ghostItem?.defaultW ?? 1
     const d = ghostItem?.defaultD ?? 1
-    if (placeObjectType === 'door' || placeObjectType === 'window') return { w, d: 0.06 }
+    if (placeObjectType === 'door' || placeObjectType === 'window' || ghostItem?.placesAs) return { w, d: 0.06 }
     if (placeObjectType === 'stairs') {
       const sol = solveStair({
         totalRiseM: ghostItem?.defaultH ?? 2.9,
@@ -2056,7 +2091,19 @@ export default function FloorplanOverlay() {
             <mesh
               position={[(a[0] + b[0]) / 2, wallBase + ceilingM / 2, (a[2] + b[2]) / 2]}
               rotation={[0, -ang, 0]}
+              userData={{ pick: {
+                key: `wall:${drawing?.id}:${index}`,
+                select: () => {
+                  if (!drawing) return
+                  const ui = i >= 0 ? i : adoptDetectedWall(drawing.id, index)
+                  if (ui >= 0) selectWallExclusive(ui)
+                },
+              } }}
               onPointerDown={(e) => {
+                // Trim acts on the wall you point at, whatever is behind it.
+                // Otherwise the tap may belong to something further back — see
+                // tapCycle — and has to be let through to it.
+                if (!wallTrimArmed && !tapCycle.mine(e, `wall:${drawing?.id}:${index}`)) return
                 e.stopPropagation()
                 // TRIM armed → this tap removes the PIECE of wall you pointed at
                 // rather than selecting it. Derive the point from the ray (the
@@ -2072,6 +2119,13 @@ export default function FloorplanOverlay() {
                   const [px, py] = toPixel(hit)
                   trimUserWallAt(drawing.id, ui, px, py)
                   setWallTrimArmed(false)
+                  return
+                }
+                // Already the selected wall: the press is a free move. The
+                // drag body at its foot was the only handle, and in 3D the
+                // full-height pick box above it caught the finger first.
+                if (canEditWalls && ui === selectedWallIndex) {
+                  onDragStart(e, { kind: 'wall', wallIndex: ui } as DragState)
                   return
                 }
                 selectWallExclusive(ui)

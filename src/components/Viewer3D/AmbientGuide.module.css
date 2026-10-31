@@ -12,7 +12,7 @@
   padding: 4px 2px;
   font-size: 12px;
   color: var(--bp-text-dim, #94a3b8);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  text-shadow: var(--ink-on-model);
 }
 
 .spin {
@@ -36,7 +36,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  text-shadow: var(--ink-on-model);
 }
 
 .stepLabel {
@@ -614,7 +614,7 @@
   padding: 4px 8px;
   background: none;
   border: none;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
   pointer-events: none;
 }
 .measureHudLabel {
@@ -666,7 +666,7 @@
   white-space: nowrap;
   /* No surface of its own — a shadow keeps it readable over the model, the same
      trick the rails use, instead of a panel behind it. */
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  text-shadow: var(--ink-on-model);
 }
 /* Storey chips inside the placement bar — compact, so the row stays slim enough
    to live in the corner. */
@@ -764,3 +764,62 @@
 .packRow .numInput { width: 88px; flex: 0 0 auto; }
 .packRow .select { flex: 1 1 96px; min-width: 0; }
 .packList > .propLabel { width: auto; }
+
+/* "Remove this door" — the first thing on a placed item's card, the way the
+   Draw it sheet offers "Remove this wall". Outlined in the warning colour, a
+   full-width thumb target, never a filled red slab. */
+.removeBtn {
+  width: 100%;
+  min-height: 44px;
+  margin: 2px 0 6px;
+  background: none;
+  border: 1px solid var(--bp-bad, #e5643f);
+  border-radius: 10px;
+  color: var(--bp-bad, #f08a6c);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.removeBtn:active { background: rgba(229, 100, 63, 0.16); }
+
+/* ── ON THE MODEL, ON A PLATE ───────────────────────────────────────────────
+   The placing bar, the trace bar and the live length all float over the 3D
+   view, and they were see-through: 8–35% panels and pale text with a soft
+   shadow. Over the white print they simply disappeared (Mitchell, 26 Oct 2026:
+   "you can't see half of it because of that print"). They keep their corner
+   and their size; they get a near-opaque dark backing so they read the same
+   over white paper, white walls or the dark background. */
+.placeBar .action,
+.placeBar .secondary,
+.traceBarChip,
+.traceBarBtn {
+  background: var(--hud-plate);
+  border-color: var(--hud-plate-line);
+  color: #f8fafc;
+}
+.placeBar .action,
+.traceBarBuild {
+  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 30%, var(--hud-plate));
+  border-color: var(--bp-accent, #38bdf8);
+}
+.placeBar .action:hover,
+.placeBar .secondary:hover,
+.traceBarChip:hover,
+.traceBarBtn:hover {
+  background: color-mix(in srgb, #ffffff 12%, var(--hud-plate));
+}
+.placeHint,
+.measureHud {
+  background: var(--hud-plate);
+  border: 1px solid var(--hud-plate-line);
+  border-radius: 8px;
+}
+.placeHint { padding: 5px 9px; color: #f8fafc; }
+.measureHudLabel { color: rgba(255, 255, 255, 0.72); }
+@supports (backdrop-filter: blur(1px)) {
+  .placeBar .action, .placeBar .secondary, .traceBarChip, .traceBarBtn,
+  .placeHint, .measureHud {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}

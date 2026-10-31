@@ -18,6 +18,25 @@
      ──────────────────────────────────────────────────────────────────────── */
   --rail-w: 44px;
 
+  /* ─────────────────────────────────────────────────────────────────────────
+     INK ON THE MODEL — anything that floats over the 3D view.
+
+     The print is white and the walls go white, so a soft drop shadow under pale
+     text vanished exactly where you were working (placing a door, tracing, the
+     workflow hints). Two tools, both readable on ANY colour behind them:
+       --ink-on-model  a hard dark outline all round, plus a halo — for text with
+                       no box of its own;
+       --hud-plate     a near-opaque dark backing — for chips and buttons.
+     Not a colour that tries to follow the background: that flickers as the
+     camera moves. Light ink on a dark edge reads over white and black alike.
+     ──────────────────────────────────────────────────────────────────────── */
+  --ink-on-model:
+    1px 0 0 rgba(0, 0, 0, 0.9), -1px 0 0 rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(0, 0, 0, 0.9), 0 -1px 0 rgba(0, 0, 0, 0.9),
+    0 0 6px rgba(0, 0, 0, 0.85);
+  --hud-plate: rgba(10, 16, 28, 0.84);
+  --hud-plate-line: rgba(255, 255, 255, 0.22);
+
   /* The top-right icons (Undo, zoom). The right-edge column starts under them,
      so it reads their numbers instead of guessing its own. */
   --top-icons-top: 52px;

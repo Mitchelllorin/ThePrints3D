@@ -14,6 +14,7 @@ import { answer, AI_PROXIED, type Turn } from '../../services/askBrain'
 import { reviewBuildModel, type FindingTarget } from '../../services/buildReview'
 import { cameraForFinding } from '../../services/reviewFocus'
 import { focusSceneFor } from '../../services/buildFocus'
+import { pocketConflictsIn } from '../../services/pocketWall'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { knowledgeCardCount, EXAMPLE_QUESTIONS } from '../../services/constructionKnowledge'
 import { hasAiKey, setAiKey } from '../../services/aiKey'
@@ -39,6 +40,9 @@ export default function AskAI() {
   const roofAreas = useAppStore((s) => s.roofAreas)
   const placedObjects = useAppStore((s) => s.placedObjects)
   const overlay = useAppStore((s) => s.floorplanOverlay)
+  const electricalLines = useAppStore((s) => s.electricalLines)
+  const plumbingLines = useAppStore((s) => s.plumbingLines)
+  const hvacLines = useAppStore((s) => s.hvacLines)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const setCameraPreset = useAppStore((s) => s.setCameraPreset)
   const hasBuild = drawings.some((d) => d.parsedWalls.length > 0) || placedObjects.length > 0
@@ -107,6 +111,12 @@ export default function AskAI() {
       ceilingM: ceilingM ?? undefined,
       studSpacingIn,
       framingMaterial,
+      pocketConflicts: pocketConflictsIn({
+        placedObjects, electricalLines, plumbingLines, hvacLines, drawings, floorplanOverlay: overlay,
+      }).map((c) => {
+        const i = openingObjects.findIndex((o) => o.id === c.doorId)
+        return { openingIndex: i, what: c.what, level: openingObjects[i]?.level ?? 0 }
+      }),
     }
 
     // Where each wall and opening IS, in world metres. Shared with F.U.S.E.,
@@ -126,6 +136,7 @@ export default function AskAI() {
   }, [
     hasBuild, drawings, placedObjects, floorsAreas, roofAreas,
     ceilingM, studSpacingIn, framingMaterial, overlay, storeyHeightM,
+    electricalLines, plumbingLines, hvacLines,
   ])
 
   // What the badge counts: the two grades that ask something of the builder.
