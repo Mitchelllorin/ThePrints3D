@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { billingAvailable, restorePro } from '../../services/billing'
+import { readTestUnlock, revokeTestUnlock, testUnlockAvailable, tryTestUnlock } from '../../services/testUnlock'
 import { PRO_REASON_GENERAL } from './UpgradeSheet'
 
 export default function ProSection() {
@@ -18,6 +19,10 @@ export default function ProSection() {
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  // Test unlock — see services/testUnlock. Both false in a store build.
+  const testUnlock = testUnlockAvailable()
+  const testUnlocked = testUnlock && readTestUnlock()
+  const [code, setCode] = useState('')
 
   const restore = async () => {
     setBusy(true)
@@ -42,7 +47,7 @@ export default function ProSection() {
           : 'Free covers scan, draw, edit, build and explode. Pro adds unlimited saved jobs, the full cut list and takeoff with export, the measuring tape, trade layers, and exports without the watermark.'}
       </p>
 
-      {!isPro && (
+      {!isPro && !testUnlocked && (
         <button
           onClick={() => openUpgrade(PRO_REASON_GENERAL)}
           style={{
@@ -64,6 +69,72 @@ export default function ProSection() {
           opacity: busy || !billingAvailable() ? 0.55 : 1,
         }}
       >{busy ? 'Checking…' : 'Restore purchase'}</button>
+
+      {/* TEST UNLOCK — a code, not a purchase. Only present in a build flagged
+          with VITE_TEST_UNLOCK=1 (or the dev server); a store build compiles the
+          whole row away. See services/testUnlock. */}
+      {testUnlock && !testUnlocked && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (tryTestUnlock(code)) {
+              setCode('')
+              setPro(true)
+              setNote('Test unlock accepted — the Pro features are open.')
+            } else {
+              setNote('That code does not match this build.')
+            }
+          }}
+          style={{ display: 'flex', gap: 6 }}
+        >
+          <input
+            type="password"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Test unlock code"
+            autoComplete="off"
+            spellCheck={false}
+            style={{
+              flex: 1, minWidth: 0, padding: '8px 10px',
+              background: 'rgba(15,23,42,0.6)',
+              border: '1px solid rgba(148,163,184,0.35)', borderRadius: 8,
+              color: '#e2e8f0', fontSize: 12,
+            }}
+          />
+          <button
+            type="submit"
+            disabled={code.trim() === ''}
+            style={{
+              padding: '8px 12px', border: '1px dashed rgba(250,204,21,0.55)',
+              background: 'none', borderRadius: 8,
+              color: '#facc15', fontSize: 11, fontWeight: 700,
+              cursor: code.trim() === '' ? 'default' : 'pointer',
+              opacity: code.trim() === '' ? 0.5 : 1,
+            }}
+          >Unlock</button>
+        </form>
+      )}
+
+      {testUnlocked && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <p style={{ margin: 0, fontSize: 11, color: '#facc15', lineHeight: 1.45 }}>
+            Test unlock active on this build — the Pro features are open. This is
+            not a Play purchase.
+          </p>
+          <button
+            onClick={() => {
+              revokeTestUnlock()
+              setPro(false)
+              setNote('Test unlock cleared.')
+            }}
+            style={{
+              alignSelf: 'flex-start', padding: '6px 10px', background: 'none',
+              border: '1px dashed rgba(250,204,21,0.55)', borderRadius: 8,
+              color: '#facc15', fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
+            }}
+          >Lock again</button>
+        </div>
+      )}
 
       {/* DEV ONLY — flip the entitlement by hand.
           Without this the gates are untestable on the bench: there is no Play

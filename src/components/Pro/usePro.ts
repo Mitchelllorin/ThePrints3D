@@ -17,6 +17,7 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
+import { readTestUnlock } from '../../services/testUnlock'
 
 /**
  * NO STORE, NO PAYWALL.
@@ -46,17 +47,27 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
  */
 export const PRO_FREE_FOR_EVERYONE: boolean = false
 
+/**
+ * A FOURTH WAY IN, FOR THE BENCH.
+ *
+ * `services/testUnlock` lets a build deliberately flagged with
+ * VITE_TEST_UNLOCK=1 take a code in Settings → Pro. It is checked HERE, with the
+ * other three reasons, so there is still exactly one Pro rule: a feature is open
+ * if it is free for everyone, bought, test-unlocked, or not for sale yet. A
+ * normal build compiles the check away with the rest of the test unlock.
+ */
+
 export function useIsPro(): boolean {
   const owned = useAppStore((s) => s.isPro)
   const live = useAppStore((s) => s.billingLive)
-  return PRO_FREE_FOR_EVERYONE || owned || !live
+  return PRO_FREE_FOR_EVERYONE || owned || readTestUnlock() || !live
 }
 
 /** Whether to show a way to buy: not owned yet, and there is something to buy. */
 export function useCanBuyPro(): boolean {
   const owned = useAppStore((s) => s.isPro)
   const live = useAppStore((s) => s.billingLive)
-  return !PRO_FREE_FOR_EVERYONE && !owned && live
+  return !PRO_FREE_FOR_EVERYONE && !owned && !readTestUnlock() && live
 }
 
 export function useRequirePro(): (reason: string, action: () => void) => void {
@@ -80,6 +91,6 @@ export function requirePro(reason: string, action: () => void): void {
   // editing, the tape, product placement and the trade layers would have locked
   // for closed testers the moment the Play product went live.
   const { isPro, billingLive } = useAppStore.getState()
-  if (PRO_FREE_FOR_EVERYONE || isPro || !billingLive) action()
+  if (PRO_FREE_FOR_EVERYONE || isPro || readTestUnlock() || !billingLive) action()
   else useFloorplanLocalStore.getState().openUpgrade(reason)
 }

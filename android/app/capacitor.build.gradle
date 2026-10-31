@@ -9,9 +9,11 @@ android {
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
+    implementation project(':capacitor-filesystem')
+    implementation project(':capacitor-share')
     implementation project(':capacitor-splash-screen')
-    implementation project(':revenuecat-purchases-capacitor')
-
+    implementation "com.android.billingclient:billing:9.0.0"
+    implementation "androidx.core:core:1.9.0"
 }
 
 
