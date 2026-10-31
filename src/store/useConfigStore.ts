@@ -99,6 +99,15 @@ export interface AppConfig {
    *  is applied to every roof the moment it's laid — no manual sizing. */
   roofOverhangIn: number
 
+  // ── Bulkheads / soffits ───────────────────────────────────────────────────
+  /** How far a bulkhead hangs BELOW the ceiling (inches). The model drew one at
+   *  a fixed 11", so its height could not be set to clear a duct, a beam or the
+   *  head of a door. */
+  bulkheadDropIn: number
+  /** How deep the bulkhead is, out from the wall (inches). A 24" soffit over a
+   *  kitchen run; deeper for a main duct. */
+  bulkheadDepthIn: number
+
   // ── Framing ─────────────────────────────────────────────────────────────────
   /** Global stud spacing, on-centre (inches). */
   studSpacingIn: 16 | 24
@@ -154,6 +163,10 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   buildAutoEnableFraming: true,
   buildAutoShell: true,
   roofOverhangIn: 16,
+  // 11" below the ceiling and 24" deep is the soffit that was drawn before,
+  // now adjustable. See buildSpecialFeatures. 
+  bulkheadDropIn: 11,
+  bulkheadDepthIn: 24,
   studSpacingIn: 16,
   defaultStudSize: '2x4',
   cornerType: 'three-stud',

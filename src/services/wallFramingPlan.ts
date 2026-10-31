@@ -21,6 +21,8 @@ import { modelWalls } from './modelWalls'
 import { teesForWalls } from './wallTees'
 import { renderWallThicknessM, wallHeightM, wallFramingSpec } from './constructionCode'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../data/objectCatalog'
+import { framedShiftM, doorWidthM } from './doorStyle'
+import type { PocketKit } from './framingGeometry'
 
 export interface WallPlanInput {
   drawings: readonly Drawing[]
@@ -47,6 +49,9 @@ export interface WallOpeningAt {
   /** The placed door or window this came from, so it can be found again and
    *  moved by typed position. Absent for stairs and openings read off the print. */
   objectId?: string
+  /** A pocket door kit: which way along the wall the pocket runs from the
+   *  doorway, and the door's own width. The hole is the whole kit. */
+  pocket?: PocketKit
 }
 
 export interface PlannedWall {
@@ -164,8 +169,20 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
   }
   for (const o of placedObjects) {
     if (o.type !== 'door' && o.type !== 'window') continue
-    const { best, t } = nearestWall(o.x, o.z, 0, 0, o.level ?? 0)
+    const { best, t: tDoor } = nearestWall(o.x, o.z, 0, 0, o.level ?? 0)
     if (best < 0) continue
+    // A pocket door's hole runs from the doorway out over the pocket, so it is
+    // framed off-centre — see framedShiftM. Matched by the doorway (that is the
+    // wall it is in), then slid along THAT wall; `dir` is which way the pocket
+    // runs in the wall's own direction, for the kit drawn inside the hole.
+    const shift = framedShiftM(o)
+    const seg = wsegs[best]
+    const segLen2 = seg.dx * seg.dx + seg.dz * seg.dz
+    // The door's own +X in the world is (cos, −sin) of its yaw — THREE's turn
+    // about +Y, and what openingSeat's negated yaw means.
+    const dt = shift === 0 ? 0 : (shift * (Math.cos(o.rotationY) * seg.dx - Math.sin(o.rotationY) * seg.dz)) / segLen2
+    const t = Math.max(0, Math.min(1, tDoor + dt))
+    const pocket = shift === 0 ? undefined : { dir: (dt >= 0 ? 1 : -1) as 1 | -1, doorW: doorWidthM(o) }
     const item = getCatalogItem(o.type)
     // FRAME THE HOLE, NOT THE DOOR. The object's size is the unit — the leaf,
     // or the window's nominal size — and the framer frames whatever width it
@@ -185,6 +202,7 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
       type: o.type,
       sillM: o.sillM,
       heightM: ro.heightM,
+      pocket,
     })
   }
   // Stairs/elevators cut a full-height opening where they sit flush against a
@@ -284,7 +302,7 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
     const wallOpenings: WallOpening[] = openings[i].map((o) => ({
       // Positions are fractions of the TRACED line; the framed wall starts
       // half a thickness earlier at a corner.
-      centerM: startOff + o.t * rawLen, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM,
+      centerM: startOff + o.t * rawLen, widthM: o.widthM, type: o.type, sillM: o.sillM, heightM: o.heightM, pocket: o.pocket,
     }))
     const isMasonry = wall.wallType === 'masonry-thick' || wall.framingType === 'cmu'
     const ex = wall.exteriorMaterial

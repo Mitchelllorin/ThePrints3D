@@ -28,14 +28,20 @@ import { Line } from '@react-three/drei'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { usePrintDrop } from '../../services/printPlane'
-import { getCatalogItem } from '../../data/objectCatalog'
+import { doorStyle, doorWidthM, bifoldLeaves } from '../../services/doorStyle'
 import { useWallPlans } from './useWallPlans'
+import { getCatalogItem } from '../../data/objectCatalog'
 import type { PlacedObject } from '../../types'
 
 /** Ink colours. A print is drawn in one weight of line, not coloured in — the
  *  colour coding belongs to the model, where there is a member to colour. */
 const INK = '#7ea4dd'
 const INK_FAINT = '#4a6b9c'
+/** Ceiling items are drawn lighter than the plan cut: they are above it. */
+const INK_CEILING = '#9fdcff'
+
+/** What hangs FROM the ceiling — the content of a reflected ceiling plan. */
+const CEILING_FIXTURES = new Set(['ceiling-light', 'recessed-light', 'exhaust-fan', 'light-box'])
 
 /** A hair above the sheet, so the lines sit ON the paper rather than z-fighting
  *  the image under them. */
@@ -44,22 +50,22 @@ const INK_LIFT = 0.012
 /** Opening width in metres, from the catalogue and the object's own scale —
  *  the same figure the 3D uses to cut the hole, so the break drawn on the sheet
  *  is the width of the hole that exists. */
-function openingWidth(obj: PlacedObject): number {
-  return (getCatalogItem(obj.type)?.defaultW ?? 0.9) * obj.scaleX
-}
-
-/** A sectional overhead, not a hinged door — decided by WIDTH, the same test
- *  PlacedObjectsLayer uses, because width is what actually decides it. */
-const isOverhead = (obj: PlacedObject) => obj.type === 'door' && openingWidth(obj) >= 2.1
-/** Past 36in nobody hangs one leaf; the opening takes a pair. */
-const isPair = (obj: PlacedObject) => obj.type === 'door' && openingWidth(obj) > 1.0 && !isOverhead(obj)
+const openingWidth = (obj: PlacedObject): number => doorWidthM(obj)
 
 export default function PlanSheet() {
   const plans = useWallPlans()
   const placedObjects = useAppStore((s) => s.placedObjects)
   const activeLevel = useFloorplanLocalStore((s) => s.activeLevel)
   const printVisible = useAppStore((s) => s.floorplanOverlay.visible)
+  const floorplanOverlay = useAppStore((s) => s.floorplanOverlay)
+  const drawings = useAppStore((s) => s.drawings)
   const printDrop = usePrintDrop()
+
+  // AN RCP IS THE SHEET THAT SHOWS THE CEILING. Lights only belong on one, so
+  // they are drawn when the sheet being read IS a reflected ceiling plan, not
+  // cluttering every floor plan with symbols for things above the cut.
+  const activeDrawing = drawings.find((d) => d.id === floorplanOverlay.drawingId) ?? drawings[0] ?? null
+  const isRcp = activeDrawing?.type === 'rcp'
 
   /**
    * Each wall becomes its own footprint: the rectangle it occupies in plan,
@@ -108,11 +114,16 @@ export default function PlanSheet() {
       const w = openingWidth(obj)
       const cos = Math.cos(obj.rotationY)
       const sin = Math.sin(obj.rotationY)
-      // Object-local (along the opening, across it) → world.
+      // Object-local (along the opening, across it) → world, turned exactly
+      // as THREE turns the 3D door (rotation about +Y: local +X lands on
+      // (cos, −sin)). This used to turn the other way, which only agrees for a
+      // wall running across the page: in a wall running up and down it, the
+      // print drew every swing on the opposite jamb, into the opposite room,
+      // from the door standing in the model.
       const at = (u: number, v: number): [number, number, number] => [
-        obj.x + u * cos - v * sin,
+        obj.x + u * cos + v * sin,
         INK_LIFT,
-        obj.z + u * sin + v * cos,
+        obj.z - u * sin + v * cos,
       ]
       const jambs: [number, number, number][][] = [
         [at(-w / 2, -0.11), at(-w / 2, 0.11)],
@@ -127,7 +138,8 @@ export default function PlanSheet() {
         }
       }
 
-      if (isOverhead(obj)) {
+      const style = doorStyle(obj)
+      if (style === 'garage') {
         // Nothing swings on a sectional: the door across the opening, and the
         // tracks running back into the garage, which is where it actually goes.
         const reach = Math.min(w, 2.4)
@@ -137,6 +149,36 @@ export default function PlanSheet() {
             [at(-w / 2, 0), at(w / 2, 0)],
             [at(-w / 2 + 0.06, 0), at(-w / 2 + 0.06, reach)],
             [at(w / 2 - 0.06, 0), at(w / 2 - 0.06, reach)],
+          ],
+          leaves: [],
+        }
+      }
+
+      // Sliders: two panels, one track in front of the other, lapping at the
+      // middle — the symbol every print uses for a patio door or a bypass pair.
+      if (style === 'patio' || style === 'bypass') {
+        const lap = 0.05
+        return {
+          key: obj.id, jambs,
+          bars: [
+            [at(-w / 2, -0.04), at(lap / 2, -0.04)],
+            [at(-lap / 2, 0.04), at(w / 2, 0.04)],
+          ],
+          leaves: [],
+        }
+      }
+
+      // Pocket: the leaf lives INSIDE the wall beside the doorway, in the kit's
+      // own pocket. The kit is framed as one rough opening — doorway plus
+      // pocket — so the line runs to the end of that hole, and it shows the
+      // stretch of wall that can carry no outlet or pipe.
+      if (style === 'pocket') {
+        const p = (obj.swing ?? 'left') === 'left' ? -1 : 1
+        return {
+          key: obj.id, jambs,
+          bars: [
+            [at(p * w / 2, 0), at(p * (w / 2 + w), 0)],
+            [at(p * (w / 2 + w), -0.07), at(p * (w / 2 + w), 0.07)],
           ],
           leaves: [],
         }
@@ -152,10 +194,25 @@ export default function PlanSheet() {
         }
         return { arc, leaf: [at(hinge, 0), at(hinge, face * reach)] }
       }
+      // A bifold drawn half folded: each pair of leaves a V off its jamb, the
+      // way a print shows one — a pair off the hinge jamb for a narrow closet,
+      // a pair off each jamb for a wide one.
+      if (style === 'bifold') {
+        const n = bifoldLeaves(w)
+        const lw = w / n
+        const k = lw * 0.7   // each leaf at 45°
+        const pairOff = (jamb: number, dir: number): [number, number, number][] =>
+          [at(jamb, 0), at(jamb + dir * k, face * k), at(jamb + dir * 2 * k, 0)]
+        const hinge = (obj.swing ?? 'left') === 'left' ? -1 : 1
+        const bars = n === 2
+          ? [pairOff(hinge * w / 2, -hinge)]
+          : [pairOff(-w / 2, 1), pairOff(w / 2, -1)]
+        return { key: obj.id, jambs, bars, leaves: [] }
+      }
       // A pair hinges at BOTH jambs, each leaf covering half the opening —
       // one big arc across a double door is the plan-symbol equivalent of
       // hanging one big slab.
-      const leaves = isPair(obj)
+      const leaves = style === 'double'
         ? [leafAt(-w / 2, 1, w / 2), leafAt(w / 2, -1, w / 2)]
         : [leafAt(
             (obj.swing ?? 'left') === 'left' ? -w / 2 : w / 2,
@@ -165,9 +222,52 @@ export default function PlanSheet() {
       return { key: obj.id, jambs, bars: [] as [number, number, number][][], leaves }
     }), [placedObjects, activeLevel])
 
+  /**
+   * THE LIGHTING, ON THE REFLECTED CEILING PLAN.
+   *
+   * Ceiling lights, recessed cans, exhaust fans and ceiling boxes were in the
+   * model and on no drawing at all: the sheet drew walls and openings and
+   * stopped. A reflected ceiling plan that cannot show a switchable light is not
+   * a ceiling plan, it is a wall plan with a title.
+   *
+   * Drawn at the unit's own size (catalogue × scale) so two different cans read
+   * as different sizes, with the symbol each one has on a real RCP — circle and
+   * cross for a ceiling light or can, blades for a fan, a box for a box.
+   */
+  const ceilingItems = useMemo(() => {
+    if (!isRcp) return []
+    return placedObjects
+      .filter((o) => CEILING_FIXTURES.has(o.type) && (o.level ?? 0) === activeLevel)
+      .map((o) => {
+        const item = getCatalogItem(o.type)
+        const r = Math.max(0.06, ((item?.defaultW ?? 0.2) * o.scaleX) / 2)
+        const cos = Math.cos(o.rotationY)
+        const sin = Math.sin(o.rotationY)
+        const at = (u: number, v: number): [number, number, number] => [
+          o.x + u * cos + v * sin,
+          INK_LIFT,
+          o.z - u * sin + v * cos,
+        ]
+        const ring: [number, number, number][] = []
+        for (let i = 0; i <= 32; i++) {
+          const t = (i / 32) * Math.PI * 2
+          ring.push(at(r * Math.cos(t), r * Math.sin(t)))
+        }
+        const marks: [number, number, number][][] = []
+        if (o.type === 'exhaust-fan') {
+          marks.push([at(0, 0), at(r * 0.85, 0)], [at(0, 0), at(-r * 0.55, r * 0.65)])
+        } else if (o.type === 'light-box') {
+          marks.push([at(-r, -r), at(r, -r), at(r, r), at(-r, r), at(-r, -r)])
+        } else {
+          marks.push([at(-r * 0.7, 0), at(r * 0.7, 0)], [at(0, -r * 0.7), at(0, r * 0.7)])
+        }
+        return { key: o.id, ring, marks }
+      })
+  }, [isRcp, placedObjects, activeLevel])
+
   // No sheet showing, nothing to draw on. The print's own visibility toggle
   // governs its contents too — the marks are part of the drawing.
-  if (!printVisible || (outlines.length === 0 && openings.length === 0)) return null
+  if (!printVisible || (outlines.length === 0 && openings.length === 0 && ceilingItems.length === 0)) return null
 
   return (
     /* NOT inside any group that explodes. Explode is opt-in per layer
@@ -191,6 +291,12 @@ export default function PlanSheet() {
               <Line points={l.arc} color={INK_FAINT} lineWidth={2} />
             </group>
           ))}
+        </group>
+      ))}
+      {ceilingItems.map((o) => (
+        <group key={`c-${o.key}`}>
+          <Line points={o.ring} color={INK_CEILING} lineWidth={2} />
+          {o.marks.map((m, i) => <Line key={`m${i}`} points={m} color={INK_CEILING} lineWidth={1.5} />)}
         </group>
       ))}
     </group>

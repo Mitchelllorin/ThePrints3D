@@ -20,6 +20,17 @@ export interface ObjectCatalogItem {
   defaultH: number
   /** Base colour of the box stand-in */
   color: string
+  /** A DRAWN tray glyph, for the few items an emoji cannot say. The patio door
+   *  was `🚪` — the same mark as a plain swing door — which is exactly what it
+   *  is not: two glass panels lapping on a track. Anything with a `glyph` draws
+   *  it instead of `icon`. */
+  glyph?: 'patio-slider'
+  /** A SHORTCUT TO ANOTHER TYPE, preset. "Patio door" is not a new kind of
+   *  object: it is a door with its Type already set to Patio Slider and its
+   *  width already six feet. Placing one drops a plain `door` carrying that
+   *  subtype, so everything that knows doors — the cut, the framing, the card —
+   *  knows it with no second type to teach them. */
+  placesAs?: { type: string; subtype: string }
 }
 
 export const OBJECT_CATALOG: ObjectCatalogItem[] = [
@@ -28,7 +39,13 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
   // and once the card started showing the rough opening it read as an app
   // that does not know what a door is.
   { type: 'door',           label: 'Door',            short: 'Door',     icon: '🚪', defaultW: 0.9144, defaultD: 0.12, defaultH: 2.032, color: '#f59e0b' },
-  { type: 'window',         label: 'Window',          short: 'Window',   icon: '🪟', defaultW: 1.2,  defaultD: 0.12, defaultH: 1.2,  color: '#7dd3fc' },
+  // A 6068 slider — 6'-0" x 6'-8", the patio door every builder stocks. An 8'
+  // is the same door stretched on the card.
+  { type: 'patio-door',     label: 'Patio Door',      short: 'Patio',    icon: '🚪', glyph: 'patio-slider', defaultW: 1.8288, defaultD: 0.12, defaultH: 2.032, color: '#7dd3fc', placesAs: { type: 'door', subtype: 'Patio Slider' } },
+  // A 4'-0" bifold, the closet door that goes in more than any other. Bypass and
+  // pocket are one tap away on its Type.
+  { type: 'closet-door',    label: 'Closet Door',     short: 'Closet',   icon: '🚪', defaultW: 1.2192, defaultD: 0.12, defaultH: 2.032, color: '#f59e0b', placesAs: { type: 'door', subtype: 'Bifold' } },
+  { type: 'window',        label: 'Window',          short: 'Window',   icon: '🪟', defaultW: 1.2,  defaultD: 0.12, defaultH: 1.2,  color: '#7dd3fc' },
   { type: 'sofa',           label: 'Sofa',            short: 'Sofa',     icon: '🛋️', defaultW: 2.0,  defaultD: 0.9,  defaultH: 0.8,  color: '#6366f1' },
   { type: 'chair',          label: 'Chair',           short: 'Chair',    icon: '🪑', defaultW: 0.55, defaultD: 0.55, defaultH: 0.9,  color: '#22c55e' },
   { type: 'bed-double',     label: 'Bed (Double)',    short: 'Bed',      icon: '🛏️', defaultW: 1.5,  defaultD: 2.0,  defaultH: 0.5,  color: '#be185d' },
@@ -76,7 +93,26 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
   { type: 'recessed-light', label: 'Recessed Light',      short: 'Recessed', icon: '🔆', defaultW: 0.16, defaultD: 0.16, defaultH: 0.08, color: '#fef3c7' },
   { type: 'exhaust-fan',    label: 'Exhaust Fan',         short: 'Fan',      icon: '🌀', defaultW: 0.3,  defaultD: 0.3,  defaultH: 0.2,  color: '#cbd5e1' },
   { type: 'panel-box',      label: 'Panel Box',           short: 'Panel',    icon: '🔋', defaultW: 0.4,  defaultD: 0.12, defaultH: 0.75, color: '#9ca3af' },
+  // ── MEP sources and HVAC terminals (the MEP standard, services/mepWorkflow) ──
+  { type: 'drain-stack',    label: 'Drain Stack (3")',    short: 'Stack',    icon: '⬇️', defaultW: 0.09, defaultD: 0.09, defaultH: 2.4,  color: '#a8a29e' },
+  { type: 'furnace',        label: 'Furnace',             short: 'Furnace',  icon: '🔥', defaultW: 0.55, defaultD: 0.75, defaultH: 1.2,  color: '#94a3b8' },
+  { type: 'supply-register',label: 'Supply Register',     short: 'Supply',   icon: '▤',  defaultW: 0.30, defaultD: 0.10, defaultH: 0.02, color: '#e2e8f0' },
+  { type: 'return-grille',  label: 'Return Grille',       short: 'Return',   icon: '▦',  defaultW: 0.60, defaultD: 0.05, defaultH: 0.30, color: '#cbd5e1' },
 ]
+
+/** The parts each MEP trade places — what it serves, then where it comes
+ *  from — in tray order. See services/mepWorkflow for the standard. */
+export const MEP_TRAY_ORDER: Record<'electrical' | 'plumbing' | 'hvac', string[]> = {
+  electrical: ['duplex-outlet', 'gfci-outlet', 'switch', 'ceiling-light', 'recessed-light', 'exhaust-fan', 'panel-box', 'device-box', 'junction-box', 'light-box'],
+  plumbing: ['toilet', 'bathroom-sink', 'kitchen-sink', 'bathtub', 'shower', 'washer', 'dishwasher', 'drain-stack', 'water-heater'],
+  hvac: ['supply-register', 'return-grille', 'furnace'],
+}
+
+export function mepTrayItems(trade: 'electrical' | 'plumbing' | 'hvac'): ObjectCatalogItem[] {
+  return MEP_TRAY_ORDER[trade]
+    .map((t) => OBJECT_CATALOG.find((o) => o.type === t))
+    .filter((o): o is ObjectCatalogItem => Boolean(o))
+}
 
 /** Electrical fixture types (tray order when the Electrical layer is active). */
 export const ELECTRICAL_TRAY_ORDER: string[] = [
@@ -95,6 +131,7 @@ export const OUTLET_TYPES = new Set(['duplex-outlet', 'gfci-outlet'])
  *  height) rather than sitting on the floor. Ceiling fixtures are separate. */
 export const WALL_MOUNTED_DEVICES = new Set([
   'duplex-outlet', 'gfci-outlet', 'device-box', 'junction-box', 'switch', 'panel-box',
+  'drain-stack', 'return-grille', 'supply-register',
 ])
 
 /**
@@ -107,7 +144,10 @@ export const WALL_MOUNTED_DEVICES = new Set([
  * consulting walls for EVERYTHING and stairs refused to go indoors.
  */
 export function isWallMountedType(type: string): boolean {
-  return WALL_MOUNTED_DEVICES.has(type) || type === 'door' || type === 'window'
+  if (WALL_MOUNTED_DEVICES.has(type) || type === 'door' || type === 'window') return true
+  // A preset (Patio Door, Closet Door) goes where the type it places goes.
+  const as = OBJECT_CATALOG.find((o) => o.type === type)?.placesAs?.type
+  return as === 'door' || as === 'window'
 }
 
 /** Ceiling-mounted electrical fixtures (boxes/lights/fans up at the ceiling). */
@@ -129,6 +169,9 @@ export function deviceMountHeightM(type: string, ceilingM = 2.4): number | null 
     case 'junction-box': return 1.20
     case 'switch':       return 1.22   // ~48" to switch centre
     case 'panel-box':    return 1.40
+    case 'drain-stack':  return 1.20     // floor to ceiling, centred
+    case 'return-grille': return 0.30    // low on the wall
+    case 'supply-register': return 0.01  // in the floor at the wall
     case 'light-box':
     case 'ceiling-light':
     case 'recessed-light':
@@ -145,7 +188,7 @@ export function electricalTrayItems(): ObjectCatalogItem[] {
 
 /** Tray display order (curated; one bed entry shown as "Bed"). */
 export const TRAY_ORDER: string[] = [
-  'door', 'window', 'sofa', 'armchair', 'chair', 'coffee-table', 'tv',
+  'door', 'patio-door', 'closet-door', 'window', 'sofa', 'armchair', 'chair', 'coffee-table', 'tv',
   'bed-double', 'bed-single', 'nightstand', 'dresser', 'wardrobe', 'bookshelf',
   'desk', 'dining-table',
   'kitchen-counter', 'refrigerator', 'stove', 'range-hood', 'dishwasher', 'kitchen-sink',
@@ -163,7 +206,10 @@ export const SUBTYPES: Record<string, string[]> = {
   // to say one was: it framed as a swing door with two inches of allowance a
   // garage door does not take. The TYPE drives the rough opening — see
   // services/roughOpening.
-  door: ['Hinged Single', 'Hinged Double', 'Pocket', 'Sliding', 'Bifold', 'Garage'],
+  // "Sliding" was one entry for two different doors: a 6-ft glass patio slider
+  // and a closet's bypass pair. They are drawn, framed and bought differently,
+  // so they are two Types now (services/doorStyle reads an old "Sliding").
+  door: ['Hinged Single', 'Hinged Double', 'Patio Slider', 'Pocket', 'Bypass', 'Bifold', 'Garage'],
   window: ['Single-hung', 'Double-hung', 'Casement', 'Fixed'],
   stairs: ['Straight', 'L-shaped', 'U-shaped', 'Switchback'],
 }

@@ -20,8 +20,16 @@ import type { WorkspaceWizardInputs } from '../types'
 export function useSceneConfig(inputs: WorkspaceWizardInputs | null): WorkspaceSceneConfig {
   const ceilingM = useConfigStore((s) => s.ceilingHeightM)
   const buildType = useConfigStore((s) => s.buildType)
+  // Bulkhead height and depth, so the drawn soffit is the one in Settings and
+  // not a constant buried in the builder (see buildSpecialFeatures).
+  const bulkheadDropIn = useConfigStore((s) => s.bulkheadDropIn)
+  const bulkheadDepthIn = useConfigStore((s) => s.bulkheadDepthIn)
   return useMemo(
-    () => deriveWorkspaceSceneConfig(inputs, { ceilingM, buildType }),
-    [inputs, ceilingM, buildType],
+    () => deriveWorkspaceSceneConfig(inputs, {
+      ceilingM, buildType,
+      bulkheadDropM: bulkheadDropIn * 0.0254,
+      bulkheadDepthM: bulkheadDepthIn * 0.0254,
+    }),
+    [inputs, ceilingM, buildType, bulkheadDropIn, bulkheadDepthIn],
   )
 }

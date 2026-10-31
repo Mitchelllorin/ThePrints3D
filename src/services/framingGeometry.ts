@@ -180,6 +180,21 @@ export interface WallOpening {
   sillM?: number
   /** Opening height (m). Door ≈ 2.06, window ≈ 1.13 by default. */
   heightM?: number
+  /** This hole holds a pocket door frame kit — see PocketKit. */
+  pocket?: PocketKit
+}
+
+/**
+ * A POCKET DOOR FRAME KIT, in its rough opening.
+ *
+ * The kit comes assembled — its own header with the track, and the pocket
+ * already framed in split members with a gap down the middle for the door — and
+ * goes into one rough opening (2 × door + 1″) in a single piece. `dir` is which
+ * way the pocket runs from the doorway along the wall's +X; `doorW` is the door.
+ */
+export interface PocketKit {
+  dir: 1 | -1
+  doorW: number
 }
 
 /**
@@ -337,7 +352,7 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // Rough openings, mapped to local-centred X and clamped to the wall. Only
   // openings that fully fit (with a stud-pack margin at each end) are framed.
   const ops = openings
-    .map((o) => ({ type: o.type, x: o.centerM - half, w: Math.min(o.widthM, length - 0.2), sillM: o.sillM, heightM: o.heightM }))
+    .map((o) => ({ type: o.type, x: o.centerM - half, w: Math.min(o.widthM, length - 0.2), sillM: o.sillM, heightM: o.heightM, pocket: o.pocket }))
     .filter((o) => o.w > 0.1 && o.x - o.w / 2 > bodyL + studW * 2 && o.x + o.w / 2 < bodyR - studW * 2)
   // A regular stud / blocking span is "in the clear" (dropped) if it falls inside
   // an opening's rough span — king/jack studs are added back at the edges.
@@ -514,10 +529,9 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   //
   // HEADERS ARE BOUGHT IN PLIES. A wood header is 1-3/4" LVL plied up to fill
   // the wall: two in a 2×4, three in a 2×6, four in a 2×8. Drawn as one block,
-  // cut as that many pieces. The depth is the 9-1/4" the model draws — the span
-  // and the load above decide the real one.
+  // cut as that many pieces. The DEPTH follows the span (lvlHeaderFor): a
+  // closet door and a 16-ft garage door do not get the same header.
   const headerPlies = steel ? 2 : Math.max(1, Math.floor(studDepth / 0.0254 / 1.75 + 1e-6))
-  const headerStock = steel ? studStock : 'LVL 1-3/4 × 9-1/4'
   for (const op of ops) {
     const isDoor = op.type === 'door'
     const hw = op.w / 2
@@ -527,8 +541,12 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     const oh = op.heightM ?? (isDoor ? 2.06 : 1.13)
     const roBot = isDoor ? floorY : Math.min(floorY + sill, studTop - studW - 0.3)
     const roTop = Math.min(roBot + oh, studTop - studW)
-    // Wood openings get a beefy LVL header; steel keeps the slimmer box beam.
-    const headerDepth = steel ? 0.18 : 0.235
+    // Wood openings get an LVL header as deep as the span asks for; steel keeps
+    // the slimmer box beam. Never deeper than the room between the opening and
+    // the top plate — the cut list still names the stock the span calls for.
+    const lvl = lvlHeaderFor(op.w)
+    const headerStock = steel ? studStock : `LVL 1-3/4 × ${lvl.label}`
+    const headerDepth = steel ? 0.18 : Math.max(0.05, Math.min(lvl.depthM, studTop - roTop))
 
     // JACKS AND KINGS BY SPAN — see jacksPerEnd / kingsPerEnd. The jacks stack
     // outward from the opening edge and the kings stand outboard of them all, so
@@ -563,6 +581,41 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       const ch = studTop - cripBot
       const cripGeo = new THREE.BoxGeometry(studW, ch, studDepth)
       for (let cx = op.x - hw + spacingM; cx < op.x + hw; cx += spacingM) add(cripGeo, cx, cripBot + ch / 2, 0, memberInfo('cripple stud'), cut('cripple', ch))
+    }
+
+    // THE POCKET KIT, standing in the hole. It is bought, not cut, so none of
+    // it goes on the cut list — every piece names the kit instead. Drawn the
+    // way it goes in: the kit header and track across the whole opening under
+    // the LVL, and over the pocket, split members on both faces with the door's
+    // gap down the middle, so nothing can snag the door as it slides. Drywall
+    // screws into those slats must be short enough to stay out of that gap.
+    if (op.pocket && isDoor && !steel) {
+      const kitInfo = `Pocket door frame kit — ${Math.round(op.pocket.doorW / 0.0254)}" door`
+      const dir = op.pocket.dir
+      const kitHeadH = 0.045
+      add(new THREE.BoxGeometry(op.w, kitHeadH, studDepth), op.x, roTop - kitHeadH / 2, 0, kitInfo)
+      const gap = Math.min(0.05, studDepth * 0.5)              // the door's slot
+      const faceD = Math.max(0.006, (studDepth - gap) / 2)     // each split member
+      const faceZ = gap / 2 + faceD / 2
+      const pocketA = op.x - dir * hw + dir * op.pocket.doorW   // where the door enters
+      const pocketB = op.x + dir * hw                           // the back of the pocket
+      const pLen = Math.abs(pocketB - pocketA)
+      const pMid = (pocketA + pocketB) / 2
+      const kitTop = roTop - kitHeadH
+      if (pLen > 0.1) {
+        // The split jamb at the pocket's mouth, both faces.
+        const jambH = kitTop - studBottom
+        for (const z of [-faceZ, faceZ]) {
+          add(new THREE.BoxGeometry(studW, jambH, faceD), pocketA + dir * studW / 2, studBottom + jambH / 2, z, kitInfo)
+        }
+        // Horizontal slats up the pocket, both faces, about every 16".
+        const slatH = 0.038
+        for (let y = studBottom + 0.3; y < kitTop - 0.15; y += 0.406) {
+          for (const z of [-faceZ, faceZ]) {
+            add(new THREE.BoxGeometry(pLen, slatH, faceD), pMid, y, z, kitInfo)
+          }
+        }
+      }
     }
 
     // Windows also get a sill + cripples down to the bottom plate. The sill fits
@@ -1207,8 +1260,36 @@ export function buildFloorJoists(opts: {
       }
     }
   }
+  // A SHED ON SKIDS. No footing and no slab: the floor frame sits on treated
+  // runners laid on the gravel pad, running the LONG way under the joists so
+  // every joist bears on each one. Two for a shed up to 8 ft wide, three past
+  // that — one under the middle of the span.
+  if (isSkidFloor(element)) {
+    const SKID_W = 3.5 * 0.0254, SKID_H = 5.5 * 0.0254   // a 4×6 on edge
+    const n = spanLen > 2.5 ? 3 : 2
+    const inset = Math.min(0.3, spanLen / 6)
+    const skidMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#8f9a6a'), roughness: 0.85, transparent: opacity < 1, opacity })
+    for (let i = 0; i < n; i++) {
+      const at = -spanHalf + inset + (i * (spanLen - 2 * inset)) / (n - 1)
+      const m = new THREE.Mesh(
+        spanAlongX ? new THREE.BoxGeometry(SKID_W, SKID_H, runLen) : new THREE.BoxGeometry(runLen, SKID_H, SKID_W),
+        skidMat,
+      )
+      m.position.set(spanAlongX ? at : 0, -depth / 2 - SKID_H / 2, spanAlongX ? 0 : at)
+      m.castShadow = true; m.receiveShadow = true
+      m.userData.layer = 'floors'
+      m.userData.info = '4×6 PT skid'
+      m.userData.id = `${idPrefix}-skid-${i}`
+      m.userData.label = '4×6 PT skid'
+      g.add(m)
+    }
+  }
   return g
 }
+
+/** The shed floor: 2×6 joists on treated skids, no foundation under it. */
+export const SKID_FLOOR = 'Skids + 2x6'
+export const isSkidFloor = (element: string) => element === SKID_FLOOR
 
 /**
  * The plywood subfloor DECK for a traced floor rectangle, as individual 4'×8'
@@ -3218,4 +3299,27 @@ export function buildWallEnvelope(opts: WallEnvelopeOpts): THREE.Group {
     }
   }
   return group
+}
+
+/**
+ * HEADER DEPTH BY SPAN — an LVL deep enough for the opening under it.
+ *
+ * Every opening used to get a 9-1/4" header, the closet door and the 16-ft
+ * garage door alike. These are the rule-of-thumb depths for a 1-3/4" LVL
+ * header in a bearing wall carrying a roof — a starting point to frame and
+ * price from, NOT an engineered size. Snow load, a floor above or a girder
+ * landing on it all change the answer, and the LVL supplier's span table (or
+ * the engineer) wins.
+ *
+ *   up to 4'-2"   9-1/4"    doors, most windows (a 4-ft unit frames 48-1/2")
+ *   up to 6'-6"   11-7/8"   a 6-ft patio slider, a wide window
+ *   up to 10'-0"  14"       an 8-ft slider, a 9-ft garage door
+ *   past that     16"       a 16-ft garage door
+ */
+export function lvlHeaderFor(spanM: number): { depthM: number; label: string } {
+  const IN = 0.0254
+  if (spanM <= 50 * IN) return { depthM: 9.25 * IN, label: '9-1/4' }
+  if (spanM <= 78 * IN) return { depthM: 11.875 * IN, label: '11-7/8' }
+  if (spanM <= 120 * IN) return { depthM: 14 * IN, label: '14' }
+  return { depthM: 16 * IN, label: '16' }
 }

@@ -5,6 +5,7 @@
  * the walls whether or not the model has been built (drywall is a finish over
  * the studs). Openings (doors/windows) are left unboarded.
  */
+import { useRoughIn } from './useRoughIn'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
@@ -89,6 +90,7 @@ export default function DrywallLayer() {
   const orientation = useUISettingsStore((s) => s.drywallOrientation)
   const finishTiming = useUISettingsStore((s) => s.finishTiming)
   const finishesApplied = useUISettingsStore((s) => s.finishesApplied)
+  const roughIn = useRoughIn()
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const boardKind = useUISettingsStore((s) => s.boardKind)
   const boardType = useMemo(() => boardSpec(boardKind), [boardKind])
@@ -215,7 +217,7 @@ export default function DrywallLayer() {
     return (w: ParsedWall): 1 | -1 => ((tests.get(w.level ?? 0)?.(w) ?? 1) === 1 ? -1 : 1)
   }, [userWalls, isExteriorWall])
 
-  if (!finishesVisible(finishTiming, finishesApplied, traceMode)) return null
+  if (!finishesVisible(finishTiming, finishesApplied, traceMode || roughIn)) return null
   if (!visible || userWalls.length === 0) return null
 
   return (

@@ -27,10 +27,12 @@ import type { Drawing, ParsedWall, TracedLine, WorkspaceWizardInputs } from '../
 import { getWallType, getMember } from '../data/members'
 import { sectionBearingPoints, studsUnderBearing, withBearingPacks } from './bearingPacks'
 import { formatFeetInches, parseFeetInches } from './unitConverter'
+import { SKID_FLOOR } from './framingGeometry'
 import {
   placeBoxes, footprintOutline, insetOutline, outlineBounds, translateOutline,
   type FootprintBox, type Point,
 } from './footprint'
+import { inferCorners } from './wallTraceReducer'
 
 /** Millimetres per sheet pixel. Matches the practice plans, so both paths draw alike. */
 export const DRAWN_MM_PER_PX = 10
@@ -40,7 +42,8 @@ const MARGIN_MM = 1219.2   // 4 ft
 const MM_PER_FT = 304.8
 const MM_PER_IN = 25.4
 
-export type FloorChoice = 'slab' | 'joists' | 'none'
+/** 'skids' is a shed's: a 2×6 floor frame on treated runners, no foundation. */
+export type FloorChoice = 'slab' | 'joists' | 'skids' | 'none'
 
 export interface DrawnProjectSpec {
   /** Outside face to outside face, millimetres. The MAIN box. */
@@ -194,6 +197,67 @@ export function insideWalls(spec: DrawnProjectSpec): ParsedWall[] {
   } as ParsedWall))
 }
 
+/**
+ * HOW FAR A HAND-DRAWN WALL END CAN BE FROM WHAT IT MEANT TO MEET.
+ *
+ * The sheet is drawn at 10 mm per pixel, so 20 px is 200 mm — about a stud bay,
+ * and inside what a drag with a finger misses by. Anything wider is a doorway
+ * or a deliberate offset, and gets left alone.
+ */
+const DRAWN_JOINT_TOLERANCE_PX = 20
+
+/**
+ * CLOSE THE JOINTS THE FINGER MISSED.
+ *
+ * Inside walls used to be committed exactly where the drag ended and nothing
+ * tied them in. Two perpendicular walls that stopped an inch short of each
+ * other stayed an inch apart — so the framing saw two separate ends instead of
+ * a corner, and the three-stud corner post a carpenter builds at a junction was
+ * never placed. Drawing each new wall off the previous one's end helped, but
+ * that is only one of the ways people draw a plan.
+ *
+ * So: every inside-wall end is carried onto the line of the wall it was clearly
+ * heading for — the shell, or another inside wall it butts into — and then the
+ * meeting ends are squared up into an exact corner. The end moves ALONG its own
+ * wall's axis, so a square wall stays square; angled walls are left as drawn.
+ * The traced path has had this for a while (snapTraceWallToExisting,
+ * inferCorners); this is the same bargain for the drawn one.
+ */
+function closeDrawnJoints(inside: ParsedWall[], shell: ParsedWall[]): ParsedWall[] {
+  if (inside.length === 0) return inside
+  const all = [...shell, ...inside]
+  const snapped = inside.map((w, i) => {
+    const others = all.filter((_, j) => j !== shell.length + i)
+    const horiz = Math.abs(w.y2 - w.y1) < Math.abs(w.x2 - w.x1)
+    const move = (px: number, py: number) => {
+      let best: { x: number; y: number; d: number } | null = null
+      for (const o of others) {
+        const oHoriz = Math.abs(o.y2 - o.y1) < Math.abs(o.x2 - o.x1)
+        // Only a PERPENDICULAR wall is a tee. Parallel (and angled) ones are
+        // skipped rather than projected onto, which would tilt the wall.
+        if (oHoriz === horiz) continue
+        const along = horiz ? py : px
+        const [lo, hi] = horiz
+          ? [Math.min(o.y1, o.y2), Math.max(o.y1, o.y2)]
+          : [Math.min(o.x1, o.x2), Math.max(o.x1, o.x2)]
+        if (along < lo - DRAWN_JOINT_TOLERANCE_PX || along > hi + DRAWN_JOINT_TOLERANCE_PX) continue
+        const target = horiz ? o.x1 : o.y1
+        const d = Math.abs((horiz ? px : py) - target)
+        if (d === 0 || d > DRAWN_JOINT_TOLERANCE_PX) continue
+        if (best && d >= best.d) continue
+        best = horiz ? { x: target, y: py, d } : { x: px, y: target, d }
+      }
+      return best ? { x: best.x, y: best.y } : { x: px, y: py }
+    }
+    const s = move(w.x1, w.y1)
+    const e = move(w.x2, w.y2)
+    return { ...w, x1: s.x, y1: s.y, x2: e.x, y2: e.y }
+  })
+  // Then make the projected ends MEET: the exact intersection of the two lines,
+  // which is the corner the person was drawing.
+  return inferCorners([...shell, ...snapped], DRAWN_JOINT_TOLERANCE_PX).slice(shell.length)
+}
+
 /** Every box of the building, main first, in the shape the footprint service takes. */
 export function specBoxes(spec: DrawnProjectSpec): FootprintBox[] {
   return [{ widthMm: spec.widthMm, depthMm: spec.depthMm }, ...(spec.wings ?? [])]
@@ -238,10 +302,8 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
   const bearing = sectionBearingPoints(rects).map((b) => ({
     ...toSheetPt(b), studs: studsUnderBearing(b.spanMm), along: b.along,
   }))
-  const walls = [
-    ...withBearingPacks(shellWalls(spec, centreline, tPx), bearing, tPx * 0.75 + 1),
-    ...insideWalls(spec),
-  ]
+  const shell = withBearingPacks(shellWalls(spec, centreline, tPx), bearing, tPx * 0.75 + 1)
+  const walls = [...shell, ...closeDrawnJoints(insideWalls(spec), shell)]
 
   const svg = sheetSvg(spec, wPx, hPx, outlinePx, tPx, sizeMm)
   let file: File
@@ -265,8 +327,8 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
     y1: px(r.y1 + offY),
     x2: px(r.x2 + offX),
     y2: px(r.y2 + offY),
-    elementType: spec.floor === 'slab' ? 'Concrete Slab' : '2x10',
-    size: spec.floor === 'slab' ? '4in' : '2x10',
+    elementType: spec.floor === 'slab' ? 'Concrete Slab' : spec.floor === 'skids' ? SKID_FLOOR : '2x10',
+    size: spec.floor === 'slab' ? '4in' : spec.floor === 'skids' ? '16"' : '2x10',
     material: spec.floor === 'slab' ? 'Concrete' : 'Wood',
     level: 0,
     // An angled house's floor is its shape, not its bounding box.
@@ -308,7 +370,7 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
     floorAreas,
     outlinePx,
     wizardInputs: {
-      set1BuildingBasics: `${ftOf(sizeMm.w)} x ${ftOf(sizeMm.d)} footprint, 8ft ceiling, 1 floor, ${spec.floor === 'slab' ? 'slab' : spec.floor === 'joists' ? 'crawlspace' : 'foundation not chosen'}`,
+      set1BuildingBasics: `${ftOf(sizeMm.w)} x ${ftOf(sizeMm.d)} footprint, 8ft ceiling, 1 floor, ${spec.floor === 'slab' ? 'slab' : spec.floor === 'joists' ? 'crawlspace' : spec.floor === 'skids' ? 'on skids' : 'foundation not chosen'}`,
       set1Clarifications: `Drawn to typed sizes rather than traced from a print.${(spec.wings?.length ?? 0) > 0 ? ` ${(spec.wings ?? []).length + 1} sections.` : ''}`,
       set2StructuralDetails: `Exterior ${wallType?.short ?? 'wood'} bearing walls.`,
       set2Clarifications: 'Interior partitions to be added.',

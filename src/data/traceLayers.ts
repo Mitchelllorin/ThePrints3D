@@ -104,6 +104,10 @@ export const LEVEL_OPTIONS: Array<{ value: number; label: string }> = [
  * (I-Joist/LVL) run deeper than dimensional lumber.
  */
 export const JOIST_PROFILES: Record<string, { width: number; depth: number; color: string }> = {
+  '2x6':     { width: 0.038, depth: 0.140, color: '#cfaa70' }, // sheds, decks
+  '2x8':     { width: 0.038, depth: 0.184, color: '#cca76d' },
+  // A shed's floor frame — the skids under it are drawn by buildFloorJoists.
+  'Skids + 2x6': { width: 0.038, depth: 0.140, color: '#cfaa70' },
   '2x10':    { width: 0.038, depth: 0.235, color: '#caa46a' }, // SPF dimensional
   '2x12':    { width: 0.038, depth: 0.286, color: '#c49a5f' },
   'I-Joist': { width: 0.045, depth: 0.302, color: '#d8c490' }, // OSB web, pale flanges

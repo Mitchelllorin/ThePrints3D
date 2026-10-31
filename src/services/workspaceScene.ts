@@ -11,6 +11,10 @@ export interface WorkspaceSceneConfig {
   primaryWallMaterial: string
   finishMaterial: string
   hasLoadBearingWalls: boolean
+  /** How far a bulkhead hangs below the ceiling, in metres. */
+  bulkheadDropM: number
+  /** How deep a bulkhead is out from the wall, in metres. */
+  bulkheadDepthM: number
 }
 
 export const DEFAULT_WORKSPACE_SCENE_CONFIG: WorkspaceSceneConfig = {
@@ -24,6 +28,8 @@ export const DEFAULT_WORKSPACE_SCENE_CONFIG: WorkspaceSceneConfig = {
   primaryWallMaterial: 'Concrete block',
   finishMaterial: 'Painted gypsum',
   hasLoadBearingWalls: false,
+  bulkheadDropM: 0.28,
+  bulkheadDepthM: 0.6,
 }
 
 function parseNumber(text: string, pattern: RegExp): number | null {
@@ -115,6 +121,10 @@ export interface WorkspaceSceneOverrides {
   ceilingM?: number | null
   /** e.g. 'residential-single' — picks the default when nobody has said. */
   buildType?: string | null
+  /** Bulkhead drop below the ceiling, metres (Settings → Bulkhead drop). */
+  bulkheadDropM?: number | null
+  /** Bulkhead depth out from the wall, metres. */
+  bulkheadDepthM?: number | null
 }
 
 /** The height to frame at when the drawing and the user have both said nothing. */
@@ -135,6 +145,8 @@ export function deriveWorkspaceSceneConfig(
     return {
       ...DEFAULT_WORKSPACE_SCENE_CONFIG,
       wallHeightM: stated ?? defaultCeilingM(overrides?.buildType),
+      bulkheadDropM: overrides?.bulkheadDropM ?? DEFAULT_WORKSPACE_SCENE_CONFIG.bulkheadDropM,
+      bulkheadDepthM: overrides?.bulkheadDepthM ?? DEFAULT_WORKSPACE_SCENE_CONFIG.bulkheadDepthM,
     }
   }
 
@@ -160,6 +172,8 @@ export function deriveWorkspaceSceneConfig(
     floorCount,
     foundationType,
     defaultWallThicknessM,
+    bulkheadDropM: overrides?.bulkheadDropM ?? DEFAULT_WORKSPACE_SCENE_CONFIG.bulkheadDropM,
+    bulkheadDepthM: overrides?.bulkheadDepthM ?? DEFAULT_WORKSPACE_SCENE_CONFIG.bulkheadDepthM,
     specialFeatures: parseSpecialFeatures(allText),
     primaryWallMaterial: parseMaterial(inputs.set2StructuralDetails, DEFAULT_WORKSPACE_SCENE_CONFIG.primaryWallMaterial),
     finishMaterial: parseMaterial(inputs.set3FinishingDetails, DEFAULT_WORKSPACE_SCENE_CONFIG.finishMaterial),

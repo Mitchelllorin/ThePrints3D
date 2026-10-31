@@ -8,6 +8,7 @@
  * deck is modelled as individual 4'×8' sheets with visible joints, and each area
  * carries a sheet COUNT nameplate for material takeoff.
  */
+import { tapCycle, memberKey, type PickTag } from './tapCycle'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
@@ -103,6 +104,8 @@ interface PartProps {
   offset?: [number, number]
   /** Pointer handlers spread onto the area mesh (down + edit-mode hover). */
   bodyHandlers?: Record<string, (e: ThreeEvent<PointerEvent>) => void>
+  /** What a tap on this floor selects — see tapCycle. */
+  pickTag?: PickTag
   /** 0..1 opacity override for ghost mode (1 = opaque). */
   ghostOpacity?: number
 }
@@ -119,7 +122,7 @@ function useFloorExplode(ref: React.RefObject<THREE.Group | null>, baseY: number
 }
 
 /** The structure: joist field, or a concrete slab. */
-function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity }: PartProps) {
+function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity, pickTag }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
   const holeKey = JSON.stringify(holes ?? [])
@@ -153,13 +156,16 @@ function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, over
   if (lenX < 0.1 || lenZ < 0.1) return null
   return (
     <group ref={ref}>
-      <primitive object={joists} position={[centre.x + offset[0], 0, centre.z + offset[1]]} rotation={[0, rotRad, 0]} {...(bodyHandlers ?? {})} />
+      {/* The floor, and every joist in it, take part in tap-again (tapCycle). */}
+      <group userData={{ pick: pickTag && { ...pickTag, members: true } }}>
+        <primitive object={joists} position={[centre.x + offset[0], 0, centre.z + offset[1]]} rotation={[0, rotRad, 0]} {...(bodyHandlers ?? {})} />
+      </group>
     </group>
   )
 }
 
 /** The plywood subfloor deck (individual sheets) + a sheet-count nameplate. */
-function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity }: PartProps) {
+function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity, pickTag }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const holeKey = JSON.stringify(holes ?? [])
   const outline = areaOutline(area, imageWidth, imageHeight, overlayW, overlayD)
@@ -196,12 +202,14 @@ function DeckPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overl
   if (lenX < 0.1 || lenZ < 0.1) return null
   return (
     <group ref={ref}>
-      <primitive
-        object={deck}
-        position={[centre.x + offset[0], -SUBFLOOR_T / 2, centre.z + offset[1]]}
-        rotation={[0, rotRad, 0]}
-        {...(bodyHandlers ?? {})}
-      />
+      <group userData={{ pick: pickTag }}>
+        <primitive
+          object={deck}
+          position={[centre.x + offset[0], -SUBFLOOR_T / 2, centre.z + offset[1]]}
+          rotation={[0, rotRad, 0]}
+          {...(bodyHandlers ?? {})}
+        />
+      </group>
     </group>
   )
 }
@@ -221,7 +229,6 @@ export default function FloorJoistsLayer() {
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
-  const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
   const selectMember = useFloorplanLocalStore((s) => s.selectMember)
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
@@ -310,6 +317,14 @@ export default function FloorJoistsLayer() {
   // floor across the plan; a press only moves something once it is deliberately
   // selected. That selection gate replaces Edit mode's old press-to-drag, which
   // is what made thin handles unusable — they sat on grab-anywhere bodies.
+  const floorKey = (area: TracedLine) => `floor:${area.id}`
+  // One tag per area, kept while the areas are, so a part's effect does not
+  // re-tag it every render.
+  const pickTags = useMemo(() => new Map(floorsAreas.map((a): [string, PickTag] => [a.id, {
+    key: `floor:${a.id}`,
+    select: () => useFloorplanLocalStore.getState().selectAreaExclusive('floor', a.id),
+  }])), [floorsAreas])
+  const pickTagFor = (area: TracedLine): PickTag | undefined => pickTags.get(area.id)
   const onAreaDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
     const isSel = editSelected?.kind === 'floor' && editSelected.id === area.id
     e.stopPropagation()
@@ -353,27 +368,21 @@ export default function FloorJoistsLayer() {
   // and it changes no geometry.
   const handlersFor = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => (traceMode || overlay.calibrationMode)
     ? {}
-    : editMode && granularity === 'member'
-    ? {
-        // Member grain: the tap picks the actual JOIST it landed on, not the
-        // whole deck. Same rule as walls — one switch, one meaning.
-        onPointerDown: (e: ThreeEvent<PointerEvent>) => {
-          const ud = e.object.userData as { id?: string; label?: string }
-          if (!ud.id) return
-          e.stopPropagation()
-          selectMember(ud.id, ud.label ?? 'Joist')
-        },
-        onPointerOver: (e: ThreeEvent<PointerEvent>) => {
-          const id = (e.object.userData as { id?: string }).id
-          if (!id) return
-          e.stopPropagation()
-          setEditHover({ kind: 'member', id })
-        },
-        onPointerOut: () => setEditHover(null),
-      }
     : editMode
     ? {
-        onPointerDown: onAreaDown(area),
+        // The floor or the JOIST under the tap — whichever tapCycle says this
+        // tap is for. Neither: it belongs to something further back, so it is
+        // let through rather than swallowed.
+        onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+          const ud = e.object.userData as { id?: string; label?: string; pick?: unknown }
+          if (ud.id && !ud.pick && tapCycle.mine(e, memberKey(ud.id))) {
+            e.stopPropagation()
+            selectMember(ud.id, ud.label ?? 'Joist')
+            return
+          }
+          if (!tapCycle.mine(e, floorKey(area))) return
+          onAreaDown(area)(e)
+        },
         onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'floor', id: area.id }) },
         onPointerOut: () => setEditHover(null),
       }
@@ -409,14 +418,14 @@ export default function FloorJoistsLayer() {
         {structural.map((area) => {
           const gop = areaOpacity(area)
           if (gop === 0) return null
-          return <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} />
+          return <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} pickTag={pickTagFor(area)} />
         })}
       </group>
       <group name="floor-sheeting">
         {decked.map((area) => {
           const gop = areaOpacity(area)
           if (gop === 0) return null
-          return <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} />
+          return <DeckPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} pickTag={pickTagFor(area)} />
         })}
       </group>
       {/* PICK TARGET — one invisible slab per floor area, carrying the handlers.
@@ -439,6 +448,7 @@ export default function FloorJoistsLayer() {
             key={`pick-${area.id}`}
             position={[centre.x + live[0], y, centre.z + live[1]]}
             rotation={[0, rotRad, 0]}
+            userData={{ pick: pickTagFor(area) }}
             {...handlersFor(area)}
           >
             <boxGeometry args={[lenX, 0.05, lenZ]} />

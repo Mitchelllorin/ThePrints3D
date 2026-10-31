@@ -99,6 +99,9 @@ export interface BuildReviewInput {
   ceilingM?: number
   studSpacingIn?: number
   framingMaterial?: 'wood' | 'steel'
+  /** What sits in a pocket door's pocket (see services/pocketWall), against
+   *  the index of that door in `openings`. */
+  pocketConflicts?: { openingIndex: number; what: string; level?: number }[]
 }
 
 const FT = 0.3048
@@ -140,7 +143,7 @@ function hasAreaAt(areas: FloorAreaLite[], level: number): boolean {
 export function reviewBuildModel(input: BuildReviewInput): Finding[] {
   const {
     scaleMmPerPx, walls, openings, floors, roofs, hasVerticalCirculation,
-    ceilingM, studSpacingIn, framingMaterial = 'wood',
+    ceilingM, studSpacingIn, framingMaterial = 'wood', pocketConflicts = [],
   } = input
 
   const findings: Finding[] = []
@@ -344,6 +347,24 @@ export function reviewBuildModel(input: BuildReviewInput): Finding[] {
       fix: 'Keep the header within the box-beam span for the gauge and the load, or pick up the opening with a structural member.',
       citation: 'AISI S230 / manufacturer span tables',
       target: { focus: 'opening', openingIndex: worstSteel.index, level: worstSteel.level ?? 0 },
+    })
+  }
+
+  // ── Something in a pocket door's pocket ─────────────────────────────────────
+  // The pocket is hollow — slats, not studs — and the slab slides through it.
+  // A box there has nothing to fasten to and stops the door; a pipe or a wire
+  // there takes a drywall screw. Nothing about it is a judgement call.
+  if (pocketConflicts.length > 0) {
+    const first = pocketConflicts[0]
+    const names = [...new Set(pocketConflicts.map((c) => c.what))]
+    add({
+      id: 'pocket-obstructed',
+      severity: 'STOP',
+      title: `${pocketConflicts.length === 1 ? 'Something is' : `${pocketConflicts.length} things are`} in a pocket door's wall`,
+      detail: `${names.join(', ')} ${pocketConflicts.length === 1 ? 'sits' : 'sit'} in the stretch of wall the pocket door slides into. That wall is a hollow kit with slats, not studs: a box there has nothing to fasten to and blocks the door, and a pipe or wire there is where the drywall screws go.`,
+      fix: 'Move the outlet, switch, fixture or run past the end of the pocket, or flip the pocket to the other side of the doorway (door card → Pocket → Left/Right).',
+      citation: 'Pocket door frame kit install instructions — keep the pocket clear of plumbing and electrical',
+      target: { focus: 'opening', openingIndex: first.openingIndex, level: first.level ?? 0 },
     })
   }
 

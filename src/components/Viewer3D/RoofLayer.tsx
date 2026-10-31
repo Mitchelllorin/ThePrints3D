@@ -15,6 +15,8 @@
  * once the ridge is actually re-shaped we switch that roof to buildRidgeRoof.
  * Untouched roofs render exactly as before (the override is absent).
  */
+import { useRoughIn } from './useRoughIn'
+import { tapCycle, memberKey } from './tapCycle'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
@@ -120,6 +122,13 @@ function RoofAreaMesh({
         })
       : buildRoofByType(area.elementType, { lenX, lenZ, pitch: ridge.pitch, ocM: RAFTER_OC_M, overhangM, cladding: gableCladding, sheathingVisible })
     r.userData.level = area.level ?? 0  // so the shared explode lifts it floor-by-floor
+    // The roof, and every rafter in it, take part in tap-again (tapCycle).
+    const areaId = area.id
+    r.userData.pick = {
+      key: `roof:${areaId}`,
+      select: () => useFloorplanLocalStore.getState().selectAreaExclusive('roof', areaId),
+      members: true,
+    }
     // IDENTITY, STAMPED AFTER THE FACT. A rafter with no id is anonymous
     // geometry — visible, unselectable. There are four roof builders, each with
     // its own little add-helper, so stamping them individually means one gets
@@ -331,6 +340,7 @@ export default function RoofLayer() {
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const roofAreas = useAppStore((s) => s.roofAreas)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
+  const roughIn = useRoughIn()
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const setRoofRidge = useAppStore((s) => s.setRoofRidge)
   const translateRoofArea = useAppStore((s) => s.translateRoofArea)
@@ -341,7 +351,6 @@ export default function RoofLayer() {
   const editHover = useFloorplanLocalStore((s) => s.editHover)
   const editSelected = useFloorplanLocalStore((s) => s.editSelected)
   const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
-  const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
   const selectMember = useFloorplanLocalStore((s) => s.selectMember)
 
   const groupRef = useRef<THREE.Group>(null)
@@ -380,6 +389,14 @@ export default function RoofLayer() {
   // so the ridge grip no longer competes with the body underneath it, and an
   // unselected roof just lets the camera orbit. See docs/INTERACTIONS.md.
   const onBodyDown = (area: TracedLine) => (e: ThreeEvent<PointerEvent>) => {
+    // The roof, or a RAFTER in it, or something further back — tapCycle says.
+    const ud = e.object.userData as { id?: string; label?: string }
+    if (ud.id && tapCycle.mine(e, memberKey(ud.id))) {
+      e.stopPropagation()
+      selectMember(ud.id, ud.label ?? 'Roof member')
+      return
+    }
+    if (!tapCycle.mine(e, `roof:${area.id}`)) return
     const isSel = editSelected?.kind === 'roof' && editSelected.id === area.id
     e.stopPropagation()
     if (!isSel) { selectArea('roof', area.id); return }
@@ -408,31 +425,14 @@ export default function RoofLayer() {
 
   const hoverHandlers = (area: TracedLine): Record<string, (e: ThreeEvent<PointerEvent>) => void> => {
     if (!editMode) return {}
-    // Member grain picks the RAFTER you touched; whole grain picks the roof.
-    if (granularity === 'member') {
-      return {
-        onPointerDown: (e: ThreeEvent<PointerEvent>) => {
-          const ud = e.object.userData as { id?: string; label?: string }
-          if (!ud.id) return
-          e.stopPropagation()
-          selectMember(ud.id, ud.label ?? 'Roof member')
-        },
-        onPointerOver: (e: ThreeEvent<PointerEvent>) => {
-          const id = (e.object.userData as { id?: string }).id
-          if (!id) return
-          e.stopPropagation()
-          setEditHover({ kind: 'member', id })
-        },
-        onPointerOut: () => setEditHover(null),
-      }
-    }
     return {
       onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEditHover({ kind: 'roof', id: area.id }) },
       onPointerOut: () => setEditHover(null),
     }
   }
 
-  if (!visibleLayers.has('roof') || roofAreas.length === 0) return null
+  // Rough-in view: the roof is off while a trade is being worked (useRoughIn).
+  if (!visibleLayers.has('roof') || roofAreas.length === 0 || roughIn) return null
 
   return (
     <group name="roof" ref={groupRef}>

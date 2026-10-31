@@ -155,6 +155,8 @@ function activeDrywallConfig(): DrywallConfig {
 
 import { DEFAULT_WALL_DETECTION_CONFIG, type WallDetectionConfig } from './wallDetectionConfig'
 import { createDrawnProject, type DrawnProjectSpec } from '../services/drawnProject'
+import { overlayPixelToWorld } from '../services/wallFramingPlan'
+import { planRegisters, planSource, planRuns, TRADE_LINES, type Trade, type PlannedObject } from '../services/mepWorkflow'
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
 import { readCachedPro } from '../services/billing'
 import { useConfigStore } from './useConfigStore'
@@ -168,6 +170,7 @@ import {
   setWizardCurrentGroup,
   type ProjectContextWizardState,
 } from '../components/ProjectContext/wizardState'
+import { framedShiftM } from '../services/doorStyle'
 import {
   loadWizardState as loadOnboardingWizardState,
   saveWizardState as saveOnboardingWizardState,
@@ -604,14 +607,22 @@ interface AppState {
    *  many openings it filled. One undo step. */
   finishShell: (opts?: { roof?: boolean }) => number
   /** Stand the walls: hang the openings, frame around them. NO ROOF — the roof
-   *  is its own step, taken when the inside is in. */
+   *  is its own step, taken when the inside is in. One undo step. */
   standWalls: () => void
   /** Put the roof on over the walls as they stand. Returns how many roof areas
    *  it added — 0 if there was already a roof. One undo step. */
-  putRoofOn: () => number
+  putRoofOn: (roof?: { element?: string; pitch?: string }) => number
+  /** Draw it, for a shed: the drawn project, walls stood, the roof on and the
+   *  door hung in the front wall — all one undo step. */
+  frameShed: (spec: DrawnProjectSpec, shed: { roof: string; pitch: string; doorWidthM: number }) => void
   /** Run the General's electrical pass on a storey. Returns how many devices
    *  it placed, so the caller can say so. One undo step. */
   autoPlaceElectrical: (level?: number) => number
+  /** The MEP standard's "do it for me", one step at a time (services/mepWorkflow).
+   *  Each is one undo and returns how many things it placed or ran. */
+  mepPlaceServes: (trade: Trade, level: number) => number
+  mepPlaceSource: (trade: Trade, level: number) => number
+  mepRun: (trade: Trade, level: number) => number
   addPlacedObject: (obj: PlacedObject) => void
   removePlacedObject: (id: string) => void
   updatePlacedObject: (id: string, patch: Partial<PlacedObject>) => void
@@ -897,9 +908,15 @@ function computeFramingResult(
         (item?.defaultW ?? 0.9) * o.scaleX,
         (item?.defaultH ?? (o.type === 'door' ? 2.06 : 1.13)) * o.scaleY,
       ).widthM * 1000
+      // A pocket door's hole runs from the doorway out over the pocket — see
+      // framedShiftM. Print pixels run with world x/z while the print sits
+      // square, the same assumption `angle` below makes.
+      const shiftPx = (framedShiftM(o) * 1000) / scaleMmPerPx
       return {
-        x: o.pxX as number,
-        y: o.pxY as number,
+        x: (o.pxX as number) + shiftPx * Math.cos(o.rotationY),
+        // Yaw is the NEGATIVE of the pixel angle (see `angle` below), so the
+        // door's own +X runs (cos, −sin) on the print.
+        y: (o.pxY as number) - shiftPx * Math.sin(o.rotationY),
         widthPx: widthMm / scaleMmPerPx,
         widthMm,
         // The real direction, not just the nearest axis. `orientation` stays as
@@ -940,12 +957,52 @@ function computeFramingResult(
 
 export const useAppStore = create<AppState>()(
   immer((set, get) => {
+    /**
+     * ONE ACTION, ONE UNDO. Inside `asOneUndo` only the first pushHistory
+     * records; the rest are the same action's inner steps. Standing walls was
+     * three undo steps (hang openings, build, hang again), so Undo stopped in
+     * the middle — walls standing, model marked unbuilt — and the app asked to
+     * "Stand them up" over walls that were already up.
+     */
+    let batching = false
+    let batchRecorded = false
+    const asOneUndo = (fn: () => void) => {
+      // Nested (a shed build stands its walls): already one step — just run it.
+      if (batching) { fn(); return }
+      batching = true
+      batchRecorded = false
+      try { fn() } finally { batching = false }
+    }
     const pushHistory = () => {
+      if (batching) {
+        if (batchRecorded) return
+        batchRecorded = true
+      }
       set((s) => {
         s.historyPast.push(captureSnapshot(s))
         if (s.historyPast.length > HISTORY_LIMIT) s.historyPast.shift()
         s.historyFuture = []
       })
+    }
+    /** Turn planned MEP parts (pixel space) into placed objects — one undo. */
+    const placePlanned = (planned: PlannedObject[]): number => {
+      if (planned.length === 0) return 0
+      const s = get()
+      const drawing = s.drawings.find((d) => d.id === s.floorplanOverlay.drawingId) ?? s.drawings[0]
+      if (!drawing) return 0
+      const toWorld = overlayPixelToWorld(s.floorplanOverlay, drawing.rasterWidth ?? 1400, drawing.rasterHeight ?? 900)
+      pushHistory()
+      set((st) => {
+        for (const p of planned) {
+          const { x, z } = toWorld(p.pxX, p.pxY)
+          st.placedObjects.push({
+            id: genId(), type: p.type, x, z, rotationY: p.rotationY,
+            scaleX: 1, scaleY: 1, scaleZ: 1, label: p.label,
+            pxX: p.pxX, pxY: p.pxY, level: p.level,
+          })
+        }
+      })
+      return planned.length
     }
 
     return {
@@ -2631,11 +2688,45 @@ export const useAppStore = create<AppState>()(
      * three calls it replaces in three places: none of them can forget to leave
      * the roof off again.
      */
+    frameShed: (spec, shed) => {
+      asOneUndo(() => {
+        get().startDrawnProject(spec)
+        // THE DOOR FIRST, in the middle of the front wall — a shed is not a
+        // shed until the mower goes in. Hung BEFORE the walls stand, because
+        // the framing engine frames around the openings it is handed: stand
+        // first and the doorway is a hole with studs across it. The front wall
+        // is the top of the sheet, the same "Front" the Draw it sections use.
+        const st = get()
+        const drawing = st.drawings.find((d) => d.id === st.floorplanOverlay.drawingId)
+        const front = drawing?.parsedWalls
+          .filter((w) => Math.abs(w.y2 - w.y1) < 1)
+          .reduce<ParsedWall | null>((a, w) => (!a || w.y1 < a.y1 ? w : a), null)
+        if (drawing && front) {
+          const pxX = (front.x1 + front.x2) / 2, pxY = front.y1
+          const toWorld = overlayPixelToWorld(st.floorplanOverlay, drawing.rasterWidth ?? 1400, drawing.rasterHeight ?? 900)
+          const { x, z } = toWorld(pxX, pxY)
+          const doorW = getCatalogItem('door')?.defaultW ?? 0.9144
+          st.addPlacedObject({
+            id: `shed-door-${genId()}`,
+            type: 'door', subtype: 'Hinged Double',
+            x, z, rotationY: 0,
+            scaleX: shed.doorWidthM / doorW, scaleY: 1, scaleZ: 1,
+            label: 'Shed door', pxX, pxY, level: 0,
+            swingSide: 'out',
+          })
+        }
+        get().standWalls()
+        get().putRoofOn({ element: shed.roof, pitch: shed.pitch })
+      })
+    },
+
     standWalls: () => {
-      const app = get()
-      app.finishShell({ roof: false })
-      app.buildForMe()
-      get().finishShell({ roof: false })
+      asOneUndo(() => {
+        const app = get()
+        app.finishShell({ roof: false })
+        app.buildForMe()
+        get().finishShell({ roof: false })
+      })
     },
 
     /**
@@ -2650,7 +2741,7 @@ export const useAppStore = create<AppState>()(
      * Leaves a roof you already traced alone rather than stacking a second one
      * on top of it.
      */
-    putRoofOn: () => {
+    putRoofOn: (roof) => {
       const s = get()
       if (s.roofAreas.length > 0) return 0
       const walls = s.drawings.flatMap((d) => d.parsedWalls)
@@ -2658,6 +2749,8 @@ export const useAppStore = create<AppState>()(
       const shell = deriveBuildAreas(walls, {
         levels: Math.max(1, s.model.floorLevels?.length ?? 1),
         makeId: (role, level) => `auto-${role}-${level}-${genId()}`,
+        roofElement: roof?.element,
+        roofPitch: roof?.pitch,
       })
       if (shell.roofs.length === 0) return 0
       pushHistory()
@@ -2739,6 +2832,41 @@ export const useAppStore = create<AppState>()(
         }
       })
       return devices.length
+    },
+
+    mepPlaceServes: (trade, level) => {
+      if (trade === 'electrical') return get().autoPlaceElectrical(level)
+      if (trade === 'plumbing') return 0   // fixtures come from the plan
+      const s = get()
+      const drawing = s.drawings.find((d) => d.id === s.floorplanOverlay.drawingId) ?? s.drawings[0]
+      if (!drawing) return 0
+      return placePlanned(planRegisters(drawing.parsedWalls, s.placedObjects, level))
+    },
+
+    mepPlaceSource: (trade, level) => {
+      const s = get()
+      const drawing = s.drawings.find((d) => d.id === s.floorplanOverlay.drawingId) ?? s.drawings[0]
+      if (!drawing) return 0
+      // Same fallback scale the model builds with (BuildingModel) when none is set.
+      const mPerPx = (drawing.scaleMmPerPx ?? 23.5) / 1000
+      return placePlanned(planSource(trade, drawing.parsedWalls, s.placedObjects, level, mPerPx))
+    },
+
+    mepRun: (trade, level) => {
+      const s = get()
+      const drawing = s.drawings.find((d) => d.id === s.floorplanOverlay.drawingId) ?? s.drawings[0]
+      if (!drawing) return 0
+      const planned = planRuns(trade, drawing.parsedWalls, s.placedObjects, level)
+      if (planned.length === 0) return 0
+      const key = TRADE_LINES[trade]
+      pushHistory()
+      set((st) => {
+        // Run it again = run it fresh. Only this storey's AUTO runs go; a run
+        // drawn by hand is never touched.
+        st[key] = st[key].filter((l) => !(l.auto && (l.level ?? 0) === level))
+        for (const l of planned) st[key].push({ ...l, id: genId(), auto: true })
+      })
+      return planned.length
     },
 
     // ─── Placed objects (furniture / fixtures) ────────────────────────

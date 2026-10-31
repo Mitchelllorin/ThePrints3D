@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { tapCycle, memberKey } from './tapCycle'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
@@ -351,6 +352,9 @@ function buildSpecialFeatures(
   elevation: number,
   floorHeight: number,
   features: string[],
+  /** The soffit's drop below the ceiling and its depth — Settings, not a
+   *  constant. A bulkhead has to clear the duct or beam it hides. */
+  bulkhead: { dropM: number; depthM: number },
 ) {
   if (features.length === 0) return
   const cx = (fp.minX + fp.maxX) / 2
@@ -362,8 +366,10 @@ function buildSpecialFeatures(
     roughness: 0.5,
   })
   if (features.includes('soffit') || features.includes('bulkhead')) {
-    const soffit = new THREE.Mesh(new THREE.BoxGeometry((fp.maxX - fp.minX) * 0.35, 0.28, 0.6), featureMat)
-    soffit.position.set(cx, elevation + floorHeight - 0.25, fp.minZ + 0.8)
+    const drop = Math.max(0.05, bulkhead.dropM)
+    const deep = Math.max(0.1, bulkhead.depthM)
+    const soffit = new THREE.Mesh(new THREE.BoxGeometry((fp.maxX - fp.minX) * 0.35, drop, deep), featureMat)
+    soffit.position.set(cx, elevation + floorHeight - drop / 2, fp.minZ + deep / 2 + 0.05)
     soffit.userData.layer = 'ceiling'
     group.add(soffit)
   }
@@ -825,10 +831,11 @@ export default function BuildingModel({ layers }: Props) {
   // exact member that was hit.
   const editMode = useFloorplanLocalStore((s) => s.editMode)
   const granularity = useFloorplanLocalStore((s) => s.selectionGranularity)
-  const setEditHover = useFloorplanLocalStore((s) => s.setEditHover)
   const selectMember = useFloorplanLocalStore((s) => s.selectMember)
   const isolatedMemberId = useFloorplanLocalStore((s) => s.isolatedMemberId)
-  const memberPicking = editMode && granularity === 'member'
+  // Every stick answers in edit mode; tapCycle decides whether a tap is the
+  // stick's or the wall's in front of it (tap again to go deeper).
+  const memberPicking = editMode
 
   // Explode animation state that must persist across frames (not re-rendered).
   const explodeCurrentRef = useRef(0)
@@ -1149,7 +1156,10 @@ export default function BuildingModel({ layers }: Props) {
             )
             break
           case 'special-features':
-            buildSpecialFeatures(group, fp, elev, fh, sceneConfig.specialFeatures)
+            buildSpecialFeatures(group, fp, elev, fh, sceneConfig.specialFeatures, {
+              dropM: sceneConfig.bulkheadDropM,
+              depthM: sceneConfig.bulkheadDepthM,
+            })
             break
         }
       }
@@ -1345,16 +1355,10 @@ export default function BuildingModel({ layers }: Props) {
   return (
     <group
       ref={groupRef}
-      onPointerOver={memberPicking ? (e) => {
-        const id = e.object.userData.id as string | undefined
-        if (!id) return
-        e.stopPropagation()
-        setEditHover({ kind: 'member', id })
-      } : undefined}
-      onPointerOut={memberPicking ? () => setEditHover(null) : undefined}
+      userData={{ pickMembers: true }}
       onPointerDown={memberPicking ? (e) => {
         const ud = e.object.userData as { id?: string; label?: string; componentType?: string }
-        if (!ud.id) return
+        if (!ud.id || !tapCycle.mine(e, memberKey(ud.id))) return
         e.stopPropagation()
         selectMember(ud.id, ud.label ?? ud.componentType ?? 'Member')
       } : undefined}

@@ -17,6 +17,7 @@
  * the wrong face, which is visible and fixable rather than silent. It beats the
  * alternative of sheathing both faces of every wall.
  */
+import { useRoughIn } from './useRoughIn'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useAppStore } from '../../store/useAppStore'
@@ -171,6 +172,7 @@ export default function EnvelopeLayer() {
   // and cladding sitting there solid — the fade "wasn't applying to the plywood".
   const finishTiming = useUISettingsStore((s) => s.finishTiming)
   const finishesApplied = useUISettingsStore((s) => s.finishesApplied)
+  const roughIn = useRoughIn()
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
   const ghostedLevels = useFloorplanLocalStore((s) => s.ghostedLevels)
@@ -310,7 +312,7 @@ export default function EnvelopeLayer() {
 
   // The guardrail is not part of the envelope — it can be shown on bare studs, so
   // this layer stays mounted when only the rail is on.
-  if (!finishesVisible(finishTiming, finishesApplied, traceMode)) return null
+  if (!finishesVisible(finishTiming, finishesApplied, traceMode || roughIn)) return null
   if ((!sheathingVisible && cladding === 'none') || skinWalls.length === 0) return null
 
   return (

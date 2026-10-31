@@ -70,7 +70,7 @@ function lengthPx(w: ParsedWall): number {
 }
 
 /** Centre of everything, used to decide which way is indoors. */
-function centroid(walls: ParsedWall[]): { x: number; y: number } {
+export function centroid(walls: ParsedWall[]): { x: number; y: number } {
   let sx = 0
   let sy = 0
   for (const w of walls) {
@@ -89,7 +89,7 @@ function centroid(walls: ParsedWall[]): { x: number; y: number } {
  * complicated footprint and right on the overwhelming majority of walls — and
  * being wrong only means a device faces the wrong way, which the user can spin.
  */
-function inwardNormal(w: ParsedWall, mid: { x: number; y: number }): { nx: number; ny: number } {
+export function inwardNormal(w: ParsedWall, mid: { x: number; y: number }): { nx: number; ny: number } {
   const dx = w.x2 - w.x1
   const dy = w.y2 - w.y1
   const len = Math.hypot(dx, dy) || 1
@@ -102,7 +102,7 @@ function inwardNormal(w: ParsedWall, mid: { x: number; y: number }): { nx: numbe
   return towardsMiddle >= 0 ? { nx, ny } : { nx: -nx, ny: -ny }
 }
 
-function facingInward(w: ParsedWall, mid: { x: number; y: number }): number {
+export function facingInward(w: ParsedWall, mid: { x: number; y: number }): number {
   const { nx, ny } = inwardNormal(w, mid)
   // Image Y runs down; negate so the angle reads as a normal world heading.
   return Math.atan2(nx, -ny)

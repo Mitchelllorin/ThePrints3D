@@ -15,6 +15,7 @@
  * `placementPose` (services/planPlacement), which is also where the arithmetic
  * can finally be tested.
  */
+import { tapCycle } from './tapCycle'
 import { useState, useRef, useLayoutEffect } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
@@ -25,6 +26,8 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { getCatalogItem, deviceMountHeightM, isWallMountedType } from '../../data/objectCatalog'
 import { placementPose, roomEdgeWalls, type PlanTransform, type PlanWall } from '../../services/planPlacement'
 import ObjectModel from './ObjectModels'
+import DoorLeaves from './DoorLeaves'
+import { doorStyle } from '../../services/doorStyle'
 import { useSceneConfig } from '../../store/useSceneConfig'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import type { PlacedObject } from '../../types'
@@ -130,6 +133,21 @@ export default function PlacedObjectsLayer() {
   const storeyHeight = ceilingM + FLOOR_ASSEMBLY_H
 
   const [drag, setDrag] = useState<DragState | null>(null)
+  /**
+   * THE DRAG MOVES THE GROUP, NOT THE WHOLE LAYER.
+   *
+   * Every pointer move used to call setDrag, which re-rendered every placed
+   * object in the building — each one rebuilding its procedural geometry to move
+   * ONE box. That is what made nudging a countertop or a door feel choppy: the
+   * room around it was being rebuilt on every frame of the gesture.
+   *
+   * The dragged group is posed directly here instead, and the store is written
+   * once, on release. React renders the drag START (the ref has to attach) and
+   * the drop; the finger's travel is pure three.js.
+   */
+  const dragGroup = useRef<THREE.Group | null>(null)
+  const dragPose = useRef<{ x: number; z: number; rotationY: number; moved: boolean } | null>(null)
+  const dragTarget = useRef<PlacedObject | null>(null)
   // Precision gizmo (edit mode only) — live transform before commit, + its mode.
   const groupRef = useRef<THREE.Group>(null)
   // Double-tap an object to flip its X-ray — quick, no panel/scroll. One detector
@@ -186,50 +204,57 @@ export default function PlacedObjectsLayer() {
     return wallMounted ? { ...moved, rotationY: pose.rotationY } : moved
   }
 
-  // Rotate knob (only shows when selected): an explicit rotate drag.
-  const startDrag = (e: ThreeEvent<PointerEvent>, obj: PlacedObject, kind: 'move' | 'rotate') => {
+  /**
+   * SELECT AND PICK UP IN ONE PRESS.
+   *
+   * It used to take a tap to select and then a SECOND press before the drag
+   * would do anything, so the first drag after picking something up was dead —
+   * which reads as "it won't move". One press now selects and starts the drag;
+   * a press that never moves is still just a selection, decided on release.
+   */
+  const beginDrag = (e: ThreeEvent<PointerEvent>, obj: PlacedObject, kind: 'move' | 'rotate') => {
     e.stopPropagation()
     select(obj.id)
+    dragTarget.current = obj
+    dragPose.current = null
     setDrag({ id: obj.id, kind, x: obj.x, z: obj.z, rotationY: obj.rotationY, moved: false })
-    setGestureLock(true)
-  }
-
-  // Pressing an object starts a PENDING move — no select yet. If the pointer
-  // moves it becomes a drag; if it doesn't, the release selects it (tap).
-  const startObjectPress = (e: ThreeEvent<PointerEvent>, obj: PlacedObject) => {
-    e.stopPropagation()
-    setDrag({ id: obj.id, kind: 'move', x: obj.x, z: obj.z, rotationY: obj.rotationY, moved: false })
     setGestureLock(true)
   }
 
   const onPlaneMove = (e: ThreeEvent<PointerEvent>) => {
     if (!drag) return
     e.stopPropagation()
+    const obj = dragTarget.current
+    if (!obj) return
     if (drag.kind === 'move') {
-      setDrag({ ...drag, x: e.point.x, z: e.point.z, moved: true })
+      dragPose.current = { x: e.point.x, z: e.point.z, rotationY: obj.rotationY, moved: true }
+      dragGroup.current?.position.set(e.point.x, (obj.level ?? 0) * storeyHeight, e.point.z)
     } else {
-      const obj = placedObjects.find((o) => o.id === drag.id)
-      if (!obj) return
-      setDrag({ ...drag, rotationY: Math.atan2(e.point.x - obj.x, e.point.z - obj.z), moved: true })
+      const yaw = Math.atan2(e.point.x - obj.x, e.point.z - obj.z)
+      dragPose.current = { x: obj.x, z: obj.z, rotationY: yaw, moved: true }
+      if (dragGroup.current) dragGroup.current.rotation.y = yaw
     }
   }
 
   const endDrag = (e: ThreeEvent<PointerEvent>) => {
     if (!drag) return
     e.stopPropagation()
-    if (drag.moved) {
+    const pose = dragPose.current
+    const obj = dragTarget.current
+    if (pose?.moved) {
       if (drag.kind === 'move') {
-        const obj = placedObjects.find((o) => o.id === drag.id)
-        updatePlacedObject(drag.id, obj ? dropPose(obj, drag.x, drag.z) : { x: drag.x, z: drag.z })
+        updatePlacedObject(drag.id, obj ? dropPose(obj, pose.x, pose.z) : { x: pose.x, z: pose.z })
       } else {
         // An explicit rotate is the user overruling the wall, so the angle is
         // taken as given — but the object has not moved, so its pixel position
         // is still correct and nothing else needs rewriting.
-        updatePlacedObject(drag.id, { rotationY: drag.rotationY })
+        updatePlacedObject(drag.id, { rotationY: pose.rotationY })
       }
     } else {
       select(drag.id)   // a tap (no movement) just selects → opens the editor
     }
+    dragPose.current = null
+    dragTarget.current = null
     setDrag(null)
     setGestureLock(false)
   }
@@ -255,10 +280,9 @@ export default function PlacedObjectsLayer() {
         </mesh>
       )}
       {placedObjects.map((obj) => {
-        const live =
-          drag && drag.id === obj.id
-            ? { ...obj, x: drag.x, z: drag.z, rotationY: drag.rotationY }
-            : obj
+        // The dragged group is posed imperatively (see dragPose), so the render
+        // never re-poses the whole layer for one finger's travel.
+        const live = obj
         const { w, d, h, color } = dims(live)
         const selected = obj.id === selectedObjectId
         const editHovered = editMode && editHover?.kind === 'object' && editHover.id === obj.id
@@ -280,7 +304,10 @@ export default function PlacedObjectsLayer() {
          * door the user widens become overheads on their own, with no new type
          * to pick and nothing to migrate.
          */
-        const isOverheadDoor = obj.type === 'door' && w >= 2.1
+        // The door's Type decides first (services/doorStyle); width only for a
+        // door with no Type set, which is what the two notes here describe.
+        const style = doorStyle(obj)
+        const isOverheadDoor = style === 'garage'
         /**
          * A FIVE-FOOT OPENING IS NOT A FIVE-FOOT DOOR.
          *
@@ -294,7 +321,7 @@ export default function PlacedObjectsLayer() {
          * actually decides it on site, so wide openings already in a plan fix
          * themselves with no new type to pick.
          */
-        const isDoubleDoor = obj.type === 'door' && !isOverheadDoor && w >= 1.0
+        const isDoubleDoor = style === 'double'
         const boxD = isOpening ? 0.06 : d
         // Windows sit at their sill height; electrical devices mount on the
         // wall/ceiling at a standard height; everything else sits on the floor.
@@ -308,10 +335,11 @@ export default function PlacedObjectsLayer() {
           />
         )
         return (
-          <group key={obj.id} position={[live.x, (obj.level ?? 0) * storeyHeight, live.z]} rotation={[0, live.rotationY, 0]}>
+          <group key={obj.id} ref={drag?.id === obj.id ? dragGroup : undefined}
+            position={[live.x, (obj.level ?? 0) * storeyHeight, live.z]} rotation={[0, live.rotationY, 0]}>
             <group
               position={[0, mountY, 0]}
-              userData={{ info: obj.label ?? obj.type }}
+              userData={{ info: obj.label ?? obj.type, pick: { key: `object:${obj.id}`, select: () => select(obj.id) } }}
               onPointerDown={(e) => {
                 // In place mode the floorplan handles the next click — don't steal it.
                 if (placeObjectType) return
@@ -320,9 +348,9 @@ export default function PlacedObjectsLayer() {
                 // the mode felt meaningless: you could shove the furniture around
                 // while just looking at the model.
                 if (!editMode) return
-                e.stopPropagation()
-                if (!selected) { select(obj.id); return }
-                startObjectPress(e, obj)
+                // Tap again to go deeper: this tap may be for the wall behind.
+                if (!tapCycle.mine(e, `object:${obj.id}`)) return
+                beginDrag(e, obj, 'move')
               }}
               onPointerOver={editMode ? (e) => { e.stopPropagation(); setEditHover({ kind: 'object', id: obj.id }) } : undefined}
               onPointerOut={editMode ? () => setEditHover(null) : undefined}
@@ -358,6 +386,9 @@ export default function PlacedObjectsLayer() {
                         </mesh>
                       )
                     })
+                  ) : style === 'patio' || style === 'bypass' || style === 'bifold' ? (
+                    <DoorLeaves style={style} w={w} h={h} d={boxD} color={color}
+                      xray={!!obj.transparent} hand={obj.swing ?? 'left'} />
                   ) : isDoubleDoor ? (
                     // Two leaves, each half the opening, with a reveal where
                     // they meet — the pair reads as a pair from any angle.
@@ -448,7 +479,7 @@ export default function PlacedObjectsLayer() {
             {selected && !placeObjectType && (
               <mesh
                 position={[0, mountY, d / 2 + 0.4]}
-                onPointerDown={(e) => startDrag(e, obj, 'rotate')}
+                onPointerDown={(e) => beginDrag(e, obj, 'rotate')}
               >
                 <sphereGeometry args={[0.14, 16, 16]} />
                 <meshBasicMaterial color="#f472b6" />

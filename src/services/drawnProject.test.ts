@@ -190,9 +190,14 @@ describe('Draw it on a page — where you put it, with its inside walls', () => 
   })
 
   it('inside walls come through as interior 2x4 walls, in sheet pixels', () => {
-    const inner = createDrawnProject(spec).drawing.parsedWalls.filter((w) => w.wallRole !== 'exterior-bearing')
+    const p = createDrawnProject(spec)
+    const inner = p.drawing.parsedWalls.filter((w) => w.wallRole !== 'exterior-bearing')
     expect(inner).toHaveLength(1)
-    expect(inner[0]).toMatchObject({ x1: 1000, y1: 320, x2: 1000, y2: 1180, framingType: 'wood-2x4', wallRole: 'interior-bearing', source: 'user' })
+    expect(inner[0]).toMatchObject({ x1: 1000, framingType: 'wood-2x4', wallRole: 'interior-bearing', source: 'user' })
+    // Both ends were drawn 200 mm short of the shell and are carried onto it.
+    const shellYs = p.drawing.parsedWalls.filter((w) => w.wallRole === 'exterior-bearing').flatMap((w) => [w.y1, w.y2])
+    expect(shellYs.some((y) => Math.abs(y - inner[0].y1) < 1e-6)).toBe(true)
+    expect(shellYs.some((y) => Math.abs(y - inner[0].y2) < 1e-6)).toBe(true)
   })
 })
 
@@ -228,5 +233,44 @@ describe('Draw it at any angle — the shape is the building', () => {
     let s = 0
     shape.forEach((q, i) => { const r = shape[(i + 1) % shape.length]; s += q[0] * r[1] - r[0] * q[1] })
     expect(Math.abs(s) / 2).toBeCloseTo(103.5 / 108, 6)
+  })
+})
+
+
+describe('drawn walls meet where they were meant to', () => {
+  const page = { originMm: { x: 5000, y: 3000 }, wMm: 30000, dMm: 20000 }
+  const spec = { widthMm: 12000, depthMm: 9000, wallTypeKey: 'wood-2x6', floor: 'slab' as const, page }
+
+  it('two perpendicular inside walls drawn 100 mm short become one exact corner', () => {
+    // At 10 mm/px that is a 14 px gap — a drag with a finger, not a doorway.
+    const p = createDrawnProject({
+      ...spec,
+      insideWalls: [
+        { x1: 6000, y1: 6000, x2: 11000, y2: 6000 },   // horizontal
+        { x1: 11100, y1: 6100, x2: 11100, y2: 10000 }, // vertical, ending short of it
+      ],
+    })
+    const inner = p.drawing.parsedWalls.filter((w) => w.wallRole !== 'exterior-bearing')
+    expect(inner).toHaveLength(2)
+    const h = inner.find((w) => Math.abs(w.y2 - w.y1) < Math.abs(w.x2 - w.x1))!
+    const v = inner.find((w) => w !== h)!
+    // Same point, exactly — that is what makes the framing place one 3-stud corner
+    // instead of two separate end packs.
+    expect(h.x2).toBeCloseTo(v.x1, 6)
+    expect(h.y2).toBeCloseTo(v.y1, 6)
+  })
+
+  it('an inside wall that stops short of the shell is carried onto the shell line', () => {
+    const p = createDrawnProject({ ...spec, insideWalls: [{ x1: 6000, y1: 3200, x2: 6000, y2: 8000 }] })
+    const inner = p.drawing.parsedWalls.find((w) => w.wallRole !== 'exterior-bearing')!
+    const shellYs = p.drawing.parsedWalls.filter((w) => w.wallRole === 'exterior-bearing').flatMap((w) => [w.y1, w.y2])
+    expect(shellYs.some((y) => Math.abs(y - inner.y1) < 1e-6)).toBe(true)
+  })
+
+  it('leaves a gap wider than the tolerance alone — that is a doorway', () => {
+    const p = createDrawnProject({ ...spec, insideWalls: [{ x1: 6000, y1: 5000, x2: 6000, y2: 8000 }] })
+    const inner = p.drawing.parsedWalls.find((w) => w.wallRole !== 'exterior-bearing')!
+    const shellYs = p.drawing.parsedWalls.filter((w) => w.wallRole === 'exterior-bearing').flatMap((w) => [w.y1, w.y2])
+    expect(shellYs.some((y) => Math.abs(y - inner.y1) < 1e-6)).toBe(false)
   })
 })

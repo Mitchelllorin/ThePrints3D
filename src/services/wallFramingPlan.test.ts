@@ -108,6 +108,30 @@ describe('openings land where they were placed', () => {
   })
 })
 
+describe('a pocket door frames its hole toward the pocket, on any wall', () => {
+  const pocket = (rotationY: number, x: number, z: number): PlacedObject => ({
+    id: 'p1', type: 'door', subtype: 'Pocket', swing: 'right', x, z, rotationY,
+    scaleX: 1, scaleY: 1, scaleZ: 1, label: 'Pocket', level: 0,
+  } as unknown as PlacedObject)
+
+  it('in a wall across the page', () => {
+    // Wall heading +X; the door's +X is the wall's direction, so the hole
+    // slides half a door (18") toward the wall's end.
+    const op = planWalls(input([w(100, 100, 900, 100)], [pocket(0, 0, -4)]))[0].opts.openings![0]
+    expect(op.centerM).toBeCloseTo(4 + 0.4572, 2)
+    expect(op.pocket?.dir).toBe(1)
+  })
+
+  it('in a wall running down the page', () => {
+    // Wall heading +Z (pixel y grows down). openingSeat seats a door in it with
+    // yaw = −atan2(dz, dx) = −90°, and the door's +X then points down +Z too —
+    // so a right-hand pocket runs toward the wall's end, as it does above.
+    const op = planWalls(input([w(100, 100, 100, 900)], [pocket(-Math.PI / 2, -4, 0)]))[0].opts.openings![0]
+    expect(op.centerM).toBeCloseTo(4 + 0.4572, 2)
+    expect(op.pocket?.dir).toBe(1)
+  })
+})
+
 describe('nothing to plan', () => {
   it('returns nothing for a drawing with no walls', () => {
     expect(planWalls(input([]))).toEqual([])

@@ -222,6 +222,9 @@ export interface TracedLine {
   /** Height band the run lives in — drives its 3D elevation; risers connect
    *  bands and drop open ends to the floor. */
   band?: 'under-floor' | 'in-wall' | 'ceiling'
+  /** Laid by "Run it for me" (services/mepWorkflow). Running it again replaces
+   *  these and never touches a run drawn by hand. */
+  auto?: boolean
   /**
    * A floor that is not a rectangle: its corners, as fractions (0..1) of the
    * x1→x2 / y1→y2 box, so moving or resizing the box carries the shape with

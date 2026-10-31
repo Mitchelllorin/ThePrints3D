@@ -18,7 +18,12 @@
  * size stays editable and the rough opening is shown next to it.
  *
  *   Hinged single / double   +2″ wide, +2½″ tall      36″ door → 38″ × 82½″
- *   Bifold, Sliding          +2″ wide, +2½″ tall      jambs + clearance, same rule
+ *   Bifold, Bypass           +2″ wide, +2½″ tall      jambs + clearance, same rule
+ *   Patio slider             +½″ wide, +½″ tall       a 6068 frames 72½″ × 80½″ — the
+ *                                                     unit comes in its own frame
+ *     (checked: Andersen 200 frames a 6068 at 72″ × 80″, Gentek Kent at 72½″ × 80″,
+ *     Silver Line at 72⅛″ × 80½″ — so 72½″ × 80½″ takes any of them; a hole a
+ *     little big is shimmed, a hole a little small does not take the door.)
  *   Pocket                   2 × door + 1″, +4½″ tall the pocket frame kit
  *   Garage                   the door's own size      the opening IS the door size
  *   Window                   +½″ each way             nominal unit + ½″
@@ -26,14 +31,19 @@
 
 const IN = 0.0254
 
-export type RoughOpeningRule = 'swing' | 'pocket' | 'garage' | 'window'
+export type RoughOpeningRule = 'swing' | 'pocket' | 'garage' | 'window' | 'patio'
 
 /** Which rule a placed door or window is framed by. Unknown door types frame as a swing door. */
-export function roughOpeningRule(type: string, subtype?: string): RoughOpeningRule {
+export function roughOpeningRule(type: string, subtype?: string, widthM = 0): RoughOpeningRule {
   if (type === 'window') return 'window'
   const s = (subtype ?? '').toLowerCase()
   if (s.includes('pocket')) return 'pocket'
   if (s.includes('garage')) return 'garage'
+  if (s.includes('patio')) return 'patio'
+  // A plan saved before the slider was split in two says only "Sliding". The
+  // 3D already draws a wide one as a patio door (see doorStyle), so it has to
+  // be framed as one too; a narrow one is a closet bypass, framed like a swing.
+  if (s.includes('slid') && !s.includes('bypass') && widthM >= 1.5) return 'patio'
   return 'swing'
 }
 
@@ -48,13 +58,14 @@ export function roughOpening(
   widthM: number,
   heightM: number,
 ): { widthM: number; heightM: number; rule: RoughOpeningRule } {
-  const rule = roughOpeningRule(type, subtype)
+  const rule = roughOpeningRule(type, subtype, widthM)
   switch (rule) {
     case 'pocket':
       return { rule, widthM: 2 * widthM + 1 * IN, heightM: heightM + 4.5 * IN }
     case 'garage':
       return { rule, widthM, heightM }
     case 'window':
+    case 'patio':
       return { rule, widthM: widthM + 0.5 * IN, heightM: heightM + 0.5 * IN }
     case 'swing':
     default:
