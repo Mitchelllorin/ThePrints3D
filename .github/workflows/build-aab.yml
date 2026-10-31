@@ -21,9 +21,10 @@ name: Build Android AAB
 #   GOOGLE_PLAY_SERVICE_ACCOUNT_JSON  the whole JSON key of a Google Cloud service
 #                              account that has been invited in Play Console →
 #                              Users and permissions, with release rights.
-# With it set, every run also sends the signed bundle to the track chosen when
-# the run starts (production — the live app — by default). Without it, the run just builds
-# the bundle as before and you upload it by hand.
+# With it set, every MANUAL run also sends the signed bundle to the track chosen
+# when the run starts (internal — testers only — by default). Tag pushes still
+# build the bundle but never upload. Without the key, the run just builds the
+# bundle as before and you upload it by hand.
 
 on:
   workflow_dispatch:
@@ -33,9 +34,9 @@ on:
         required: false
         default: ''
       track:
-        description: 'Play track to upload to (needs GOOGLE_PLAY_SERVICE_ACCOUNT_JSON). production = the live app.'
+        description: 'Play track to upload to. internal = testers only; production = the live app.'
         required: false
-        default: 'production'
+        default: 'internal'
         type: choice
         options: [production, alpha, internal, beta]
   push:
@@ -156,14 +157,17 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Only when the Play key is there — a run without it still builds the
-      # bundle and stops here, as it always has.
+      # Only on a manual run with the Play key there — a tag push, or a run
+      # without the key, still builds the bundle and stops here.
       - name: Upload to Google Play
-        if: env.PLAY_JSON != ''
+        if: github.event_name == 'workflow_dispatch' && env.PLAY_JSON != ''
         uses: r0adkll/upload-google-play@v1.1.3
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.theprints3d.app
           releaseFiles: android/app/build/outputs/bundle/release/app-release.aab
-          track: ${{ github.event.inputs.track || 'production' }}
+          # R8 is on for release (minifyEnabled true), so Play needs this to
+          # de-obfuscate crash reports.
+          mappingFile: android/app/build/outputs/mapping/release/mapping.txt
+          track: ${{ github.event.inputs.track || 'internal' }}
           status: completed
