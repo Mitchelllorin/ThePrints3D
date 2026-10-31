@@ -16,6 +16,8 @@ import CutListSection from './CutListSection'
 import { useCutList, formatCutLength } from './useCutList'
 import { cutListCsvRows } from '../../services/cutList'
 import type { ParsedWall } from '../../types'
+import { doorOrderName } from '../../services/doorStyle'
+import { getCatalogItem } from '../../data/objectCatalog'
 
 const LAYER_TITLE: Record<string, string> = {
   framing: 'Framing', roof: 'Roof', floors: 'Floors',
@@ -48,7 +50,20 @@ export default function TakeoffContent() {
       scaleMmPerPx, wallHeightM, walls,
       plumbing: plumbingLines, electrical: electricalLines, hvac: hvacLines,
       floors: floorsAreas, roof: roofAreas,
-      placedObjects: placedObjects.map((o) => ({ type: o.type })),
+      // The schedules need the UNIT's size, not just its type — a window is
+      // bought by its nominal size and framed as a bigger hole than that. The
+      // catalog default × the object's own scale is the same size the framing
+      // engine cuts the opening for (see wallFramingPlan).
+      placedObjects: placedObjects.map((o) => {
+        const item = getCatalogItem(o.type)
+        return {
+          type: o.type,
+          orderAs: doorOrderName(o) ?? undefined,
+          widthM: (item?.defaultW ?? 1) * o.scaleX,
+          heightM: (item?.defaultH ?? 1) * o.scaleY,
+          subtype: o.subtype,
+        }
+      }),
       roofOverhangM: roofOverhangIn * 0.0254,
     })
   }, [drawings, overlay.drawingId, plumbingLines, electricalLines, hvacLines, floorsAreas, roofAreas, placedObjects, sceneConfig, roofOverhangIn])
@@ -60,7 +75,9 @@ export default function TakeoffContent() {
   // a cut list counted off the framing it is the same quantity worked out twice,
   // and the two disagree by design (it cannot see a corner post, a king, a jack
   // or a header). Showing both is how a user ends up ordering the wrong number.
-  // The estimate is kept for floors, roof and the trades, which nothing counts yet.
+  // The estimate is kept for floor and roof sheet goods, for wall board (which the
+  // cut list does not count — see the board section in services/takeoff), and for
+  // the trades, which nothing counts yet.
   const { walls: cutWalls, buy } = useCutList()
   const counted = cutWalls.some((w) => w.lines.length > 0)
   const sections = counted ? allSections.filter((s) => s.title !== 'Walls') : allSections
