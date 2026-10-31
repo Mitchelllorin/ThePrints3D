@@ -7,8 +7,10 @@ import {
   listJobs,
   newJob,
   onJobSaved,
+  onJobSaveState,
   openJob,
   removeJob,
+  readSaveState,
   renameJob,
 } from '../../services/currentJob'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
@@ -48,6 +50,15 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
   const [renaming, setRenaming] = useState<string | null>(null)
   const [draftName, setDraftName] = useState('')
   const [armedDelete, setArmedDelete] = useState<string | null>(null)
+  /** Which job the user has asked to open, waiting for the second tap. */
+  const [confirmOpen, setConfirmOpen] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  /** The last autosave failed. This is the screen about saving, so it is the
+   *  worst possible place to look like everything is fine. */
+  const [saveError, setSaveError] = useState<string | null>(() => {
+    const state = readSaveState()
+    return state?.status === 'error' ? state.message : null
+  })
   const disarmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isPro = useIsPro()   // the one Pro rule — see Pro/usePro
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
@@ -81,6 +92,10 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
     }
   }, [])
 
+  useEffect(() => onJobSaveState((state) => {
+    setSaveError(state.status === 'error' ? state.message : null)
+  }), [])
+
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
     try { await fn() } finally {
@@ -99,9 +114,29 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
     void run(newJob)
   }
 
+  /**
+   * OPENING IS TWO TAPS, AND SAYS WHAT HAPPENS TO THE JOB YOU ARE ON.
+   *
+   * The save itself was already safe — openJob flushes the current job before
+   * it loads another — but nothing on screen said so, so switching jobs felt
+   * like it might throw the open one away. The first tap now arms it and states
+   * the fact (the current job is saved first); the second opens. A failure is
+   * also reported instead of silently doing nothing, which is what a missing or
+   * unreadable save used to look like.
+   */
   const open = (id: string) => {
+    if (confirmOpen !== id) {
+      setConfirmOpen(id)
+      setLoadError(null)
+      return
+    }
+    setConfirmOpen(null)
     void run(async () => {
-      await openJob(id)
+      const ok = await openJob(id)
+      if (!ok) {
+        setLoadError('That job could not be opened — its saved copy is missing or unreadable.')
+        return
+      }
       onClose?.()
     })
   }
@@ -133,7 +168,7 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
     <div className={inline ? styles.inlineWrap : styles.overlay} onClick={inline ? undefined : onClose}>
       <div className={inline ? styles.inlineBody : styles.modal} onClick={(e) => e.stopPropagation()}>
         <div className={styles.header} style={inline ? { display: 'none' } : undefined}>
-          <h2 className={styles.title}>Jobs</h2>
+          <h2 className={styles.title}>Save &amp; load</h2>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close">×</button>
         </div>
 
@@ -145,6 +180,28 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
         >
           New job
         </button>
+
+        {/* WHAT IS OPEN RIGHT NOW, and the promise that switching does not
+            cost you it. Shown above the list because it is the question a job
+            list is being read to answer. */}
+        {(() => {
+          const openProject = projects.find((p) => p.id === openId)
+          if (!openProject) return null
+          return (
+            <div className={styles.current}>
+              <span>
+                Open now: <strong>{openProject.name}</strong>
+                {' · '}{openProject.drawings.length === 0 ? 'empty' : `${openProject.drawings.length} sheet${openProject.drawings.length === 1 ? '' : 's'}`}
+                {' · saved '}{ago(openProject.updatedAt, now)}
+              </span>
+              <span className={styles.currentNote}>
+                Work saves automatically. Opening another job saves this one first.
+              </span>
+            </div>
+          )
+        })()}
+        {saveError && <p className={styles.error} role="alert">{saveError}</p>}
+        {loadError && <p className={styles.error} role="alert">{loadError}</p>}
 
         {projects.length === 0 ? (
           <p className={styles.empty}>Jobs save as you work. Start one and it shows here.</p>
@@ -190,9 +247,10 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
                         className={styles.openBtn}
                         onClick={() => open(p.id)}
                         disabled={busy}
+                        aria-label={confirmOpen === p.id ? `Open ${p.name} now` : `Open ${p.name}`}
                         data-testid={`open-project-${p.id}`}
                       >
-                        Open
+                        {confirmOpen === p.id ? 'Open it' : 'Open'}
                       </button>
                     )}
                     <button
@@ -205,6 +263,20 @@ export default function ProjectLibrary({ onClose, inline }: { onClose?: () => vo
                       {armedDelete === p.id ? "Delete — can't undo" : 'Delete'}
                     </button>
                   </div>
+                  {/* The confirmation, in the row it belongs to. */}
+                  {confirmOpen === p.id && (
+                    <div className={styles.confirm} role="alert">
+                      <span>
+                        {openId && openId !== p.id
+                          ? 'The job you have open is saved first. Then this one opens — nothing is lost.'
+                          : 'This job opens on the workspace.'}
+                      </span>
+                      <div className={styles.confirmBtns}>
+                        <button className={styles.openBtn} onClick={() => open(p.id)} disabled={busy}>Open it</button>
+                        <button className={styles.deleteBtn} onClick={() => setConfirmOpen(null)}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               )
             })}

@@ -27,7 +27,8 @@ vi.mock('./projectStorage', async (importActual) => {
 })
 
 import { useAppStore } from '../store/useAppStore'
-import { currentJobId, flushJob, newJob, openJob, removeJob, renameJob } from './currentJob'
+import { currentJobId, flushJob, newJob, openJob, readSaveState, removeJob, renameJob } from './currentJob'
+import { saveProject } from './projectStorage'
 import type { Drawing, PlacedObject, TracedLine } from '../types'
 
 const s = () => useAppStore.getState()
@@ -134,5 +135,30 @@ describe('the open job', () => {
     expect(db.has(id)).toBe(false)
     expect(currentJobId()).toBeNull()
     expect(s().drawings).toHaveLength(0)
+  })
+})
+
+/**
+ * A FAILED SAVE IS NOT SILENT.
+ *
+ * The catch in flushJob used to be empty, so a full device looked exactly like a
+ * saved job. This pins the two halves of the fix: the failure is reported, in
+ * words that name the fix, and the next good save clears it without anyone
+ * having to dismiss anything.
+ */
+describe('a save that fails', () => {
+  it('reports a full device, then clears itself on the next good save', async () => {
+    putAJobOn()
+    const quota = Object.assign(new Error('quota'), { name: 'QuotaExceededError' })
+    vi.mocked(saveProject).mockRejectedValueOnce(quota)
+
+    await expect(flushJob()).resolves.toBeUndefined()   // never throws at the UI
+    const failed = readSaveState()
+    expect(failed?.status).toBe('error')
+    expect(failed?.status === 'error' && failed.message).toMatch(/no room left/i)
+    expect(s().drawings).toHaveLength(1)                // the work is still on screen
+
+    await flushJob()
+    expect(readSaveState()?.status).toBe('saved')
   })
 })

@@ -86,6 +86,60 @@ export function onJobSaved(fn: SavedListener): () => void {
   return () => { listeners.delete(fn) }
 }
 
+/**
+ * A SAVE THAT FAILED HAS TO SAY SO.
+ *
+ * This used to end in `.catch(() => {})` — the failure vanished, and a full
+ * device looked exactly like a saved job until the app was reopened and the
+ * afternoon's tracing was gone. IndexedDB quotas are not theoretical once a few
+ * print rasters are in a job, so the outcome is now a piece of state that the
+ * UI can read and subscribe to. See components/Layout/SaveStatus.
+ */
+export type JobSaveState =
+  | { status: 'saved'; at: number }
+  | { status: 'error'; message: string }
+
+let saveState: JobSaveState | null = null
+
+/** The last thing that happened to the autosave, or null before the first one. */
+export function readSaveState(): JobSaveState | null {
+  return saveState
+}
+
+type StateListener = (s: JobSaveState) => void
+const stateListeners = new Set<StateListener>()
+
+/** Every save, and every failure. Returns the unsubscribe. */
+export function onJobSaveState(fn: StateListener): () => void {
+  stateListeners.add(fn)
+  return () => { stateListeners.delete(fn) }
+}
+
+function report(next: JobSaveState): void {
+  saveState = next
+  for (const fn of stateListeners) fn(next)
+}
+
+/**
+ * WHY a save failed, in words that name the fix.
+ *
+ * "Something went wrong" is not a message, it is a shrug — and the one thing a
+ * framer can actually do about a failed save is different for each cause. A
+ * quota error is fixed by deleting a job; private browsing is fixed by leaving
+ * it; anything else is worth retrying.
+ */
+function describeSaveFailure(e: unknown): string {
+  const err = e as { name?: string; message?: string } | null
+  const name = err?.name ?? ''
+  if (name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+    return 'No room left on this device to save this job. Delete a job you no longer need in Jobs, and it will save again.'
+  }
+  if (name === 'SecurityError' || name === 'InvalidStateError' || name === 'NotAllowedError') {
+    return 'This browser is blocking local storage, so the job cannot be saved. Private browsing does this — open the app normally and your work will save.'
+  }
+  return 'This job did not save just now. It is still on screen, and it will try again on your next change.'
+}
+
 async function writeNow(): Promise<void> {
   const s = useAppStore.getState()
   // Nothing on the sheet and nothing saved yet: there is no job to keep.
@@ -119,13 +173,21 @@ async function writeNow(): Promise<void> {
     snapshot: captureJob(),
   }
   await saveProject(record)
+  report({ status: 'saved', at: now })
   for (const fn of listeners) fn(now)
 }
 
 /** Save the open job now, and wait for it. Chained, so two saves never race. */
 export function flushJob(): Promise<void> {
   if (timer) { clearTimeout(timer); timer = null }
-  saving = saving.then(writeNow).catch(() => { /* a failed save is retried on the next change */ })
+  saving = saving
+    .then(writeNow)
+    .catch((e) => {
+      // Still does not throw at the caller — the workspace must not fall over
+      // because a save failed — but it is no longer silent. The next change
+      // tries again, and a success clears this by itself.
+      report({ status: 'error', message: describeSaveFailure(e) })
+    })
   return saving
 }
 
@@ -185,6 +247,8 @@ export async function openJob(id: string, opts: { flushFirst?: boolean } = {}): 
   currentName = p.name
   createdAt = p.createdAt
   writeCurrentId(p.id)
+  // A job that just opened is saved, whatever the last write did.
+  report({ status: 'saved', at: p.updatedAt })
   return true
 }
 

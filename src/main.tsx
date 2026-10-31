@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import './index.css'
 import './styles/mobile.css'
 import App from './App.tsx'
+import AppErrorBoundary from './components/AppErrorBoundary'
 import { useAppStore } from './store/useAppStore'
 import { useFloorplanLocalStore } from './store/useFloorplanLocalStore'
 import { useUISettingsStore } from './store/useUISettingsStore'
@@ -145,9 +146,14 @@ startCorpusCapture()
  */
 void startJobAutosave()
 
+// The boundary wraps everything, including the front door: a throw during render
+// used to take the whole tree down to a blank page with nothing to tap. The
+// autosave above lives outside React, so it keeps saving while this screen is up.
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>,
 )
 

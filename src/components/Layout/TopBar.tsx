@@ -1,7 +1,13 @@
 import { useAppStore } from '../../store/useAppStore'
 import styles from './TopBar.module.css'
 
-export default function TopBar({ onSettingsOpen, settingsOpen }: { onSettingsOpen: () => void; settingsOpen: boolean }) {
+export default function TopBar({ onSettingsOpen, settingsOpen, onJobsOpen }: {
+  onSettingsOpen: () => void
+  settingsOpen: boolean
+  /** Save & load. In the bar because a job list you cannot find is a job list
+   *  that does not exist — it used to live only inside Settings. */
+  onJobsOpen: () => void
+}) {
   const sidebarOpen  = useAppStore((s) => s.sidebarOpen)
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
 
@@ -25,6 +31,15 @@ export default function TopBar({ onSettingsOpen, settingsOpen }: { onSettingsOpe
       </div>
 
       <div className={styles.right}>
+        <button
+          className={styles.jobsBtn}
+          onClick={onJobsOpen}
+          title="Save & load jobs"
+          aria-label="Save and load jobs"
+        >
+          <span aria-hidden style={{ fontSize: 14 }}>🗂</span>
+          <span>Jobs</span>
+        </button>
         <button
           className={`${styles.settingsBtn} ${settingsOpen ? styles.settingsBtnActive : ''}`}
           onClick={onSettingsOpen}

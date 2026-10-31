@@ -1,0 +1,69 @@
+/* The failed-save strip. In flow under the top bar, so it cannot hide behind a
+   drawer, a 3D canvas or a thumb. Red, because it is the one message in the app
+   that means work is at risk. */
+
+.strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px 8px 12px;
+  background: rgba(185, 28, 28, 0.16);
+  border-bottom: 1px solid rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.mark {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(248, 113, 113, 0.2);
+  border: 1px solid rgba(248, 113, 113, 0.6);
+  color: #fca5a5;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The way to the fix, right where the problem is stated. */
+.action {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: transparent;
+  color: #fecaca;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.action:hover { background: rgba(248, 113, 113, 0.18); }
+
+.dismiss {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #fca5a5;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dismiss:hover { background: rgba(248, 113, 113, 0.18); }
+
+@media (max-width: 420px) {
+  .strip { font-size: 12px; padding: 7px 8px 7px 10px; }
+}
