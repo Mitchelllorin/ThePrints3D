@@ -6,9 +6,20 @@
    the order they need to paint in, and it keeps this component out of the
    app's four stacking layers entirely. */
 
+/* The plan and its camera, stacked: the drawing gets the height, the zoom row
+   gets its own line under it. See .cam for why it is not laid over the plan. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
 .wrap {
   position: relative;
-  height: 100%;                   /* the box it sits in decides — see DrawItSheet .plan */
+  flex: 1;
+  min-height: 0;                  /* the box it sits in decides — see DrawItSheet .plan */
   overflow: hidden;
   border-radius: 10px;
   background: var(--bp-panel-2, #1e2833);
@@ -155,3 +166,32 @@
 @media (prefers-reduced-motion: no-preference) {
   .grip::before { transition: transform 120ms ease-out; }
 }
+
+/* ── Camera: + / − / Fit, in their own row BELOW the plan ──────────────────
+   Outside the drawing box on purpose: overlaid on the plan these were under
+   the finger that was pulling a corner, so a tap meant for a grip zoomed
+   instead. The row is a flex sibling of the plan, not a child, so it never
+   covers a single pixel of drawing surface. */
+.cam {
+  flex: none;
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.camBtn {
+  width: 48px;
+  height: 44px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  background: rgba(15, 23, 42, 0.82);
+  color: #e2e8f0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.camBtn:active { transform: translateY(1px); }
+.camFit { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }

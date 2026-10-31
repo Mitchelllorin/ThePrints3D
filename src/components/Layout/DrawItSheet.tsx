@@ -56,8 +56,27 @@ const SIDES: Array<{ id: AttachSide; label: string }> = [
 const FLOORS: Array<{ id: FloorChoice; label: string; note: string }> = [
   { id: 'slab', label: 'Slab', note: '4" on grade' },
   { id: 'joists', label: 'Joists', note: '2×10 floor' },
+  { id: 'skids', label: 'Skids', note: '2×6 on 4×6' },
   { id: 'none', label: 'Later', note: 'decide after' },
 ]
+
+/**
+ * A SHED IS A SMALL BUILDING, so it is the same sheet with different starting
+ * answers: a stock shed size, 2×4 walls, a floor on skids instead of a
+ * foundation, a roof chosen up front, and double doors in the front wall. Every
+ * one of them can still be changed here or after, like a house.
+ */
+type Building = 'house' | 'shed'
+const SHED_SIZES: Array<{ w: number; d: number }> = [{ w: 8, d: 10 }, { w: 10, d: 12 }, { w: 12, d: 16 }]
+const SHED_ROOFS: Array<{ id: string; label: string; pitch: string }> = [
+  { id: 'Gable', label: 'Gable', pitch: '6:12' },
+  // A lean-to sheds its water one way and wants little pitch to do it.
+  { id: 'Shed', label: 'Lean-to', pitch: '3:12' },
+  { id: 'Gambrel', label: 'Barn', pitch: '6:12' },
+]
+const shedBox = (metric: boolean, w = 10, d = 12): FootprintBox =>
+  // Metric: the same shed to the nearest 100 mm (8×10 ft → 2.4 × 3.0 m).
+  metric ? { widthMm: Math.round((w * FT) / 100) * 100, depthMm: Math.round((d * FT) / 100) * 100 } : { widthMm: w * FT, depthMm: d * FT }
 
 export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   const startDrawnProject = useAppStore((s) => s.startDrawnProject)
@@ -86,7 +105,26 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const [wallTypeKey, setWallTypeKey] = useState('wood-2x6')
   const [floor, setFloor] = useState<FloorChoice>('slab')
+  const [building, setBuilding] = useState<Building>('house')
+  const [shedRoof, setShedRoof] = useState(SHED_ROOFS[0].id)
+  const frameShed = useAppStore((s) => s.frameShed)
   const boxes = plan.boxes
+
+  const chooseBuilding = (b: Building) => {
+    if (b === building) return
+    setBuilding(b)
+    setMode('outline'); setSelectedWall(null); setPickedUp(false)
+    if (b === 'shed') {
+      setPlan(initialPlan(shedBox(metric)))
+      setWallTypeKey('wood-2x4')
+      setFloor('skids')
+    } else {
+      setPlan(initialPlan(firstBox(metric)))
+      setWallTypeKey('wood-2x6')
+      setFloor('slab')
+    }
+  }
+  const shedSize = (w: number, d: number) => setPlan(initialPlan(shedBox(metric, w, d)))
 
   const editBoxes = (next: FootprintBox[]) => setPlan(fitPage({ ...plan, boxes: normalizeBoxes(next) }))
   const addWing = () => editBoxes([...boxes, newSection(metric)])
@@ -113,13 +151,24 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
 
   const start = () => {
     const [main, ...wings] = boxes
-    startDrawnProject({
-      widthMm: main.widthMm, depthMm: main.depthMm, wallTypeKey, floor, name: 'New project',
+    const spec = {
+      widthMm: main.widthMm, depthMm: main.depthMm, wallTypeKey, floor,
+      name: building === 'shed' ? 'Shed' : 'New project',
       wings,
       page: { originMm: plan.origin, wMm: plan.page.w, dMm: plan.page.d },
       insideWalls: plan.walls,
       outline: plan.shape ? cleanShape(plan.shape) : undefined,
-    })
+    }
+    if (building === 'shed') {
+      // Walls stood, roof on and the doors hung, in one undo step. Double
+      // doors 5 ft wide, narrower on a shed too small to take them.
+      const roof = SHED_ROOFS.find((r) => r.id === shedRoof) ?? SHED_ROOFS[0]
+      const doorWidthM = Math.min(1.524, Math.max(0.9144, main.widthMm / 1000 - 0.9))
+      frameShed(spec, { roof: roof.id, pitch: roof.pitch, doorWidthM })
+      onClose()
+      return
+    }
+    startDrawnProject(spec)
     // THE WALLS ARE ALREADY UP. A drawn project's shell draws itself standing
     // the moment it exists, but the model was left marked unbuilt — so the
     // step chip asked you to "Stand them up" while you were looking at them
@@ -169,6 +218,38 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
 
         <div className={styles.rest}>
           <p className={styles.echo}>{area} · outside face to outside face{wallCount}</p>
+
+          {/* WHAT IS BEING BUILT. A shed starts at a shed's size, framing and
+              floor, with the roof chosen here and its doors hung on Frame it. */}
+          <div className={styles.row} role="group" aria-label="What you are building">
+            {(['house', 'shed'] as const).map((b) => (
+              <button key={b} className={`${styles.mode} ${building === b ? styles.chosen : ''}`} onClick={() => chooseBuilding(b)} aria-pressed={building === b}>
+                {building === b ? '✓ ' : ''}{b === 'house' ? 'House' : 'Shed'}
+              </button>
+            ))}
+          </div>
+          {building === 'shed' && mode === 'outline' && (
+            <>
+              <div className={styles.row} role="group" aria-label="Shed size">
+                {SHED_SIZES.map(({ w, d }) => {
+                  const box = shedBox(metric, w, d)
+                  const on = !shaped && boxes.length === 1 && boxes[0].widthMm === box.widthMm && boxes[0].depthMm === box.depthMm
+                  return (
+                    <button key={`${w}x${d}`} className={`${styles.side} ${on ? styles.chosen : ''}`} onClick={() => shedSize(w, d)} aria-pressed={on}>
+                      {on ? '✓ ' : ''}{metric ? `${box.widthMm / 1000}×${box.depthMm / 1000} m` : `${w}×${d}`}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className={styles.row} role="group" aria-label="Shed roof">
+                {SHED_ROOFS.map((r) => (
+                  <button key={r.id} className={`${styles.side} ${shedRoof === r.id ? styles.chosen : ''}`} onClick={() => setShedRoof(r.id)} aria-pressed={shedRoof === r.id}>
+                    {shedRoof === r.id ? '✓ ' : ''}{r.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* What a drag on the plan does. On-state is a fill, a heavier border
               and a check, never colour alone. */}

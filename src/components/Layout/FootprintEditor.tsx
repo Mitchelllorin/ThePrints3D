@@ -116,6 +116,12 @@ function fitFrame(w: number, h: number, pageW: number, pageD: number): Frame {
   return { s, ox: EDGE_PX + (aw - pageW * s) / 2, oy: EDGE_PX + (ah - pageD * s) / 2 }
 }
 
+/** Zoom and pan over the fitted page. See the note in FootprintEditor. */
+type View = { z: number; x: number; y: number }
+const HOME_VIEW: View = { z: 1, x: 0, y: 0 }
+const MIN_ZOOM = 0.6
+const MAX_ZOOM = 8
+
 /** The grid is squared paper: pick the finest step that is still wide enough to read. */
 function gridStepMm(scale: number, metric: boolean): number {
   const ladder = metric ? [500, 1000, 2000, 5000, 10000] : [1, 2, 5, 10, 20].map((ft) => ft * 304.8)
@@ -172,6 +178,45 @@ export default function FootprintEditor({
     return () => ro.disconnect()
   }, [])
 
+  /**
+   * ZOOM AND PAN — Mitchell, 25 Oct 2026: "proper camera controls" for drawing.
+   *
+   * One finger stays the pencil: it draws, pulls and moves exactly as before.
+   * Two fingers are the camera, pinch to zoom and drag to pan, and the plan
+   * never turns. A second finger landing mid-drag puts that drag back, so a
+   * pinch cannot leave a half-pulled wall behind. With a mouse, the wheel
+   * zooms at the cursor and a right or middle drag pans. + / − / Fit sit in
+   * the corner for one-handed use.
+   *
+   * The view sits ON TOP of the fitted frame: zoom 1 at no offset is the old
+   * whole-page fit, so Fit is just going home.
+   */
+  const [view, setView] = useState<View>(HOME_VIEW)
+  const pts = useRef(new Map<number, { x: number; y: number }>())
+  const pinch = useRef<{ dist: number; cx: number; cy: number; start: View } | null>(null)
+  /** Fingers stay the camera's until every one of them is up. */
+  const camGesture = useRef(false)
+  const mousePan = useRef<{ id: number; x: number; y: number; start: View } | null>(null)
+  const zoomAt = (v: View, z: number, px: number, py: number): View => {
+    const nz = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
+    // Keep the point under (px, py) under it.
+    return { z: nz, x: px - ((px - v.x) / v.z) * nz, y: py - ((py - v.y) / v.z) * nz }
+  }
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    // Native and not passive, so the wheel zooms the plan instead of scrolling the sheet.
+    const wheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const r = el.getBoundingClientRect()
+      const k = Math.exp(-e.deltaY * 0.0015)
+      const px = e.clientX - r.left, py = e.clientY - r.top
+      setView((v) => zoomAt(v, v.z * k, px, py))
+    }
+    el.addEventListener('wheel', wheel, { passive: false })
+    return () => el.removeEventListener('wheel', wheel)
+  }, [])
+
   const boxes = plan.boxes
   const placed = houseRects(plan)
   if (placed.length === 0) return null
@@ -183,7 +228,8 @@ export default function FootprintEditor({
     x2: Math.max(...ext.map((r) => r.x2)), y2: Math.max(...ext.map((r) => r.y2)),
   }
 
-  const f = fitFrame(size.w, size.h, plan.page.w, plan.page.d)
+  const fit = fitFrame(size.w, size.h, plan.page.w, plan.page.d)
+  const f = { s: fit.s * view.z, ox: fit.ox * view.z + view.x, oy: fit.oy * view.z + view.y }
   const X = (mm: number) => f.ox + mm * f.s
   const Y = (mm: number) => f.oy + mm * f.s
   const toMm = (e: { clientX: number; clientY: number }): Point => {
@@ -549,8 +595,71 @@ export default function FootprintEditor({
   if (drawing) chipFor(drawing, 'drawing', true)
   else if (selectedWall != null && plan.walls[selectedWall]) chipFor(plan.walls[selectedWall], `wall:${selectedWall}`, false)
 
+  // ── Camera: two fingers, the wheel, a right drag. Heard in the CAPTURE phase,
+  // ahead of the grips and the paper, so a camera gesture never reaches them.
+  const local = (e: { clientX: number; clientY: number }) => {
+    const r = wrapRef.current?.getBoundingClientRect()
+    return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) }
+  }
+  /** Put back whatever one finger had started, the moment it becomes a pinch. */
+  const dropDrag = () => {
+    const d = drag
+    dragFrom.current = null
+    setDrag(null)
+    if (d && 'start' in d) onChange(d.start)
+  }
+  const camDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse') {
+      if (e.button === 0) return
+      e.preventDefault(); e.stopPropagation()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      mousePan.current = { id: e.pointerId, ...local(e), start: view }
+      return
+    }
+    pts.current.set(e.pointerId, local(e))
+    if (pts.current.size < 2) return
+    e.preventDefault(); e.stopPropagation()
+    if (!camGesture.current) dropDrag()
+    camGesture.current = true
+    const [a, b] = [...pts.current.values()]
+    pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, start: view }
+  }
+  const camMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    const mp = mousePan.current
+    if (mp && e.pointerId === mp.id) {
+      const p = local(e)
+      setView({ ...mp.start, x: mp.start.x + p.x - mp.x, y: mp.start.y + p.y - mp.y })
+      e.stopPropagation()
+      return
+    }
+    if (pts.current.has(e.pointerId)) pts.current.set(e.pointerId, local(e))
+    if (!camGesture.current) return
+    e.stopPropagation()
+    const p0 = pinch.current
+    if (!p0 || pts.current.size < 2) return
+    const [a, b] = [...pts.current.values()]
+    const dist = Math.hypot(a.x - b.x, a.y - b.y)
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2
+    const zoomed = zoomAt(p0.start, p0.start.z * (dist / Math.max(1, p0.dist)), p0.cx, p0.cy)
+    setView({ ...zoomed, x: zoomed.x + cx - p0.cx, y: zoomed.y + cy - p0.cy })
+  }
+  const camUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (mousePan.current?.id === e.pointerId) { mousePan.current = null; e.stopPropagation(); return }
+    pts.current.delete(e.pointerId)
+    if (!camGesture.current) return
+    e.stopPropagation()
+    if (pts.current.size < 2) pinch.current = null
+    if (pts.current.size === 0) camGesture.current = false
+  }
+  const zoomBy = (k: number) => setView(zoomAt(view, view.z * k, size.w / 2, size.h / 2))
+  const home = view.z === 1 && view.x === 0 && view.y === 0
+
   return (
-    <div ref={wrapRef} className={`${styles.wrap} ${mode === 'walls' ? styles.wrapWalls : ''}`}>
+    <div className={styles.stack}>
+    <div ref={wrapRef} className={`${styles.wrap} ${mode === 'walls' ? styles.wrapWalls : ''}`}
+      onPointerDownCapture={camDown} onPointerMoveCapture={camMove}
+      onPointerUpCapture={camUp} onPointerCancelCapture={camUp}
+      onContextMenu={(e) => e.preventDefault()}>
       <svg className={styles.svg} width={size.w} height={size.h} aria-hidden>
         <defs>
           <pattern id={`${ids}g`} width={step * f.s} height={step * f.s} x={f.ox} y={f.oy} patternUnits="userSpaceOnUse">
@@ -781,6 +890,22 @@ export default function FootprintEditor({
           </button>
         )
       })}
+
+    </div>
+
+      {/* THE CAMERA SITS BELOW THE PLAN, not on it. Mitchell, 30 Oct 2026:
+          "move them outside the box." Laid over the drawing they were under the
+          finger that was pulling a corner — a tap meant for a grip zoomed the
+          page instead. Out here they are still one-handed, and the whole plan
+          is drawing surface again. The button row is outside the pan/zoom
+          surface, so it takes taps, not pinches. */}
+      <div className={styles.cam} role="group" aria-label="Zoom">
+        <button type="button" className={styles.camBtn} onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom out">−</button>
+        <button type="button" className={styles.camBtn} onClick={() => zoomBy(1.5)} aria-label="Zoom in">+</button>
+        {!home && (
+          <button type="button" className={`${styles.camBtn} ${styles.camFit}`} onClick={() => setView(HOME_VIEW)} aria-label="Fit the whole page">Fit</button>
+        )}
+      </div>
     </div>
   )
 }
