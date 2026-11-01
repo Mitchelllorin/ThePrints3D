@@ -41,11 +41,11 @@ const PARKED_YAW = 0.42   // ~24 degrees
 const PARKED_PITCH = 0.13 // ~7.5 degrees, nose down so the top bevel shows
 
 const WORDS = [
-  // ThePrints3D's own three colours (C:\Dev\CLAUDE.md, wordmark section):
-  // violet, amber (italic), teal. Spelled at its strategic capitals: The·Prints·3D.
-  { text: 'The',    color: '#8b5cf6', metalness: 0.25, shear: 0 },
-  { text: 'Prints', color: '#f59e0b', metalness: 0.25, shear: PRINTS_SHEAR },
-  { text: '3D',     color: '#14b8a6', metalness: 0.35, shear: 0 },
+  // The family colours, the same on every app's wordmark. Spelled at the
+  // strategic capitals: The·Prints·3D.
+  { text: 'The',    color: '#2f80ff', metalness: 0.25, shear: 0 },
+  { text: 'Prints', color: '#ffa033', metalness: 0.25, shear: PRINTS_SHEAR },
+  { text: '3D',     color: '#2fe070', metalness: 0.35, shear: 0 },
 ] as const
 
 useFont.preload(FONT_URL)
