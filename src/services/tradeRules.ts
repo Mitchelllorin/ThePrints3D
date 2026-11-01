@@ -161,6 +161,50 @@ export function bandForElectrical(elementType: string): MountRule['band'] {
   return ELECTRICAL_MOUNTS[norm(elementType)]?.band ?? 'in-wall'
 }
 
+// ─── Dedicated 240 V circuits ─────────────────────────────────────────────────
+//
+// A range, a dryer and a water heater are not general-purpose loads. Each one
+// takes its own two-pole circuit from the panel, sized to the appliance, in a
+// cable with the conductors it actually needs. Running them on a 15 A 14/2
+// branch — which is what "every circuit is a light circuit" produced — is not a
+// conservative estimate, it is a circuit that trips the first time the oven
+// comes on, and wire that is undersized for the load.
+//
+// The neutral is the reason these carry a conductor count. A range and a dryer
+// need 120 V for their controls and a light, so they take two hots AND a neutral
+// (a 3-conductor cable); a water heater is a pure 240 V resistive load with
+// nothing to return, so it takes two hots and a ground (a 2-conductor cable).
+
+export interface DedicatedCircuit {
+  /** Branch-circuit rating, amperes. */
+  amps: number
+  /** Current-carrying conductors in the cable: 3 = two hots + neutral, 2 = two hots. */
+  conductors: 2 | 3
+  /** What the trade calls the appliance. */
+  label: string
+}
+
+/**
+ * Dedicated 240 V appliances, by catalog type. Ratings follow common residential
+ * nameplate values: a 40 A range, a 30 A dryer, a 30 A water heater. A larger
+ * range on a 50 A circuit is a per-unit override, not a different appliance.
+ */
+export const DEDICATED_240V: Readonly<Record<string, DedicatedCircuit>> = {
+  stove: { amps: 40, conductors: 3, label: 'Range' },
+  dryer: { amps: 30, conductors: 3, label: 'Dryer' },
+  'water-heater': { amps: 30, conductors: 2, label: 'Water heater' },
+}
+
+/** The dedicated circuit an appliance type needs, or null for general-purpose. */
+export function dedicatedCircuit240(elementType: string): DedicatedCircuit | null {
+  return DEDICATED_240V[norm(elementType)] ?? null
+}
+
+/** The cable a circuit is pulled in, e.g. '8/3 Romex' — what the yard cuts. */
+export function cableFor(amps: number, conductors: 2 | 3): string {
+  return `${wireGaugeForAmps(amps).replace(' AWG', '')}/${conductors} Romex`
+}
+
 // ─── Heating: the type decides which trade even owns the work ─────────────────
 //
 // "HVAC" is not one system. Only ONE of the common heating types has ducts, and

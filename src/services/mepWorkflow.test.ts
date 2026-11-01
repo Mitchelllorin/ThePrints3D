@@ -80,3 +80,27 @@ describe('planRuns', () => {
     expect(runs.filter((r) => r.elementType === 'Return Duct')).toHaveLength(1)
   })
 })
+
+describe('planRuns — dedicated 240 V circuits', () => {
+  it('gives a range its own 40 A circuit, not a 15 A branch with the outlets', () => {
+    const objs = [obj('panel-box', 0, 400), obj('stove', 900, 200), obj('duplex-outlet', 100, 8)]
+    const runs = planRuns('electrical', box, objs, 0)
+    const dedicated = runs.filter((r) => r.elementType === 'Dedicated Circuit')
+    expect(dedicated).toHaveLength(1)
+    expect(dedicated[0].size).toBe('40A')
+    expect(dedicated[0].material).toBe('8/3 Romex')
+    // The outlets keep their general-purpose circuit, and the range is not on it.
+    const home = runs.filter((r) => r.elementType === 'Home Run')
+    expect(home).toHaveLength(1)
+    expect(home[0].size).toBe('15A')
+    expect(home[0].material).toBe('14/2 Romex')
+  })
+
+  it('sizes a water heater on a two-conductor cable and a dryer on three', () => {
+    const runs = planRuns('electrical', box, [obj('panel-box', 0, 400), obj('dryer', 500, 200), obj('water-heater', 900, 700)], 0)
+    const ded = runs.filter((r) => r.elementType === 'Dedicated Circuit')
+    expect(ded).toHaveLength(2)
+    expect(ded.map((d) => d.material).sort()).toEqual(['10/2 Romex', '10/3 Romex'])
+    expect(ded.every((d) => d.size === '30A')).toBe(true)
+  })
+})

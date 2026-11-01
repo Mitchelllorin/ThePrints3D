@@ -10,6 +10,7 @@
  *
  *              ①                        ②                      ③
  *   Electrical outlets, switches, lights the panel              wire, by circuit
+ *              + 240 V appliances (range, dryer, water heater)
  *   Plumbing   toilet, sinks, tub, …    stack + water heater    drain and supply
  *   HVAC       supply registers, return the furnace             ducts
  *
@@ -21,7 +22,7 @@
 import type { ParsedWall, PlacedObject, TracedLine } from '../types'
 import { routeAlongWalls } from './autoRouteTrades'
 import { centroid, inwardNormal, facingInward } from './autoPlaceTrades'
-import { PLUMBING_FIXTURES } from './tradeRules'
+import { PLUMBING_FIXTURES, dedicatedCircuit240, cableFor } from './tradeRules'
 
 export type Trade = 'electrical' | 'plumbing' | 'hvac'
 export const TRADES: Trade[] = ['electrical', 'plumbing', 'hvac']
@@ -39,8 +40,12 @@ export const TRADE_SPECS: Record<Trade, TradeSpec> = {
     label: 'Electrical',
     serves: {
       label: 'Devices',
-      types: ['duplex-outlet', 'gfci-outlet', 'switch', 'ceiling-light', 'recessed-light', 'exhaust-fan'],
-      hint: 'Outlets, switches and lights',
+      // The appliances are here because they are wired work, not furniture: a
+      // range and a dryer each need a home run of their own (see DEDICATED_240V
+      // in tradeRules), and leaving them out of this list meant no circuit was
+      // ever drawn to them at all.
+      types: ['duplex-outlet', 'gfci-outlet', 'switch', 'ceiling-light', 'recessed-light', 'exhaust-fan', 'stove', 'dryer', 'water-heater'],
+      hint: 'Outlets, switches, lights and the 240 V appliances',
     },
     source: { label: 'Panel', types: ['panel-box'], hint: 'Where every circuit starts' },
     run: { label: 'Wire', hint: 'Circuits from the panel, in the walls' },
@@ -247,9 +252,28 @@ export function planRuns(
     if (!panel) return []
     // Nearest first, then cut into circuits; each circuit is a home run from
     // the panel to its first device, then device to device along the walls.
-    const byDist = [...served].sort((a, b) =>
-      Math.hypot(a.pxX! - panel.pxX!, a.pxY! - panel.pxY!) - Math.hypot(b.pxX! - panel.pxX!, b.pxY! - panel.pxY!))
     const out: PlannedLine[] = []
+    // 240 V APPLIANCES FIRST, ONE CIRCUIT EACH.
+    // A range, a dryer and a water heater are two-pole loads and cannot share a
+    // general-purpose branch, so each gets its own home run straight from the
+    // panel, sized by the appliance and pulled in the cable that matches it.
+    // They are taken out of the general pool below, so nothing is wired twice
+    // and a 40 A range does not end up on a 15 A circuit with the receptacles.
+    for (const d of served) {
+      const c = dedicatedCircuit240(d.type)
+      if (!c) continue
+      out.push({
+        ...base, ...seg(pt(panel), pt(d)),
+        elementType: 'Dedicated Circuit',
+        size: `${c.amps}A`,
+        material: cableFor(c.amps, c.conductors),
+        band: 'in-wall',
+      })
+    }
+    const general = served.filter((o) => !dedicatedCircuit240(o.type))
+    if (general.length === 0) return out
+    const byDist = [...general].sort((a, b) =>
+      Math.hypot(a.pxX! - panel.pxX!, a.pxY! - panel.pxY!) - Math.hypot(b.pxX! - panel.pxX!, b.pxY! - panel.pxY!))
     for (let i = 0; i < byDist.length; i += DEVICES_PER_CIRCUIT) {
       const group = byDist.slice(i, i + DEVICES_PER_CIRCUIT)
       const hops = routeAlongWalls(group.map((o) => ({ type: o.type, pxX: o.pxX!, pxY: o.pxY! })), ws, { startNear: { pxX: panel.pxX!, pxY: panel.pxY! } })
