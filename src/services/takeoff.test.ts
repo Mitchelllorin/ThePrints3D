@@ -245,3 +245,84 @@ describe('computeTakeoff — MEP buying units and the device schedule', () => {
     expect(item(s, 'Electrical devices & wire', '12/2 Romex (250 ft coils)')!.quantity).toBe(1)
   })
 })
+
+describe('computeTakeoff — ceiling board', () => {
+  it('counts the ceiling as sheet goods, on the top storey only', () => {
+    const s = computeTakeoff({ ...baseInput, walls: [wall()], floors: [floorLine({})] })
+    // 645.8 sq ft of ceiling ÷ 32 sq ft a sheet = 21 sheets.
+    expect(item(s, 'Board & sheathing', '__ceiling')!.quantity).toBe(21)
+    // Two storeys: the lower floor has a floor above it, so only the top one is a
+    // ceiling and the 21 does not double.
+    const two = computeTakeoff({
+      ...baseInput, walls: [wall()],
+      floors: [floorLine({}), floorLine({ id: 'f2', level: 1 })],
+    })
+    expect(item(two, 'Board & sheathing', '__ceiling')!.quantity).toBe(21)
+  })
+
+  it('tapes and muds the ceiling with the walls', () => {
+    const wallOnly = computeTakeoff({ ...baseInput, walls: [wall()] })
+    const withCeiling = computeTakeoff({ ...baseInput, walls: [wall()], floors: [floorLine({})] })
+    // 581.3 sq ft alone → 2 rolls; 1,227.1 sq ft with the ceiling → 4.
+    expect(item(wallOnly, 'Finishes', '__tape')!.quantity).toBe(2)
+    expect(item(withCeiling, 'Finishes', '__tape')!.quantity).toBe(4)
+    expect(item(withCeiling, 'Finishes', '__mud')!.quantity).toBe(3)
+  })
+
+  it('still orders no board on an empty model', () => {
+    expect(computeTakeoff(baseInput).find((x) => x.title === 'Board & sheathing')).toBeUndefined()
+  })
+})
+
+describe('computeTakeoff — HVAC equipment', () => {
+  it('schedules the furnace and the air devices as mechanical, not furniture', () => {
+    const s = computeTakeoff({
+      ...baseInput,
+      placedObjects: [{ type: 'furnace' }, { type: 'supply-register' }, { type: 'supply-register' }, { type: 'return-grille' }],
+    })
+    expect(item(s, 'HVAC equipment', 'Furnaces')!.quantity).toBe(1)
+    expect(item(s, 'HVAC equipment', 'Supply registers')!.quantity).toBe(2)
+    expect(item(s, 'HVAC equipment', 'Return grilles')!.quantity).toBe(1)
+    expect(item(s, 'HVAC equipment', '__filters')!.quantity).toBe(1)
+    // Scheduled once, not once as equipment and again as furniture.
+    expect(s.find((x) => x.title === 'Fixtures & objects')).toBeUndefined()
+  })
+
+  it('puts the drain stack in the plumbing schedule, not the furniture list', () => {
+    const s = computeTakeoff({ ...baseInput, placedObjects: [{ type: 'drain-stack' }] })
+    expect(item(s, 'Plumbing fittings & fixtures', 'Drain stacks, 3"')!.quantity).toBe(1)
+    expect(s.find((x) => x.title === 'Fixtures & objects')).toBeUndefined()
+  })
+})
+
+describe('computeTakeoff — the range', () => {
+  it('schedules the range as a 240 V electrical device, not furniture', () => {
+    const s = computeTakeoff({ ...baseInput, placedObjects: [{ type: 'stove' }] })
+    expect(item(s, 'Electrical devices & wire', 'Ranges, 240 V')!.quantity).toBe(1)
+    expect(s.find((x) => x.title === 'Fixtures & objects')).toBeUndefined()
+  })
+})
+
+describe('computeTakeoff — stairs', () => {
+  const stair = (subtype: string) => ({ type: 'stairs', subtype, widthM: 0.9144 })
+
+  it('solves the flight from the storey height, not from the box on the plan', () => {
+    const s = computeTakeoff({ ...baseInput, walls: [wall()], placedObjects: [stair('Straight')] })
+    // 2.7 m walls + 0.32 m floor build-up = 3.02 m rise → 17 equal risers.
+    expect(item(s, 'Stairs', '__steps')!.quantity).toBe(17)
+    // 16 treads, 3 ft wide, ripped out of 12 ft boards: 48 ft + waste = 5 boards.
+    expect(item(s, 'Stairs', '__treads')!.quantity).toBe(5)
+    // One 16.6 ft sloped stringer, two per flight, nested into 16 ft stock: 3.
+    expect(item(s, 'Stairs', '__stringers')!.quantity).toBe(3)
+    expect(item(s, 'Stairs', '__handrail')!.quantity).toBeGreaterThan(15)
+    expect(s.find((x) => x.title === 'Fixtures & objects')).toBeUndefined()
+  })
+
+  it('adds a landing for a stair that turns', () => {
+    const s = computeTakeoff({ ...baseInput, walls: [wall()], placedObjects: [stair('L-shaped')] })
+    expect(item(s, 'Stairs', '__steps')!.quantity).toBe(17)
+    expect(item(s, 'Stairs', '__landing')!.quantity).toBe(1)
+    // Two flights of treads, so fewer treads than the straight run.
+    expect(item(s, 'Stairs', '__treads')!.quantity).toBe(4)
+  })
+})

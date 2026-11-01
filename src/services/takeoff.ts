@@ -21,6 +21,7 @@ import type { ParsedWall, TracedLine } from '../types'
 import { generateRoofPlanes, summarizeRoof } from './roofPlanes'
 import { pitchToRatio } from '../data/traceLayers'
 import { roughOpening } from './roughOpening'
+import { solveStair, stairShapeFromSubtype } from './stairs'
 
 const MM_PER_FT = 304.8
 const MM_PER_M = 1000
@@ -517,17 +518,21 @@ function finishesSection(
   walls: ParsedWall[],
   floors: TracedLine[],
   objects: TakeoffObject[],
-  boardSqFt: number,
+  wallBoardSqFt: number,
   ceilingSqFt: number,
   mmPerPx: number,
   wallHeightM: number,
 ): TakeoffSection | null {
-  if (boardSqFt <= 0 && ceilingSqFt <= 0) return null
+  // BOARDED IS WALLS AND CEILING. Tape and mud run the ceiling seams exactly as
+  // they run the wall seams; only the wall area ever fed them, so the ceiling
+  // was in the paint and in nothing else.
+  const boardedSqFt = wallBoardSqFt + ceilingSqFt
+  if (boardedSqFt <= 0) return null
   const heightFt = wallHeightM * FT_PER_M
   const items: TakeoffItem[] = []
-  if (boardSqFt > 0) {
-    items.push({ key: '__tape', label: 'Joint tape (500 ft rolls)', quantity: Math.ceil((boardSqFt * TAPE_FT_PER_BOARD_SQFT) / TAPE_ROLL_FT), unit: 'rolls' })
-    items.push({ key: '__mud', label: 'Joint compound (4.5 gal)', quantity: Math.ceil(boardSqFt / MUD_BUCKET_SQFT), unit: 'buckets' })
+  items.push({ key: '__tape', label: 'Joint tape (500 ft rolls)', quantity: Math.ceil((boardedSqFt * TAPE_FT_PER_BOARD_SQFT) / TAPE_ROLL_FT), unit: 'rolls' })
+  items.push({ key: '__mud', label: 'Joint compound (4.5 gal)', quantity: Math.ceil(boardedSqFt / MUD_BUCKET_SQFT), unit: 'buckets' })
+  if (wallBoardSqFt > 0) {
     const corners = cornerJunctions(walls)
     if (corners > 0) {
       items.push({ key: '__bead', label: 'Corner bead (8 ft sticks)', quantity: Math.ceil(((corners / 2) * heightFt) / TRIM_STICK_FT), unit: 'ea' })
@@ -544,7 +549,7 @@ function finishesSection(
       return n + 2 * ((o.widthM ?? fallback.w) + (o.heightM ?? fallback.h)) * FT_PER_M
     }, 0)
   if (casingFt > 0) items.push({ key: '__casing', label: 'Opening casing (ft)', quantity: round0(casingFt * TRIM_WASTE), unit: 'ft' })
-  const paintSqFt = boardSqFt + ceilingSqFt
+  const paintSqFt = boardedSqFt
   if (paintSqFt > 0) {
     items.push({ key: '__primer', label: 'Primer (gal)', quantity: Math.ceil(paintSqFt / PRIMER_GAL_SQFT), unit: 'gal' })
     items.push({ key: '__paint', label: `Paint, ${PAINT_COATS} coats (gal)`, quantity: Math.ceil((paintSqFt * PAINT_COATS) / PAINT_GAL_SQFT), unit: 'gal' })
@@ -590,6 +595,11 @@ const ELECTRICAL_DEVICE_LABELS: Record<string, string> = {
   'recessed-light': 'Recessed lights',
   'exhaust-fan': 'Exhaust fans',
   'panel-box': 'Panel boxes',
+  // The range is a 240 V connection on its own circuit (see DEDICATED_240V in
+  // tradeRules), not a piece of furniture to sit beside the sofa. Left out of
+  // here it fell through to Fixtures & objects while the model was drawing a
+  // 40 A circuit to it.
+  stove: 'Ranges, 240 V',
 }
 
 const PLUMBING_FIXTURE_LABELS: Record<string, string> = {
@@ -601,6 +611,10 @@ const PLUMBING_FIXTURE_LABELS: Record<string, string> = {
   washer: 'Washing machines',
   dryer: 'Dryers',
   'water-heater': 'Water heaters',
+  // The stack is where every drain in the house ends up — plumbing's source, not
+  // a fixture, and it was landing in the furniture list because nothing here
+  // knew its name.
+  'drain-stack': 'Drain stacks, 3"',
   'kitchen-counter': 'Kitchen counters',
 }
 
@@ -660,9 +674,11 @@ function electricalDetail(lines: TracedLine[], objects: TakeoffObject[], mmPerPx
 }
 
 /**
- * HVAC FITTINGS — duct is bought in lengths and boxes, and every run turns. Air
- * devices (registers, returns) are not placeable yet, so they are not counted;
- * the exhaust fans that ARE placed are in the electrical schedule.
+ * HVAC FITTINGS — duct is bought in lengths and boxes, and every run turns.
+ *
+ * The equipment the runs land in is a schedule of its own now (see
+ * hvacEquipmentSection), so this counts duct only. The exhaust fans are
+ * electrical work and stay in the electrical schedule.
  */
 function hvacDetail(lines: TracedLine[], mmPerPx: number): TakeoffSection | null {
   if (lines.length === 0) return null
@@ -677,6 +693,131 @@ function hvacDetail(lines: TracedLine[], mmPerPx: number): TakeoffSection | null
   const items = stock.items('ea')
   items.push({ key: '__fittings', label: 'Elbows / take-offs', quantity: fittings, unit: 'ea' })
   return { title: 'HVAC fittings & duct', items }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HVAC EQUIPMENT
+// ═══════════════════════════════════════════════════════════════════════════
+
+const HVAC_EQUIPMENT_LABELS: Record<string, string> = {
+  furnace: 'Furnaces',
+  'supply-register': 'Supply registers',
+  'return-grille': 'Return grilles',
+}
+
+/**
+ * HVAC EQUIPMENT — the furnace and the boxes the duct lands in.
+ *
+ * The RUNS have been in the takeoff since the MEP sections existed, but the
+ * equipment they run between was not: a forced-air house counted its duct
+ * footage and its elbows, then listed "Furnace 1, Supply register 6" under
+ * Fixtures & objects, next to the sofas. Nothing can be bought from a line that
+ * does not say whether it is mechanical or furniture, and the schedule is what
+ * tells a supplier which truck the furnace goes on.
+ */
+function hvacEquipmentSection(objects: TakeoffObject[]): TakeoffSection | null {
+  const b = bucket()
+  let furnaces = 0
+  for (const o of objects) {
+    const label = HVAC_EQUIPMENT_LABELS[o.type]
+    if (!label) continue
+    b.add(label, 1)
+    if (o.type === 'furnace') furnaces += 1
+  }
+  const items = b.items('ea')
+  if (items.length === 0) return null
+  // A filter per furnace — the one consumable the mechanical schedule owes.
+  items.push({ key: '__filters', label: 'Furnace filters', quantity: furnaces, unit: 'ea' })
+  return { title: 'HVAC equipment', items }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// STAIRS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** What a stair climbs through between finished floors: the joist bay, the
+ *  subfloor and the ceiling build-up. Matches the framing model's default. */
+export const FLOOR_ASSEMBLY_M = 0.32
+/** Stringers are cut from the longest 2×12 most yards stock. */
+const STRINGER_STOCK_FT = 16
+/** Treads and risers are ripped out of boards this long. */
+const TREAD_BOARD_FT = 12
+const RISER_BOARD_FT = 8
+const TREAD_WASTE = 1.05
+const RISER_WASTE = 1.1
+const STRINGER_WASTE = 1.05
+const HANDRAIL_WASTE = 1.05
+/** Two stringers carry a flight; a third goes in past a 4'-0" clear width. */
+const WIDE_STAIR_M = 1.2192
+const DEFAULT_STAIR_WIDTH_M = 0.9144
+
+/**
+ * STAIRS — the biggest carpentry line on a two-storey job, and the one this
+ * takeoff did not have at all.
+ *
+ * The stair is SOLVED, not measured. `solveStair` divides the floor-to-floor
+ * rise into equal risers that meet IRC R311.7 and lays the treads out from the
+ * 10" minimum, and that is the right way round for an order: the riser count is
+ * fixed by the RISE, not by how far the box was dragged on the plan. A stair
+ * drawn short still has to climb the storey; buying treads for the drawn depth
+ * would order a stair that does not reach the floor above.
+ *
+ * What it counts: risers, treads, stringers cut to the sloped length, the
+ * landing a turn needs, and a graspable handrail (R311.7.8 — one is required on
+ * every flight). What it does NOT: balusters, newels, skirt boards, the framing
+ * around the floor opening, or anything that is not a stair (a ship's ladder, a
+ * spiral). Those stay a conversation with the carpenter.
+ */
+function stairsSection(objects: TakeoffObject[], wallHeightM: number): TakeoffSection | null {
+  const stairs = objects.filter((o) => o.type === 'stairs')
+  if (stairs.length === 0) return null
+  const riseM = wallHeightM + FLOOR_ASSEMBLY_M
+  let risers = 0
+  let treads = 0
+  let landings = 0
+  let slopeFt = 0
+  let treadWidthFt = 0
+  let riserWidthFt = 0
+  let wide = false
+  for (const st of stairs) {
+    const widthM = st.widthM && st.widthM > 0 ? st.widthM : DEFAULT_STAIR_WIDTH_M
+    if (widthM > WIDE_STAIR_M) wide = true
+    const s = solveStair({ totalRiseM: riseM, shape: stairShapeFromSubtype(st.subtype), widthM })
+    const flights = s.flightRisers.length
+    // The top riser of a flight lands on the floor (or landing) above it, so a
+    // flight of n risers only carries n−1 treads.
+    const flightTreads = s.riserCount - flights
+    risers += s.riserCount
+    treads += flightTreads
+    landings += s.landingsM.length
+    const widthFt = widthM * FT_PER_M
+    treadWidthFt += flightTreads * widthFt
+    riserWidthFt += s.riserCount * widthFt
+    for (const r of s.flightRisers) {
+      const run = Math.max(0, r - 1) * s.treadM
+      slopeFt += Math.hypot(run, r * s.riserM) / M_PER_FT
+    }
+  }
+  const items: TakeoffItem[] = []
+  if (risers > 0) {
+    items.push({ key: '__steps', label: 'Risers (steps)', quantity: risers, unit: 'ea' })
+  }
+  if (treads > 0) {
+    items.push({ key: '__treads', label: `Treads, 1×10 (${TREAD_BOARD_FT} ft boards)`, quantity: Math.ceil((treadWidthFt * TREAD_WASTE) / TREAD_BOARD_FT), unit: 'ea' })
+  }
+  if (risers > 0) {
+    items.push({ key: '__risers', label: `Riser boards, 1×8 (${RISER_BOARD_FT} ft boards)`, quantity: Math.ceil((riserWidthFt * RISER_WASTE) / RISER_BOARD_FT), unit: 'ea' })
+  }
+  if (slopeFt > 0) {
+    const perFlight = wide ? 3 : 2
+    items.push({ key: '__stringers', label: `Stringers, 2×12 (${STRINGER_STOCK_FT} ft)`, quantity: Math.ceil((slopeFt * perFlight * STRINGER_WASTE) / STRINGER_STOCK_FT), unit: 'ea' })
+    items.push({ key: '__handrail', label: 'Handrail (ft)', quantity: Math.round(slopeFt * HANDRAIL_WASTE), unit: 'ft' })
+  }
+  if (landings > 0) {
+    items.push({ key: '__landing', label: 'Landing deck, 4×8 sheet', quantity: landings, unit: 'sheets' })
+  }
+  if (items.length === 0) return null
+  return { title: 'Stairs', items }
 }
 
 export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
@@ -702,18 +843,39 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
     sections.push({ title: 'Walls', items })
   }
 
+  // THE CEILING IS BOARD TOO, AND IT WAS IN NO ORDER.
+  //
+  // The ceiling area was already measured — for paint, and for the top storey's
+  // insulation — but it never reached the sheet goods. So a 1,000 sq ft house
+  // ordered its walls and its subfloor and its roof deck, and was short about 32
+  // sheets of 4x8 board plus the tape and mud for the seams, which is the single
+  // largest domestic order on the job after the framing.
+  //
+  // The ceiling is the area of the TOP storey: every storey under it has a floor
+  // above it, so only the highest one looks up at the roof.
+  const topLevel = input.floors.reduce((n, f) => Math.max(n, f.level ?? 0), 0)
+  const ceilingSqFt = input.floors
+    .filter((f) => (f.level ?? 0) === topLevel)
+    .reduce((n, f) => n + rectSqFt(f, mm), 0)
+
   // BOARD IS ITS OWN SECTION. It is not part of the cut list, and the panel
   // drops the estimated Walls section the moment the framing is counted (see
   // TakeoffPanel), so riding along in there meant the drywall and sheathing
   // sheet count — two of the biggest orders on the job — vanished the moment
   // the model had a cut list. Each face is height × length; both faces boarded.
-  const boardSqFt = totalFt * wallHeightFt * 2
-  if (boardSqFt > 0) {
-    sections.push({
-      title: 'Board & sheathing',
-      items: [{ key: '__board', label: 'Wall board/sheathing (4×8)', quantity: Math.ceil(boardSqFt / SHEET_SQFT), unit: 'sheets' }],
-    })
+  const wallBoardSqFt = totalFt * wallHeightFt * 2
+  if (wallBoardSqFt > 0) {
+    const items: TakeoffItem[] = [
+      { key: '__board', label: 'Wall board/sheathing (4×8)', quantity: Math.ceil(wallBoardSqFt / SHEET_SQFT), unit: 'sheets' },
+    ]
+    if (ceilingSqFt > 0) {
+      items.push({ key: '__ceiling', label: 'Ceiling board (4×8)', quantity: Math.ceil(ceilingSqFt / SHEET_SQFT), unit: 'sheets' })
+    }
+    sections.push({ title: 'Board & sheathing', items })
   }
+  // Boarded area — walls and ceiling — for the nail count and the finishes. The
+  // ceiling eats nails, tape, mud and paint exactly like a wall does.
+  const boardSqFt = wallBoardSqFt + ceilingSqFt
 
   // ── Under the building, in the holes, round the outside, and on top ──
   const foundation = foundationSection(input.floors, mm)
@@ -744,11 +906,7 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
   const fasteners = fastenersSection(input.floors, studs, sheetCount, mm)
   if (fasteners) sections.push(fasteners)
 
-  const topLevel = input.floors.reduce((n, f) => Math.max(n, f.level ?? 0), 0)
-  const ceilingSqFt = input.floors
-    .filter((f) => (f.level ?? 0) === topLevel)
-    .reduce((n, f) => n + rectSqFt(f, mm), 0)
-  const finishes = finishesSection(input.walls, input.floors, input.placedObjects, boardSqFt, ceilingSqFt, mm, wallHeightM)
+  const finishes = finishesSection(input.walls, input.floors, input.placedObjects, wallBoardSqFt, ceilingSqFt, mm, wallHeightM)
   if (finishes) sections.push(finishes)
 
   const plumb = runSection('Plumbing', input.plumbing, mm)
@@ -765,12 +923,19 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
   const hvacDet = hvacDetail(input.hvac, mm)
   if (hvacDet) sections.push(hvacDet)
 
+  const hvacEquipment = hvacEquipmentSection(input.placedObjects)
+  if (hvacEquipment) sections.push(hvacEquipment)
+
+  const stairs = stairsSection(input.placedObjects, wallHeightM)
+  if (stairs) sections.push(stairs)
+
   // ── Furniture / every other placed object, counted by type ──
   // ONCE EACH. A door is in the windows-and-doors schedule, a toilet in the
   // plumbing fixture list, a switch in the device schedule — counting them
   // again as "objects" would order every one of them twice.
   const scheduled = new Set([
-    'door', 'window',
+    'door', 'window', 'stairs',
+    ...Object.keys(HVAC_EQUIPMENT_LABELS),
     ...Object.keys(ELECTRICAL_DEVICE_LABELS),
     ...Object.keys(PLUMBING_FIXTURE_LABELS),
   ])
