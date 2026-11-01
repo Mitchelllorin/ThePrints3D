@@ -1,0 +1,23 @@
+name: Footage handoff
+on:
+  push:
+    branches: [footage-handoff]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: theprints3d-footage
+          run-id: 40409778561
+          github-token: ${{ github.token }}
+          path: clips
+      - name: Put the clips in a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -laR clips
+          gh release create footage-handoff-40409778561 --draft --target footage-handoff --title "Promo footage, run 40409778561 (draft)" --notes "Clips from promo-bot run 40409778561, for cutting a promo. Draft, not public." -R ${{ github.repository }} $(find clips -type f)
