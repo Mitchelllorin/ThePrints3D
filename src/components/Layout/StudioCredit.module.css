@@ -1,7 +1,7 @@
 /* ── Studio credit ─────────────────────────────────────────────────────────────
-   The website link plus "More from the 3D family". Containerless: no card, no
-   border, no fill — only text. Colours come from the live UI settings vars so
-   it follows whatever palette the user has set. Spacing is gap, not margins. */
+   The website link. Containerless: no card, no border, no fill — only text.
+   Colours come from the live UI settings vars so it follows whatever palette
+   the user has set. */
 
 .credit {
   display: flex;
@@ -21,52 +21,4 @@
   color: var(--bp-accent, #38bdf8);
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-.lead {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.7px;
-  color: var(--bp-text-dim, #94a3b8);
-}
-
-.list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* A linked name is underlined; an unlinked one is not — the difference is in
-   shape, not only colour. The link carries the 48px row height. */
-.appLink,
-.appName {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--bp-text, #e2e8f0);
-}
-.appLink {
-  min-height: 48px;
-  display: inline-flex;
-  align-items: flex-end;
-  align-self: flex-start;
-  color: var(--bp-accent, #38bdf8);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.line {
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--bp-text-dim, #94a3b8);
 }

@@ -10,7 +10,7 @@
  *              the rail for now; these become slim columns next.
  *  • ASK     — opens the real panel-less Ask overlay.
  */
-import { useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useAppStore } from '../../store/useAppStore'
@@ -22,6 +22,7 @@ import { useCanBuyPro, useIsPro } from '../Pro/usePro'
 import { sharePicture, type ShareOutcome } from '../../services/sharePicture'
 import { PRO_REASON_GENERAL } from '../Pro/UpgradeSheet'
 import { planViewCamera } from '../../services/builtScene'
+import FamilyDrawer, { FamilyGlyph } from './FamilyDrawer'
 import styles from './RailCascade.module.css'
 
 /** Wastebasket, drawn rather than typed — the rail's glyphs are thin monochrome
@@ -223,6 +224,10 @@ export default function RailCascade() {
   const [layersOpen, setLayersOpen] = useState(false)
   const [framingOpen, setFramingOpen] = useState(false)
   const [fuseOpen, setFuseOpen] = useState(false)
+  // The family drawer is its own sheet, not a rail section: it closes nothing
+  // and nothing closes it but itself.
+  const [familyOpen, setFamilyOpen] = useState(false)
+  const closeFamily = useCallback(() => setFamilyOpen(false), [])
   const setRailPanelOpen = useFloorplanLocalStore((s) => s.setRailPanelOpen)
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
   const canBuyPro = useCanBuyPro()
@@ -337,20 +342,35 @@ export default function RailCascade() {
     <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen || framingOpen || fuseOpen ? styles.wrapSheet : ''}`}>
       <nav className={styles.rail} aria-label="Menus">
         {RAIL.filter((r) => r.id !== 'framing' || hasDrawings).map(({ id, icon, label }) => (
-          <button
-            key={id}
-            className={`${styles.icon} ${active[id] ? styles.active : ''}`}
-            onClick={() => selectSection(id)}
-            title={label}
-            aria-pressed={active[id]}
-            // So the tutorial can spotlight the real control instead of
-            // describing where it is and hoping. Until now only two elements in
-            // the whole app could be pointed at.
-            data-tour={`rail-${id}`}
-          >
-            <span className={styles.glyph}>{icon}</span>
-            <span className={styles.iconLabel}>{label}</span>
-          </button>
+          <Fragment key={id}>
+            <button
+              className={`${styles.icon} ${active[id] ? styles.active : ''}`}
+              onClick={() => selectSection(id)}
+              title={label}
+              aria-pressed={active[id]}
+              // So the tutorial can spotlight the real control instead of
+              // describing where it is and hoping. Until now only two elements in
+              // the whole app could be pointed at.
+              data-tour={`rail-${id}`}
+            >
+              <span className={styles.glyph}>{icon}</span>
+              <span className={styles.iconLabel}>{label}</span>
+            </button>
+            {/* The 3D Learning Family — beside the gear, the same small button
+                in every family app. A glyph only; its name is for screen
+                readers and the desktop tooltip. */}
+            {id === 'settings' && !traceMode && (
+              <button
+                className={`${styles.icon} ${familyOpen ? styles.active : ''}`}
+                onClick={() => setFamilyOpen(!familyOpen)}
+                title="3D Family"
+                aria-label="3D Family"
+                aria-expanded={familyOpen}
+              >
+                <span className={styles.glyph}><FamilyGlyph /></span>
+              </button>
+            )}
+          </Fragment>
         ))}
 
         {/* PLAN / 3D — a MODE, switchable both ways at any time.
@@ -474,6 +494,8 @@ export default function RailCascade() {
           </span>
         </button>
       </nav>
+
+      <FamilyDrawer open={familyOpen} onClose={closeFamily} />
 
       {layersOpen && (
         <div className={styles.col} style={{ minWidth: 168, maxHeight: '100%' }}>

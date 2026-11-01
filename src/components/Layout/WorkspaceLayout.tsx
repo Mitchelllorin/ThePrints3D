@@ -415,9 +415,10 @@ function SettingsContent() {
 
       <button className={styles.resetBtn} onClick={resetAll}>Reset to defaults</button>
 
-      {/* The website + sibling apps. Last thing in the drawer on purpose: in
-          the Play build there is no URL bar, so this is the only route out to
-          the sites, but it must never sit above the controls people came for. */}
+      {/* The website. Last thing in the drawer on purpose: in the Play build
+          there is no URL bar, so this is the only route out to the site, but it
+          must never sit above the controls people came for. The sibling apps
+          are in the family drawer, from the button beside Settings. */}
       <StudioCredit />
     </div>
   )

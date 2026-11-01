@@ -1,0 +1,177 @@
+/* ── The 3D Learning Family drawer ────────────────────────────────────────────
+   The same file, byte for byte, in CircuiTry3D, ThePrints3D and AutoMotive3D, so
+   the drawer looks the same in all three. Its own tokens, prefixed --fd-, so it
+   leans on nothing app-specific.
+
+   A side sheet on glass: the model stays visible behind it. Transient — opened
+   by the 3D Family button, gone on ✕, Escape or a tap anywhere outside it.
+   Plain text rows, no cards; every link is a 48px row. Built at 360×640 first. */
+
+:root {
+  --fd-tint: 15 22 32; /* raw RGB, used with alpha below */
+  --fd-alpha: 0.86; /* alpha floor is .72 */
+  --fd-line: rgba(140, 160, 185, 0.28);
+  --fd-ink: #e8eef5; /* 4.5:1+ composited over white and over black */
+  --fd-ink-2: #b9c6d6;
+  --fd-muted: #9fb0c4;
+  --fd-link: #8ccaff;
+  --fd-tap: 48px;
+  --fd-z: 20; /* sheets, drawers, panels */
+}
+
+/* Catches the tap outside the drawer. Clear, not a scrim: this is a sheet, not
+   a modal, and the model behind it is the point. */
+.fd-catch {
+  position: fixed;
+  inset: 0;
+  z-index: var(--fd-z);
+  background: transparent;
+}
+
+.fd-drawer {
+  position: fixed;
+  z-index: var(--fd-z);
+  top: env(safe-area-inset-top, 0px);
+  right: env(safe-area-inset-right, 0px);
+  bottom: env(safe-area-inset-bottom, 0px);
+  width: min(320px, calc(100vw - 48px));
+  display: flex;
+  flex-direction: column;
+  background: rgb(var(--fd-tint) / var(--fd-alpha));
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
+  border-left: 1px solid var(--fd-line);
+  border-radius: 14px 0 0 14px;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.35);
+  color: var(--fd-ink);
+  font-size: 14px;
+  line-height: 1.35;
+  text-align: left;
+  animation: fd-in 0.2s ease-out;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fd-drawer { background: rgb(var(--fd-tint) / 0.94); }
+}
+@keyframes fd-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fd-drawer { animation: none; }
+}
+
+.fd-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 16px;
+  border-bottom: 1px solid var(--fd-line);
+}
+.fd-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.fd-title a {
+  min-height: var(--fd-tap);
+  display: flex;
+  align-items: center;
+  color: var(--fd-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--fd-line);
+  text-underline-offset: 4px;
+}
+.fd-close {
+  flex: none;
+  width: var(--fd-tap);
+  height: var(--fd-tap);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--fd-ink-2);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+/* Every list scrolls: phones are short. */
+.fd-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 0;
+}
+.fd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fd-row {
+  min-height: var(--fd-tap);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 16px;
+  color: var(--fd-ink);
+  text-decoration: none;
+}
+.fd-name {
+  font-weight: 700;
+}
+.fd-line {
+  font-size: 13px;
+  color: var(--fd-ink-2);
+}
+/* A linked name is underlined; the app you are in and the ones not out yet are
+   not. Shape, not only colour. */
+.fd-row--link .fd-name {
+  color: var(--fd-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.fd-row--link:active { background: rgba(140, 160, 185, 0.14); }
+.fd-here {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fd-ink-2);
+}
+/* The ones not out yet: names only, set apart from the live three. Not links,
+   so not 48px rows. */
+.fd-list--soon {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--fd-line);
+}
+.fd-row--soon {
+  min-height: 0;
+  padding: 5px 16px;
+  font-weight: 600;
+  color: var(--fd-ink-2);
+}
+
+.fd-title a:focus-visible,
+.fd-close:focus-visible,
+.fd-row--link:focus-visible {
+  outline: 2px solid var(--fd-link);
+  outline-offset: -2px;
+}
+
+.fd-foot {
+  flex: none;
+  margin: 0;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--fd-line);
+  font-size: 13px;
+  color: var(--fd-muted);
+}

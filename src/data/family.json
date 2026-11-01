@@ -1,0 +1,16 @@
+{
+  "name": "The 3D Learning Family",
+  "home": "https://3dlearningfamily.com",
+  "maker": "Mitchell Lorin McKnight",
+  "apps": [
+    { "name": "CircuiTry3D", "site": "https://circuitry3d.app", "line": "Build circuits in 3D and see why parts fail.", "live": true },
+    { "name": "ThePrints3D", "site": "https://theprints3d.com", "line": "Trace a floor plan and frame it in 3D.", "live": true },
+    { "name": "AutoMotive3D", "site": "https://automotive3d.ca", "line": "Build an engine, run it on the dyno, tear it down.", "live": true },
+    { "name": "TheAtom3D", "site": "https://theatom3d.mitchelllorinmcknight.workers.dev", "line": "Electron orbitals as they really are, hydrogen to iron.", "live": false },
+    { "name": "TheCell3D", "site": "https://thecell3d.com", "line": "A living cell you can take apart.", "live": false },
+    { "name": "AnyBody3D", "site": "https://anybody3d.com", "line": "The human body, outside in.", "live": false },
+    { "name": "AnyPlanet3D", "site": null, "line": "Earth, layer by layer down to the core.", "live": false },
+    { "name": "LearnIT3D", "site": null, "line": "Trade courses built on the apps.", "live": false },
+    { "name": "ThePyramids3D", "site": null, "line": "In early development.", "live": false }
+  ]
+}
