@@ -122,8 +122,30 @@ describe('computeTakeoff — foundation', () => {
     expect(item(s, 'Foundation', '__forms')!.quantity).toBe(105)
   })
 
-  it('does not invent a foundation under a joist floor', () => {
+  it('stands a joist floor on a stem wall instead of leaving it on the ground', () => {
     const s = computeTakeoff({ ...baseInput, floors: [floorLine({})] })
+    // No wall lines drawn, so the wall follows the floor edge: 32 m = 105 ft.
+    expect(item(s, 'Foundation', '__stem')!.quantity).toBe(5.4)
+    expect(item(s, 'Foundation', '__stembolts')!.quantity).toBe(20)
+    expect(item(s, 'Foundation', '__slab')).toBeUndefined()
+  })
+
+  it('walls, sills and covers the crawl under the bearing run, over gravel', () => {
+    const s = computeTakeoff({ ...baseInput, walls: [wall()], floors: [floorLine({})] })
+    // 32.8 ft of wall at 8" × 24", with waste.
+    expect(item(s, 'Foundation', '__stem')!.quantity).toBe(1.7)
+    expect(item(s, 'Foundation', '__stemforms')!.quantity).toBe(66) // both faces
+    expect(item(s, 'Foundation', '__stembolts')!.quantity).toBe(8)
+    expect(item(s, 'Foundation', '__sill')!.quantity).toBe(33)
+    // 645.8 sq ft of crawl, plus a lap.
+    expect(item(s, 'Foundation', '__groundcover')!.quantity).toBe(710)
+    // 32.8 ft of trench, 24" wide, 4" of stone.
+    expect(item(s, 'Foundation', '__gravel')!.quantity).toBe(0.8)
+    expect(item(s, 'Foundation', '__slab')).toBeUndefined()
+  })
+
+  it('leaves a skid set on its own skids — no slab, no stem wall', () => {
+    const s = computeTakeoff({ ...baseInput, floors: [floorLine({ elementType: 'Skids + 2x6' })] })
     expect(s.find((x) => x.title === 'Foundation')).toBeUndefined()
   })
 })
@@ -188,6 +210,42 @@ describe('computeTakeoff — fasteners & consumables', () => {
 
   it('says nothing on an empty model', () => {
     expect(computeTakeoff(baseInput).find((x) => x.title === 'Fasteners & consumables')).toBeUndefined()
+  })
+
+  it('orders the screws, roofing nails and siding nails it used to skip', () => {
+    const s = computeTakeoff({
+      ...baseInput, walls: [wall()], floors: [floorLine({})], roof: [roofLine({})], roofOverhangM: 0,
+    })
+    // 39 sheets of wall and ceiling board at 32 screws each — 4.3 lb, so one 5 lb box.
+    expect(item(s, 'Fasteners & consumables', '__drywall')!.quantity).toBe(1)
+    // 8 squares of shingle and 4 squares of siding, at 1.5 lb a square.
+    expect(item(s, 'Fasteners & consumables', '__roofnails')!.quantity).toBeCloseTo(11.9, 0)
+    expect(item(s, 'Fasteners & consumables', '__sidingnails')!.quantity).toBeCloseTo(4.8, 0)
+  })
+})
+
+describe('computeTakeoff — excavation & footings', () => {
+  it('digs the footprint and the footing trenches, then hauls the spoil', () => {
+    const s = computeTakeoff({ ...baseInput, walls: [wall()], floors: [floorLine({})] })
+    // 645.8 sq ft plus a 2 ft margin round 105 ft of perimeter, 6" deep.
+    expect(item(s, 'Excavation', '__topsoil')!.quantity).toBe(15.8)
+    // 32.8 ft of exterior wall × 24" × 16".
+    expect(item(s, 'Excavation', '__trench')!.quantity).toBe(3.2)
+    // Bulked 25% on the way to the truck.
+    expect(item(s, 'Excavation', '__haul')!.quantity).toBe(23.9)
+  })
+
+  it('puts a strip footing and two bars under the exterior walls', () => {
+    const s = computeTakeoff({ ...baseInput, walls: [wall()] })
+    // 32.8 ft × 16" × 8" = 1.1 cu yd, with no slab drawn.
+    expect(item(s, 'Foundation', '__footing')!.quantity).toBe(1.1)
+    // Two continuous bars over 32.8 ft = 65.6 ft → four 20 ft sticks.
+    expect(item(s, 'Foundation', '__rebar')!.quantity).toBe(4)
+    expect(item(s, 'Foundation', '__slab')).toBeUndefined()
+  })
+
+  it('digs nothing on an empty model', () => {
+    expect(computeTakeoff(baseInput).find((x) => x.title === 'Excavation')).toBeUndefined()
   })
 })
 

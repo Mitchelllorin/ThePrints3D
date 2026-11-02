@@ -226,6 +226,76 @@ function roofTakeoff(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SHARED MEASUREMENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * The exterior wall run, in feet.
+ *
+ * Siding, wrap, the footing under it and the nails that fix it are all measured
+ * off the same line, so it is measured once. Interior partitions are not part of
+ * the envelope and get nothing.
+ */
+function exteriorWallFt(walls: ParsedWall[], mmPerPx: number): number {
+  return walls
+    .filter((w) => !/interior/i.test(w.wallRole ?? ''))
+    .reduce((n, w) => n + lineFt(w, mmPerPx), 0)
+}
+
+/** The exterior wall FACE area in sq ft — length × storey height. */
+function exteriorWallSqFt(walls: ParsedWall[], mmPerPx: number, wallHeightM: number): number {
+  return exteriorWallFt(walls, mmPerPx) * wallHeightM * FT_PER_M
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXCAVATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Topsoil comes off the whole footprint, not just the trenches. */
+const TOPSOIL_IN = 6
+/** A 2 ft working margin, so a man can stand outside the form. */
+const WORK_MARGIN_FT = 2
+/** A strip footing is cut into a 24" wide × 16" deep trench: 8" of footing, 8" of bearing. */
+const TRENCH_W_IN = 24
+const TRENCH_D_IN = 16
+/** Excavated soil bulks about a quarter when it comes out of the hole. */
+const SOIL_SWELL = 1.25
+
+/**
+ * EXCAVATION — the first trade on the job, and the one no takeoff had at all.
+ *
+ * Nothing here is drawn as a line: a plan shows a slab edge, not a hole. So the
+ * quantities come off the footprint that IS drawn — the ground-floor areas — and
+ * the trade's own rules: strip the topsoil over the building plus a 2 ft working
+ * margin, cut a trench under every exterior wall for the footing, and haul the
+ * spoil away, bulked 25% because a yard in the bank is not a yard in the truck.
+ *
+ * What it is NOT: a site cut/fill, a basement dig, a dewatering allowance or
+ * rock. Those come off a survey and a soil report, not a floor plan.
+ */
+function excavationSection(floors: TracedLine[], walls: ParsedWall[], mmPerPx: number): TakeoffSection | null {
+  const ground = floors.filter((f) => (f.level ?? 0) === 0)
+  const sqft = ground.reduce((n, f) => n + rectSqFt(f, mmPerPx), 0)
+  const perimFt = ground.reduce((n, f) => n + boxPerimeterFt(f, mmPerPx), 0)
+  const trenchFt = exteriorWallFt(walls, mmPerPx)
+  const topsoilCuFt = (sqft + perimFt * WORK_MARGIN_FT) * (TOPSOIL_IN / 12)
+  const trenchCuFt = trenchFt * (TRENCH_W_IN / 12) * (TRENCH_D_IN / 12)
+  const items: TakeoffItem[] = []
+  if (topsoilCuFt > 0) {
+    items.push({ key: '__topsoil', label: `Topsoil strip, ${TOPSOIL_IN}" (incl. margin)`, quantity: round1(topsoilCuFt / 27), unit: 'cu yd' })
+  }
+  if (trenchCuFt > 0) {
+    items.push({ key: '__trench', label: `Footing trenches, ${TRENCH_W_IN}" × ${TRENCH_D_IN}"`, quantity: round1(trenchCuFt / 27), unit: 'cu yd' })
+  }
+  const dugCuFt = topsoilCuFt + trenchCuFt
+  if (dugCuFt > 0) {
+    items.push({ key: '__haul', label: `Spoil haul-off (bulked ${Math.round((SOIL_SWELL - 1) * 100)}%)`, quantity: round1((dugCuFt * SOIL_SWELL) / 27), unit: 'cu yd' })
+  }
+  if (items.length === 0) return null
+  return { title: 'Excavation', items }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // FOUNDATION
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -239,36 +309,103 @@ const ANCHOR_OC_FT = 6
 /** A 5'×10' sheet of welded wire mesh. */
 const MESH_SHEET_SQFT = 50
 
+/** Strip footing under a bearing wall: 16" wide × 8" deep (IRC Table R403.1). */
+const FOOTING_W_IN = 16
+const FOOTING_D_IN = 8
+/** Two continuous #4 bars, bought in 20 ft sticks. */
+const FOOTING_BARS = 2
+const REBAR_STICK_FT = 20
+/** 4" of compacted stone under the footing, the full width of the trench. */
+const GRAVEL_IN = 4
+/** A crawl-space stem wall: 8" thick, 24" high (IRC R408 wants 18" clear under the joists). */
+const STEM_W_IN = 8
+const STEM_H_IN = 24
+
 /**
  * FOUNDATION — the part under the building, which the takeoff used to report as
- * a floor area and nothing else. A slab is the only foundation this app models
- * (a joist floor's foundation walls are not drawn), so the schedule is the
- * slab's own concrete, base, barrier, mesh, bolts and edge forms. What it is
- * NOT: a footing schedule. A slab on grade at 4" needs no thickened footing
- * except under bearing walls, which are not drawn as separate lines.
+ * a floor area and nothing else.
+ *
+ * Three different foundations, priced the same way: the FOOTING is a strip under
+ * every exterior wall, whether the floor above it is a slab or joists, and it is
+ * measured off the wall lines that are drawn. The SLAB is only there when a
+ * concrete floor was drawn, and brings its base, barrier, mesh, bolts and edge
+ * forms with it. The footing used to be missing entirely — "a slab on grade
+ * needs no footing except under bearing walls, which are not drawn as separate
+ * lines" — but the bearing walls ARE drawn, and they are the exterior run.
+ *
+ * A house on JOISTS has no slab, and used to get a footing and nothing to stand
+ * the house on: the floor sat on the ground. It gets a crawl-space STEM WALL
+ * now — an 8" wall two feet high round the same bearing run, with the bolts, the
+ * treated sill the joists land on, forms, and a ground cover over the crawl. A
+ * skid set is left alone, because a skid set already sits on something.
+ *
+ * What it is NOT: a stepped or keyed footing, a frost-protected shallow
+ * foundation, an insulated crawl wall, vent sizing, or a design for a soil the
+ * drawings cannot describe.
  */
-function foundationSection(floors: TracedLine[], mmPerPx: number): TakeoffSection | null {
+function foundationSection(floors: TracedLine[], walls: ParsedWall[], mmPerPx: number): TakeoffSection | null {
   const slabs = floors.filter((f) => f.elementType === 'Concrete Slab')
-  if (slabs.length === 0) return null
   let sqft = 0, perimFt = 0
   for (const s of slabs) {
     sqft += rectSqFt(s, mmPerPx)
     perimFt += boxPerimeterFt(s, mmPerPx)
   }
-  if (sqft <= 0) return null
-  const slabCuFt = sqft * (SLAB_IN / 12) * SLAB_WASTE
-  const baseCuFt = sqft * (BASE_IN / 12) * SLAB_WASTE
-  return {
-    title: 'Foundation',
-    items: [
+  const items: TakeoffItem[] = []
+
+  // THE FOOTING UNDER THE WALLS — the concrete nobody ordered.
+  const footingFt = exteriorWallFt(walls, mmPerPx)
+  const footingCuFt = footingFt * (FOOTING_W_IN / 12) * (FOOTING_D_IN / 12)
+  if (footingCuFt > 0) {
+    items.push({ key: '__footing', label: `Strip footing, ${FOOTING_W_IN}" × ${FOOTING_D_IN}" (incl. waste)`, quantity: round1((footingCuFt * SLAB_WASTE) / 27), unit: 'cu yd' })
+    items.push({ key: '__rebar', label: `Rebar, #4 (${REBAR_STICK_FT} ft sticks)`, quantity: Math.ceil((footingFt * FOOTING_BARS) / REBAR_STICK_FT), unit: 'ea' })
+    // GRAVEL UNDER THE STONE. No footing is poured straight onto subgrade: 4" of
+    // compacted stone goes in first, across the full width of the trench the
+    // digger already cut. It was the one material in the ground nobody bought.
+    items.push({ key: '__gravel', label: `Gravel under footing, ${GRAVEL_IN}"`, quantity: round1((footingFt * (TRENCH_W_IN / 12) * (GRAVEL_IN / 12)) / 27), unit: 'cu yd' })
+  }
+
+  if (sqft > 0) {
+    const slabCuFt = sqft * (SLAB_IN / 12) * SLAB_WASTE
+    const baseCuFt = sqft * (BASE_IN / 12) * SLAB_WASTE
+    items.push(
       { key: '__slab', label: `Concrete, ${SLAB_IN}" slab (incl. waste)`, quantity: round1(slabCuFt / 27), unit: 'cu yd' },
       { key: '__base', label: `Compacted base, ${BASE_IN}"`, quantity: round1(baseCuFt / 27), unit: 'cu yd' },
       { key: '__vb', label: 'Vapour barrier, 6 mil', quantity: round0(sqft * 1.1), unit: 'sq ft' },
       { key: '__mesh', label: 'Welded wire mesh (5×10 sheets)', quantity: Math.ceil((sqft * 1.1) / MESH_SHEET_SQFT), unit: 'sheets' },
       { key: '__anchors', label: 'Anchor bolts, ½"×10"', quantity: Math.ceil(perimFt / ANCHOR_OC_FT) + 2, unit: 'ea' },
       { key: '__forms', label: 'Edge forms, 2×10', quantity: round0(perimFt), unit: 'ft' },
-    ],
+    )
   }
+
+  // THE WALL A JOIST FLOOR STANDS ON.
+  //
+  // Without a slab there was no foundation line at all, so a joist floor was a
+  // floor lying on the ground: no crawl, no sill, nothing under the bearing
+  // walls the framing was already cutting plates for. The wall follows the
+  // bearing run when wall lines are drawn, and the floor edge when they are not.
+  const crawl = floors.filter((f) => (f.level ?? 0) === 0 && HANGER_FLOOR_TYPES.has(f.elementType))
+  if (crawl.length > 0) {
+    const crawlSqFt = crawl.reduce((n, f) => n + rectSqFt(f, mmPerPx), 0)
+    const runFt = footingFt > 0
+      ? footingFt
+      : crawl.reduce((n, f) => n + boxPerimeterFt(f, mmPerPx), 0)
+    if (runFt > 0) {
+      items.push(
+        { key: '__stem', label: `Stem wall, ${STEM_W_IN}" × ${STEM_H_IN}" (incl. waste)`, quantity: round1((runFt * (STEM_W_IN / 12) * (STEM_H_IN / 12) * SLAB_WASTE) / 27), unit: 'cu yd' },
+        { key: '__stemforms', label: 'Wall forms, 2×10 (both faces)', quantity: round0(runFt * 2), unit: 'ft' },
+        { key: '__stembolts', label: 'Anchor bolts, ½"×10"', quantity: Math.ceil(runFt / ANCHOR_OC_FT) + 2, unit: 'ea' },
+        { key: '__sill', label: 'Sill plate, 2×6 pressure-treated', quantity: round0(runFt), unit: 'ft' },
+      )
+      // The bare earth under a vapour barrier is what makes a crawl a crawl
+      // rather than a damp pit under the subfloor.
+      if (crawlSqFt > 0) {
+        items.push({ key: '__groundcover', label: 'Crawl space ground cover, 6 mil', quantity: round0(crawlSqFt * 1.1), unit: 'sq ft' })
+      }
+    }
+  }
+
+  if (items.length === 0) return null
+  return { title: 'Foundation', items }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -379,7 +516,9 @@ function envelopeSection(
   if (walls.length === 0 && roof.surfaceSqFt <= 0) return null
   const heightFt = wallHeightM * FT_PER_M
   const ext = walls.filter((w) => !/interior/i.test(w.wallRole ?? ''))
-  const grossSqFt = ext.reduce((n, w) => n + lineFt(w, mmPerPx), 0) * heightFt
+  // Measured by the one helper, so the siding here and the nails that fix it in
+  // the fastener schedule are the same wall rather than two close readings of it.
+  const grossSqFt = exteriorWallSqFt(walls, mmPerPx, wallHeightM)
 
   // The ceiling is the area of the TOP storey — every storey under it has a
   // floor above it, so only the highest one is under the roof.
@@ -429,6 +568,14 @@ const SHEATHING_NAIL_LB_PER_SHEET = 0.6
 const HANGER_NAIL_LB_PER_HANGER = 0.1
 /** One 28-oz tube of subfloor adhesive lays about four sheets. */
 const SHEETS_PER_ADHESIVE_TUBE = 4
+/** Drywall screws: 32 to a 4×8 sheet, ~320 to the pound, sold in 5 lb boxes. */
+const DRYWALL_SCREWS_PER_SHEET = 32
+const DRYWALL_SCREWS_PER_LB = 320
+const DRYWALL_SCREW_BOX_LB = 5
+const DRYWALL_SCREW_WASTE = 1.1
+/** Shingle and siding nails, per square (100 sq ft) — the yards' own numbers. */
+const ROOFING_NAIL_LB_PER_SQUARE = 1.5
+const SIDING_NAIL_LB_PER_SQUARE = 1.5
 
 /**
  * FASTENERS & CONSUMABLES — the line every material list has and every app
@@ -442,6 +589,9 @@ function fastenersSection(
   studs: number,
   sheetCount: number,
   mmPerPx: number,
+  boardSqFt: number,
+  roofSqFt: number,
+  sidingSqFt: number,
 ): TakeoffSection | null {
   const joistFloors = floors.filter((f) => HANGER_FLOOR_TYPES.has(f.elementType))
   let hangers = 0
@@ -460,6 +610,26 @@ function fastenersSection(
     items.push({ key: '__hangernails', label: 'Joist hanger nails', quantity: round1(hangers * HANGER_NAIL_LB_PER_HANGER), unit: 'lb' })
   }
   if (sheetCount > 0) items.push({ key: '__adhesive', label: 'Subfloor adhesive (28 oz)', quantity: Math.ceil(sheetCount / SHEETS_PER_ADHESIVE_TUBE), unit: 'tubes' })
+
+  // SCREWS AND THE TWO NAILS THAT WERE NEVER ORDERED.
+  //
+  // The section had framing nails, sheathing nails and hangers, and not one
+  // screw — on a job boarded in the thousands of square feet, where the board
+  // is held by screws that no line in the list accounted for. Roofing and siding
+  // nails were the same: the shingles and the squares were ordered and the fixings
+  // to put them up were not, which is the second trip to the yard on a Saturday.
+  if (boardSqFt > 0) {
+    const sheets = Math.ceil(boardSqFt / SHEET_SQFT)
+    const lb = (sheets * DRYWALL_SCREWS_PER_SHEET * DRYWALL_SCREW_WASTE) / DRYWALL_SCREWS_PER_LB
+    items.push({ key: '__drywall', label: `Drywall screws, 1⅝" (${DRYWALL_SCREW_BOX_LB} lb box)`, quantity: Math.ceil(lb / DRYWALL_SCREW_BOX_LB), unit: 'box' })
+  }
+  if (roofSqFt > 0) {
+    items.push({ key: '__roofnails', label: 'Roofing nails, 1¼"', quantity: round1(((roofSqFt * ENVELOPE_WASTE) / SQUARE_SQFT) * ROOFING_NAIL_LB_PER_SQUARE), unit: 'lb' })
+  }
+  if (sidingSqFt > 0) {
+    items.push({ key: '__sidingnails', label: 'Siding nails, galvanised', quantity: round1(((sidingSqFt * ENVELOPE_WASTE) / SQUARE_SQFT) * SIDING_NAIL_LB_PER_SQUARE), unit: 'lb' })
+  }
+
   if (items.length === 0) return null
   return { title: 'Fasteners & consumables', items }
 }
@@ -877,8 +1047,11 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
   // ceiling eats nails, tape, mud and paint exactly like a wall does.
   const boardSqFt = wallBoardSqFt + ceilingSqFt
 
-  // ── Under the building, in the holes, round the outside, and on top ──
-  const foundation = foundationSection(input.floors, mm)
+  // ── Out of the ground, under the building, in the holes, round the outside, and on top ──
+  const excavation = excavationSection(input.floors, input.walls, mm)
+  if (excavation) sections.push(excavation)
+
+  const foundation = foundationSection(input.floors, input.walls, mm)
   if (foundation) sections.push(foundation)
 
   const openings = openingsSection(input.placedObjects)
@@ -903,7 +1076,10 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
     + Math.ceil(floorSheets / SHEET_SQFT)
     + Math.ceil(roofSheets / SHEET_SQFT)
 
-  const fasteners = fastenersSection(input.floors, studs, sheetCount, mm)
+  const fasteners = fastenersSection(
+    input.floors, studs, sheetCount, mm,
+    boardSqFt, roof.metrics.surfaceSqFt, exteriorWallSqFt(input.walls, mm, wallHeightM),
+  )
   if (fasteners) sections.push(fasteners)
 
   const finishes = finishesSection(input.walls, input.floors, input.placedObjects, wallBoardSqFt, ceilingSqFt, mm, wallHeightM)
