@@ -257,7 +257,25 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
     const item = getCatalogItem(o.type)
     const lenM = (item?.defaultW ?? 1.524) * o.scaleX
     const depthM = (item?.defaultD ?? 0.762) * o.scaleZ
-    const { best, t } = nearestWall(o.x, o.z, depthM / 2, 6 * mPerPx, o.level ?? 0)
+    /* THE BACK OF A TUB IS NOT ALWAYS ITS DEPTH.
+       `reach` is how far the tub's own back face is from its centre, and that
+       depends on which way it lies: turned a quarter turn to fit a bathroom,
+       the face on the wall is the tub's LENGTH. Handing over depth/2 whatever
+       the rotation found the wrong wall (or none) as soon as a tub was turned,
+       so the alcove L's were packed onto a wall the tub was not against.
+       Two passes: the wall nearest the centre, then the same search at the
+       reach that wall's normal actually gives — the box's half-extent along
+       it, which is exact for any yaw. */
+    const near = nearestWall(o.x, o.z, 0, 6 * mPerPx, o.level ?? 0)
+    let backM = depthM / 2
+    if (near.best >= 0) {
+      const s0 = wsegs[near.best]
+      const l0 = Math.hypot(s0.dx, s0.dz) || 1
+      const nx = -s0.dz / l0, nz = s0.dx / l0
+      const c = Math.cos(o.rotationY), sn = Math.sin(o.rotationY)
+      backM = 0.5 * (lenM * Math.abs(c * nx - sn * nz) + depthM * Math.abs(sn * nx + c * nz))
+    }
+    const { best, t } = nearestWall(o.x, o.z, backM, 6 * mPerPx, o.level ?? 0)
     if (best < 0) continue
     const seg = wsegs[best]
     const wallLenM = Math.hypot(seg.dx, seg.dz)
