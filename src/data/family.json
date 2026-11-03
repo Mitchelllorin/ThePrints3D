@@ -10,7 +10,6 @@
     { "name": "TheCell3D", "site": "https://thecell3d.com", "line": "A living cell you can take apart.", "live": false },
     { "name": "AnyBody3D", "site": "https://anybody3d.com", "line": "The human body, outside in.", "live": false },
     { "name": "AnyPlanet3D", "site": null, "line": "Earth, layer by layer down to the core.", "live": false },
-    { "name": "LearnIT3D", "site": null, "line": "Trade courses built on the apps.", "live": false },
     { "name": "ThePyramids3D", "site": null, "line": "In early development.", "live": false }
   ]
 }

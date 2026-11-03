@@ -73,10 +73,12 @@ export default function FamilyDrawer({ open, onClose }: Props) {
               </li>
             ))}
           </ul>
-          {/* Not out yet: by name only, no link. */}
+          {/* Not out yet: by name, linked where it already has a site. */}
           <ul className="fd-list fd-list--soon">
             {SOON.map((app) => (
-              <li key={app.name} className="fd-row fd-row--soon">{app.name}</li>
+              <li key={app.name} className="fd-row fd-row--soon">
+                {app.site ? <a href={app.site} target="_blank" rel="noopener noreferrer">{app.name}</a> : app.name}
+              </li>
             ))}
           </ul>
         </div>

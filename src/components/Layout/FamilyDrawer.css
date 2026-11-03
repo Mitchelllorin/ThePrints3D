@@ -159,6 +159,14 @@
   font-weight: 600;
   color: var(--fd-ink-2);
 }
+.fd-row--soon a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.fd-row--soon a:hover {
+  color: var(--fd-ink);
+}
 
 .fd-title a:focus-visible,
 .fd-close:focus-visible,
