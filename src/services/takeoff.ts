@@ -754,6 +754,15 @@ const DUCT_STOCK_FT: Record<string, number> = {
 /** Every run turns at both ends, so two fittings are the minimum honest count. */
 const FITTINGS_PER_RUN = 2
 
+function caseworkSection(objects: TakeoffObject[]): TakeoffSection | null {
+  const b = bucket()
+  for (const o of objects) {
+    const label = CASEWORK_LABELS[o.type]
+    if (label) b.add(label, 1)
+  }
+  const items = b.items('ea')
+  return items.length > 0 ? { title: 'Casework', items } : null
+}
 const ELECTRICAL_DEVICE_LABELS: Record<string, string> = {
   'device-box': 'Device boxes (1-gang)',
   'junction-box': 'Junction boxes',
@@ -786,6 +795,20 @@ const PLUMBING_FIXTURE_LABELS: Record<string, string> = {
   // knew its name.
   'drain-stack': 'Drain stacks, 3"',
   'kitchen-counter': 'Kitchen counters',
+}
+
+/**
+ * CASEWORK — cabinets by the box.
+ *
+ * A kitchen order is a cabinet order before it is anything else, and these
+ * were landing in Fixtures & objects next to the sofas — the same hole the
+ * furnace, the drain stack and the range each fell through, one at a time.
+ * Counted by the box and named the way a cabinet shop names them.
+ */
+const CASEWORK_LABELS: Record<string, string> = {
+  'base-cabinet': 'Base cabinets',
+  'upper-cabinet': 'Upper cabinets',
+  'tall-cabinet': 'Tall cabinets / pantries',
 }
 
 /** The key a pipe or wire is bought by — its material, which is what a yard stocks. */
@@ -1105,6 +1128,9 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
   const stairs = stairsSection(input.placedObjects, wallHeightM)
   if (stairs) sections.push(stairs)
 
+  const casework = caseworkSection(input.placedObjects)
+  if (casework) sections.push(casework)
+
   // ── Furniture / every other placed object, counted by type ──
   // ONCE EACH. A door is in the windows-and-doors schedule, a toilet in the
   // plumbing fixture list, a switch in the device schedule — counting them
@@ -1114,6 +1140,7 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
     ...Object.keys(HVAC_EQUIPMENT_LABELS),
     ...Object.keys(ELECTRICAL_DEVICE_LABELS),
     ...Object.keys(PLUMBING_FIXTURE_LABELS),
+    ...Object.keys(CASEWORK_LABELS),
   ])
   const objectItems = input.placedObjects.filter((o) => !scheduled.has(o.type))
   if (objectItems.length > 0) {

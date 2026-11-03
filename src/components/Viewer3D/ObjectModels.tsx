@@ -147,6 +147,42 @@ export default function ObjectModel({ type, w, h, d, color, subtype, stair }: Mo
         </>
       )
     }
+    case 'base-cabinet': {
+      // Carcass, a toe kick set back off the front face, and the door reveal.
+      // The countertop is a separate item — you buy the box and the top.
+      const kick = Math.min(0.1, h * 0.12)
+      const body = h - kick
+      return (
+        <>
+          <Box args={[w, body, d]} pos={[0, floor + kick + body / 2, 0]} color={color} />
+          <Box args={[w, kick, d * 0.8]} pos={[0, floor + kick / 2, -d * 0.1]} color={shade(color, -0.35)} />
+          <Box args={[0.006, body - 0.06, 0.012]} pos={[0, floor + kick + body / 2, d / 2 + 0.006]} color={shade(color, -0.3)} />
+          {/* a pull, where a hand actually goes */}
+          <Box args={[Math.min(0.14, w * 0.3), 0.012, 0.02]} pos={[0, floor + kick + body - 0.09, d / 2 + 0.02]} color={shade(color, -0.55)} metal={0.4} />
+        </>
+      )
+    }
+    case 'upper-cabinet': {
+      // Two doors lapping at a reveal down the middle, which is what makes it
+      // read as a wall cabinet instead of a box hanging on the wall.
+      const face = 0.018
+      return (
+        <>
+          <Box args={[w, h, d]} pos={[0, floor + h / 2, 0]} color={color} />
+          <Box args={[w / 2 - 0.008, h - 0.03, face]} pos={[-w / 4 - 0.004, floor + h / 2, d / 2 + face / 2]} color={shade(color, 0.06)} />
+          <Box args={[w / 2 - 0.008, h - 0.03, face]} pos={[w / 4 + 0.004, floor + h / 2, d / 2 + face / 2]} color={shade(color, 0.06)} />
+        </>
+      )
+    }
+    case 'tall-cabinet': {
+      const face = 0.018
+      return (
+        <>
+          <Box args={[w, h, d]} pos={[0, floor + h / 2, 0]} color={color} />
+          <Box args={[w - 0.04, h - 0.04, face]} pos={[0, floor + h / 2, d / 2 + face / 2]} color={shade(color, 0.06)} />
+        </>
+      )
+    }
     case 'kitchen-counter': {
       const topH = h * 0.08
       return (

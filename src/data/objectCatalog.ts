@@ -52,7 +52,14 @@ export const OBJECT_CATALOG: ObjectCatalogItem[] = [
   { type: 'bed-single',     label: 'Bed (Single)',    short: 'Bed S',    icon: '🛏️', defaultW: 0.99, defaultD: 1.9,  defaultH: 0.5,  color: '#db2777' },
   { type: 'desk',           label: 'Desk',            short: 'Desk',     icon: '🖥️', defaultW: 1.4,  defaultD: 0.7,  defaultH: 0.75, color: '#0891b2' },
   { type: 'dining-table',   label: 'Dining Table',    short: 'Table',    icon: '🍽️', defaultW: 1.6,  defaultD: 0.9,  defaultH: 0.75, color: '#b45309' },
-  { type: 'kitchen-counter',label: 'Kitchen Counter', short: 'Counter',  icon: '🍳', defaultW: 2.4,  defaultD: 0.6,  defaultH: 0.9,  color: '#78716c' },
+  { type: 'kitchen-counter',label: 'Kitchen Counter', short: 'Counter',  icon: '🍳', defaultW: 2.4,  defaultD: 0.6,  defaultH: 0.9,  color: '#78716c' },
+  // ── Cabinets — the boxes a kitchen is actually built from ──
+  // A counter is one run with a top on it; a kitchen is cabinets. Base is the
+  // 24" x 34-1/2" box a countertop lands on, upper is the 12"-deep wall cabinet
+  // 18" above that top, and tall is the pantry that goes floor to header.
+  { type: 'base-cabinet',  label: 'Base Cabinet',  short: 'Base cab', icon: '🗄️', defaultW: 0.6096, defaultD: 0.61,  defaultH: 0.876, color: '#8a6f4e' },
+  { type: 'upper-cabinet', label: 'Upper Cabinet', short: 'Upper cab', icon: '🗄️', defaultW: 0.6096, defaultD: 0.3048, defaultH: 0.762, color: '#96795a' },
+  { type: 'tall-cabinet',  label: 'Tall Cabinet',  short: 'Pantry',    icon: '🚪', defaultW: 0.6096, defaultD: 0.61,  defaultH: 2.1336, color: '#8a6f4e' },
   { type: 'toilet',         label: 'Toilet',          short: 'Toilet',   icon: '🚽', defaultW: 0.4,  defaultD: 0.7,  defaultH: 0.8,  color: '#e2e8f0' },
   // A 60 x 30 alcove tub, the one every bathroom on a panel layout is framed
   // for. It was 1.7 x 0.75 m — 5'-7" long, which is not an alcove tub and would
@@ -169,6 +176,9 @@ export function deviceMountHeightM(type: string, ceilingM = 2.4): number | null 
     case 'junction-box': return 1.20
     case 'switch':       return 1.22   // ~48" to switch centre
     case 'panel-box':    return 1.40
+    // Wall cabinet: centre at 69", so a 30"-high one hangs 18" over a 36"
+    // countertop. Same treatment devices get — a fixed centre, not floor + h/2.
+    case 'upper-cabinet': return 1.7526
     case 'drain-stack':  return 1.20     // floor to ceiling, centred
     case 'return-grille': return 0.30    // low on the wall
     case 'supply-register': return 0.01  // in the floor at the wall
@@ -191,7 +201,7 @@ export const TRAY_ORDER: string[] = [
   'door', 'patio-door', 'closet-door', 'window', 'sofa', 'armchair', 'chair', 'coffee-table', 'tv',
   'bed-double', 'bed-single', 'nightstand', 'dresser', 'wardrobe', 'bookshelf',
   'desk', 'dining-table',
-  'kitchen-counter', 'refrigerator', 'stove', 'range-hood', 'dishwasher', 'kitchen-sink',
+  'kitchen-counter', 'base-cabinet', 'upper-cabinet', 'tall-cabinet', 'refrigerator', 'stove', 'range-hood', 'dishwasher', 'kitchen-sink',
   'toilet', 'bathtub', 'shower', 'bathroom-sink',
   'washer', 'dryer', 'water-heater',
   'stairs', 'elevator',

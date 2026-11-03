@@ -60,6 +60,13 @@ export const STOCK_SIZES_IN: Record<string, StockSizes> = {
   // 24" and 25" are the two depths a counter actually is: base cabinet, and
   // base cabinet plus a countertop overhang.
   'kitchen-counter': { w: [24, 36, 48, 60, 72, 96], d: [24, 25] },
+
+  // Cabinets are bought by width off the same 3" ladder, and 12/18/24 deep.
+  // Base is 30" or 34-1/2" high; upper 24 to 42; a pantry 78 to 96.
+  // 15" is the narrow one nobody stocks but everyone orders for a filler.
+  'base-cabinet': { w: [12, 15, 18, 21, 24, 27, 30, 33, 36, 42, 48], d: [12, 18, 24], h: [30, 34.5] },
+  'upper-cabinet': { w: [12, 15, 18, 21, 24, 27, 30, 33, 36], d: [12, 13], h: [24, 30, 36, 42] },
+  'tall-cabinet': { w: [18, 24, 30, 36], d: [12, 18, 24], h: [78, 84, 90, 96] },
   refrigerator: { w: [24, 30, 33, 36, 42], d: [24, 30, 36] },
   stove: { w: [20, 24, 30, 36], d: [24, 25, 29] },
   'range-hood': { w: [24, 30, 36, 48], d: [18, 20, 24] },
