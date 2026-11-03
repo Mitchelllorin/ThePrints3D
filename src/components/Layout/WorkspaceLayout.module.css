@@ -893,25 +893,45 @@
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   top: auto;
+  /* THE DOCK WRAPS. It used to be one row that ran off the right edge, so on a
+     360px phone Size, Rotate, Specs, X-ray and Delete were all past the clip —
+     present in the DOM, unreachable by thumb, and with no scrollbar to say so.
+     That is what made a finished toolbar look half built. It wraps into rows
+     now, and anything that still does not fit inside the bounded height
+     scrolls behind a real thumb. */
   max-width: calc(100vw - 112px);
-  max-height: none;
+  max-height: min(28dvh, 168px);
   flex-direction: row;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  justify-content: center;
   align-items: flex-end;
-  align-content: normal;
-  gap: 12px;
-  padding: 6px 12px 7px;
+  align-content: center;
+  gap: 8px 12px;
+  padding: 6px 12px 8px;
   border-radius: 14px;
   background: rgba(var(--bp-panel-rgb, 10, 16, 30), 0.84);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(148, 163, 184, 0.28);
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
-  overflow-x: auto;
-  overflow-y: hidden;
+  /* A REAL SCROLLBAR. The base rule above hides one, which was right for the
+     bare right-edge rail and wrong here: hidden overflow plus no thumb means
+     content you cannot find and cannot see is missing. Thin, and only on the
+     axis that actually overflows. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.6) rgba(15, 23, 42, 0.45);
+  overscroll-behavior: contain;
   z-index: var(--z-hud);
+}
+.editRail::-webkit-scrollbar { width: 6px; height: 6px; }
+.editRail::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.45); border-radius: 999px; }
+.editRail::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.6);
+  border-radius: 999px;
 }
 .editRail .editRailLabel {
   align-self: center;
@@ -1328,4 +1348,20 @@
 }
 .uploadHintChip {
   background: color-mix(in srgb, var(--bp-accent, #38bdf8) 22%, var(--hud-plate));
+}
+
+/* THE DOCK CLEARS THE GESTURE BAR.
+   At 12px it sat inside the ~40px a phone's gesture bar (and a preview
+   window's chrome) clips. .editBar was lifted for the same reason and this
+   one was left behind, which is why the strip read as cut off at the bottom.
+   Last in the file so it wins over the media queries above. */
+@media (max-width: 767px), (max-height: 600px) {
+  .editRail {
+    bottom: calc(46px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100vw - 100px);
+    max-height: min(26dvh, 152px);
+    gap: 6px 10px;
+    padding: 5px 10px 7px;
+  }
+  .editRail .editRailLabel { max-width: 58px; font-size: 9px; }
 }

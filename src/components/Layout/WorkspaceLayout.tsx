@@ -666,6 +666,10 @@ export default function WorkspaceLayout() {
   // Happy-place invariant: no drawer over the workspace while tracing.
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const placeObjectType = useFloorplanLocalStore((s) => s.placeObjectType)
+  // Duplicate a placed object — the card has had Clone for a while, but the
+  // card is the surface you have to go and find. Same verb, on the dock.
+  const clonePlacedObject = useAppStore((s) => s.clonePlacedObject)
+  const setEditSelected = useFloorplanLocalStore((s) => s.setEditSelected)
   // Lock-driven edit: an ACTION owns the workspace. Any active action (tracing,
   // calibrating, arming a placement) locks it — edit/select is NOT available and
   // auto-disarms. Only when IDLE is edit offered. (User: edit "can't be on all
@@ -1428,11 +1432,6 @@ export default function WorkspaceLayout() {
             here; tapping the same spot again now steps through everything
             under the finger — wall, stud, floor, joist — and round again
             (see Viewer3D/tapCycle). All that is left to say is that it does. */}
-        {editMode && !traceMode && !calibrationMode && (
-          <div className={styles.grainSwitch}>
-            <span className={styles.grainCaption}>Tap again for what's behind</span>
-          </div>
-        )}
 
         {/* A PICKED MEMBER, named, with the one verb that matters for it.
             The generic edit rail below is built around assemblies — move, stretch,
@@ -1480,30 +1479,6 @@ export default function WorkspaceLayout() {
               </>
             )}
 
-            {selectionEdit.verbs.includes('rotate') && (
-              <div className={styles.editRailGroup}>
-                <span className={styles.editRailCaption}>Rotate</span>
-                <div className={styles.editRailPair}>
-                  <button className={styles.editRailBtn} aria-label="Rotate left 15 degrees"
-                    onClick={() => selectionEdit.apply({ rot: -ROT_STEP })}>↺</button>
-                  <button className={styles.editRailBtn} aria-label="Rotate right 15 degrees"
-                    onClick={() => selectionEdit.apply({ rot: ROT_STEP })}>↻</button>
-                </div>
-              </div>
-            )}
-
-            {selectionEdit.verbs.includes('stretch') && (
-              <div className={styles.editRailGroup}>
-                <span className={styles.editRailCaption}>Stretch</span>
-                <div className={styles.editRailPair}>
-                  <button className={styles.editRailBtn} aria-label="Shrink"
-                    onClick={() => selectionEdit.apply({ factor: 1 / STRETCH_STEP })}>−</button>
-                  <button className={styles.editRailBtn} aria-label="Grow"
-                    onClick={() => selectionEdit.apply({ factor: STRETCH_STEP })}>+</button>
-                </div>
-              </div>
-            )}
-
             {/* SIZE, BY AXIS — Mitchell, 31 Oct 2026: a countertop could only be
                 stretched uniformly, so it could never be fitted to a run. These
                 are the object's real Width and Depth, stepped in 6" — the same
@@ -1529,7 +1504,7 @@ export default function WorkspaceLayout() {
                 <>
                   <div className={styles.editRailGroup}>
                     <span className={styles.editRailCaption}>
-                      W {Math.round(size.w / 0.0254)}″
+                      Size W {Math.round(size.w / 0.0254)}″
                     </span>
                     <div className={styles.editRailPair}>
                       <button className={styles.editRailBtn} aria-label={`Narrower by ${Math.round(sw / 0.0254)} inches`}
@@ -1540,7 +1515,7 @@ export default function WorkspaceLayout() {
                   </div>
                   <div className={styles.editRailGroup}>
                     <span className={styles.editRailCaption}>
-                      D {Math.round(size.d / 0.0254)}″
+                      Size D {Math.round(size.d / 0.0254)}″
                     </span>
                     <div className={styles.editRailPair}>
                       <button className={styles.editRailBtn} aria-label={`Shallower by ${Math.round(sd / 0.0254)} inches`}
@@ -1552,6 +1527,58 @@ export default function WorkspaceLayout() {
                 </>
               )
             })()}
+
+            {selectionEdit.verbs.includes('rotate') && (
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Rotate</span>
+                <div className={styles.editRailPair}>
+                  <button className={styles.editRailBtn} aria-label="Rotate left 15 degrees"
+                    onClick={() => selectionEdit.apply({ rot: -ROT_STEP })}>↺</button>
+                  <button className={styles.editRailBtn} aria-label="Rotate right 15 degrees"
+                    onClick={() => selectionEdit.apply({ rot: ROT_STEP })}>↻</button>
+                  {selectionEdit.size && (
+                    /* QUARTER TURN — for the things that are not square.
+                       A tub, a counter run, a bed: whether it fits is mostly
+                       which way it lies, and the only way to find out was six
+                       taps of 15°. One tap stands it along the other wall. */
+                    <button
+                      className={styles.editRailBtn}
+                      aria-label="Turn 90 degrees"
+                      title="Turn 90° — stand it along the other wall"
+                      onClick={() => selectionEdit.apply({ rot: Math.PI / 2 })}
+                    >
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>90°</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {editSelected?.kind === 'object' && (
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Copy</span>
+                <button
+                  className={styles.editRailBtn}
+                  aria-label="Duplicate this object"
+                  title="Duplicate — drops a copy beside it"
+                  onClick={() => {
+                    const id = clonePlacedObject(editSelected.id)
+                    if (id) setEditSelected({ kind: 'object', id })
+                  }}
+                >⧉</button>
+              </div>
+            )}
+            {selectionEdit.verbs.includes('stretch') && (
+              <div className={styles.editRailGroup}>
+                <span className={styles.editRailCaption}>Stretch</span>
+                <div className={styles.editRailPair}>
+                  <button className={styles.editRailBtn} aria-label="Shrink"
+                    onClick={() => selectionEdit.apply({ factor: 1 / STRETCH_STEP })}>−</button>
+                  <button className={styles.editRailBtn} aria-label="Grow"
+                    onClick={() => selectionEdit.apply({ factor: STRETCH_STEP })}>+</button>
+                </div>
+              </div>
+            )}
 
             {/* SPECS — the property card, on request only.
                 Selecting something used to raise the card by itself, so you could
