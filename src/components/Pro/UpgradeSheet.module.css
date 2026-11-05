@@ -77,14 +77,6 @@
   font-weight: 700;
 }
 
-/* The nudge's one sentence: editing is free, Pro is the rest of the job. */
-.line {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--bp-text-dim, #94a3b8);
-}
-
 .actions {
   display: flex;
   align-items: center;
