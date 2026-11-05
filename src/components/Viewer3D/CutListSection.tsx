@@ -13,7 +13,8 @@
  * actually frames — see the header there for why this is not an estimate.
  */
 import { useIsPro } from '../Pro/usePro'
-import { useState } from 'react'
+import { useProNudge } from '../Pro/useProNudge'
+import { useEffect, useState } from 'react'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useCutList, formatCutLength } from './useCutList'
@@ -99,6 +100,15 @@ export default function CutListSection() {
   const openUpgrade = useFloorplanLocalStore((s) => s.openUpgrade)
   const setConfig = useConfigStore((s) => s.set)
   const { walls, buy, waste } = useCutList()
+  const nudge = useProNudge()
+
+  // THE HONEST MOMENT. A framed job's cut list is the first time the numbers are
+  // real, and the first time Pro is worth a sentence: the rest of the lists, the
+  // takeoff, the tape and clean exports. It opens once, ever, and only while Pro
+  // is actually for sale — see Pro/useProNudge.
+  useEffect(() => {
+    if (walls.length > 0) nudge()
+  }, [walls.length, nudge])
   // The first wall opens; the rest wait to be asked for.
   const [openWall, setOpenWall] = useState<number | null>(0)
   const [showWaste, setShowWaste] = useState(false)

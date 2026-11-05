@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { billingAvailable, getProPrice, purchasePro, restorePro } from '../../services/billing'
+import { PRO_NUDGE_REASON } from './useProNudge'
 import styles from './UpgradeSheet.module.css'
 
 /** What the unlock buys. Kept short — a list you can read at arm's length. */
@@ -132,9 +133,11 @@ export default function UpgradeSheet() {
     )
   }
 
-  const heading = reason === PRO_REASON_GENERAL
-    ? 'ThePrints3D Pro'
-    : `${reason} is part of Pro`
+  const heading = reason === PRO_NUDGE_REASON
+    ? 'The rest of the job'
+    : reason === PRO_REASON_GENERAL
+      ? 'ThePrints3D Pro'
+      : `${reason} is part of Pro`
 
   return (
     <div className={styles.sheet} role="dialog" aria-label="Unlock Pro">
@@ -143,11 +146,20 @@ export default function UpgradeSheet() {
         <button className={styles.close} onClick={closeUpgrade} aria-label="Close">✕</button>
       </div>
 
-      <ul className={styles.list}>
-        {PRO_FEATURES.map((f) => (
-          <li key={f} className={styles.item}>{f}</li>
-        ))}
-      </ul>
+      {/* The nudge gets one line, not a feature list: it arrives unasked, so it
+          says the one thing worth knowing — the editing stays free — and names
+          what Pro adds. A pitch here would read as a toll on their own job. */}
+      {reason === PRO_NUDGE_REASON ? (
+        <p className={styles.line}>
+          Editing stays free. Pro is the cut list, the takeoff, the tape and clean exports.
+        </p>
+      ) : (
+        <ul className={styles.list}>
+          {PRO_FEATURES.map((f) => (
+            <li key={f} className={styles.item}>{f}</li>
+          ))}
+        </ul>
+      )}
 
       <div className={styles.actions}>
         <button className={styles.buy} onClick={buy} disabled={busy !== null || !billingAvailable()}>
