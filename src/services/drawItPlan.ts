@@ -53,6 +53,28 @@ export const MIN_WALL_MM = 300
 /** A drag within this many degrees of square is square. */
 const SQUARE_DEG = 10
 
+/**
+ * WALLS ON PAPER, WITH NO BUILDING ROUND THEM.
+ *
+ * A carport is three walls. A fence line is one. An addition is whatever the
+ * print says, not what a box says. So the sheet can be paper and nothing else —
+ * the print when there is one, squared paper when there is not — and the walls
+ * dragged on it are the building. No boxes, so nothing closes a loop round them
+ * and no wall is invented to finish a rectangle.
+ */
+export function wallsPlan(page: { w: number; d: number }): DrawItPlan {
+  return { boxes: [], origin: { x: 0, y: 0 }, page, walls: [] }
+}
+
+/** What walls occupy on the page — the building, when there is no box. */
+export function wallsBounds(walls: readonly InsideWall[]): { x1: number; y1: number; w: number; d: number } | null {
+  if (walls.length === 0) return null
+  const xs = walls.flatMap((w) => [w.x1, w.x2])
+  const ys = walls.flatMap((w) => [w.y1, w.y2])
+  const x1 = Math.min(...xs), y1 = Math.min(...ys)
+  return { x1, y1, w: Math.max(...xs) - x1, d: Math.max(...ys) - y1 }
+}
+
 export function initialPlan(first: FootprintBox): DrawItPlan {
   return {
     boxes: [first],
@@ -88,6 +110,9 @@ function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[]): Rect {
  * the left or top, everything shifts right or down by the same amount.
  */
 export function fitPage(plan: DrawItPlan): DrawItPlan {
+  // Nothing on the paper yet: there is no extent to fit, and asking for one
+  // would produce Infinity and a page to match.
+  if (!plan.shape && plan.boxes.length === 0 && plan.walls.length === 0) return plan
   const b = boundsOf(plan.shape ? [shapeBounds(plan.shape)] : houseRects(plan), plan.walls)
   const dx = Math.max(0, MIN_CLEAR_MM - b.x1)
   const dy = Math.max(0, MIN_CLEAR_MM - b.y1)
@@ -159,9 +184,9 @@ function insidePoly(poly: readonly Point[], p: Point): boolean {
 }
 
 /** The lines an inside wall can land on: the inside face of the shell, and other inside walls. */
-function landingLines(plan: DrawItPlan, shellMm: number, skip?: number): Array<{ a: Point; b: Point }> {
+function landingLines(plan: DrawItPlan, shellMm: number, skip?: number, noShell?: boolean): Array<{ a: Point; b: Point }> {
   const out: Array<{ a: Point; b: Point }> = []
-  const poly = houseOutline(plan)
+  const poly = noShell ? [] : houseOutline(plan)
   // The shell's INSIDE face: each outline edge moved inward by the wall's
   // thickness. An inside wall stops at the face of the wall it meets — that is
   // where the tee is framed. Which way is inward is asked of the outline itself
@@ -200,6 +225,9 @@ export interface SnapOpts {
   skip?: number
   /** Any angle: the wall keeps the angle it was dragged at (see freeWallPoint). */
   free?: boolean
+  /** No shell — walls drawn on their own (see wallsPlan). Only other walls are
+   *  lines to land on, because there is no outline to land on. */
+  noShell?: boolean
 }
 
 /**
@@ -229,7 +257,7 @@ export function snapWallPoint(plan: DrawItPlan, p: Point, o: SnapOpts): Point {
   // Faces and lines.
   let best: Point | null = null
   let bestD = o.tolMm
-  for (const { a, b } of landingLines(plan, o.shellMm, o.skip)) {
+  for (const { a, b } of landingLines(plan, o.shellMm, o.skip, o.noShell)) {
     let c: Point | null
     if (lock) {
       // Slide along the locked axis to where it crosses this line.
@@ -281,7 +309,7 @@ function freeWallPoint(plan: DrawItPlan, p: Point, o: SnapOpts & { from: Point }
   // Meet a line: where the wall's own line crosses it, if that is near.
   let best: Point | null = null
   let bestD = o.tolMm
-  for (const { a, b } of landingLines(plan, o.shellMm, o.skip)) {
+  for (const { a, b } of landingLines(plan, o.shellMm, o.skip, o.noShell)) {
     const ex = b.x - a.x, ey = b.y - a.y
     const den = ux * ey - uy * ex
     if (Math.abs(den) < 1e-9) continue

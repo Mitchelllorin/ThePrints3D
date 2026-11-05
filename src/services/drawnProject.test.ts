@@ -18,6 +18,36 @@ const outside = (p: ReturnType<typeof createDrawnProject>) => {
   }
 }
 
+/**
+ * A BUILDING THAT IS ONLY WALLS.
+ *
+ * Not every job closes a loop, and a footprint box cannot say "three walls"
+ * without inventing a fourth. These are the walls as drawn: open, the user's
+ * own, and nothing closed around them.
+ */
+describe('walls drawn one at a time', () => {
+  const free = [
+    { x1: 1000, y1: 1000, x2: 1000 + 10 * FT, y2: 1000 },
+    { x1: 1000 + 10 * FT, y1: 1000, x2: 1000 + 10 * FT, y2: 1000 + 8 * FT },
+    { x1: 1000 + 10 * FT, y1: 1000 + 8 * FT, x2: 1000, y2: 1000 + 8 * FT },
+  ]
+
+  it('keeps three walls as three walls — no fourth is invented', () => {
+    expect(createDrawnProject({ ...spec, freeWalls: free }).drawing.parsedWalls).toHaveLength(3)
+  })
+
+  it("builds them as the user's own, at the length drawn", () => {
+    const walls = createDrawnProject({ ...spec, freeWalls: free }).drawing.parsedWalls
+    expect(walls.every((w) => w.source === 'user' && w.framingType === 'wood-2x6')).toBe(true)
+    expect(Math.hypot(walls[0].x2 - walls[0].x1, walls[0].y2 - walls[0].y1) * DRAWN_MM_PER_PX).toBeCloseTo(10 * FT, 6)
+    expect(Math.hypot(walls[1].x2 - walls[1].x1, walls[1].y2 - walls[1].y1) * DRAWN_MM_PER_PX).toBeCloseTo(8 * FT, 6)
+  })
+
+  it('lays no floor, because a floor is a closed shape and this is not one', () => {
+    expect(createDrawnProject({ ...spec, freeWalls: free }).floorAreas).toHaveLength(0)
+  })
+})
+
 describe('a typed size is the size you get', () => {
   it('measures the footprint outside face to outside face', () => {
     // 40 ft means 40 ft across the outside, not 40 ft between centrelines with

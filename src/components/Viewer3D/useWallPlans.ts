@@ -9,6 +9,7 @@ import { useMemo } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useSceneConfig } from '../../store/useSceneConfig'
+import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
 import { planWalls, type PlannedWall, type WallPlanInput } from '../../services/wallFramingPlan'
 
@@ -43,6 +44,7 @@ function sameInput(a: WallPlanInput, b: WallPlanInput): boolean {
     && a.steelTrackTop === b.steelTrackTop
     && a.steelDeflectionGapMm === b.steelDeflectionGapMm
     && a.studSpacingIn === b.studSpacingIn
+    && a.tracedOnly === b.tracedOnly
 }
 function planFor(input: WallPlanInput): PlannedWall[] {
   if (lastInput && sameInput(lastInput, input)) return lastPlans
@@ -61,10 +63,14 @@ export function useWallPlans(): PlannedWall[] {
   const steelTrackTop = useConfigStore((s) => s.steelTrackTop)
   const steelDeflectionGapMm = useConfigStore((s) => s.steelDeflectionGapMm)
   const studSpacingIn = useConfigStore((s) => s.studSpacingIn)
+  // The plan the model stands up is the plan the cut list counts, so this has to
+  // be handed down rather than read separately in each — see modelWalls.
+  const tracedOnly = useUISettingsStore((s) => s.traceOwnWalls)
   const ceilingM = useSceneConfig(wizardInputs).wallHeightM
   return useMemo(() => planFor({
     drawings, overlay, placedObjects,
     ceilingM, storeyM: ceilingM + FLOOR_ASSEMBLY_H,
     framingMaterial, steelGauge, steelTrackTop, steelDeflectionGapMm, studSpacingIn,
-  }), [drawings, overlay, placedObjects, ceilingM, framingMaterial, steelGauge, steelTrackTop, steelDeflectionGapMm, studSpacingIn])
+    tracedOnly,
+  }), [drawings, overlay, placedObjects, ceilingM, framingMaterial, steelGauge, steelTrackTop, steelDeflectionGapMm, studSpacingIn, tracedOnly])
 }

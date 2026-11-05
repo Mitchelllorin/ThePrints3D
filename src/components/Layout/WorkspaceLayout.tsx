@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useIsPro } from '../Pro/usePro'
 import CameraCapture from '../Upload/CameraCapture'
 import WallCalibrationPanel from '../Drawings/WallCalibrationPanel'
+import DetectedWallsPanel from './DetectedWallsPanel'
 import ProjectLibrary from '../Projects/ProjectLibrary'
 import { listPresetDefinitions, presetStair, type PresetDifficulty } from '../../services/presetDrawings'
 import { overlayPixelToWorld } from '../../services/wallFramingPlan'
@@ -368,6 +369,16 @@ function SettingsContent() {
           val={ui.presetMode === 'practice'}
           onChange={(v) => setUI({ presetMode: v ? 'practice' : 'ready' })}
         />
+        {/* The same question, for the sheet somebody actually opened. Detection
+            on a photo or a marked-up print comes back wrong often enough that
+            the walls in the way are worse than none — and with no way to say so,
+            tracing over them means fighting them on every tap. On, nothing
+            detected is framed and the model is only what you draw. */}
+        <Toggle
+          label="Imports: trace it yourself"
+          val={ui.traceOwnWalls}
+          onChange={(v) => setUI({ traceOwnWalls: v })}
+        />
         <Toggle
           label="Carry exterior up a storey"
           val={ui.autoCarryShellUp}
@@ -614,6 +625,17 @@ export default function WorkspaceLayout() {
   const [drawItOpen, setDrawItOpen] = useState(false)
   /** The tour and the sample plans, folded away until asked for. */
   const [moreWays, setMoreWays] = useState(false)
+  /** Sheets picked and waiting on the one question asked before anything runs:
+   *  who finds the walls? Mirrored from the floorplan store so the drop on the
+   *  canvas and the camera ask through the same surface as the file picker. */
+  const pendingImport = useFloorplanLocalStore((s) => s.pendingImport)
+  const setPendingImport = useFloorplanLocalStore((s) => s.setPendingImport)
+  /** The walls the detector found on the open sheet — see the edit dock. */
+  const detectedWallCount = useAppStore((st) => {
+    const d = st.drawings.find((x) => x.id === st.floorplanOverlay.drawingId) ?? st.drawings[0]
+    return d ? d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user').length : 0
+  })
+  const [detectedWallsOpen, setDetectedWallsOpen] = useState(false)
 
   // Auto-build DISABLED — the user builds by tracing (this "model builds itself"
   // behaviour was deliberately reverted; re-enabling it auto-laid slabs coplanar
@@ -1087,10 +1109,30 @@ export default function WorkspaceLayout() {
   // Onboarding card persists until a plan is actually loaded — no dismiss.
   const showUploadHint = !hasDrawings
 
+  /**
+   * A FILE IS NOT AN ANSWER TO "WHO FINDS THE WALLS?" — SO ASK.
+   *
+   * Picking a sheet used to run the detector immediately and stand up whatever
+   * it found. On a clean architectural PDF that is the right answer; on a photo
+   * of a print taken on a tailgate it is a guess, and once those walls are
+   * standing the only move left is to fight them on every tap while tracing over
+   * the print. So the choice is asked ONCE, BEFORE anything runs: find them, or
+   * leave the sheet bare and trace it. The Setting of the same name is the
+   * answer for the paths that cannot ask.
+   */
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    if (files.length) { addDrawings(files) }
+    if (files.length) setPendingImport(files)
     e.target.value = ''
+  }
+
+  /** The answer. Only now does the sheet go in, tagged with how its walls are
+   *  meant to arrive — see Drawing.manualWalls. */
+  const acceptImport = (manualWalls: boolean) => {
+    const files = pendingImport
+    if (!files) return
+    setPendingImport(null)
+    addDrawings(files, { manualWalls })
   }
 
   // ─── THE Escape owner ──────────────────────────────────────────────────────
@@ -1129,6 +1171,9 @@ export default function WorkspaceLayout() {
       // close a panel.
       if (st.gestureLock) st.setGestureLock(false)
 
+      // 0.5. A file was picked and the question it asks is still unanswered.
+      if (st.pendingImport) { st.setPendingImport(null); return }
+
       // 1. A tool is in your hand — put it down.
       if (st.placeObjectType) { st.setPlaceObjectType(null); return }
       if (st.wallTrimArmed) { st.setWallTrimArmed(false); return }
@@ -1140,6 +1185,9 @@ export default function WorkspaceLayout() {
         st.setTraceMode(false); st.setTraceStroke([]); st.setHoverPixel(null); st.setPlumbNudge(null)
         return
       }
+
+      // 2.5. The edit dock's wall list — the sheet opened from the dock.
+      if (detectedWallsOpen) { setDetectedWallsOpen(false); return }
 
       // 3. A card or picker is open.
       if (st.activePanel) { st.closeAllPanels(); return }
@@ -1155,7 +1203,7 @@ export default function WorkspaceLayout() {
     }
     window.addEventListener('keydown', onEsc)
     return () => window.removeEventListener('keydown', onEsc)
-  }, [])
+  }, [detectedWallsOpen])
 
   // Global undo/redo shortcuts: Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+Y.
   // Skipped while typing so text fields keep their native undo.
@@ -1183,6 +1231,32 @@ export default function WorkspaceLayout() {
     return () => window.removeEventListener('keydown', onKey)
   }, [smartUndo])
 
+  /**
+   * DETECTED WALLS BELONGS IN EDIT, NOT IN SETTINGS.
+   *
+   * It lived in Settings → Wall detection for an hour, next to the calibration
+   * tool, on the reasoning that it is about the detector. It is not: it is a
+   * wall verb. Deciding a wall the app found is wrong and taking it off the
+   * model is the same job as moving, stretching or deleting one — so it sits in
+   * the edit dock with the other verbs, one tap from the model it acts on,
+   * instead of three taps away behind a gear.
+   *
+   * The dock is one row and scrolls sideways on a phone, so the entry is one
+   * chip with the count on it; tapping it replaces the dock with the list.
+   */
+  const detectedWallsEntry = (
+    <button
+      className={`${styles.editRailBtn} ${detectedWallsOpen ? styles.editRailBtnOn : ''}`}
+      onClick={() => setDetectedWallsOpen((v) => !v)}
+      aria-pressed={detectedWallsOpen}
+      aria-label={`Detected walls — ${detectedWallCount} found`}
+      title="The walls the app found on this sheet — pick the wrong ones and remove them"
+      style={{ width: 'auto', padding: '0 10px', fontSize: 11, fontWeight: 700 }}
+    >
+      Walls {detectedWallCount}
+    </button>
+  )
+
   return (
     <div className={styles.root}>
       {/* Hidden file input */}
@@ -1193,13 +1267,49 @@ export default function WorkspaceLayout() {
 
       {scanOpen && (
         <CameraCapture
-          onCapture={(file) => { setScanOpen(false); addDrawings([file]) }}
+          onCapture={(file) => { setScanOpen(false); setPendingImport([file]) }}
           onClose={() => setScanOpen(false)}
           /* getUserMedia needs a secure context; over plain LAN http on a phone
              it is blocked, so fall back to the input, which still opens the
              rear camera on mobile. */
           onFallback={() => { setScanOpen(false); fileInputRef.current?.click() }}
         />
+      )}
+
+      {/* WHO FINDS THE WALLS? — the one question asked between picking a sheet
+          and anything running on it.
+
+          Two answers, equally weighted, because neither is the "real" way in:
+          a CAD export is best read by the detector, and a photograph or a marked
+          -up print is best read by eye. It is transient — the user just chose a
+          file — so it may sit over the model and be as solid as it likes; one
+          tap answers it, Cancel and Escape put it away. */}
+      {pendingImport && (
+        <div
+          className={styles.importChoice}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Who finds the walls?"
+        >
+          <p className={styles.importChoiceLead} title={pendingImport[0]?.name}>
+            {pendingImport.length > 1 ? `${pendingImport.length} sheets` : pendingImport[0]?.name}
+          </p>
+          <p className={styles.importChoiceAsk}>Who finds the walls?</p>
+          <div className={styles.importChoiceRow}>
+            <button className={styles.importChoiceBtn} onClick={() => acceptImport(false)}>
+              Find them
+            </button>
+            <button
+              className={`${styles.importChoiceBtn} ${styles.importChoiceQuiet}`}
+              onClick={() => acceptImport(true)}
+            >
+              I&rsquo;ll trace them
+            </button>
+          </div>
+          <button className={styles.importChoiceCancel} onClick={() => setPendingImport(null)}>
+            Cancel
+          </button>
+        </div>
       )}
 
       {/* 3D Viewport — fills the whole screen at all times.
@@ -1229,6 +1339,7 @@ export default function WorkspaceLayout() {
       <TopIcons
         onUndo={smartUndo}
         canUndo={canUndo}
+        onOpenPlan={() => fileInputRef.current?.click()}
       />
 
       {/* RIGHT drawer — Settings & view. Always mounted so its tab stays on the
@@ -1254,7 +1365,12 @@ export default function WorkspaceLayout() {
         <div className={styles.specDivider} />
         <p className={styles.sectionTitle}>Tools</p>
         <button className={styles.specBtn} onClick={() => { setDrawerOpen('settings', false); startGuidedTour() }}>🎓 Guided tutorial</button>
-        <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Load Preset</button>
+        <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Open a plan</button>
+        {/* DRAW IT, WITH A PLAN ALREADY OPEN. The sheet only had a door on the
+            empty start card, so the one thing it can now do with a print — use
+            it as the paper and draw the walls on it — was behind a door that
+            closes the moment there is a print to draw on. */}
+        <button className={styles.specBtn} onClick={() => { setDrawerOpen('settings', false); setDrawItOpen(true) }}>✏ Draw it — walls on the print</button>
         <PresetPanel onLoad={handleLoadPreset} />
         <button className={styles.specBtn} onClick={recalibrate}>
           {calibrationMode ? 'Calibrating…' : 'Recalibrate'}
@@ -1451,9 +1567,28 @@ export default function WorkspaceLayout() {
           </div>
         )}
 
-        {editMode && selectionEdit && !traceMode && !calibrationMode && (
+        {/* EDITING WITH NOTHING SELECTED — the list of walls the app found is
+            still the thing you came for, so it is offered without a selection. */}
+        {editMode && !selectionEdit && !traceMode && !calibrationMode && !detectedWallsOpen && (
+          <div className={styles.editRail}>
+            <span className={styles.editRailLabel}>Edit</span>
+            {detectedWallsEntry}
+          </div>
+        )}
+
+        {/* The list itself. Transient — opened from the dock, closed with Done or
+            Escape — and it takes the dock's place rather than stacking on top of
+            it, so nothing overlaps on a 360px screen. */}
+        {editMode && !traceMode && !calibrationMode && detectedWallsOpen && (
+          <div className={styles.wallSheet}>
+            <DetectedWallsPanel onClose={() => setDetectedWallsOpen(false)} />
+          </div>
+        )}
+
+        {editMode && selectionEdit && !traceMode && !calibrationMode && !detectedWallsOpen && (
           <div className={styles.editRail}>
             <span className={styles.editRailLabel}>{selectionEdit.label}</span>
+            {detectedWallsEntry}
 
             {selectionEdit.verbs.includes('move') && (
               <>

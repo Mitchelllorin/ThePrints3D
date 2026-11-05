@@ -357,6 +357,17 @@ export interface Drawing {
    *  no print on it, so nothing on it can be DETECTED. */
   source?: 'upload' | 'preset' | 'drawn'
   presetDifficulty?: 'easy' | 'medium' | 'hard'
+  /**
+   * TRACE THIS ONE MYSELF — the answer given when the sheet was opened.
+   *
+   * Set when the user picks "I'll trace them" instead of letting the detector
+   * find the walls. Detection still runs (the lines are useful as suggestions
+   * you can tap to adopt), but nothing detected is built: the model holds only
+   * what is drawn on it. Per sheet rather than per app, because one job can be
+   * a clean CAD export and the next a photo, and the answer belongs to the
+   * drawing. See `modelWalls`.
+   */
+  manualWalls?: boolean
   type: DrawingType
   file: File
   pageCount: number

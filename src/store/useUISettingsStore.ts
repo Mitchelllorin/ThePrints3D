@@ -96,6 +96,19 @@ export interface UISettings {
    *  reason about (door orientation, seating openings, "Find the rest"), since
    *  practice legitimately empties parsedWalls. */
   presetMode: 'ready' | 'practice'
+  /** IMPORTED plans: do the detected walls join the model, or is the print left
+   *  bare to trace over?
+   *
+   *  `presetMode` answers this for the sample plans; this answers it for the
+   *  sheet someone actually opened, which is the case that matters. Off by
+   *  default — the app finding the walls is the faster road, and on a clean
+   *  architectural PDF it is usually right. But detection on a photo, a scan or
+   *  a hand-marked sheet comes back wrong often enough that the walls in the way
+   *  are worse than no walls at all, and the user has to be able to say so.
+   *
+   *  On, nothing detected is framed: the lines stay as suggestions on the print
+   *  (tap one to adopt it) and the model only holds what you draw yourself. */
+  traceOwnWalls: boolean
   /** How the house is heated. Only forced air has ducts; electric baseboard is
    *  an electrical job and in-floor hydronic a plumbing one, so this decides
    *  which trade owns the work — and it must be set BEFORE devices are placed,
@@ -193,6 +206,7 @@ export const DEFAULT_UI_SETTINGS: UISettings = {
   topPlatesHidden: false,
   nameplateTier: 0,
   presetMode: 'practice',
+  traceOwnWalls: false,
   heatingType: DEFAULT_HEATING,
   settingsRev: SETTINGS_REV,
   autoCarryShellUp: true,

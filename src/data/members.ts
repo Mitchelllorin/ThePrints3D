@@ -204,6 +204,7 @@ export const WALL_TYPES: readonly WallTypeSpec[] = [
   { key: 'steel-6',     label: 'Steel 6"',               short: 'Steel 6"',  studMemberId: 'steel-stud-6', material: 'steel', studSize: '2x6', steelWidth: '6' },
   { key: 'steel-8',     label: 'Steel 8" (heavy)',       short: 'Steel 8"',  studMemberId: 'steel-stud-8', material: 'steel', studSize: '2x8', steelWidth: '8' },
   { key: 'cmu',         label: 'CMU Block',              short: 'CMU',       studMemberId: 'cmu-8', material: 'wood', studSize: '2x6', isMasonry: true },
+  { key: 'brick',       label: 'Brick',                  short: 'Brick',     studMemberId: 'cmu-8', material: 'wood', studSize: '2x6', isMasonry: true },
 ]
 
 export function getWallType(key: string | undefined): WallTypeSpec | undefined {

@@ -176,7 +176,7 @@
   flex: none;
   display: flex;
   flex-direction: row;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 8px;
 }
 .camBtn {
@@ -195,3 +195,65 @@
 }
 .camBtn:active { transform: translateY(1px); }
 .camFit { font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
+
+/* THE WALL WIDGET — one wall picked, and everything about it on the plan beside
+   it. Transient: it appears when a wall is picked and the paper puts it away,
+   so it may be solid. The tail points at the wall so it always reads as
+   belonging to one thing. */
+.wallWidget {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  background: #0b1220;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+.wallWidget::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: #0b1220;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  transform: rotate(45deg);
+}
+.wallWidget[data-tail='top']::after { top: -7px; border-right: none; border-bottom: none; }
+.wallWidget[data-tail='bottom']::after { bottom: -7px; border-left: none; border-top: none; }
+.widgetRow { display: flex; gap: 8px; }
+.wBtn {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 8px;
+  border-radius: 9px;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  background: #16202e;
+  color: var(--bp-text, #e8eef5);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.wBtn::after { content: ''; position: absolute; inset: -2px; }
+.wBtn { position: relative; }
+.wBtn:disabled { opacity: 0.45; cursor: default; }
+.wBtn:active:not(:disabled) { transform: translateY(1px); }
+/* The angle is the one you drag: ringed in the accent, grab cursor. */
+.wAngle {
+  border: 2px solid var(--bp-accent, #3d9ae8);
+  color: #8ec5f5;
+  cursor: grab;
+  touch-action: none;
+}
+.wAngle:active { cursor: grabbing; }
+.wRemove { color: #fdba74; border-color: #7a4a24; }
+/* The two halves of the row under the plan: undo/redo on the left, the camera
+   on the right. */
+.camGroup { display: flex; gap: 8px; }
+.camBtn:disabled { opacity: 0.42; cursor: default; }
+.camBtn:disabled:active { transform: none; }

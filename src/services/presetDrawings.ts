@@ -315,7 +315,10 @@ function ftIn(n: number): string {
 // ── SVG ──────────────────────────────────────────────────────────────────────
 
 const INK = '#1e293b'
-const THIN = '#94a3b8'
+const THIN = '#64748b'
+/** The numbers themselves. A dimension you cannot read is not a dimension:
+ *  #94a3b8 on paper was 2.4:1 and went white at phone size. */
+const DIM = '#334155'
 const PAPER = '#f8fafc'
 
 /** Door: a gap knocked in the wall, a leaf, and the swing arc. */
@@ -365,7 +368,7 @@ function dimension(x1: number, y1: number, x2: number, y2: number, label: string
     <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${THIN}" stroke-width="1.2" />
     ${tick(x1, y1)}${tick(x2, y2)}
     <text x="${mx}" y="${my - 6}" text-anchor="middle" font-family="Inter, Arial, sans-serif"
-          font-size="13" fill="${THIN}"${horiz ? '' : ` transform="rotate(-90 ${mx} ${my})"`}>${label}</text>`
+          font-size="13" fill="${DIM}"${horiz ? '' : ` transform="rotate(-90 ${mx} ${my})"`}>${label}</text>`
 }
 
 function drawSvg(plan: PlanSpec): string {
@@ -386,7 +389,7 @@ function drawSvg(plan: PlanSpec): string {
       <text x="${cx}" y="${cy}" text-anchor="middle" font-family="Inter, Arial, sans-serif"
             font-size="${tight ? 11 : 15}" font-weight="600" fill="#475569">${r.name}</text>
       ${tight ? '' : `<text x="${cx}" y="${cy + 17}" text-anchor="middle" font-family="Inter, Arial, sans-serif"
-            font-size="12" fill="${THIN}">${ftIn(x2 - x1)} x ${ftIn(y2 - y1)}</text>`}`
+            font-size="12" fill="${DIM}">${ftIn(x2 - x1)} x ${ftIn(y2 - y1)}</text>`}`
   }).join('')
 
   const dims = dimension(m, m - 22, W - m, m - 22, ftIn(plan.widthFt))
@@ -400,7 +403,7 @@ function drawSvg(plan: PlanSpec): string {
     ${symbols}
     ${labels}
     <text x="${m}" y="${H - 14}" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">${plan.name}</text>
-    <text x="${W - m}" y="${H - 14}" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="12" fill="${THIN}">1:100 · ${ftIn(plan.widthFt)} x ${ftIn(plan.depthFt)}</text>
+    <text x="${W - m}" y="${H - 14}" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="12" fill="${DIM}">1:100 · ${ftIn(plan.widthFt)} x ${ftIn(plan.depthFt)}</text>
   </svg>`
 }
 

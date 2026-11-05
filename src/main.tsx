@@ -140,11 +140,12 @@ extend(THREE as any) // eslint-disable-line @typescript-eslint/no-explicit-any
 startCorpusCapture()
 
 /**
- * THE OPEN JOB COMES BACK. Reopens the last job and saves every change after
- * that. Unawaited: the front door is on screen while it loads, and a save that
- * cannot be read just means starting clean. See services/currentJob.
+ * THE JOB LIST AND THE AUTOSAVE BEHIND IT. Reopens nothing: a cold start is a
+ * clean sheet, and the job you were on last is in Jobs with everything still on
+ * it. From here every change to what is open saves itself. See
+ * services/currentJob.
  */
-void startJobAutosave()
+startJobAutosave()
 
 // The boundary wraps everything, including the front door: a throw during render
 // used to take the whole tree down to a blank page with nothing to tap. The

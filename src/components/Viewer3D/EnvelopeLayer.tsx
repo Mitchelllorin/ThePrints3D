@@ -172,6 +172,9 @@ export default function EnvelopeLayer() {
   // and cladding sitting there solid — the fade "wasn't applying to the plywood".
   const finishTiming = useUISettingsStore((s) => s.finishTiming)
   const finishesApplied = useUISettingsStore((s) => s.finishesApplied)
+  // Trace it yourself: no detected walls means no envelope either — there is
+  // nothing standing yet to sheath.
+  const traceOwnWalls = useUISettingsStore((s) => s.traceOwnWalls)
   const roughIn = useRoughIn()
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const isolatedFloor = useFloorplanLocalStore((s) => s.isolatedFloor)
@@ -208,7 +211,7 @@ export default function EnvelopeLayer() {
     // Detected walls are part of the shell too — see modelWalls. Skinning only
     // traced walls meant a plan you had detected rather than traced got no
     // envelope at all, and the perimeter test had nothing to measure against.
-    const user: ParsedWall[] = modelWalls(drawings).map((m) => m.wall)
+    const user: ParsedWall[] = modelWalls(drawings, { tracedOnly: traceOwnWalls }).map((m) => m.wall)
     const byLevel = new Map<number, ParsedWall[]>()
     for (const w of user) {
       const lv = w.level ?? 0
@@ -226,7 +229,7 @@ export default function EnvelopeLayer() {
       // what actually decides.
       wallMayTakeEnvelope(w)
       && (tests.get(w.level ?? 0)?.(w) ?? false))
-  }, [drawings])
+  }, [drawings, traceOwnWalls])
 
   // Which way is out — shared with DrywallLayer via wallFacing, so sheathing and
   // drywall can never end up on the same face of a wall.

@@ -1,14 +1,19 @@
 /**
- * THE OPEN JOB — saved as you go, back where you left it on the next launch.
+ * THE JOBS ON THIS PHONE — saved as you go, opened when you ask for them.
  *
  * There is no Save button to forget. A phone kills a backgrounded app whenever
  * it likes, and a framer who switches to the camera to shoot a print should not
  * come back to an empty sheet. So the open job is written to IndexedDB a moment
  * after every change, and straight away when the app goes to the background.
  *
+ * A COLD START DOES NOT REOPEN IT. Last night's job is in Jobs with everything
+ * that was on the sheet; what does not come back is the job being OPEN. Coming
+ * back to yesterday's plan unasked puts the drawing you were about to measure
+ * behind someone else's walls, one careless edit away from being saved over.
+ * See beginSession, which is the whole difference.
+ *
  * What is saved is the store's own undo snapshot (see captureJob) plus the
- * drawings, whose files and rasters go in as Blobs. The job's id is kept in
- * localStorage so the next cold start knows which one to reopen.
+ * drawings, whose files and rasters go in as Blobs.
  */
 import { useAppStore, captureJob, restoreJob, resetJob } from '../store/useAppStore'
 import {
@@ -24,7 +29,6 @@ import {
 } from './projectStorage'
 import type { Drawing } from '../types'
 
-const CURRENT_KEY = 'theprints3d.currentJob'
 const DEBOUNCE_MS = 1200
 
 /** The store fields that make up a job. A change to any of them is a save. */
@@ -36,17 +40,10 @@ const JOB_FIELDS = [
   'constructionDecisions', 'detectedWallTypes', 'corrections',
 ] as const
 
-function readCurrentId(): string | null {
-  try { return localStorage.getItem(CURRENT_KEY) } catch { return null }
-}
-function writeCurrentId(id: string | null): void {
-  try {
-    if (id) localStorage.setItem(CURRENT_KEY, id)
-    else localStorage.removeItem(CURRENT_KEY)
-  } catch { /* storage off — the job still saves, it just won't reopen */ }
-}
-
-let currentId: string | null = readCurrentId()
+// Which job is open is a fact about THIS session, held in memory on purpose.
+// Persisting it is what used to reopen the last job before the front door had
+// even been tapped.
+let currentId: string | null = null
 let currentName: string | null = null
 let createdAt = 0
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -74,8 +71,17 @@ async function serialize(d: Drawing): Promise<SerializableDrawing> {
   return sd
 }
 
+/**
+ * WHAT A NEW JOB IS CALLED.
+ *
+ * The sheet it was started from, because that is what a framer recognises in a
+ * list — "ground-floor.pdf", not "Job 11/3/2026" beside three others from the
+ * same week. Renaming is one tap when the file name is not the job's name.
+ */
 function defaultName(): string {
-  return `Job ${new Date().toLocaleDateString()}`
+  const first = useAppStore.getState().drawings[0]
+  const base = first?.name?.replace(/\.[a-z0-9]+$/i, '').trim()
+  return base || `Job ${new Date().toLocaleDateString()}`
 }
 
 /** Listeners for the "saved" readout in the Projects list. */
@@ -151,7 +157,6 @@ async function writeNow(): Promise<void> {
     currentId = newProjectId()
     currentName = defaultName()
     createdAt = Date.now()
-    writeCurrentId(currentId)
   }
   if (!currentName || !createdAt) {
     const existing = await loadProject(currentId)
@@ -197,18 +202,31 @@ function schedule(): void {
   timer = setTimeout(() => { timer = null; void flushJob() }, DEBOUNCE_MS)
 }
 
+/**
+ * START A SESSION WITH NOTHING OPEN.
+ *
+ * The saved job stays in the library exactly as it is — only the pointer to it
+ * is dropped. That drop is the whole fix: with a pointer, the first wall built
+ * this session would be written back into last night's record and replace it.
+ * Without one, the session's work becomes a new job the moment something is on
+ * the sheet, and last night's is still there to open.
+ */
+export function beginSession(): void {
+  if (timer) { clearTimeout(timer); timer = null }
+  currentId = null
+  currentName = null
+  createdAt = 0
+}
+
 let started = false
 /**
- * Reopen the last job, then save every change from here on. Called once at
- * startup. The reopen happens first so the empty starting state is never
- * written over the job it is about to load.
+ * Save every change from here on, in a session that starts clean. Called once
+ * at startup; nothing is reopened (see beginSession).
  */
-export async function startJobAutosave(): Promise<void> {
+export function startJobAutosave(): void {
   if (started) return
   started = true
-  if (currentId) {
-    try { await openJob(currentId, { flushFirst: false }) } catch { /* unreadable save: start clean */ }
-  }
+  beginSession()
   useAppStore.subscribe((state, prev) => {
     for (const k of JOB_FIELDS) {
       if (state[k] !== prev[k]) { schedule(); return }
@@ -230,7 +248,7 @@ export async function openJob(id: string, opts: { flushFirst?: boolean } = {}): 
   if (opts.flushFirst !== false) await flushJob()
   const p = await loadProject(id)
   if (!p) {
-    if (id === currentId) { currentId = null; writeCurrentId(null) }
+    if (id === currentId) currentId = null
     return false
   }
   restoring = true
@@ -246,7 +264,6 @@ export async function openJob(id: string, opts: { flushFirst?: boolean } = {}): 
   currentId = p.id
   currentName = p.name
   createdAt = p.createdAt
-  writeCurrentId(p.id)
   // A job that just opened is saved, whatever the last write did.
   report({ status: 'saved', at: p.updatedAt })
   return true
@@ -261,7 +278,6 @@ export async function newJob(): Promise<void> {
   currentId = null
   currentName = null
   createdAt = 0
-  writeCurrentId(null)
 }
 
 export async function renameJob(id: string, name: string): Promise<void> {
@@ -286,7 +302,6 @@ export async function removeJob(id: string): Promise<void> {
     currentId = null
     currentName = null
     createdAt = 0
-    writeCurrentId(null)
   }
   await deleteProject(id)
 }

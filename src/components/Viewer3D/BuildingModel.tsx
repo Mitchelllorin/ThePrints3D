@@ -813,6 +813,9 @@ export default function BuildingModel({ layers }: Props) {
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const placedObjects = useAppStore((s) => s.placedObjects)
   const floorsAreas = useAppStore((s) => s.floorsAreas)
+  // Trace it yourself — see modelWalls. Read at component level so switching it
+  // rebuilds the model, rather than waiting for the next unrelated change.
+  const traceOwnWalls = useUISettingsStore((s) => s.traceOwnWalls)
   const setModelStatus = useAppStore((s) => s.setModelStatus)
   const explodeAmountRaw = useAppStore((s) => s.explodeAmount)
   const traceModeExplode = useFloorplanLocalStore((s) => s.traceMode)
@@ -973,7 +976,7 @@ export default function BuildingModel({ layers }: Props) {
      * It also means "upload a print" and "trace it yourself" no longer produce
      * different qualities of model. Same walls, same framing, same envelope.
      */
-    const hasUserWalls = modelWalls(drawings).length > 0
+    const hasUserWalls = modelWalls(drawings, { tracedOnly: traceOwnWalls }).length > 0
 
     // User-placed doors/windows become real openings cut into the wall meshes.
     const placedSpecs: OpeningSpec[] = placedObjects
@@ -1229,7 +1232,7 @@ export default function BuildingModel({ layers }: Props) {
       })
     }, 1500)
     return () => clearTimeout(timer)
-  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, sceneConfig, buildResult, overlay, placedObjects, floorsAreas, granularity])
+  }, [drawings, layers, model.floorLevels, setModelStatus, wizardInputs, sceneConfig, buildResult, overlay, placedObjects, floorsAreas, granularity, traceOwnWalls])
 
   // Flipping the colours is a material swap on what is already built.
   const memberColours = useUISettingsStore((s) => s.memberColours)

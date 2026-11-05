@@ -27,7 +27,9 @@
   overflow: hidden;                       /* the plan holds still; the controls scroll */
 
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* header, plan, scrolling controls, and the button that finishes it — the
+     last one owns its own row so it is on screen without a scroll. */
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 8px;                               /* gap on the container, not margins */
   padding: calc(env(safe-area-inset-top, 0px) + 8px) calc(env(safe-area-inset-right, 0px) + 12px)
            calc(env(safe-area-inset-bottom, 0px) + 12px) calc(env(safe-area-inset-left, 0px) + 12px);
@@ -101,7 +103,7 @@
 
 .go {
   min-height: 48px;
-  margin-top: 4px;
+  margin: 0;
   background: var(--bp-accent, #3d9ae8);
   border: none;
   border-radius: 10px;
@@ -210,10 +212,11 @@
 .top, .rest { display: grid; gap: 8px; min-width: 0; }
 /* The plan fills whatever the header and the controls leave it. */
 .plan { min-height: 0; min-width: 0; }
-/* The controls under it scroll on their own, and never take more than a
-   little under half the screen — the plan keeps the rest. */
+/* The controls under it scroll on their own. Capped at a third of the screen
+   rather than nearly half: the plan is what you came here to touch, and every
+   line the controls take is a line of print you cannot see while drawing. */
 .rest {
-  max-height: 44dvh;
+  max-height: 34dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
   align-content: start;
@@ -238,6 +241,7 @@
 }
 
 .remove {
+  flex: 1;
   min-height: 48px;
   background: none;
   border: 1px solid var(--bp-bad, #e5643f);
@@ -253,6 +257,21 @@
   color: var(--bp-text-dim, #97a4b6);
   cursor: default;
 }
+
+/* Undo the wall you just drew. Same shape as Remove, quieter border: it is not
+   destructive, it is the other half of drawing quickly. */
+.undo {
+  flex: 1;
+  min-height: 48px;
+  background: none;
+  border: 1px solid var(--bp-line, #2c3a4a);
+  border-radius: 10px;
+  color: var(--bp-text, #e8eef5);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.undo:disabled { color: var(--bp-text-dim, #97a4b6); cursor: default; }
 
 .more {
   min-height: 48px;
@@ -274,10 +293,11 @@
   .sheet {
     width: min(820px, 100vw);
     grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas: "plan top" "plan rest";
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "plan top" "plan rest" "plan go";
     column-gap: 16px;
   }
+  .go { grid-area: go; }
   .top { grid-area: top; }
   .plan { grid-area: plan; }
   .rest { grid-area: rest; max-height: none; min-height: 0; }

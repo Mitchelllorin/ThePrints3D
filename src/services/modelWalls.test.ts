@@ -47,6 +47,28 @@ describe('the walls the model is built from', () => {
     expect(modelWalls([d]).length).toBe(2)
   })
 
+  it('leaves the detected walls out when the user asks to trace it themselves', () => {
+    // Detection is a guess about somebody else's drawing; when it is wrong the
+    // only thing left to do is trace over it, and walls already standing are in
+    // the way of every tap. An opt-out, not a new default.
+    const d = drawing([wall(0, 0, 400, 0, 'auto'), wall(9, 9, 409, 9, 'user')])
+    const mine = modelWalls([d], { tracedOnly: true })
+    expect(mine.length).toBe(1)
+    expect(mine[0].wall.source).toBe('user')
+    expect(modelWalls([d]).length).toBe(2)
+  })
+
+  it('honours the answer given for one sheet, not just the global one', () => {
+    // The question is asked at import and the answer belongs to THAT drawing:
+    // one job can be a clean CAD export and the next a photograph.
+    const d: Drawing = {
+      ...drawing([wall(0, 0, 400, 0, 'auto'), wall(9, 9, 409, 9, 'user')]),
+      manualWalls: true,
+    }
+    expect(modelWalls([d]).length).toBe(1)
+    expect(modelWalls([d])[0].wall.source).toBe('user')
+  })
+
   it('puts traced walls FIRST so existing selection indices still point at them', () => {
     const d = drawing([
       wall(0, 0, 400, 0, 'auto'),      // detected, listed first in the drawing

@@ -152,6 +152,21 @@ export function scaleIsKnown(d: Pick<Drawing, 'scaleConfidence'>): boolean {
   return d.scaleConfidence === 'parsed'
 }
 
+export interface ModelWallsOptions {
+  /**
+   * TRACE IT MYSELF — leave the detected walls out of the model.
+   *
+   * Detection is a guess about someone else's drawing, and on a photo, a scan or
+   * a sheet with hand-marking on it the guess is regularly wrong. With the walls
+   * wrong the only thing left to do is trace over them, and a model full of
+   * somebody else's walls is in the way of that: every tapped corner fights the
+   * ones already standing. On, nothing detected is built — the lines stay on the
+   * print as suggestions you can adopt one at a time — and the model holds
+   * exactly what you drew. See `traceOwnWalls` in useUISettingsStore.
+   */
+  tracedOnly?: boolean
+}
+
 /**
  * The walls to build, across every drawing: traced ones first (index-stable),
  * then the detected ones worth showing.
@@ -162,15 +177,19 @@ export function scaleIsKnown(d: Pick<Drawing, 'scaleConfidence'>): boolean {
  * into the model), which is what detection was agreed to be. It is never the
  * source of truth for how big the building is.
  */
-export function modelWalls(drawings: Drawing[]): ModelWall[] {
+export function modelWalls(drawings: Drawing[], opts: ModelWallsOptions = {}): ModelWall[] {
+  const tracedOnly = opts.tracedOnly ?? false
   const traced: ModelWall[] = []
   const detected: ModelWall[] = []
   /** Too short to stand on their own — candidates for the return rescue below. */
   const shortlisted: ModelWall[] = []
   for (const d of drawings) {
     const known = scaleIsKnown(d)
+    // The global setting, or this sheet's own answer — see Drawing.manualWalls.
+    const manual = tracedOnly || d.manualWalls === true
     for (const w of d.parsedWalls) {
       if (w.source === 'user') traced.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
+      else if (manual) continue                      // the print is there to trace
       else if (!known) continue                      // a suggestion, not a wall
       else if (autoWallIsReal(w)) detected.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })
       else shortlisted.push({ wall: w, scaleMmPerPx: d.scaleMmPerPx })

@@ -10,7 +10,7 @@
  *              the rail for now; these become slim columns next.
  *  • ASK     — opens the real panel-less Ask overlay.
  */
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useAppStore } from '../../store/useAppStore'
@@ -200,24 +200,23 @@ export default function RailCascade() {
   const setPlanView = useFloorplanLocalStore((s) => s.setPlanView)
   const setCameraPreset = useAppStore((s) => s.setCameraPreset)
   const setEditMode = useFloorplanLocalStore((s) => s.setEditMode)
-  // Reachable once there's ANYTHING to grab — a built model, or any traced
-  // wall, floor, roof or placed object. If you can select it you can edit it,
-  // so the same things that make a selection possible make Edit reachable.
-  // (Gating on the built model alone hid Edit on a plan you had traced but not
-  // yet built, which is exactly when you most want to nudge a wall.) Returns a
-  // boolean from one selector so an unrelated store write cannot re-render the
-  // whole rail.
-  const hasSomethingToEdit = useAppStore((s) =>
-    s.buildResult !== null
-    || s.model.status === 'ready'
-    || s.floorsAreas.length > 0
-    || s.roofAreas.length > 0
-    || s.placedObjects.length > 0
-    || s.plumbingLines.length > 0
-    || s.electricalLines.length > 0
-    || s.hvacLines.length > 0
-    || s.drawings.some((d) => d.parsedWalls.some((w) => w.source === 'user')),
-  )
+  /**
+   * EDIT IS ALWAYS THERE ONCE THERE IS A PLAN — no "is there anything to grab
+   * yet" test in front of it.
+   *
+   * It used to appear only when the model had something selectable: a built
+   * model, a traced wall, a placed object. The reasoning was that a mode you
+   * cannot do anything in is a dead button, and on a half-built plan that was
+   * the intent. In practice it reads as the app losing the tool: open a plan, or
+   * look at a sample, and EDIT has simply gone — and the one moment you most
+   * want to nudge a wall is the moment you have just imported it and the
+   * detector got a line wrong. A verb that comes and goes teaches people not to
+   * look for it.
+   *
+   * So it is on whenever a plan is open, in any state — traced, detected,
+   * built or bare. With nothing under it yet it is a mode waiting for the first
+   * wall, which is exactly what a tool is.
+   */
 
   // Place is a cascade column (not a store drawer), so its open state is local.
   const [placeOpen, setPlaceOpen] = useState(false)
@@ -247,6 +246,54 @@ export default function RailCascade() {
   useEffect(() => { setRailPanelOpen(layersOpen || placeOpen || framingOpen || fuseOpen) }, [layersOpen, placeOpen, framingOpen, fuseOpen, setRailPanelOpen])
   // First tap arms Clear, second does it. See the button for why.
   const [clearArmed, setClearArmed] = useState(false)
+
+  /**
+   * TWO COLUMNS WHEN THE LIST IS TALLER THAN THE SCREEN.
+   *
+   * Measured, not pinned to a breakpoint: how many tools the rail carries
+   * depends on what is loaded (Plan, Share, Edit and Pro only appear once there
+   * is a plan), so any viewport height chosen for today's count is wrong the day
+   * a tool is added. The moment the list needs more room than the column has, it
+   * wraps into two 44px columns — every tool visible, at full tap size, instead
+   * of the tail scrolling off the bottom where nobody can see it.
+   *
+   * `needed` is the height the list wants as ONE column, which does not change
+   * when it wraps — so this cannot oscillate between the two layouts.
+   */
+  const railRef = useRef<HTMLElement | null>(null)
+  const [railWrap, setRailWrap] = useState(false)
+  useEffect(() => {
+    const rail = railRef.current
+    const col = rail?.parentElement
+    if (!rail || !col) return
+    const measure = () => {
+      const kids = Array.from(rail.children) as HTMLElement[]
+      if (!kids.length) return
+      const cs = getComputedStyle(rail)
+      const gap = parseFloat(cs.rowGap) || 0
+      const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0)
+      const needed = kids.reduce((h, k) => h + k.getBoundingClientRect().height, 0)
+        + gap * (kids.length - 1) + pad
+      // Clear sits outside the list and keeps its own height at the foot.
+      const foot = (col.lastElementChild as HTMLElement | null)?.offsetHeight ?? 0
+      setRailWrap(needed > col.clientHeight - foot - 12 + 1)
+    }
+    measure()
+    // The list itself changes length as tools appear; the column changes size as
+    // the screen does. Watch both — a ResizeObserver on the column alone would
+    // never hear about a tool being added to a list that still fits the box.
+    const ro = new ResizeObserver(measure)
+    ro.observe(col)
+    const mo = new MutationObserver(measure)
+    mo.observe(rail, { childList: true })
+    return () => { ro.disconnect(); mo.disconnect() }
+  }, [])
+  // The rail's width is a token the ambient guide and the nameplates lay
+  // themselves out against (see --rail-w), so the second column has to say so.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--rail-w', railWrap ? '96px' : '44px')
+    return () => { document.documentElement.style.removeProperty('--rail-w') }
+  }, [railWrap])
 
   const active: Record<Section, boolean> = {
     build: buildOpen,
@@ -340,140 +387,151 @@ export default function RailCascade() {
    */
   return (
     <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen || framingOpen || fuseOpen ? styles.wrapSheet : ''}`}>
-      <nav className={styles.rail} aria-label="Menus">
-        {RAIL.filter((r) => r.id !== 'framing' || hasDrawings).map(({ id, icon, label }) => (
-          <Fragment key={id}>
-            <button
-              className={`${styles.icon} ${active[id] ? styles.active : ''}`}
-              onClick={() => selectSection(id)}
-              title={label}
-              aria-pressed={active[id]}
-              // So the tutorial can spotlight the real control instead of
-              // describing where it is and hoping. Until now only two elements in
-              // the whole app could be pointed at.
-              data-tour={`rail-${id}`}
-            >
-              <span className={styles.glyph}>{icon}</span>
-              <span className={styles.iconLabel}>{label}</span>
-            </button>
-            {/* The 3D Learning Family — beside the gear, the same small button
-                in every family app. A glyph only; its name is for screen
-                readers and the desktop tooltip. */}
-            {id === 'settings' && !traceMode && (
+      {/* The list scrolls; CLEAR sits outside the scroll port, below it. See the
+          note on .railCol — when the list got longer than the screen, Clear (its
+          last child, pinned to the foot) was the first thing pushed out of it. */}
+      <div className={styles.railCol}>
+        <nav ref={railRef} className={`${styles.rail} ${railWrap ? styles.railWrap : ''}`} aria-label="Menus">
+          {RAIL.filter((r) => r.id !== 'framing' || hasDrawings).map(({ id, icon, label }) => (
+            <Fragment key={id}>
               <button
-                className={`${styles.icon} ${familyOpen ? styles.active : ''}`}
-                onClick={() => setFamilyOpen(!familyOpen)}
-                title="3D Family"
-                aria-label="3D Family"
-                aria-expanded={familyOpen}
+                className={`${styles.icon} ${active[id] ? styles.active : ''}`}
+                onClick={() => selectSection(id)}
+                title={label}
+                aria-pressed={active[id]}
+                // So the tutorial can spotlight the real control instead of
+                // describing where it is and hoping. Until now only two elements in
+                // the whole app could be pointed at.
+                data-tour={`rail-${id}`}
               >
-                <span className={styles.glyph}><FamilyGlyph /></span>
+                <span className={styles.glyph}>{icon}</span>
+                <span className={styles.iconLabel}>{label}</span>
               </button>
-            )}
-          </Fragment>
-        ))}
+              {/* The 3D Learning Family — beside the gear, the same small button
+                  in every family app. A glyph only; its name is for screen
+                  readers and the desktop tooltip. */}
+              {id === 'settings' && !traceMode && (
+                <button
+                  className={`${styles.icon} ${familyOpen ? styles.active : ''}`}
+                  onClick={() => setFamilyOpen(!familyOpen)}
+                  title="3D Family"
+                  aria-label="3D Family"
+                  aria-expanded={familyOpen}
+                >
+                  <span className={styles.glyph}><FamilyGlyph /></span>
+                </button>
+              )}
+            </Fragment>
+          ))}
 
-        {/* PLAN / 3D — a MODE, switchable both ways at any time.
-            Not the old one-way "Build 3D" button: 2D is where you make
-            decisions (tune the detector, confirm the walls, answer the
-            questions) and 3D is where you check them, so you need to move
-            between them freely. Entering plan view snaps the camera straight
-            overhead and locks rotation; leaving it hands the view back
-            untouched, since the 3D camera is wherever you last left it. */}
-        {hasDrawings && (
-          <button
-            className={`${styles.icon} ${planView ? styles.active : ''}`}
-            onClick={() => {
-              const next = !planView
-              setPlanView(next)
-              if (next) {
-                // Frame against the REAL viewport shape — a tall phone needs the
-                // camera much further back than a square one for the same sheet.
-                const aspect = window.innerWidth / Math.max(1, window.innerHeight)
-                setCameraPreset(planViewCamera(useAppStore.getState().floorplanOverlay, aspect))
-              }
-            }}
-            aria-pressed={planView}
-            title={planView ? 'Back to 3D' : 'Plan view — look straight down at the drawing'}
-          >
-            <span className={styles.glyph}><PlanIcon flat={planView} /></span>
-            <span className={styles.iconLabel}>{planView ? '3D' : 'Plan'}</span>
-          </button>
-        )}
+          {/* PLAN / 3D — a MODE, switchable both ways at any time.
+              Not the old one-way "Build 3D" button: 2D is where you make
+              decisions (tune the detector, confirm the walls, answer the
+              questions) and 3D is where you check them, so you need to move
+              between them freely. Entering plan view snaps the camera straight
+              overhead and locks rotation; leaving it hands the view back
+              untouched, since the 3D camera is wherever you last left it. */}
+          {hasDrawings && (
+            <button
+              className={`${styles.icon} ${planView ? styles.active : ''}`}
+              onClick={() => {
+                const next = !planView
+                setPlanView(next)
+                if (next) {
+                  // Frame against the REAL viewport shape — a tall phone needs the
+                  // camera much further back than a square one for the same sheet.
+                  const aspect = window.innerWidth / Math.max(1, window.innerHeight)
+                  setCameraPreset(planViewCamera(useAppStore.getState().floorplanOverlay, aspect))
+                }
+              }}
+              aria-pressed={planView}
+              title={planView ? 'Back to 3D' : 'Plan view — look straight down at the drawing'}
+            >
+              <span className={styles.glyph}><PlanIcon flat={planView} /></span>
+              <span className={styles.iconLabel}>{planView ? '3D' : 'Plan'}</span>
+            </button>
+          )}
 
-        {/* SHARE — the picture, straight to the phone's share sheet.
-            Mitchell, 25 Oct 2026: he drew a layout on a real job, framed it and
-            screenshotted it to his boss. The screenshot was the workaround; the
-            old Share PNG was a download buried in Settings. One tap here, from
-            whatever the view is showing. See services/sharePicture. */}
-        {hasDrawings && !traceMode && (
-          <button
-            className={styles.icon}
-            onClick={share}
-            disabled={sharing}
-            aria-busy={sharing}
-            title="Share a picture of this view — text, email, anywhere"
-          >
-            <span className={styles.glyph}><ShareIcon /></span>
-            <span className={styles.iconLabel}>
-              {sharing ? 'Wait' : shareSaid === 'downloaded' ? 'Saved' : shareSaid === 'failed' ? 'Retry' : 'Share'}
-            </span>
-          </button>
-        )}
+          {/* SHARE — the picture, straight to the phone's share sheet.
+              Mitchell, 25 Oct 2026: he drew a layout on a real job, framed it and
+              screenshotted it to his boss. The screenshot was the workaround; the
+              old Share PNG was a download buried in Settings. One tap here, from
+              whatever the view is showing. See services/sharePicture. */}
+          {hasDrawings && !traceMode && (
+            <button
+              className={styles.icon}
+              onClick={share}
+              disabled={sharing}
+              aria-busy={sharing}
+              title="Share a picture of this view — text, email, anywhere"
+            >
+              <span className={styles.glyph}><ShareIcon /></span>
+              <span className={styles.iconLabel}>
+                {sharing ? 'Wait' : shareSaid === 'downloaded' ? 'Saved' : shareSaid === 'failed' ? 'Retry' : 'Share'}
+              </span>
+            </button>
+          )}
 
-        {/* EDIT — a verb, so it belongs with the other verbs.
-            It used to float on its own at bottom-left, which put it directly
-            beside CLEAR: the exact adjacency Clear was moved to the foot to
-            escape. Sitting the button people press most next to the one that
-            wipes the workspace is the hazard, whichever of the two moved there
-            last. In the rail it is discoverable, stays on the perimeter, and
-            leaves Clear alone at the bottom with the whole gap between them.
-            A toggle rather than a section, so it lights up instead of
-            cascading a column. */}
-        {hasDrawings && hasSomethingToEdit && !traceMode && (
-          <button
-            className={`${styles.icon} ${editMode ? styles.active : ''}`}
-            // Free. Mitchell, 24 Sep 2026: fixing your own drawing is part of
-            // drawing it. Pro is what you take to the yard: the cut list.
-            onClick={() => setEditMode(!editMode)}
-            aria-pressed={editMode}
-            title={editMode ? 'Done editing' : 'Edit anything — drag to move it'}
-          >
-            <span className={styles.glyph}><EditIcon done={editMode} /></span>
-            <span className={styles.iconLabel}>{editMode ? 'Done' : 'Edit'}</span>
-          </button>
-        )}
+          {/* EDIT — a verb, so it belongs with the other verbs.
+              It used to float on its own at bottom-left, which put it directly
+              beside CLEAR: the exact adjacency Clear was moved to the foot to
+              escape. Sitting the button people press most next to the one that
+              wipes the workspace is the hazard, whichever of the two moved there
+              last. In the rail it is discoverable, stays on the perimeter, and
+              leaves Clear alone at the bottom with the whole gap between them.
+              A toggle rather than a section, so it lights up instead of
+              cascading a column. */}
+          {hasDrawings && !traceMode && (
+            <button
+              className={`${styles.icon} ${editMode ? styles.active : ''}`}
+              // Free. Mitchell, 24 Sep 2026: fixing your own drawing is part of
+              // drawing it. Pro is what you take to the yard: the cut list.
+              onClick={() => setEditMode(!editMode)}
+              aria-pressed={editMode}
+              title={editMode ? 'Done editing' : 'Edit anything — drag to move it'}
+            >
+              <span className={styles.glyph}><EditIcon done={editMode} /></span>
+              <span className={styles.iconLabel}>{editMode ? 'Done' : 'Edit'}</span>
+            </button>
+          )}
 
-        {/* PRO — the one door to buying that is always there. Every locked
-            feature opens the sheet too, but those only appear once you reach for
-            that feature; someone who already wants Pro should not have to go
-            hunting through Settings for the way to pay. Shown only while there
-            is something to buy and it is not owned, so it goes the moment they
-            buy it and never appears on a build with no store. */}
-        {canBuyPro && (
-          <button
-            className={`${styles.icon} ${styles.proCta}`}
-            onClick={() => openUpgrade(PRO_REASON_GENERAL)}
-            title="Unlock Pro: the full cut list, takeoff, tape and more"
-            data-tour="rail-pro"
-          >
-            <span className={styles.glyph}>★</span>
-            <span className={styles.iconLabel}>Pro</span>
-          </button>
-        )}
+          {/* PRO — the one door to buying that is always there. Every locked
+              feature opens the sheet too, but those only appear once you reach for
+              that feature; someone who already wants Pro should not have to go
+              hunting through Settings for the way to pay. Shown only while there
+              is something to buy and it is not owned, so it goes the moment they
+              buy it and never appears on a build with no store. */}
+          {canBuyPro && (
+            <button
+              className={`${styles.icon} ${styles.proCta}`}
+              onClick={() => openUpgrade(PRO_REASON_GENERAL)}
+              title="Unlock Pro: the full cut list, takeoff, tape and more"
+              data-tour="rail-pro"
+            >
+              <span className={styles.glyph}>★</span>
+              <span className={styles.iconLabel}>Pro</span>
+            </button>
+          )}
 
-        {/* CLEAR — pushed to the FOOT of the rail, and it asks first.
-            It was sitting six pixels under PLACE, in the middle of the
-            navigation column: tap PLACE a little low on a phone and the whole
-            workspace went, dropping you back to the Browse/Scan screen with no
-            idea why. Moving it off the top icons was right and not enough — the
-            danger was never Undo's neighbours, it was being adjacent to the
-            button people press most.
-            So: margin-auto pins it to the bottom, well clear of the four menu
-            items, and the first tap only ARMS it. The confirm lives on the
-            button itself rather than in a dialog, because a modal in the middle
-            of the workspace is the thing this app does not do. It disarms on
-            its own after a few seconds so it cannot sit there loaded. */}
+          {/* CLEAR — pushed to the FOOT of the rail, and it asks first.
+              It was sitting six pixels under PLACE, in the middle of the
+              navigation column: tap PLACE a little low on a phone and the whole
+              workspace went, dropping you back to the Browse/Scan screen with no
+              idea why. Moving it off the top icons was right and not enough — the
+              danger was never Undo's neighbours, it was being adjacent to the
+              button people press most.
+              So: margin-auto pins it to the bottom, well clear of the four menu
+              items, and the first tap only ARMS it. The confirm lives on the
+              button itself rather than in a dialog, because a modal in the middle
+              of the workspace is the thing this app does not do. It disarms on
+              its own after a few seconds so it cannot sit there loaded. */}
+        </nav>
+
+        {/* CLEAR — outside the scrolling list, at the foot of the column.
+            0.45, not 0.22: on an empty workspace it is disabled, and at 0.22 it
+            was not dimmed, it was invisible — the same report as the button
+            having gone. Dim enough to read as unavailable, present enough to
+            find when you come looking for it. */}
         <button
           className={`${styles.icon} ${styles.railFoot}`}
           onClick={() => {
@@ -486,14 +544,14 @@ export default function RailCascade() {
           title={clearArmed ? 'Tap again to clear everything' : 'Clear workspace'}
           aria-label={clearArmed ? 'Tap again to clear everything' : 'Clear workspace'}
           disabled={!hasDrawings}
-          style={hasDrawings ? undefined : { opacity: 0.22, cursor: 'default' }}
+          style={hasDrawings ? undefined : { opacity: 0.45, cursor: 'default' }}
         >
           <span className={styles.glyph} style={clearArmed ? { color: '#f87171' } : undefined}><BinIcon /></span>
           <span className={styles.iconLabel} style={clearArmed ? { color: '#f87171' } : undefined}>
             {clearArmed ? 'Sure?' : 'Clear'}
           </span>
         </button>
-      </nav>
+      </div>
 
       <FamilyDrawer open={familyOpen} onClose={closeFamily} />
 

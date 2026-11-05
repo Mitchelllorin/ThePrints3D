@@ -50,7 +50,7 @@ import {
   type Grip, type SizeField,
 } from '../../services/footprintEdit'
 import {
-  acceptsWall, addCorner, clipToShell, fitPage, houseOutline, houseRects, movedCorner, movedHouse, removeCorner, resized,
+  acceptsWall, addCorner, clipToShell, fitPage, houseOutline, houseRects, MIN_WALL_MM, movedCorner, movedHouse, removeCorner, resized,
   shapeOk, snapWallPoint, withEdgeLength, withLength, wallLength,
   type DrawItPlan, type InsideWall,
 } from '../../services/drawItPlan'
@@ -107,6 +107,8 @@ type Drag =
   | { kind: 'wall'; index: number; part: 'body' | 'a' | 'b'; start: DrawItPlan }
   /** A corner of the shape at any angle. */
   | { kind: 'corner'; index: number; start: DrawItPlan }
+  /** The angle ring on a picked wall: swings the far end round the near one. */
+  | { kind: 'angle'; index: number; start: DrawItPlan }
 
 /** Fit the paper into the box it sits in. */
 function fitFrame(w: number, h: number, pageW: number, pageD: number): Frame {
@@ -129,7 +131,8 @@ function gridStepMm(scale: number, metric: boolean): number {
 }
 
 export default function FootprintEditor({
-  plan, onChange, mode, selectedWall, onSelectWall, onPickedUp, format, snapMm, metric, shellMm, free = false, height = 300,
+  plan, onChange, mode, selectedWall, onSelectWall, onPickedUp, format, snapMm, metric, shellMm, free = false,
+  wallsOnly = false, underlay = null, onCommit, canUndo = false, canRedo = false, onUndo, onRedo, height = 300,
 }: {
   plan: DrawItPlan
   onChange: (next: DrawItPlan) => void
@@ -146,6 +149,23 @@ export default function FootprintEditor({
   shellMm: number
   /** Any angle: inside walls keep the angle they are dragged at. */
   free?: boolean
+  /**
+   * WALLS ONLY — no box round them, so the page is the paper and every wall is
+   * part of the building. This is how the thing that is not four walls gets
+   * drawn: a carport, a fence line, an addition. It is also what lets the print
+   * be the paper below.
+   */
+  wallsOnly?: boolean
+  /** The print under the walls: its page size in millimetres, and where to get
+   *  it. Same scale as the walls, so a wall drawn on a line is that line's
+   *  real length. */
+  underlay?: { url: string; wMm: number; dMm: number } | null
+  /** The plan as it was before a gesture: one step of undo per drag, not per move. */
+  onCommit?: (before: DrawItPlan) => void
+  canUndo?: boolean
+  canRedo?: boolean
+  onUndo?: () => void
+  onRedo?: () => void
   /** First-frame guess only. The box it sits in sets the real height. */
   height?: number
 }) {
@@ -160,6 +180,16 @@ export default function FootprintEditor({
   const [drag, setDrag] = useState<Drag | null>(null)
   const dragFrom = useRef<{ x: number; y: number; id: number; moved: number } | null>(null)
   const lastTap = useRef({ t: 0, x: 0, y: 0 })
+  /**
+   * THE CHAIN. Drawing a building is one wall after another, so the end of the
+   * wall just drawn is where the next one starts: tap the paper once to park
+   * the start, tap again and the wall is there, and the end of that is the next
+   * start — round a corner, along a wall, round a curve. Tap the parked end
+   * again and the run is finished. Nothing is ever assumed to be a box.
+   */
+  const [armed, setArmed] = useState<Point | null>(null)
+  /** The far end of the chain under a mouse pointer, for the live rubber band. */
+  const [hover, setHover] = useState<Point | null>(null)
   const [editing, setEditing] = useState<{ key: string; text: string; bad: boolean } | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
   const [pickedUp, setPickedUpState] = useState(false)
@@ -218,15 +248,18 @@ export default function FootprintEditor({
   }, [])
 
   const boxes = plan.boxes
-  const placed = houseRects(plan)
-  if (placed.length === 0) return null
+  const placed = wallsOnly ? [] : houseRects(plan)
+  if (!wallsOnly && placed.length === 0) return null
   const shape = plan.shape
-  // The extent of the house: its shape's, when it has one.
+  // The extent of the house: its shape's, when it has one. With no house, it is
+  // the page — the walls can be anywhere on the paper.
   const ext = shape ? shape.map((q) => ({ x1: q.x, y1: q.y, x2: q.x, y2: q.y })) : placed
-  const bounds: Rect = {
-    x1: Math.min(...ext.map((r) => r.x1)), y1: Math.min(...ext.map((r) => r.y1)),
-    x2: Math.max(...ext.map((r) => r.x2)), y2: Math.max(...ext.map((r) => r.y2)),
-  }
+  const bounds: Rect = wallsOnly
+    ? { x1: 0, y1: 0, x2: plan.page.w, y2: plan.page.d }
+    : {
+      x1: Math.min(...ext.map((r) => r.x1)), y1: Math.min(...ext.map((r) => r.y1)),
+      x2: Math.max(...ext.map((r) => r.x2)), y2: Math.max(...ext.map((r) => r.y2)),
+    }
 
   const fit = fitFrame(size.w, size.h, plan.page.w, plan.page.d)
   const f = { s: fit.s * view.z, ox: fit.ox * view.z + view.x, oy: fit.oy * view.z + view.y }
@@ -239,13 +272,18 @@ export default function FootprintEditor({
   const B = { x1: X(bounds.x1), y1: Y(bounds.y1), x2: X(bounds.x2), y2: Y(bounds.y2) }
   const shown = picked !== null && picked > 0 && picked < boxes.length ? picked : null
   const slidingBox = drag?.kind === 'slide' ? drag.box : null
-  const outlineMode = mode === 'outline'
+  const outlineMode = mode === 'outline' && !wallsOnly
+  /** The print is the paper. Its ink is dark, so anything drawn on it has to be
+   *  too — the walls were #cbd5e1 and the arrow #e6f1fd, which is white on
+   *  white paper. Same drawing, opposite ink. */
+  const onPrint = !!underlay
 
   // ── Dimensions ──────────────────────────────────────────────────────────
   const { lanes } = dimensionLanes(boxes)
   const dims: Dim[] = []
-  // A shape at any angle carries a length on each wall instead (see edgeChips).
-  if (!shape) boxes.forEach((b, i) => {
+  // A shape at any angle carries a length on each wall instead (see edgeChips),
+  // and walls on their own have no box to dimension.
+  if (!shape && !wallsOnly) boxes.forEach((b, i) => {
     const r = placed[i]
     const L = lanes[i]
     {
@@ -294,11 +332,12 @@ export default function FootprintEditor({
   if (drag?.kind === 'slide') active.add(`${drag.box}:off`)
 
   // ── Grips: on every edge and every corner of the building ────────────────
-  const m = placed[0]
+  const m = placed[0] ?? { x1: 0, y1: 0, x2: 0, y2: 0 }
   // Where the main box's walls are open to a section, there is no wall there
   // to hold: find the stretch of each wall still on the outside, and put that
   // wall's grip in the middle of the longest one.
   const openRuns = (side: AttachSide): Array<[number, number]> => {
+    if (boxes.length === 0) return []
     const along = runsDown(side) ? [m.y1, m.y2] : [m.x1, m.x2]
     const cuts = boxes.slice(1).map((b, k) => ({ b, r: placed[k + 1] }))
       .filter(({ b }) => (b.attach?.side ?? 'right') === side)
@@ -368,7 +407,9 @@ export default function FootprintEditor({
   const gripKey = (g: Grip) => `${g.box}:${g.kind}:${g.fromLeft ? 'L' : ''}${g.fromTop ? 'T' : ''}`
 
   // ── Pointer ───────────────────────────────────────────────────────────────
-  const snapOpts = { gridMm: snapMm, tolMm: REACH_PX / f.s, shellMm, free }
+  const snapOpts = { gridMm: snapMm, tolMm: REACH_PX / f.s, shellMm, free, noShell: wallsOnly }
+  /** Is this a wall worth keeping? With no shell under it, only its length can say no. */
+  const wallOk = (w: InsideWall) => (wallsOnly ? wallLength(w) >= MIN_WALL_MM : acceptsWall(plan, w))
   const begin = (e: ReactPointerEvent<Element>, d: Drag) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return
     e.preventDefault()
@@ -393,9 +434,24 @@ export default function FootprintEditor({
     } else if (drag.kind === 'move') {
       onChange(movedHouse(drag.start, dx, dy, snapMm))
     } else if (drag.kind === 'draw') {
-      setDrag({ ...drag, to: clipToShell(plan, drag.from, snapWallPoint(plan, toMm(e), { ...snapOpts, from: drag.from }), shellMm) })
+      const to = snapWallPoint(plan, toMm(e), { ...snapOpts, from: drag.from })
+      // With no shell there is nothing to stop a wall at, and nothing to clip it to.
+      setDrag({ ...drag, to: wallsOnly ? to : clipToShell(plan, drag.from, to, shellMm) })
     } else if (drag.kind === 'corner' && from.moved >= TAP_SLOP_PX) {
       onChange(movedCorner(drag.start, drag.index, toMm(e), snapMm))
+    } else if (drag.kind === 'angle') {
+      // SWING IT: the far end goes round the near one at the length it already
+      // is, magnetised to the 45s. Changing the angle of one wall is a thing you
+      // do to that wall, on the plan, not a setting for the whole sheet.
+      const w0 = drag.start.walls[drag.index]
+      const L = Math.hypot(w0.x2 - w0.x1, w0.y2 - w0.y1)
+      const to = toMm(e)
+      const raw = (Math.atan2(to.y - w0.y1, to.x - w0.x1) * 180) / Math.PI
+      const on45 = Math.round(raw / 45) * 45
+      const deg = Math.abs(raw - on45) <= 3 ? on45 : Math.round(raw)
+      const r = (deg * Math.PI) / 180
+      const w = { ...w0, x2: w0.x1 + Math.cos(r) * L, y2: w0.y1 + Math.sin(r) * L }
+      onChange({ ...drag.start, walls: drag.start.walls.map((k, i) => (i === drag.index ? w : k)) })
     } else if (drag.kind === 'wall' && from.moved >= TAP_SLOP_PX) {
       const w0 = drag.start.walls[drag.index]
       let w: InsideWall
@@ -415,6 +471,9 @@ export default function FootprintEditor({
     if (!from || e.pointerId !== from.id) return
     const tapped = from.moved < TAP_SLOP_PX
     const d = drag
+    /** The plan to come back to: as it was when the finger landed. */
+    const before = d && 'start' in d ? d.start : plan
+    const keep = () => onCommit?.(before)
     dragFrom.current = null
     setDrag(null)
     if (!d) return
@@ -424,28 +483,55 @@ export default function FootprintEditor({
       setCorner(null)
       // Walls crossing, or one shrunk to nothing: put it back.
       if (!plan.shape || !shapeOk(plan.shape)) { onChange(d.start); return }
+      keep()
       onChange(fitPage(plan))
       return
     }
     if (d.kind === 'draw') {
       const w = { x1: d.from.x, y1: d.from.y, x2: d.to.x, y2: d.to.y }
       if (tapped && d.tapped != null) { onSelectWall(d.tapped); return }
-      if (!tapped && acceptsWall(plan, w)) {
+      if (!tapped && wallOk(w)) {
+        // A WALL IS DRAWN, NOT PICKED. Selecting it here put its two end grips,
+        // 48px each, exactly where the next wall starts — so the second wall of
+        // a run stretched the first one's end instead of drawing, which is the
+        // commonest thing anyone does on this sheet. Tap a wall when you want
+        // its ends; a drag on the paper keeps drawing.
+        keep()
         onChange({ ...plan, walls: [...plan.walls, w] })
-        onSelectWall(plan.walls.length)
-      } else {
+        // The end just drawn is the start of the next wall.
+        setArmed({ x: w.x2, y: w.y2 })
         onSelectWall(null)
+        return
       }
+      if (tapped) {
+        // A TAP IS A CORNER. The first tap parks the start; each tap after it
+        // draws that wall and parks the new end, so a building goes up one
+        // wall at a time, round as many corners as it has. A tap back on the
+        // parked end finishes the run.
+        const p = d.from
+        if (!armed) { setArmed(p); onSelectWall(null); return }
+        if (Math.hypot(armed.x - p.x, armed.y - p.y) < 6 / f.s) { setArmed(null); onSelectWall(null); return }
+        const w = { x1: armed.x, y1: armed.y, x2: p.x, y2: p.y }
+        if (wallOk(w)) {
+          keep()
+          onChange({ ...plan, walls: [...plan.walls, w] })
+          setArmed(p)
+        }
+      }
+      onSelectWall(null)
       return
     }
     if (d.kind === 'wall') {
       // A wall dragged off the house, or shrunk to nothing, goes back.
       const w = plan.walls[d.index]
-      if (w && !acceptsWall(plan, w)) onChange(d.start)
+      if (w && !wallOk(w)) { onChange(d.start); return }
+      keep()
       return
     }
-    // Grow the paper once, now the finger is off it.
-    if (!tapped) onChange(fitPage(plan))
+    // Grow the paper once, now the finger is off it — and one step of undo for
+    // the drag, which is the same for a grip, a slide, a moved house and a wall
+    // swung by its ring.
+    if (!tapped) { keep(); onChange(fitPage(plan)) }
   }
 
   /** The house (main box or any section) was pressed. */
@@ -465,10 +551,13 @@ export default function FootprintEditor({
   }
 
   const pressPaper = (e: ReactPointerEvent<Element>) => {
-    if (mode === 'walls') {
+    if (mode === 'walls' || wallsOnly) {
       const p = snapWallPoint(plan, toMm(e), snapOpts)
+      // A press near the parked end starts there, not at the pixel: the tip of
+      // the last wall is exactly where the next one goes.
+      const from = armed && Math.hypot(armed.x - p.x, armed.y - p.y) < 60 / f.s ? armed : p
       onSelectWall(null)
-      begin(e, { kind: 'draw', from: p, to: p })
+      begin(e, { kind: 'draw', from, to: from })
       return
     }
     setPicked(null)
@@ -498,6 +587,7 @@ export default function FootprintEditor({
       if (mm === null || !(mm > 0)) return false
       const next = withEdgeLength(plan, Number(editing.key.slice(5)), mm)
       if (!next.shape || !shapeOk(next.shape)) return false
+      onCommit?.(plan)
       onChange(fitPage(next))
       return true
     }
@@ -506,7 +596,8 @@ export default function FootprintEditor({
       const mm = parseSizeMm(raw)
       if (mm === null || !(mm > 0)) return false
       const w = withLength(plan.walls[i], mm)
-      if (!acceptsWall(plan, w)) return false
+      if (!wallOk(w)) return false
+      onCommit?.(plan)
       onChange(fitPage({ ...plan, walls: plan.walls.map((k, j) => (j === i ? w : k)) }))
       return true
     }
@@ -516,40 +607,111 @@ export default function FootprintEditor({
     const mm = parseSizeMm(raw.replace(/^[-−]\s*/, ''))
     if (mm === null || !(mm >= 0)) return false
     // Typed from the dimension, the main box keeps its top-left corner.
+    onCommit?.(plan)
     if (d.field === 'off') onChange(fitPage({ ...plan, boxes: typeOffset(boxes, d.box, negative ? -mm : mm) }))
     else onChange(fitPage({ ...plan, boxes: typeBoxSize(boxes, d.box, d.field, mm) }))
     return true
   }
 
   const step = gridStepMm(f.s, metric)
-  const outline = houseOutline(plan)
-  const outlinePath = outline.map((p, i) => `${i === 0 ? 'M' : 'L'}${X(p.x).toFixed(1)} ${Y(p.y).toFixed(1)}`).join(' ') + ' Z'
+  const outline = wallsOnly ? [] : houseOutline(plan)
+  // No outline (walls on their own) is an empty path, not a path of one space and a Z.
+  const outlinePath = outline.length
+    ? outline.map((p, i) => `${i === 0 ? 'M' : 'L'}${X(p.x).toFixed(1)} ${Y(p.y).toFixed(1)}`).join(' ') + ' Z'
+    : ''
   // An inside wall drawn at its real thickness — a 2x4 with board both sides,
   // about 4-1/2" — and never thinner than a line you can see.
   const wallPx = Math.max(3, 114 * f.s)
 
   // Walls on screen: the committed ones, plus the one being drawn.
   const drawing = drag?.kind === 'draw' ? { x1: drag.from.x, y1: drag.from.y, x2: drag.to.x, y2: drag.to.y } : null
-  const wallChips: Array<{ key: string; x: number; y: number; w: InsideWall; live: boolean }> = []
-  const chipFor = (w: InsideWall, key: string, live: boolean) => {
+  const wallChips: Array<{ key: string; x: number; y: number; w: InsideWall; live: boolean; withAngle: boolean }> = []
+  const chipFor = (w: InsideWall, key: string, live: boolean, withAngle: boolean) => {
     const len = wallLength(w)
     if (len < 1) return
     const nx = -(w.y2 - w.y1) / len, ny = (w.x2 - w.x1) / len
     wallChips.push({
-      key, live, w,
+      key, live, w, withAngle,
       x: X((w.x1 + w.x2) / 2) + nx * WALL_LABEL_PX,
       y: Y((w.y1 + w.y2) / 2) + ny * WALL_LABEL_PX,
     })
   }
   const sel = !outlineMode && selectedWall != null && !drawing ? selectedWall : null
   const selW = sel != null ? plan.walls[sel] : undefined
-  const wallEnds = sel != null && selW ? (['a', 'b', 'body'] as const).map((part) => ({
-    part,
-    x: X(part === 'a' ? selW.x1 : part === 'b' ? selW.x2 : (selW.x1 + selW.x2) / 2),
-    y: Y(part === 'a' ? selW.y1 : part === 'b' ? selW.y2 : (selW.y1 + selW.y2) / 2),
-    on: drag?.kind === 'wall' && drag.part === part,
+  // A PICKED WALL CARRIES ONE HANDLE, on its middle — not one on each end. An
+  // end grip is 48px of target sitting exactly where the next wall starts, so
+  // picking a wall and then drawing on from it stretched that wall instead. The
+  // ring sets the angle, the number types the length, the middle drags it.
+  const wallEnds = sel != null && selW ? [{
+    part: 'body' as const,
+    x: X((selW.x1 + selW.x2) / 2),
+    y: Y((selW.y1 + selW.y2) / 2),
+    on: drag?.kind === 'wall' && drag.part === 'body',
     index: sel,
-  })) : []
+  }] : []
+
+  // ── THE WALL WIDGET ──────────────────────────────────────────────────────
+  // One wall picked, and everything about that wall in one place on the plan:
+  // its angle (drag the ring), square, straight on from the wall it came off,
+  // undo, redo, remove. The sheet-wide angle switch this replaces asked you to
+  // decide before you drew; this asks after, about the wall in front of you.
+  const angleDeg = selW ? wallAngleOffSquareDeg(selW.x1, selW.y1, selW.x2, selW.y2) : 0
+  const onPickedWall = (next: InsideWall) => {
+    if (sel == null) return
+    onCommit?.(plan)
+    onChange({ ...plan, walls: plan.walls.map((k, i) => (i === sel ? next : k)) })
+  }
+  /** Exactly level or plumb, whichever it is nearer to, at the length it is. */
+  const squarePicked = () => {
+    if (!selW) return
+    const L = wallLength(selW)
+    const dx = Math.abs(selW.x2 - selW.x1), dy = Math.abs(selW.y2 - selW.y1)
+    onPickedWall(dx >= dy
+      ? { ...selW, x2: selW.x1 + (selW.x2 >= selW.x1 ? L : -L), y2: selW.y1 }
+      : { ...selW, x2: selW.x1, y2: selW.y1 + (selW.y2 >= selW.y1 ? L : -L) })
+  }
+  /** The wall this one grew off: the one with an end on its start. */
+  const parentWall = sel != null && selW
+    ? plan.walls.find((k, i) => i !== sel && (Math.hypot(k.x1 - selW.x1, k.y1 - selW.y1) < 1 || Math.hypot(k.x2 - selW.x1, k.y2 - selW.y1) < 1))
+    : undefined
+  /** STRAIGHT ON — no corner at the joint: in line with the wall it came off. */
+  const straightPicked = () => {
+    if (!selW || !parentWall) return
+    const L = wallLength(selW)
+    const far = Math.hypot(parentWall.x2 - selW.x1, parentWall.y2 - selW.y1) < 1
+      ? { x: parentWall.x1, y: parentWall.y1 } : { x: parentWall.x2, y: parentWall.y2 }
+    const dx = selW.x1 - far.x, dy = selW.y1 - far.y
+    const d = Math.hypot(dx, dy) || 1
+    onPickedWall({ ...selW, x2: selW.x1 + (dx / d) * L, y2: selW.y1 + (dy / d) * L })
+  }
+  const removePicked = () => {
+    if (sel == null) return
+    onCommit?.(plan)
+    onChange({ ...plan, walls: plan.walls.filter((_, i) => i !== sel) })
+    onSelectWall(null)
+  }
+  /** Arrow keys swing it a degree at a time, five with shift. */
+  const swingByKey = (e: KeyboardEvent) => {
+    if (!selW || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return
+    e.preventDefault()
+    const L = wallLength(selW)
+    const raw = (Math.atan2(selW.y2 - selW.y1, selW.x2 - selW.x1) * 180) / Math.PI
+    const deg = raw + (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 5 : 1)
+    const r = (deg * Math.PI) / 180
+    onPickedWall({ ...selW, x2: selW.x1 + Math.cos(r) * L, y2: selW.y1 + Math.sin(r) * L })
+  }
+  /** Where the widget sits: under the wall unless the plan runs out there. */
+  const widgetAt = selW ? (() => {
+    if (wallLength(selW) < 1) return null
+    const mx = X((selW.x1 + selW.x2) / 2), my = Y((selW.y1 + selW.y2) / 2)
+    const halfW = 146, halfH = 58, gap = 30
+    const below = my + halfH + gap < size.h
+    return {
+      x: Math.min(Math.max(mx, halfW), Math.max(halfW, size.w - halfW)),
+      y: below ? Math.min(my + halfH + gap, size.h - halfH) : Math.max(my - halfH - gap, halfH),
+      tail: below ? 'top' : 'bottom',
+    }
+  })() : null
 
   // The shape's walls: each one's length on it, and a + to pull a corner out.
   const shapeOn = outlineMode && !!shape && !pickedUp
@@ -592,8 +754,8 @@ export default function FootprintEditor({
     return Math.hypot(out.x - X(c.x), out.y - Y(c.y)) >= 44 ? out : at(-1)
   })() : null
 
-  if (drawing) chipFor(drawing, 'drawing', true)
-  else if (selectedWall != null && plan.walls[selectedWall]) chipFor(plan.walls[selectedWall], `wall:${selectedWall}`, false)
+  if (drawing) chipFor(drawing, 'drawing', true, true)
+  else if (selectedWall != null && plan.walls[selectedWall]) chipFor(plan.walls[selectedWall], `wall:${selectedWall}`, false, false)
 
   // ── Camera: two fingers, the wheel, a right drag. Heard in the CAPTURE phase,
   // ahead of the grips and the paper, so a camera gesture never reaches them.
@@ -616,6 +778,12 @@ export default function FootprintEditor({
       mousePan.current = { id: e.pointerId, ...local(e), start: view }
       return
     }
+    // THE SHEET LOCKS WHILE YOU DRAW. A second finger landing mid-stroke is a
+    // hand resting on the paper, not a camera: the wall being drawn finishes
+    // where that finger leaves it, and the camera gets the next gesture. It
+    // used to throw the wall away and pinch instead — the drawing lost to a
+    // gesture meant to steady the phone.
+    if (drag?.kind === 'draw') return
     pts.current.set(e.pointerId, local(e))
     if (pts.current.size < 2) return
     e.preventDefault(); e.stopPropagation()
@@ -656,7 +824,7 @@ export default function FootprintEditor({
 
   return (
     <div className={styles.stack}>
-    <div ref={wrapRef} className={`${styles.wrap} ${mode === 'walls' ? styles.wrapWalls : ''}`}
+    <div ref={wrapRef} className={`${styles.wrap} ${mode === 'walls' || wallsOnly ? styles.wrapWalls : ''}`}
       onPointerDownCapture={camDown} onPointerMoveCapture={camMove}
       onPointerUpCapture={camUp} onPointerCancelCapture={camUp}
       onContextMenu={(e) => e.preventDefault()}>
@@ -668,16 +836,26 @@ export default function FootprintEditor({
           {(['n', 'a', 'w'] as const).map((k) => (
             <marker key={k} id={`${ids}${k}`} markerWidth={10} markerHeight={10} refX={9} refY={5}
               orient="auto-start-reverse" markerUnits="userSpaceOnUse">
-              <path d="M0,1.5 L9,5 L0,8.5 Z" fill={k === 'a' ? '#3d9ae8' : k === 'w' ? '#e6f1fd' : '#aebccd'} />
+              <path d="M0,1.5 L9,5 L0,8.5 Z" fill={k === 'a' ? '#3d9ae8' : onPrint ? '#0f172a' : k === 'w' ? '#e6f1fd' : '#aebccd'} />
             </marker>
           ))}
         </defs>
 
+        {/* THE PRINT UNDER THE WALLS. The sheet is the print's own size at its
+            own scale, so a wall drawn along a line is that line's real length,
+            and pan/zoom reaches the corner that a whole-page fit cuts off. */}
+        {underlay && (
+          <image href={underlay.url} x={X(0)} y={Y(0)}
+            width={underlay.wMm * f.s} height={underlay.dMm * f.s}
+            preserveAspectRatio="none" opacity={1} pointerEvents="none" />
+        )}
+
         {/* The paper. In walls mode a drag on it draws; in outline mode a tap on
             it puts down whatever was picked up. */}
-        <rect width={size.w} height={size.h} fill={`url(#${ids}g)`}
-          className={styles.paper}
-          onPointerDown={pressPaper} onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+        <rect width={size.w} height={size.h} fill={`url(#${ids}g)`} opacity={underlay ? 0.2 : 1}
+          className={styles.paper}            onPointerDown={pressPaper}
+            onPointerMove={(e) => { move(e); if (armed && e.pointerType === 'mouse' && !dragFrom.current) setHover(snapWallPoint(plan, toMm(e), { ...snapOpts, from: armed })) }}
+            onPointerUp={end} onPointerCancel={end} />
         <rect x={X(0)} y={Y(0)} width={plan.page.w * f.s} height={plan.page.d * f.s}
           fill="none" stroke="#3a4a63" strokeWidth={1} strokeDasharray="6 4" pointerEvents="none" />
 
@@ -734,7 +912,7 @@ export default function FootprintEditor({
           return (
             <g key={`w${i}`}>
               <line x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
-                stroke={sel ? '#3d9ae8' : '#cbd5e1'} strokeWidth={sel ? wallPx + 2 : wallPx}
+                stroke={sel ? '#3d9ae8' : onPrint ? '#0f172a' : '#cbd5e1'} strokeWidth={sel ? wallPx + 2 : wallPx}
                 strokeLinecap="butt" opacity={outlineMode ? 0.55 : 1} pointerEvents="none" />
               {!outlineMode && (
                 <line x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
@@ -753,6 +931,14 @@ export default function FootprintEditor({
             </g>
           )
         })}
+        {/* THE CHAIN: where the next wall starts, and where it would go. */}
+        {armed && (
+          <circle cx={X(armed.x)} cy={Y(armed.y)} r={7} fill="none" stroke="#3d9ae8" strokeWidth={2.5} pointerEvents="none" />
+        )}
+        {armed && hover && !drawing && (
+          <line x1={X(armed.x)} y1={Y(armed.y)} x2={X(hover.x)} y2={Y(hover.y)}
+            stroke="#3d9ae8" strokeWidth={2} strokeDasharray="6 4" pointerEvents="none" />
+        )}
         {drawing && (
           <line x1={X(drawing.x1)} y1={Y(drawing.y1)} x2={X(drawing.x2)} y2={Y(drawing.y2)}
             stroke="#3d9ae8" strokeWidth={wallPx} strokeDasharray="8 4" pointerEvents="none" />
@@ -761,13 +947,13 @@ export default function FootprintEditor({
             dimension sits on a print, stretching with the finger. */}
         {drawing && wallLength(drawing) * f.s > 12 && (
           <line x1={X(drawing.x1)} y1={Y(drawing.y1)} x2={X(drawing.x2)} y2={Y(drawing.y2)}
-            stroke="#e6f1fd" strokeWidth={2} pointerEvents="none"
+            stroke={onPrint ? '#0f172a' : '#e6f1fd'} strokeWidth={2} pointerEvents="none"
             markerStart={`url(#${ids}w)`} markerEnd={`url(#${ids}w)`} />
         )}
 
         {dims.map((d) => {
           const on = active.has(d.key) || editing?.key === d.key
-          const stroke = on ? '#3d9ae8' : '#aebccd'
+          const stroke = on ? '#3d9ae8' : onPrint ? '#334155' : '#aebccd'
           const [x1, y1, x2, y2] = d.line
           const hasLength = Math.hypot(x2 - x1, y2 - y1) > 12
           return (
@@ -839,19 +1025,49 @@ export default function FootprintEditor({
         <button key={g.part} type="button"
           className={[styles.grip, g.part === 'body' ? styles.gripMove : '', g.on ? styles.gripOn : ''].filter(Boolean).join(' ')}
           style={{ left: g.x, top: g.y }}
-          aria-label={g.part === 'body' ? 'Drag to move the wall' : g.part === 'a' ? 'Drag this end of the wall' : 'Drag the other end of the wall'}
+          aria-label="Drag to move the wall"
           onPointerDown={(e) => begin(e, { kind: 'wall', index: g.index, part: g.part, start: plan })}
           onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
       ))}
+
+      {/* THE WALL WIDGET, on the plan by the wall it is about. A transient
+          thing the user opened by picking a wall: tapping the paper puts it
+          away, and it never covers the wall it names. */}
+      {sel != null && selW && widgetAt && (
+        <div className={styles.wallWidget} style={{ left: widgetAt.x, top: widgetAt.y }} data-tail={widgetAt.tail} role="group" aria-label="Wall">
+          <div className={styles.widgetRow}>
+            <button type="button" className={`${styles.wBtn} ${styles.wAngle}`}
+              aria-label={`Wall angle ${angleDeg} degrees off square. Drag to swing the wall.`}
+              onPointerDown={(e) => begin(e, { kind: 'angle', index: sel, start: plan })}
+              onPointerMove={move} onPointerUp={end} onPointerCancel={end}
+              onKeyDown={swingByKey}>
+              ⟳ {angleDeg}°
+            </button>
+            <button type="button" className={styles.wBtn} onClick={squarePicked}
+              title="Set it exactly level or plumb">⊾ Square</button>
+            <button type="button" className={styles.wBtn} onClick={straightPicked} disabled={!parentWall}
+              title={parentWall ? 'No corner here: in line with the wall it starts on' : 'It has to start on another wall to run straight on'}>
+              ⌐ Straight
+            </button>
+          </div>
+          <div className={styles.widgetRow}>
+            <button type="button" className={styles.wBtn} onClick={onUndo} disabled={!canUndo}>↶ Undo</button>
+            <button type="button" className={styles.wBtn} onClick={onRedo} disabled={!canRedo}>↷ Redo</button>
+            <button type="button" className={`${styles.wBtn} ${styles.wRemove}`} onClick={removePicked}>✕ Remove</button>
+          </div>
+        </div>
+      )}
 
       {[...dims.map((d) => ({
         key: d.key, x: (d.line[0] + d.line[2]) / 2, y: (d.line[1] + d.line[3]) / 2,
         valueMm: d.valueMm, vertical: d.vertical, live: false, on: active.has(d.key),
         what: d.field === 'w' ? 'Width' : d.field === 'd' ? 'Depth' : 'From the corner',
       })), ...wallChips.map((c) => ({
-        key: c.key, x: c.x, y: c.y, valueMm: wallLength(c.w), vertical: false, live: c.live, on: true, what: 'Wall',
-        // A diagonal reads its angle off square beside its length.
-        angle: wallAngleOffSquareDeg(c.w.x1, c.w.y1, c.w.x2, c.w.y2) % 90,
+        key: c.key, x: c.x, y: c.y, valueMm: wallLength(c.w), vertical: false, live: c.live, on: true, what: 'Wall', withAngle: c.withAngle,
+        // A diagonal reads its angle off square beside its length — while it is
+        // being drawn. A picked wall does not: it has the angle ring, and two
+        // readouts of the same number is exactly the clutter this replaces.
+        angle: ('withAngle' in c && c.withAngle) ? wallAngleOffSquareDeg(c.w.x1, c.w.y1, c.w.x2, c.w.y2) % 90 : 0,
       })), ...edges.filter((e) => e.show).map((e) => ({
         key: `edge:${e.i}`, x: e.cx, y: e.cy, valueMm: e.len, vertical: false,
         live: drag?.kind === 'corner', on: false, what: 'Wall',
@@ -899,12 +1115,20 @@ export default function FootprintEditor({
           page instead. Out here they are still one-handed, and the whole plan
           is drawing surface again. The button row is outside the pan/zoom
           surface, so it takes taps, not pinches. */}
-      <div className={styles.cam} role="group" aria-label="Zoom">
-        <button type="button" className={styles.camBtn} onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom out">−</button>
-        <button type="button" className={styles.camBtn} onClick={() => zoomBy(1.5)} aria-label="Zoom in">+</button>
-        {!home && (
-          <button type="button" className={`${styles.camBtn} ${styles.camFit}`} onClick={() => setView(HOME_VIEW)} aria-label="Fit the whole page">Fit</button>
-        )}
+      <div className={styles.cam}>
+        {/* UNDO AND REDO, on the same line as the camera: both act on the plan
+            below them, and neither belongs over the drawing. */}
+        <div className={styles.camGroup} role="group" aria-label="Undo and redo">
+          <button type="button" className={styles.camBtn} onClick={onUndo} disabled={!canUndo} aria-label="Undo">↶</button>
+          <button type="button" className={styles.camBtn} onClick={onRedo} disabled={!canRedo} aria-label="Redo">↷</button>
+        </div>
+        <div className={styles.camGroup} role="group" aria-label="Zoom">
+          <button type="button" className={styles.camBtn} onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom out">−</button>
+          <button type="button" className={styles.camBtn} onClick={() => zoomBy(1.5)} aria-label="Zoom in">+</button>
+          {!home && (
+            <button type="button" className={`${styles.camBtn} ${styles.camFit}`} onClick={() => setView(HOME_VIEW)} aria-label="Fit the whole page">Fit</button>
+          )}
+        </div>
       </div>
     </div>
   )

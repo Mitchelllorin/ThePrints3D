@@ -468,7 +468,9 @@ interface AppState {
 
   // Actions
   setView: (view: AppView) => void
-  addDrawings: (files: File[]) => string[]
+  /** Add sheets to the job. `manualWalls` is the answer given at import to "who
+   *  finds the walls?" — see Drawing.manualWalls and modelWalls. */
+  addDrawings: (files: File[], opts?: { manualWalls?: boolean }) => string[]
   /** Tag a drawing as belonging to a storey (0 = ground), so the overlay can
    *  show the right plan per floor and the AI knows which floors have a plan. */
   assignDrawingToLevel: (id: string, floorNumber: number) => void
@@ -477,12 +479,18 @@ interface AppState {
   clearWorkspace: () => void
   removeDrawing: (id: string) => void
   updateDrawing: (id: string, patch: Partial<Drawing>) => void
+  /** Walls drawn on a print, added to it in one undo step — see Draw it. */
+  addUserWalls: (id: string, walls: Drawing['parsedWalls']) => void
   setDrawingType: (id: string, type: DrawingType) => void
   setDrawingScale: (id: string, mmPerPx: number, notation: string) => void
   addUserTracedWall: (id: string, wall: ParsedWall) => void
   addUserTracedWalls: (id: string, walls: ParsedWall[]) => void
   /** Delete a single user-traced wall by its index within the drawing's user walls. */
   deleteUserWall: (id: string, userIndex: number) => void
+  /** Drop DETECTED walls, by their index in `parsedWalls`. Walls the user traced
+   *  are ignored even if an index points at one — the panel never offers them,
+   *  and this is the guard that makes that true whatever the caller does. */
+  removeDetectedWalls: (id: string, indices: number[]) => void
   /**
    * TAKE OWNERSHIP OF A WALL THE DETECTOR FOUND.
    *
@@ -1067,7 +1075,7 @@ export const useAppStore = create<AppState>()(
       pushHistory()
     },
 
-    addDrawings: (files) => {
+    addDrawings: (files, opts) => {
       pushHistory()
       const newIds: string[] = []
       set((s) => {
@@ -1078,6 +1086,7 @@ export const useAppStore = create<AppState>()(
             id,
             name: file.name,
             source: 'upload',
+            manualWalls: opts?.manualWalls ? true : undefined,
             type: inferDrawingType(file.name),
             file,
             pageCount: 1,
@@ -1189,6 +1198,27 @@ export const useAppStore = create<AppState>()(
 
         sizeOverlayToDrawing(s, id)
       }),
+
+    /**
+     * WALLS DRAWN ON A PRINT, added to the print.
+     *
+     * Draw it can use the sheet you already have open as its paper and trace
+     * walls on it one at a time. Those walls belong to that sheet — a second
+     * drawing for the same building would leave two of it in the job — and they
+     * go in as the user's own walls, so nothing has to be believed about them.
+     * One undo step for the lot.
+     */
+    addUserWalls: (id, walls) => {
+      if (walls.length === 0) return
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((x) => x.id === id)
+        if (!d) return
+        const detected = d.parsedWalls.filter((w) => w.source !== 'user')
+        const mine = d.parsedWalls.filter((w) => w.source === 'user')
+        d.parsedWalls = mergeAutoAndUserWalls(detected, [...mine, ...walls])
+      })
+    },
 
     setDrawingType: (id, type) =>
       set((s) => {
@@ -1367,6 +1397,28 @@ export const useAppStore = create<AppState>()(
         if (userIndex < 0 || userIndex >= userWalls.length) return
         userWalls.splice(userIndex, 1)
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
+      })
+    },
+
+    /**
+     * THROW AWAY WHAT THE DETECTOR SAID.
+     *
+     * The walls are replaced rather than mutated in place, so every consumer of
+     * `drawings` recomputes: the 3D walls, the envelope, the board and the cut
+     * list all read this list, and a mutation the store never announced would
+     * leave the model standing on walls that are no longer in the drawing.
+     */
+    removeDetectedWalls: (id, indices) => {
+      pushHistory()
+      set((s) => {
+        const i = s.drawings.findIndex((d) => d.id === id)
+        if (i < 0) return
+        const d = s.drawings[i]
+        const drop = new Set(indices)
+        const kept = d.parsedWalls.filter((w, at) =>
+          !(drop.has(at) && (w.source ?? 'auto') !== 'user'))
+        if (kept.length === d.parsedWalls.length) return
+        s.drawings = s.drawings.map((x, xi) => (xi === i ? { ...d, parsedWalls: kept } : x))
       })
     },
 
@@ -1897,7 +1949,11 @@ export const useAppStore = create<AppState>()(
       set((s) => {
         const drawing: Drawing = { id: genId(), source: 'preset', ...project.drawing }
         drawingPool.set(drawing.id, drawing)
-        s.drawings.push(drawing)
+        // A DRAWN PROJECT IS A NEW JOB, so its sheet is the only sheet on the
+        // table. Pushing it onto the pool left whatever was loaded before it
+        // there, and the shell is framed from the pool — so a box drawn on its
+        // own came up wearing last night's house, print and rooms included.
+        s.drawings = [drawing]
         s.selectedDrawingId = drawing.id
         s.floorplanOverlay = {
           ...deepCopy(DEFAULT_FLOORPLAN_OVERLAY),

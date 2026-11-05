@@ -13,8 +13,19 @@
   align-items: stretch;
   pointer-events: none;              /* gaps fall through to the workspace */
 }
-.rail,
+/* THE RAIL COLUMN: the scrolling list of tools, with CLEAR outside the scroll
+   port. Clear was the last child of the list, so the moment there were enough
+   tools to overflow — which there are, once a plan is loaded and Plan, Share,
+   Edit and Pro join in — it sat below the fold with the scrollbar hidden and no
+   sign that anything was down there. The destructive button cannot be the one
+   that quietly disappears; it is pinned to the foot of the column instead, and
+   only the list above it scrolls. */
+.railCol,
 .col { pointer-events: auto; }
+.railCol {
+  display: flex;
+  flex-direction: column;
+}
 
 /* A column is open: the rail is a SHEET now, not HUD. The top icons (Undo, zoom)
    sit on the HUD layer too, and two things on one layer painted over each other
@@ -26,6 +37,11 @@
 /* ── level 0: the icon rail — no panel ── */
 .rail {
   width: var(--rail-w, 44px);
+  /* Takes the height it can get above Clear, and scrolls the rest. min-height:0
+     is the part flexboxes get wrong: without it the list refuses to shrink
+     below its content and overflows its parent instead of its own scroll port. */
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -55,10 +71,11 @@
   transition: opacity 0.12s, color 0.12s;
 }
 .icon:hover { opacity: 1; }
-/* Pinned to the foot of the rail with real space above it. Clear used to sit
-   one 6px gap under PLACE, and a thumb aiming for PLACE would wipe the
-   workspace. Distance is the cheapest safety there is. */
-.railFoot { margin-top: auto; padding-top: 18px; }
+/* Pinned to the foot of the rail column with real space above it. Clear used to
+   sit one 6px gap under PLACE, and a thumb aiming for PLACE would wipe the
+   workspace. Distance is the cheapest safety there is. It is a sibling of the
+   scrolling list, not a child, so no amount of tools can push it off screen. */
+.railFoot { flex: 0 0 auto; margin-top: 12px; }
 .icon:active { transform: translateY(1px); }
 .active { color: var(--bp-accent, #38bdf8); opacity: 1; }
 /* The way to buy Pro: in the accent and at full strength, so it reads as the
@@ -128,6 +145,39 @@
 .row:hover { opacity: 1; }
 .rowActive { color: var(--bp-accent, #38bdf8); opacity: 1; }
 
+/* ── When the rail is taller than the screen: a second column ─────────────────
+   The rail carries every tool the model offers, and how many that is depends on
+   what is loaded: with a plan open, Plan, Share, Edit and Pro join the five menu
+   items, which is twelve at 48px plus gaps. On a 360 x 640 phone in portrait the
+   column has about 526px, so the tail of that list — EDIT and CLEAR — sat below
+   the fold with the scrollbar hidden and nothing to say so. Two reports in one
+   day: "the edit button disappears when you import a plan", "the clear button
+   disappears in portrait". Same bug, same cause.
+
+   Measured rather than guessed at a breakpoint (RailCascade adds this class the
+   moment the list needs more height than the column has), because the number of
+   tools changes with the job and a breakpoint picked for today's count would be
+   wrong tomorrow. On a wide-and-tall screen nothing changes; on a phone the rail
+   wraps into two 44px columns, at full tap size, and every tool stays on screen.
+   The scarce axis here is height and the spare one is width.
+
+   CLEAR keeps its place at the foot of the column, outside this list entirely
+   (see .railCol) — it stays the furthest point in the rail from PLACE, which is
+   the whole reason it was moved down there. */
+.railWrap {
+  /* Two 44px columns + the 4px gap between them + the 2px side padding either
+     side = 96px, stated outright. Left to width:auto the flex box settled
+     narrower than its own content and the cascade column — the next child of
+     the flex row — opened on top of the rail's right edge. */
+  width: 96px;
+  flex: 1 1 auto;               /* bounded by the column, so the wrap has a height
+                                   to work against — and Clear keeps its foot */
+  flex-wrap: wrap;
+  align-content: flex-start;
+  overflow-x: auto;
+  overflow-y: auto;             /* a last resort: more tools than two columns */
+}
+
 /* ── Landscape / short viewports ─────────────────────────────────────────────
    The 56px top and 58px bottom insets were measured in portrait, where they
    clear the logo and the old Place tab. Turn a phone sideways and they eat a
@@ -147,7 +197,7 @@
   }
   .rail { gap: 4px; }
   .icon { padding: 2px 0; }
-  .railFoot { padding-top: 10px; }
+  .railFoot { margin-top: 6px; }
 
   /* mobile.css holds every button to a 44px minimum below 768px wide, and it
      deliberately outranks a single module class. That is right in portrait, but
@@ -159,37 +209,13 @@
   .wrap .rail .icon { min-height: 36px; }
 }
 
-/* ── Very short landscape: a second column ───────────────────────────────────
-   An older phone turned sideways is about 320px tall, and even compacted the
-   eight items want ~326px of the 304px that leaves. One column cannot hold
-   them, so CLEAR scrolls out of sight again — but on a 568px-wide screen the
-   scarce axis is height and the spare one is width. Wrap into a second 44px
-   column rather than overflow: everything stays on screen, at full size, and
-   the rail still reads as a thin strip on the perimeter.
-   CLEAR keeps its margin-top:auto, which in a wrapping column drops it to the
-   FOOT of whichever column it lands in — so it stays the furthest point in the
-   rail from PLACE, which is the whole reason it was moved down there. If even
-   two columns are not enough the strip scrolls sideways instead of hiding a
-   button; overflow-y must be hidden or the wrap has no height to work against. */
-@media (max-height: 340px) {
-  .rail {
-    /* Two 44px columns + the 4px gap between them + the 2px side padding either
-       side = 96px, stated outright. Left to width:auto the flex box settled
-       narrower than its own content, and the cascade column — the next child of
-       the flex row — opened on top of the rail's right edge; at 92px the second
-       column overhung the content box by the width of the gap and CLEAR sat
-       half outside the scroll port. */
-    width: var(--rail-w, 44px);   /* :root widens the token here — see index.css */
-    flex: 0 0 auto;               /* never let the cascade column squeeze it */
-    flex-wrap: wrap;
-    align-content: flex-start;
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
-  /* Fixed width so the two columns line up; without it each column sizes to its
-     own longest label and the icons sit on a ragged edge. */
-  .wrap .rail .icon { width: 44px; }
-}
+/* The two-column case moved to .railWrap above, where it is measured instead of
+   pinned to a viewport height — a very short landscape and a 640px portrait
+   phone have the same problem and only one of them used to be handled. */
+
+/* Fixed width so the two columns line up; without it each column sizes to its
+   own longest label and the icons sit on a ragged edge. */
+.wrap .rail .icon { width: 44px; }
 
 .rowGlyph {
   flex: 0 0 auto;

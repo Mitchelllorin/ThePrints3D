@@ -37,6 +37,9 @@ export interface WallPlanInput {
   steelTrackTop: 'shallow' | 'deep' | 'slotted' | 'double'
   steelDeflectionGapMm: number
   studSpacingIn: number
+  /** Trace it yourself: leave detected walls out of the plan, so the cut list
+   *  counts exactly what the model stands up. See modelWalls. */
+  tracedOnly?: boolean
 }
 
 export interface WallOpeningAt {
@@ -123,7 +126,7 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
   const imageWidth = drawing?.rasterWidth ?? 1400
   const imageHeight = drawing?.rasterHeight ?? 900
   const toWorld = overlayPixelToWorld(overlay, imageWidth, imageHeight)
-  const userWalls = modelWalls([...drawings])
+  const userWalls = modelWalls([...drawings], { tracedOnly: input.tracedOnly })
   if (userWalls.length === 0) return []
   const walls = userWalls.map((u) => u.wall)
 

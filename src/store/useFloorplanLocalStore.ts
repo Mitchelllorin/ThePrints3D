@@ -248,6 +248,12 @@ interface FloorplanLocalState {
    *  Session-scoped on purpose: a new session walks the same route. */
   cutListSeen: boolean
   markCutListSeen: () => void
+  /** Sheets picked and waiting on the one question asked before anything runs:
+   *  find the walls, or leave the print to trace. Held here rather than in the
+   *  layout because every way in — the file picker, a drop on the canvas, the
+   *  camera — has to be able to ask it, and only one surface should answer. */
+  pendingImport: File[] | null
+  setPendingImport: (files: File[] | null) => void
   /** The step chain has offered the inside walls once and been taken up on it.
    *  Session-scoped like cutListSeen; a shed with no partitions is not nagged. */
   insideWallsSeen: boolean
@@ -489,6 +495,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setRailPanelOpen: (open) => set({ railPanelOpen: open }),
   cutListSeen: false,
   markCutListSeen: () => set({ cutListSeen: true }),
+  pendingImport: null,
+  setPendingImport: (files) => set({ pendingImport: files }),
   insideWallsSeen: false,
   markInsideWallsSeen: () => set({ insideWallsSeen: true }),
   upgradeReason: null,

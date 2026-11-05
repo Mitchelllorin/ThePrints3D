@@ -612,7 +612,6 @@ export default function ModelViewer() {
   )
   const model      = useAppStore((s) => s.model)
   const drawings   = useAppStore((s) => s.drawings)
-  const addDrawings = useAppStore((s) => s.addDrawings)
   const layers     = useAppStore((s) => s.layers)
   const measureMode    = useAppStore((s) => s.measureMode)
   const setMeasureMode = useAppStore((s) => s.setMeasureMode)
@@ -761,7 +760,9 @@ export default function ModelViewer() {
     const files = Array.from(e.dataTransfer.files).filter((f) =>
       /\.(pdf|png|jpe?g|tiff?|webp)$/i.test(f.name)
     )
-    if (files.length > 0) addDrawings(files)
+    // A dropped sheet asks the same question a picked one does: who finds the
+    // walls? Nothing runs until it is answered (see WorkspaceLayout).
+    if (files.length > 0) useFloorplanLocalStore.getState().setPendingImport(files)
   }
 
   function handlePlaceRequest(position: [number, number, number], screenX: number, screenY: number) {

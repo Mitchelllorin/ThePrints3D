@@ -76,6 +76,14 @@ export interface DrawnProjectSpec {
    * boxes only say how big the first one was.
    */
   outline?: Point[]
+  /**
+   * WALLS DRAWN ONE AT A TIME, in page millimetres, when the job is not a box:
+   * a carport is three walls, a fence line is one, an addition is whatever the
+   * print says. These ARE the building — nothing closes a loop round them and
+   * no wall is invented to finish a rectangle. The boxes are then only a page
+   * size; see createFreeWallsProject.
+   */
+  freeWalls?: Array<{ x1: number; y1: number; x2: number; y2: number }>
 }
 
 export interface DrawnProject {
@@ -267,6 +275,9 @@ export function specBoxes(spec: DrawnProjectSpec): FootprintBox[] {
 const ftOf = (mm: number): string => `${Math.round((mm / MM_PER_FT) * 10) / 10}ft`
 
 export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
+  // Walls drawn one at a time are the building on their own. Everything below
+  // this line assumes a closed footprint, which is the thing they do not have.
+  if (spec.freeWalls?.length) return createFreeWallsProject(spec, spec.freeWalls)
   const tMm = shellThicknessMm(spec.wallTypeKey)
   const px = (mm: number) => mm / DRAWN_MM_PER_PX
 
@@ -380,6 +391,147 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
       completedAt: Date.now(),
     } as WorkspaceWizardInputs,
   }
+}
+
+/**
+ * A BUILDING THAT IS ONLY WALLS.
+ *
+ * A footprint box cannot say "three walls" without inventing a fourth, so a
+ * carport, a fence line, a partition run under an existing roof or the two
+ * walls of an addition had no way in. Here the walls you drew are the building:
+ * they are the user's own walls — nothing detected them, so nothing has to be
+ * believed — they build the moment they land, and nothing is closed off around
+ * them.
+ *
+ * There is no floor area, because a floor is a closed shape and this is not one.
+ * Lay the floor after, on the model; that step is optional everywhere anyway.
+ */
+function createFreeWallsProject(
+  spec: DrawnProjectSpec,
+  free: NonNullable<DrawnProjectSpec['freeWalls']>,
+): DrawnProject {
+  const px = (mm: number) => mm / DRAWN_MM_PER_PX
+  const tPx = px(shellThicknessMm(spec.wallTypeKey))
+  const box = free.reduce(
+    (a, w) => ({
+      x1: Math.min(a.x1, w.x1, w.x2), y1: Math.min(a.y1, w.y1, w.y2),
+      x2: Math.max(a.x2, w.x1, w.x2), y2: Math.max(a.y2, w.y1, w.y2),
+    }),
+    { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity },
+  )
+  // On a page given to us, the walls are already in page millimetres; on a page
+  // of their own, they get a plain margin round them.
+  // THE PAGE HAS TO HOLD EVERY WALL ON IT. A sheet can carry more than one
+  // structure — a house and the garage beside it, a deck off the back — and the
+  // bounding box of all of them is what the page has to cover. A page taken
+  // from the print (or the blank sheet) is a starting size, not a limit: if the
+  // walls run past its edge the page grows to them, because the print the
+  // workspace puts under the model is this page and a structure missing from it
+  // is a structure the user cannot see or place against.
+  const offX = spec.page ? Math.max(0, MARGIN_MM - box.x1) : MARGIN_MM - box.x1
+  const offY = spec.page ? Math.max(0, MARGIN_MM - box.y1) : MARGIN_MM - box.y1
+  const wMm = Math.max(spec.page?.wMm ?? 0, box.x2 + offX + MARGIN_MM)
+  const dMm = Math.max(spec.page?.dMm ?? 0, box.y2 + offY + MARGIN_MM)
+  const wPx = Math.max(1, Math.round(px(wMm)))
+  const hPx = Math.max(1, Math.round(px(dMm)))
+
+  const lines = free.map((w) => ({
+    x1: px(w.x1 + offX), y1: px(w.y1 + offY), x2: px(w.x2 + offX), y2: px(w.y2 + offY),
+  }))
+  const walls: ParsedWall[] = lines.map((w) => ({
+    ...w,
+    thickness: tPx,
+    source: 'user',
+    framingType: spec.wallTypeKey,
+    wallRole: 'exterior-bearing',
+    level: 0,
+  } as ParsedWall))
+
+  const sizeMm = { w: box.x2 - box.x1, d: box.y2 - box.y1 }
+  const svg = sheetWallsSvg(spec, wPx, hPx, lines, tPx, sizeMm)
+  let file: File
+  try {
+    file = new File([svg], 'drawn-project.svg', { type: 'image/svg+xml' })
+  } catch {
+    const blob = new Blob([svg], { type: 'image/svg+xml' })
+    file = Object.assign(blob, { name: 'drawn-project.svg', lastModified: Date.now() }) as unknown as File
+  }
+  const url = typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : ''
+  // The extent of the walls, as a rectangle, for anything that wants an outline
+  // it can draw. It is not the building's shape — there is no shape — so it is
+  // only ever used as a bounding box.
+  const outlinePx = [
+    { x: px(box.x1 + offX), y: px(box.y1 + offY) },
+    { x: px(box.x2 + offX), y: px(box.y1 + offY) },
+    { x: px(box.x2 + offX), y: px(box.y2 + offY) },
+    { x: px(box.x1 + offX), y: px(box.y2 + offY) },
+  ]
+
+  return {
+    drawing: {
+      name: spec.name ?? 'New project',
+      file,
+      pageCount: 1,
+      currentPage: 1,
+      previewUrl: url,
+      rasterUrl: url,
+      rasterWidth: wPx,
+      rasterHeight: hPx,
+      parsedWalls: walls,
+      parsedRooms: [],
+      parsedOpenings: [],
+      parsedText: [],
+      parsedSymbols: [],
+      parsedAnnotationCandidates: [],
+      parseProgress: 100,
+      floorNumber: 0,
+      status: 'ready',
+      scaleMmPerPx: DRAWN_MM_PER_PX,
+      scaleNotation: '1:100',
+      scaleConfidence: 'parsed',
+      uploadedAt: Date.now(),
+      type: 'floor-plan',
+      source: 'drawn',
+    },
+    overlayScale: [(wPx * DRAWN_MM_PER_PX) / 1000, (hPx * DRAWN_MM_PER_PX) / 1000],
+    // No floor: a floor is a closed shape and these walls do not make one.
+    floorAreas: [],
+    outlinePx,
+    wizardInputs: {
+      set1BuildingBasics: `${free.length} wall${free.length === 1 ? '' : 's'} drawn one at a time, ${ftIn(sizeMm.w)} x ${ftIn(sizeMm.d)}, 8ft ceiling, 1 floor, floor not chosen`,
+      set1Clarifications: 'Walls drawn to typed or printed sizes rather than closed from a footprint box.',
+      set2StructuralDetails: `Exterior ${getWallType(spec.wallTypeKey)?.short ?? 'wood'} bearing walls, no closed footprint.`,
+      set2Clarifications: 'Interior partitions to be added.',
+      set3FinishingDetails: 'Finishes not chosen yet.',
+      set3Clarifications: '',
+      completedGroup: 'group3',
+      completedAt: Date.now(),
+    } as WorkspaceWizardInputs,
+  }
+}
+
+/** The wall-only sheet: squared paper with the walls on it, and nothing else. */
+function sheetWallsSvg(
+  spec: DrawnProjectSpec, wPx: number, hPx: number,
+  lines: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number }>,
+  tPx: number, sizeMm: { w: number; d: number },
+): string {
+  const grid = MM_PER_FT / DRAWN_MM_PER_PX
+  const paths = lines
+    .map((w) => `<line x1="${w.x1.toFixed(2)}" y1="${w.y1.toFixed(2)}" x2="${w.x2.toFixed(2)}" y2="${w.y2.toFixed(2)}" stroke="#0f172a" stroke-width="${tPx.toFixed(2)}" stroke-linecap="square"/>`)
+    .join('')
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${wPx}" height="${hPx}" viewBox="0 0 ${wPx} ${hPx}">
+    <defs>
+      <pattern id="ft" width="${grid}" height="${grid}" patternUnits="userSpaceOnUse">
+        <path d="M ${grid} 0 L 0 0 0 ${grid}" fill="none" stroke="#dbe3ec" stroke-width="0.6"/>
+      </pattern>
+    </defs>
+    <rect width="${wPx}" height="${hPx}" fill="#f8fafc"/>
+    <rect width="${wPx}" height="${hPx}" fill="url(#ft)"/>
+    ${paths}
+    <text x="14" y="${hPx - 14}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155">${spec.name ?? 'New project'}</text>
+    <text x="${wPx - 14}" y="${hPx - 14}" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="12" fill="#64748b">Drawn to size · ${ftIn(sizeMm.w)} × ${ftIn(sizeMm.d)}</text>
+  </svg>`
 }
 
 /**

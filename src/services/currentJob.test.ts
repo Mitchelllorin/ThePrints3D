@@ -27,7 +27,7 @@ vi.mock('./projectStorage', async (importActual) => {
 })
 
 import { useAppStore } from '../store/useAppStore'
-import { currentJobId, flushJob, newJob, openJob, readSaveState, removeJob, renameJob } from './currentJob'
+import { beginSession, currentJobId, flushJob, newJob, openJob, readSaveState, removeJob, renameJob } from './currentJob'
 import { saveProject } from './projectStorage'
 import type { Drawing, PlacedObject, TracedLine } from '../types'
 
@@ -99,6 +99,37 @@ describe('the open job', () => {
     expect(s().placedObjects.map((o) => o.id)).toEqual(['obj-1'])
     expect(s().roofAreas.map((r) => r.id)).toEqual(['roof-1'])
     expect(s().historyPast).toHaveLength(0)
+  })
+
+  /**
+   * A COLD START IS A CLEAN SHEET.
+   *
+   * It used to reopen the last job before the front door was even tapped, so a
+   * framer measuring a different house opened onto yesterday's plan — and the
+   * first edit wrote back over it. Starting a session must drop the POINTER and
+   * nothing else: the record, with everything on it, is still in the library.
+   */
+  it('starts a session clean without touching the job left behind', async () => {
+    putAJobOn()
+    await flushJob()
+    const lastNight = currentJobId()!
+
+    beginSession()
+    expect(currentJobId()).toBeNull()
+    s().clearWorkspace()                       // a reload opens an empty store
+    expect((db.get(lastNight) as { drawings: unknown[] }).drawings).toHaveLength(1)
+
+    putAJobOn()                                // today's work, a different house
+    await flushJob()
+    expect(currentJobId()).not.toBe(lastNight)
+    expect((db.get(lastNight) as { drawings: unknown[] }).drawings).toHaveLength(1)
+    expect(db.size).toBe(2)
+  })
+
+  it('names a new job after the sheet it was started from', async () => {
+    putAJobOn()
+    await flushJob()
+    expect((db.get(currentJobId()!) as { name: string }).name).toBe('plan')
   })
 
   it('keeps writing to the same job, not a new one each save', async () => {

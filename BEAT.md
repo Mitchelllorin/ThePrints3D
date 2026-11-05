@@ -214,3 +214,20 @@ when a sheet opens, and every one of the bug-drive items.
   only a tint. Opening-position labels use the card's lighter dim ink.
   Check at step 19: the card is taller now, so confirm it scrolls rather than
   running under the explode bar, and that stair chips wrap cleanly at 360px.
+
+### 2026-11-03 — note 2 resolved in code. Step 29 is walkable. Not seen on a device.
+
+- **Note 2 is stale, not a rule conflict.** It was written against a build that
+  only had `NameplateStrip`. The tiered plates exist now, and they are the ones
+  the rule describes: `FloatingNameplates` draws them, `nameplateLayout` places
+  them. Rank is selected → warning → nearer the camera → entry order. The loser
+  drops a tier, then gets pushed out with a leader line, and full plates are
+  capped at `MAX_FULL = 3`. Too-small parts collapse to a dot, and dots that
+  would collide merge into one cluster marker with a count that opens to a list.
+- **The dial:** Settings → Model labels → **Nameplates**, Off / Name / Name +
+  size / Full, stored as `nameplateTier`, default Off. A selected part overrides
+  it to full regardless, so the global setting is the floor and selection is the
+  override — as written. Nothing to decide; walk it at step 29.
+- **Step 31 counts nine, not eight.** `src/data/family.json` now includes
+  **TheAtom3D** (listed, not live), so the Settings drawer's family list is nine
+  entries. The site's family band carries the same nine in the same order.

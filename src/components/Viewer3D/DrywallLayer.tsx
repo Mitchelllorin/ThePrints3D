@@ -93,6 +93,9 @@ export default function DrywallLayer() {
   const roughIn = useRoughIn()
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const boardKind = useUISettingsStore((s) => s.boardKind)
+  // Trace it yourself: detected walls stay off the model, so there is nothing
+  // here to board on a plan the user is tracing by hand.
+  const traceOwnWalls = useUISettingsStore((s) => s.traceOwnWalls)
   const boardType = useMemo(() => boardSpec(boardKind), [boardKind])
 
   const groupRef = useRef<THREE.Group>(null)
@@ -117,7 +120,10 @@ export default function DrywallLayer() {
 
   // Detected walls get boarded too — see modelWalls. A wall the app found but
   // never boarded is a wall you can see through, which reads as a hole.
-  const userWalls = useMemo(() => modelWalls(drawings), [drawings])
+  const userWalls = useMemo(
+    () => modelWalls(drawings, { tracedOnly: traceOwnWalls }),
+    [drawings, traceOwnWalls],
+  )
 
   // Assign placed doors/windows to their nearest wall (pixel space) so the board
   // is cut around them — same logic the framing uses.
