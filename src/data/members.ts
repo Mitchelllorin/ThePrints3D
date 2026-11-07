@@ -109,12 +109,26 @@ export const MEMBERS: readonly MemberSpec[] = [
   eng('lvl', 'LVL', '2.0E', 1.75, '1-3/4', 16, '16', ['header', 'beam']),
   eng('lvl', 'LVL', '2.0E', 1.75, '1-3/4', 18, '18', ['beam']),
 
+  /**
+   * A MANUFACTURER'S LINE, IN THE CATALOGUE.
+   *
+   * West Fraser's 3000Fb 1.9E LVL, from their own LVL User's Guide (United
+   * States edition, 25.1097 — 2026-07-22). 11-1/2" is one of the depths their
+   * 1-3/4" 1.9E table lists, and it is deliberately not one the generic LVL rows
+   * already carry: a maker's row that duplicated a generic size would shadow it
+   * in the lookup and put two different beams behind one id.
+   */
+  eng('lvl', 'West Fraser LVL', '3000Fb 1.9E', 1.75, '1-3/4', 11.5, '11-1/2', ['header', 'beam']),
+
   // ── LSL — tall-wall studs, headers, rim ──
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 3.5, '3-1/2', ['stud', 'plate']),
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 5.5, '5-1/2', ['stud', 'plate', 'header']),
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 7.25, '7-1/4', ['header', 'rim']),
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 9.25, '9-1/4', ['header', 'rim']),
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 11.875, '11-7/8', ['header', 'rim', 'beam']),
+
+  /** Another maker's line: LP SolidStart LSL at the 1.35E grade, 1-3/4 × 9-1/2. */
+  eng('lsl', 'LP SolidStart LSL', '1.35E', 1.75, '1-3/4', 9.5, '9-1/2', ['header', 'rim']),
 
   // ── PSL — posts, columns, heavy beams ──
   eng('psl', 'PSL', '2.2E', 3.5, '3-1/2', 3.5, '3-1/2', ['post']),
@@ -123,7 +137,34 @@ export const MEMBERS: readonly MemberSpec[] = [
   eng('psl', 'PSL', '2.2E', 5.25, '5-1/4', 11.875, '11-7/8', ['beam']),
   eng('psl', 'PSL', '2.2E', 5.25, '5-1/4', 14, '14', ['beam']),
 
+  /**
+   * Parallam PSL, from Weyerhaeuser's 2.2E deep-beam specifier's guide (TJ-7001,
+   * April 2026), which lists 3-1/2" and 5-1/4" widths against 20", 22" and 24"
+   * depths. 3-1/2 × 20 is one of those published pairs.
+   */
+  eng('psl', 'Parallam PSL', '2.2E', 3.5, '3-1/2', 20, '20', ['beam']),
+
   // ── Glulam — exposed and long-span beams ──
+  /**
+   * A MANUFACTURER'S LINE, IN THE CATALOGUE.
+   *
+   * Nordic Structures' Nordic Lam, modelled from their own published product
+   * report rather than from a generic glulam assumption: the 24F-E/ES1M1 layup
+   * is mechanically graded SPF, and its published width ceiling is 7-1/2" — not
+   * the 8-3/4" a Douglas-fir table would lead you to. 6-3/4 × 18 sits inside
+   * that layup's range with the depth-to-width ratio well under the 12:1 cap.
+   *
+   * It is a preview row: it exists so their part can be put in front of them
+   * and taken out again, and the generic glulam rows below are what the app
+   * frames with otherwise. See data/manufacturerParts.ts for the specs and the
+   * source each figure came from.
+   *
+   * The width is the one soft spot: 6-3/4" sits inside the layup's 7-1/2" limit
+   * in Table 1 of PR-L294(C), but Nordic publishes four beam widths — 1-3/4,
+   * 3-1/2, 5-1/2 and 7 — so this size is at best built to order. Worth asking
+   * them before it goes in front of them.
+   */
+  eng('glulam', 'Nordic Lam', '24F-E/ES1M1', 6.75, '6-3/4', 18, '18', ['beam', 'header']),
   eng('glulam', 'Glulam', '24F-V4', 3.125, '3-1/8', 9, '9', ['beam', 'header']),
   eng('glulam', 'Glulam', '24F-V4', 3.125, '3-1/8', 12, '12', ['beam', 'header']),
   eng('glulam', 'Glulam', '24F-V4', 5.125, '5-1/8', 12, '12', ['beam']),
