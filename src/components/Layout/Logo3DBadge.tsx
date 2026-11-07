@@ -15,6 +15,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { Text3D, useFont } from '@react-three/drei'
 import * as THREE from 'three'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
+import { DIGIT_ADVANCE, flatTopDigitGeometries, type FlatTopDigit } from '../../brand/flatTop'
 
 const FONT_URL = '/fonts/helvetiker_bold.typeface.json'
 const BASE_SIZE = 0.62
@@ -41,9 +42,13 @@ const PARKED_YAW = 0.42   // ~24 degrees
 const PARKED_PITCH = 0.13 // ~7.5 degrees, nose down so the top bevel shows
 
 const WORDS = [
-  { text: 'The',    color: '#2f80ff', metalness: 0.25, shear: 0 },
-  { text: 'PRINTS', color: '#ffa033', metalness: 0.25, shear: PRINTS_SHEAR },
-  { text: '3D',     color: '#2fe070', metalness: 0.35, shear: 0 },
+  { text: 'The',    color: '#2f80ff', metalness: 0.25, shear: 0, drawn: null },
+  { text: 'PRINTS', color: '#ffa033', metalness: 0.25, shear: PRINTS_SHEAR, drawn: null },
+  // The 3 is DRAWN, not typed: a flat top bar with a diagonal off its right end,
+  // never the round upper bowl the typeface has. The D stays typed — the rule is
+  // about the numerals. The drawn digit takes the 3's advance slot and the D is
+  // pushed past it, so the word still measures exactly as '3D' did.
+  { text: 'D',      color: '#2fe070', metalness: 0.35, shear: 0, drawn: '3' as const },
 ] as const
 
 useFont.preload(FONT_URL)
@@ -74,6 +79,33 @@ function ShearedWord({ shear, children }: { shear: number; children: ReactNode }
   return <group ref={ref}>{children}</group>
 }
 
+/**
+ * A numeral built from the drawn brand geometry rather than the typeface, in
+ * place of Text3D. Same material, same bevel, same baseline — see
+ * src/brand/flatTop.ts for why the digits are not typed.
+ */
+function DrawnDigit({
+  digit, size, depth, color, metalness, opacity,
+}: {
+  digit: FlatTopDigit
+  size: number
+  depth: number
+  color: string
+  metalness: number
+  opacity: number
+}) {
+  const parts = useMemo(() => flatTopDigitGeometries(digit, { size, depth }), [digit, size, depth])
+  return (
+    <>
+      {parts.map((geometry, i) => (
+        <mesh key={i} geometry={geometry}>
+          <meshStandardMaterial color={color} roughness={0.28} metalness={metalness} transparent opacity={opacity} />
+        </mesh>
+      ))}
+    </>
+  )
+}
+
 function Wordmark({ opacity }: { opacity: number }) {
   const font = useFont(FONT_URL)
   const rockRef = useRef<THREE.Group>(null)
@@ -84,7 +116,7 @@ function Wordmark({ opacity }: { opacity: number }) {
 
   const offsets = useMemo(() => {
     const data = font.data as unknown as TypefaceData
-    const widths = WORDS.map((w) => measureWord(data, w.text, BASE_SIZE))
+    const widths = WORDS.map((w) => measureWord(data, (w.drawn ?? '') + w.text, BASE_SIZE))
     const total = widths.reduce((a, b) => a + b, 0)
     const gap = BASE_SIZE * 0.12
     const starts: number[] = []
@@ -123,9 +155,25 @@ function Wordmark({ opacity }: { opacity: number }) {
       rotation={animated ? [0, 0, 0] : [PARKED_PITCH, PARKED_YAW, 0]}
     >
       {WORDS.map((word, i) => (
-        <group key={word.text} position={[offsets[i], 0, 0]}>
+        <group key={i} position={[offsets[i], 0, 0]}>
           <ShearedWord shear={word.shear}>
-            <Text3D font={FONT_URL} size={BASE_SIZE} height={EXTRUDE} {...bevel}>
+            {word.drawn && (
+              <DrawnDigit
+                digit={word.drawn}
+                size={BASE_SIZE}
+                depth={EXTRUDE}
+                color={word.color}
+                metalness={word.metalness}
+                opacity={opacity}
+              />
+            )}
+            <Text3D
+              font={FONT_URL}
+              size={BASE_SIZE}
+              height={EXTRUDE}
+              {...bevel}
+              position={[word.drawn ? (DIGIT_ADVANCE * BASE_SIZE) / 1000 : 0, 0, 0]}
+            >
               {word.text}
               <meshStandardMaterial color={word.color} roughness={0.28} metalness={word.metalness} transparent opacity={opacity} />
             </Text3D>
