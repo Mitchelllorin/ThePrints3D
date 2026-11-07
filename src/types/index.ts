@@ -72,6 +72,15 @@ export interface ParsedWall {
   /** Structural role chosen in the wall-type picker, e.g. 'exterior-bearing' */
   wallRole?: string
   /**
+   * A facet of a CURVED WALL rather than a straight run. The next facet carries
+   * on round the arc instead of arriving at right angles, so it frames as a
+   * bend: full length break to break, no corner post, no plate lap.
+   */
+  bend?: boolean
+  /** The stud at this facet's START break is the one the facet before it stood
+   *  up, so this end adds none — a break gets one stud, not one each side. */
+  sharedStartStud?: boolean
+  /**
    * Built-up stud packs under point loads — a 3-pack or a 5-pack where a beam
    * or girder bears on the wall. Position is a fraction along the traced line
    * (0 = start, 1 = end), so it stays put on the plan if the scale is corrected.

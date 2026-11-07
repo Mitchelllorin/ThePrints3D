@@ -263,8 +263,35 @@ describe('circles on the sheet', () => {
   it('adds its string to the plan walls, and follows a typed diameter', () => {
     const p = addCircle({ ...plan(), walls: [] }, { cx: 5000, cy: 5000, r: 1500 })
     const before = planWalls(p).length
-    expect(before).toBe(23)                 // 2π × 1500 / 406.4, rounded
+    expect(before).toBe(25)                 // the bay is r/4 = 375 mm, so 25 chords
     expect(planWalls(withCircleDiameter(p, 0, 4000)).length).toBe(31)
+  })
+
+  it('frames each break once: one stud at a joint, not one from each side', () => {
+    const s = circleString({ cx: 0, cy: 0, r: 1828.8 })
+    // Every chord is a bend, so none of them frames a corner post or a lap.
+    expect(s.walls.every((w) => w.bend === true)).toBe(true)
+    // The first chord stands the stud at its own start; every other chord's
+    // start break is the previous chord's end break, which already has one.
+    expect(s.walls[0].sharedStartStud).toBe(false)
+    expect(s.walls.slice(1).every((w) => w.sharedStartStud === true)).toBe(true)
+    expect(s.walls.filter((w) => !w.sharedStartStud)).toHaveLength(1)
+  })
+
+  it('lays the bays out by the radius, tight on a tight bend and never past a stud space', () => {
+    // A quarter of the radius is the bay — 3" of spacing per foot of radius, the
+    // trade rule for a bent plate — held between 8" and 16".
+    const tight = circleString({ cx: 0, cy: 0, r: 609.6 })
+    expect(tight.chordMm).toBeLessThanOrEqual(203.2)   // 8", the floor
+    expect(tight.chordMm).toBeGreaterThan(195)         // the chord, not the target
+    // 6 ft radius: the bay is held to a stud space, and rounding the count to a
+    // whole number leaves the chord a hair long — 16-1/8", not exactly 16".
+    const mid = circleString({ cx: 0, cy: 0, r: 1828.8 })
+    expect(mid.chordMm).toBeGreaterThan(400)
+    expect(mid.chordMm).toBeLessThan(420)
+    // A bigger ring does not space its bays wider than a stud space: the skin
+    // still has to land on something, so past a 5'-4" radius the count grows.
+    expect(circleString({ cx: 0, cy: 0, r: 4000 }).chordMm).toBeLessThanOrEqual(406.4)
   })
 
   it('comes off one at a time', () => {

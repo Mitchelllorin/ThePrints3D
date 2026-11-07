@@ -22,7 +22,22 @@ import { placeBoxes, footprintOutline, type FootprintBox, type Point, type Rect 
 import { cornerShift, normalizeBoxes, snapTo, type Grip } from './footprintEdit'
 import { freeAnglePoint } from './wallTraceReducer'
 
-export interface InsideWall { x1: number; y1: number; x2: number; y2: number }
+export interface InsideWall {
+  x1: number; y1: number; x2: number; y2: number
+  /**
+   * A FACET OF A CURVED WALL, not a corner. The next chord carries on round the
+   * arc rather than arriving at right angles, so there is nothing for this wall
+   * to butt into: it is framed at its own length, break to break, with no corner
+   * post, no plate lap and no corner extension.
+   */
+  bend?: boolean
+  /**
+   * The stud at this wall's START break is the one the chord before it stood up.
+   * Set on every chord but the first of a ring, so a break carries ONE stud
+   * instead of one from each side of it.
+   */
+  sharedStartStud?: boolean
+}
 
 /**
  * A CIRCLE ON THE SHEET — a round post, a footing, a fire pit, a turning
@@ -121,7 +136,19 @@ export function withCircleDiameter(plan: DrawItPlan, i: number, mm: number): Dra
  * in bays, and a stud at every break. So the circle on the sheet is the line the
  * string is set out to, and the walls are the chords.
  */
-export const STUD_BAY_MM = 406.4   // 16" on centre — the framing's own spacing
+/** 16" on centre — the framing's own spacing, and the longest a curved bay goes. */
+export const STUD_BAY_MM = 406.4
+/** 8" on centre — the tightest a bay is laid out, so a small ring is not slivers. */
+const MIN_CHORD_MM = 203.2
+/**
+ * THE BAY ON A CURVE IS A QUARTER OF THE RADIUS.
+ *
+ * That is the framing rule for a curved plate read as a number: 3" of spacing
+ * per foot of radius, so a 4 ft radius frames at 12", an 8 ft at 24". It is
+ * also why a ring always comes out around 25 straight walls however big it is —
+ * a quarter of the radius as the chord is a little over 14° at every break.
+ */
+const CHORD_PER_RADIUS = 0.25
 /** Fewer than this and it is a stubby polygon, not a ring. */
 const MIN_CHORDS = 8
 /** Past this nobody is framing it, and the plan stops reading. */
@@ -137,14 +164,22 @@ export interface CircleString {
 
 /**
  * The ring as walls: `n` chords, `n` as close to a bay each as a whole number
- * can get. Consecutive chords share an end to the last bit — the same angle is
- * worked out for both — so each break is one joint, not two ends a hair apart.
+ * can get. Consecutive chords share an end to the last bit — the same point is
+ * worked out once and walked twice — so each break is one joint, not two ends a
+ * hair apart, and the ring closes on itself exactly.
+ *
+ * The bay is a quarter of the radius, held between 8" and 16": a tighter curve
+ * gets closer studs because the plate has to bend round it, and a bay is held
+ * to a stud space because the skin still has to land on something. The chord
+ * comes out a millimetre or two either side of the target — the count is a
+ * whole number of walls, so the ring is shared out between them.
  */
-export function circleString(c: DrawItCircle, bayMm = STUD_BAY_MM): CircleString {
+export function circleString(c: DrawItCircle): CircleString {
   const r = Math.abs(c.r)
   if (r < 1) return { walls: [], chords: 0, chordMm: 0 }
+  const bay = Math.min(STUD_BAY_MM, Math.max(MIN_CHORD_MM, r * CHORD_PER_RADIUS))
   const n = Math.max(MIN_CHORDS, Math.min(MAX_CHORDS,
-    Math.round((2 * Math.PI * r) / Math.max(1, bayMm))))
+    Math.round((2 * Math.PI * r) / bay)))
   // One point per break, worked out once and walked twice, so a chord's start is
   // the same number as its neighbour's end — and the ring closes on itself
   // exactly instead of leaving the last break a rounding-error apart.
@@ -154,7 +189,13 @@ export function circleString(c: DrawItCircle, bayMm = STUD_BAY_MM): CircleString
   })
   const walls: InsideWall[] = pts.map((p, i) => {
     const q = pts[(i + 1) % n]
-    return { x1: p.x, y1: p.y, x2: q.x, y2: q.y }
+    return {
+      x1: p.x, y1: p.y, x2: q.x, y2: q.y,
+      bend: true,
+      // This chord's start is where the one before it ended, and that chord's
+      // own end stud is already at the joint — so this end brings none.
+      sharedStartStud: i > 0,
+    }
   })
   return { walls, chords: n, chordMm: 2 * r * Math.sin(Math.PI / n) }
 }

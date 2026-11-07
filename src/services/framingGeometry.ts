@@ -162,6 +162,18 @@ export interface WallFramingOpts {
    * says which wall runs through.
    */
   endTrim?: { start?: number; end?: number }
+  /**
+   * A facet of a CURVED WALL. A bend is not a corner: the run carries on round
+   * the arc rather than arriving at right angles, so nothing butts into it and
+   * there is no corner post or corner backer at either end.
+   */
+  bend?: boolean
+  /**
+   * The stud at this end's break is the one the facet before it stood up — it is
+   * in the model already, so this end adds none. A break gets ONE stud rather
+   * than one from each side of it.
+   */
+  sharedStartStud?: boolean
 }
 
 /**
@@ -235,6 +247,8 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     tees = [],
     packs = [],
     endTrim,
+    bend = false,
+    sharedStartStud = false,
   } = opts
 
   const group = new THREE.Group()
@@ -305,8 +319,11 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // outside face. Lower plate one way, cap the other — that is the lap.
   //
   // A tee arrival (endTrim) stops at the face of the wall it lands on, cap and all.
-  const trimA = (capLap?.start === 'back' ? depth : 0) + (endTrim?.start ?? 0)
-  const trimB = (capLap?.end === 'back' ? depth : 0) + (endTrim?.end ?? 0)
+  // A bend takes no lap: there is no corner arriving at right angles for the
+  // plates to tie to, so the chord is plated its whole length.
+  const lap = bend ? undefined : capLap
+  const trimA = (lap?.start === 'back' ? depth : 0) + (endTrim?.start ?? 0)
+  const trimB = (lap?.end === 'back' ? depth : 0) + (endTrim?.end ?? 0)
   const bodyL = -half + trimA
   const bodyR = half - trimB
   const bodyLen = Math.max(0.02, bodyR - bodyL)
@@ -355,8 +372,8 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     // so a lapping cap is simply full length and nothing projects past the line.
     let capL = -half + (endTrim?.start ?? 0)
     let capR = half - (endTrim?.end ?? 0)
-    if (capLap?.start === 'lap') capL += depth
-    if (capLap?.end === 'lap') capR -= depth
+    if (lap?.start === 'lap') capL += depth
+    if (lap?.end === 'lap') capR -= depth
     const capLen = Math.max(0.02, capR - capL)
     add(new THREE.BoxGeometry(capLen, PLATE_H_M, depth), (capL + capR) / 2, height - PLATE_H_M / 2, 0, memberInfo('cap plate'), cut('cap plate', capLen))
   }
@@ -391,19 +408,21 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // pulls from the outside face of the building: that is where the sheathing starts.
   const endA = bodyL + studW / 2
   const endB = bodyR - studW / 2
-  const xs: number[] = [endA, endB]
+  // A shared break belongs to the facet before this one, so this end starts no
+  // stud there — the joint carries one, not two.
+  const xs: number[] = sharedStartStud ? [endB] : [endA, endB]
   // Which of those positions are PACK studs — ends, corner posts, either side of
   // a tee. They keep the plain "stud" label (the takeoff counts studs), and are
   // marked separately so the member colours can draw them the way a panel
   // layout does: the packs picked out from the field.
-  const packKeys = new Set<number>([endA, endB].map((x) => Math.round(x * 1000)))
+  const packKeys = new Set<number>(xs.map((x) => Math.round(x * 1000)))
   for (let d = spacingM; d < length - studW; d += spacingM) {
     // EXACT, not rounded to the millimetre: the claim is that a stud centre is
     // one spacing from the face, and 16" is 0.4064 m, not 0.406. The dedupe
     // below still keys on millimetres, which is all that rounding was for.
     const x = -half + d
     // Don't stack a field stud on an end stud, or put one past a trimmed end.
-    if (x < endA + studW || x > endB - studW) continue
+    if (x < (sharedStartStud ? bodyL + studW : endA + studW) || x > endB - studW) continue
     xs.push(x)
   }
   // END PACKS — and a real CORNER POST where two walls meet.
@@ -434,8 +453,10 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       )
     }
   }
-  cornerPost(bodyL, 1, capLap?.start)
-  cornerPost(bodyR, -1, capLap?.end)
+  if (!bend) {
+    cornerPost(bodyL, 1, lap?.start)
+    cornerPost(bodyR, -1, lap?.end)
+  }
 
   // TEES — where another wall lands on the face of this one.
   //

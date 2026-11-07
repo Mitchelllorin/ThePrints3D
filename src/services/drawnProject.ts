@@ -83,7 +83,13 @@ export interface DrawnProjectSpec {
    * no wall is invented to finish a rectangle. The boxes are then only a page
    * size; see createFreeWallsProject.
    */
-  freeWalls?: Array<{ x1: number; y1: number; x2: number; y2: number }>
+  freeWalls?: Array<{
+    x1: number; y1: number; x2: number; y2: number
+    /** A facet of a curved wall — see drawItPlan's InsideWall. */
+    bend?: boolean
+    /** The stud at this facet's start break belongs to the chord before it. */
+    sharedStartStud?: boolean
+  }>
 }
 
 export interface DrawnProject {
@@ -438,8 +444,10 @@ function createFreeWallsProject(
   const lines = free.map((w) => ({
     x1: px(w.x1 + offX), y1: px(w.y1 + offY), x2: px(w.x2 + offX), y2: px(w.y2 + offY),
   }))
-  const walls: ParsedWall[] = lines.map((w) => ({
+  const walls: ParsedWall[] = lines.map((w, i) => ({
     ...w,
+    ...(free[i].bend ? { bend: true } : {}),
+    ...(free[i].sharedStartStud ? { sharedStartStud: true } : {}),
     thickness: tPx,
     source: 'user',
     framingType: spec.wallTypeKey,
