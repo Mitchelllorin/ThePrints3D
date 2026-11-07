@@ -18,6 +18,7 @@ import { trayItems } from '../../data/objectCatalog'
 import LayersPanel from './LayersPanel'
 import FramingPanel from './FramingPanel'
 import FusePanel from './FusePanel'
+import ArenaPanel from './ArenaPanel'
 import { useCanBuyPro, useIsPro } from '../Pro/usePro'
 import { sharePicture, type ShareOutcome } from '../../services/sharePicture'
 import { PRO_REASON_GENERAL } from '../Pro/UpgradeSheet'
@@ -150,7 +151,25 @@ function BoltIcon() {
   )
 }
 
-type Section = 'build' | 'ask' | 'fuse' | 'settings' | 'place' | 'layers' | 'framing'
+/**
+ * Arena: a beam on two supports, seen edge on. The bench's mark, drawn for the
+ * same reason as the bolt and the studs — the rail is thin monochrome marks.
+ */
+function BenchIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    >
+      <path d="M3 17h18" />
+      <path d="M4 17V8M20 17V8" />
+      <path d="M4 9.2h16" />
+      <path d="M12 3.6l4.2 5.6H7.8z" />
+    </svg>
+  )
+}
+
+type Section = 'build' | 'ask' | 'fuse' | 'arena' | 'settings' | 'place' | 'layers' | 'framing'
 
 const RAIL: { id: Section; icon: ReactNode; label: string }[] = [
   { id: 'build', icon: '✏', label: 'Build' },
@@ -159,6 +178,10 @@ const RAIL: { id: Section; icon: ReactNode; label: string }[] = [
   // today; this says what goes first and when. Both are readings of the same
   // model, so they sit next to each other rather than in Settings.
   { id: 'fuse', icon: <BoltIcon />, label: 'Fuse' },
+  // ARENA — the other half of F.U.S.E.: the years panel ages a wall, the bench
+  // loads a beam to the figures on its own plate. Same engine, same grades; the
+  // specimen and the stressor are what change.
+  { id: 'arena', icon: <BenchIcon />, label: 'Arena' },
   { id: 'settings', icon: '⚙', label: 'Settings' },
   { id: 'place', icon: '▦', label: 'Place' },
   // LAYERS — what the model is made of, and what you want to see of it.
@@ -223,6 +246,7 @@ export default function RailCascade() {
   const [layersOpen, setLayersOpen] = useState(false)
   const [framingOpen, setFramingOpen] = useState(false)
   const [fuseOpen, setFuseOpen] = useState(false)
+  const [arenaOpen, setArenaOpen] = useState(false)
   // The family drawer is its own sheet, not a rail section: it closes nothing
   // and nothing closes it but itself.
   const [familyOpen, setFamilyOpen] = useState(false)
@@ -243,7 +267,7 @@ export default function RailCascade() {
     setShareSaid(outcome)
     window.setTimeout(() => setShareSaid(null), 2500)
   }
-  useEffect(() => { setRailPanelOpen(layersOpen || placeOpen || framingOpen || fuseOpen) }, [layersOpen, placeOpen, framingOpen, fuseOpen, setRailPanelOpen])
+  useEffect(() => { setRailPanelOpen(layersOpen || placeOpen || framingOpen || fuseOpen || arenaOpen) }, [layersOpen, placeOpen, framingOpen, fuseOpen, arenaOpen, setRailPanelOpen])
   // First tap arms Clear, second does it. See the button for why.
   const [clearArmed, setClearArmed] = useState(false)
 
@@ -299,6 +323,7 @@ export default function RailCascade() {
     build: buildOpen,
     ask: askOpen,
     fuse: fuseOpen,
+    arena: arenaOpen,
     settings: settingsOpen,
     place: placeOpen,
     layers: layersOpen,
@@ -325,7 +350,23 @@ export default function RailCascade() {
       endTracing()
       if (id === 'build') return
     }
+    /**
+     * ARENA IS A CASCADE LIKE THE OTHERS, and it opens over the model on
+     * purpose: a bench you cannot see the building behind is a separate app.
+     * It is one surface at a time, so opening it shuts the rest and opening
+     * anything else shuts it.
+     */
+    if (id === 'arena') {
+      const next = !arenaOpen
+      closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null)
+      setLayersOpen(false); setFramingOpen(false); setFuseOpen(false)
+      setArenaOpen(next)
+      return
+    }
+    if (arenaOpen) setArenaOpen(false)
+
     if (active[id]) {
+
       // Tapping the open section closes it.
       if (id === 'place') { setPlaceOpen(false); setPlaceObjectType(null) }
       else if (id === 'layers') setLayersOpen(false)
@@ -386,7 +427,7 @@ export default function RailCascade() {
    * with it.
    */
   return (
-    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen || framingOpen || fuseOpen ? styles.wrapSheet : ''}`}>
+    <div className={`${styles.wrap} ${traceMode ? styles.tracing : ''} ${layersOpen || placeOpen || framingOpen || fuseOpen || arenaOpen ? styles.wrapSheet : ''}`}>
       {/* The list scrolls; CLEAR sits outside the scroll port, below it. See the
           note on .railCol — when the list got longer than the screen, Clear (its
           last child, pinned to the foot) was the first thing pushed out of it. */}
@@ -558,6 +599,12 @@ export default function RailCascade() {
       {layersOpen && (
         <div className={styles.col} style={{ minWidth: 168, maxHeight: '100%' }}>
           <LayersPanel />
+        </div>
+      )}
+
+      {arenaOpen && (
+        <div className={styles.col} style={{ minWidth: 208, maxHeight: '100%' }}>
+          <ArenaPanel />
         </div>
       )}
 

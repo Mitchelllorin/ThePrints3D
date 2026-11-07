@@ -1,0 +1,141 @@
+/* ARENA — the load bench. Glass over the model, like every persistent panel in
+   the family: tint plus blur, never alpha alone, and a 0.72 floor. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(21, 28, 37, 0.78);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border: 1px solid #2c3a4a;
+  border-radius: 10px;
+  overflow-y: auto;
+  max-height: min(70vh, 520px);
+  color: #e8eef5;
+  font-size: 13px;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .panel { background: rgba(21, 28, 37, 0.94); }
+}
+
+.head { display: flex; align-items: baseline; gap: 8px; }
+.mark { font-weight: 700; letter-spacing: 0.14em; font-size: 12px; color: #e8eef5; }
+.sub { font-size: 11px; color: #7b8ca1; }
+
+.roster { display: flex; flex-direction: column; gap: 8px; }
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 48px;
+  padding: 8px 10px;
+  text-align: left;
+  background: #1e2833;
+  border: 1px solid #2c3a4a;
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.cardOn { border-color: #3d9ae8; background: #22303f; }
+.cardOff { opacity: 0.72; }
+
+.cardTop { display: flex; align-items: center; gap: 8px; }
+.cardName { font-weight: 600; font-size: 13px; }
+.cardSize { font-size: 11px; color: #aebccd; }
+.cardLine { font-size: 11px; color: #aebccd; font-variant-numeric: tabular-nums; }
+.cardMissing { font-size: 11px; color: #e0a03a; }
+
+.chip {
+  margin-left: auto;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid #2c3a4a;
+  color: #aebccd;
+}
+
+.chip_canadian_verified { color: #3fbf6e; border-color: #3fbf6e; }
+.chip_us_reference { color: #e0a03a; border-color: #e0a03a; }
+.chip_insufficient { color: #7b8ca1; }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.fieldLabel { display: flex; justify-content: space-between; font-size: 12px; color: #aebccd; }
+.fieldLabel b { color: #e8eef5; font-variant-numeric: tabular-nums; }
+
+.meta { margin: 0; font-size: 11px; color: #7b8ca1; font-variant-numeric: tabular-nums; }
+
+.range {
+  width: 100%;
+  height: 28px;
+  accent-color: #3d9ae8;
+}
+
+.ramp { display: flex; flex-direction: column; gap: 4px; }
+.rampRow { display: flex; align-items: center; gap: 8px; }
+.rampValue { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.rampUnit { font-size: 11px; color: #7b8ca1; font-variant-numeric: tabular-nums; }
+.spacer { flex: 1; }
+
+.push {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #3d9ae8;
+  background: #3d9ae8;
+  color: #04121f;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.push:disabled { opacity: 0.45; cursor: default; }
+
+.duel {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #151c25;
+  font-size: 12px;
+  color: #e8eef5;
+}
+
+.verdict { display: flex; flex-direction: column; gap: 6px; }
+.verdictHead { display: flex; align-items: center; gap: 8px; }
+
+.phase {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.gov { font-size: 12px; font-weight: 600; }
+
+.numbers {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: #151c25;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.numbers dt { color: #7b8ca1; }
+.numbers dd { margin: 0; text-align: right; }
+
+.why, .fix { margin: 0; font-size: 12px; line-height: 1.45; color: #aebccd; }
+.fix { color: #e8eef5; }
+
+.empty { margin: 0; font-size: 12px; color: #aebccd; }
