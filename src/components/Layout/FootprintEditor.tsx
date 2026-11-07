@@ -52,6 +52,7 @@ import {
 import {
   acceptsWall, addCorner, clipToShell, fitPage, houseOutline, houseRects, MIN_WALL_MM, movedCorner, movedHouse, removeCorner, resized,
   shapeOk, snapWallPoint, withEdgeLength, withLength, wallLength,
+  addCircle, planCircles, removeCircle, withCircleDiameter,
   type DrawItPlan, type InsideWall,
 } from '../../services/drawItPlan'
 import { parseSizeMm } from '../../services/drawnProject'
@@ -83,6 +84,15 @@ const REACH_PX = 16
 /** How far a wall's number sits off the wall: clear of the 48px move handle
  *  on the wall's middle, with the 8px between two targets. */
 const WALL_LABEL_PX = 48
+/** Smaller than this and it is a tap, not a circle you meant to draw. */
+const MIN_CIRCLE_MM = 150
+
+/** The radius a circle drag has reached, on the same clean steps as everything
+ *  else — a post is ordered in whole inches, not in pixels. */
+function circleRadius(d: { from: Point; to: Point }, snapMm: number) {
+  const raw = Math.hypot(d.to.x - d.from.x, d.to.y - d.from.y)
+  return Math.max(snapMm, Math.round(raw / snapMm) * snapMm)
+}
 
 interface Frame { s: number; ox: number; oy: number }
 type DimField = SizeField | 'off'
@@ -109,6 +119,9 @@ type Drag =
   | { kind: 'corner'; index: number; start: DrawItPlan }
   /** The angle ring on a picked wall: swings the far end round the near one. */
   | { kind: 'angle'; index: number; start: DrawItPlan }
+  /** A circle being dragged out from its centre. `tapped` is a circle already
+   *  on the sheet that the press landed on, so a tap picks it instead of drawing. */
+  | { kind: 'circle'; from: Point; to: Point; tapped?: number }
 
 /** Fit the paper into the box it sits in. */
 function fitFrame(w: number, h: number, pageW: number, pageD: number): Frame {
@@ -132,7 +145,7 @@ function gridStepMm(scale: number, metric: boolean): number {
 
 export default function FootprintEditor({
   plan, onChange, mode, selectedWall, onSelectWall, onPickedUp, format, snapMm, metric, shellMm, free = false,
-  wallsOnly = false, underlay = null, onCommit, canUndo = false, canRedo = false, onUndo, onRedo, height = 300,
+  wallsOnly = false, circleTool = false, underlay = null, onCommit, canUndo = false, canRedo = false, onUndo, onRedo, height = 300,
 }: {
   plan: DrawItPlan
   onChange: (next: DrawItPlan) => void
@@ -156,6 +169,12 @@ export default function FootprintEditor({
    * be the paper below.
    */
   wallsOnly?: boolean
+  /**
+   * CIRCLES ON THE SHEET. The paper drags a circle out from its centre instead
+   * of a wall, and a tap on one picks it. Walls stay on the plan and stay
+   * pickable — a round post sits inside a room, it does not replace the drawing.
+   */
+  circleTool?: boolean
   /** The print under the walls: its page size in millimetres, and where to get
    *  it. Same scale as the walls, so a wall drawn on a line is that line's
    *  real length. */
@@ -192,6 +211,8 @@ export default function FootprintEditor({
   const [hover, setHover] = useState<Point | null>(null)
   const [editing, setEditing] = useState<{ key: string; text: string; bad: boolean } | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
+  /** The circle tapped, showing its diameter and its remove. */
+  const [pickedCircle, setPickedCircle] = useState<number | null>(null)
   const [pickedUp, setPickedUpState] = useState(false)
   /** The shape's corner tapped, showing its ✕. */
   const [corner, setCorner] = useState<number | null>(null)
@@ -433,6 +454,10 @@ export default function FootprintEditor({
       onChange({ ...drag.start, boxes: dragBoxes(drag.start.boxes, g, dx, dy, snapMm) })
     } else if (drag.kind === 'move') {
       onChange(movedHouse(drag.start, dx, dy, snapMm))
+    } else if (drag.kind === 'circle') {
+      // A press that landed ON a circle is a tap at it, not a new circle: the
+      // ring is a target, and a thumb that rolls while tapping must not draw.
+      if (drag.tapped == null) setDrag({ ...drag, to: snapWallPoint(plan, toMm(e), snapOpts) })
     } else if (drag.kind === 'draw') {
       const to = snapWallPoint(plan, toMm(e), { ...snapOpts, from: drag.from })
       // With no shell there is nothing to stop a wall at, and nothing to clip it to.
@@ -485,6 +510,16 @@ export default function FootprintEditor({
       if (!plan.shape || !shapeOk(plan.shape)) { onChange(d.start); return }
       keep()
       onChange(fitPage(plan))
+      return
+    }
+    if (d.kind === 'circle') {
+      if (tapped && d.tapped != null) { setPickedCircle(d.tapped); return }
+      const r = circleRadius(d, snapMm)
+      if (r >= MIN_CIRCLE_MM) {
+        keep()
+        onChange(fitPage(addCircle(plan, { cx: d.from.x, cy: d.from.y, r })))
+      }
+      setPickedCircle(null)
       return
     }
     if (d.kind === 'draw') {
@@ -551,6 +586,13 @@ export default function FootprintEditor({
   }
 
   const pressPaper = (e: ReactPointerEvent<Element>) => {
+    if (circleTool) {
+      const p = snapWallPoint(plan, toMm(e), snapOpts)
+      onSelectWall(null)
+      setPickedCircle(null)
+      begin(e, { kind: 'circle', from: p, to: p })
+      return
+    }
     if (mode === 'walls' || wallsOnly) {
       const p = snapWallPoint(plan, toMm(e), snapOpts)
       // A press near the parked end starts there, not at the pixel: the tip of
@@ -591,6 +633,14 @@ export default function FootprintEditor({
       onChange(fitPage(next))
       return true
     }
+    if (editing.key.startsWith('circle:')) {
+      const i = Number(editing.key.slice(7))
+      const mm = parseSizeMm(raw)
+      if (mm === null || !(mm > 0)) return false
+      onCommit?.(plan)
+      onChange(withCircleDiameter(plan, i, mm))
+      return true
+    }
     if (editing.key.startsWith('wall:')) {
       const i = Number(editing.key.slice(5))
       const mm = parseSizeMm(raw)
@@ -622,6 +672,7 @@ export default function FootprintEditor({
   // An inside wall drawn at its real thickness — a 2x4 with board both sides,
   // about 4-1/2" — and never thinner than a line you can see.
   const wallPx = Math.max(3, 114 * f.s)
+  const circleDrag = drag?.kind === 'circle' ? drag : null
 
   // Walls on screen: the committed ones, plus the one being drawn.
   const drawing = drag?.kind === 'draw' ? { x1: drag.from.x, y1: drag.from.y, x2: drag.to.x, y2: drag.to.y } : null
@@ -906,6 +957,33 @@ export default function FootprintEditor({
             onPointerDown={pressPaper} onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
         )}
 
+        {/* CIRCLES — a round post, a footing, a pit. Under the walls, because a
+            wall is what gets built; the ring is drawn in the same ink as a wall
+            so on a print it reads as part of the drawing. */}
+        {planCircles(plan).map((c, i) => {
+          const on = pickedCircle === i
+          return (
+            <g key={`o${i}`}>
+              <circle cx={X(c.cx)} cy={Y(c.cy)} r={c.r * f.s}
+                fill={on ? 'rgba(61,154,232,0.20)' : 'rgba(61,154,232,0.10)'}
+                stroke={on ? '#3d9ae8' : onPrint ? '#0f172a' : '#cbd5e1'}
+                strokeWidth={on ? 2.5 : 2} pointerEvents="none" />
+              <circle cx={X(c.cx)} cy={Y(c.cy)} r={c.r * f.s}
+                fill="none" stroke="transparent" strokeWidth={REACH_PX} className={styles.wallHit}
+                onPointerDown={(e) => begin(e, { kind: 'circle', from: { x: c.cx, y: c.cy }, to: { x: c.cx, y: c.cy }, tapped: i })}
+                onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+            </g>
+          )
+        })}
+        {circleDrag && (
+          <g pointerEvents="none">
+            <circle cx={X(circleDrag.from.x)} cy={Y(circleDrag.from.y)} r={circleRadius(circleDrag, snapMm) * f.s}
+              fill="rgba(61,154,232,0.12)" stroke="#3d9ae8" strokeWidth={2} strokeDasharray="8 4" />
+            <line x1={X(circleDrag.from.x)} y1={Y(circleDrag.from.y)} x2={X(circleDrag.to.x)} y2={Y(circleDrag.to.y)}
+              stroke="#3d9ae8" strokeWidth={1.5} strokeDasharray="4 4" />
+          </g>
+        )}
+
         {/* Inside walls. The wide invisible line is what a finger hits. */}
         {plan.walls.map((w, i) => {
           const sel = selectedWall === i
@@ -914,7 +992,7 @@ export default function FootprintEditor({
               <line x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
                 stroke={sel ? '#3d9ae8' : onPrint ? '#0f172a' : '#cbd5e1'} strokeWidth={sel ? wallPx + 2 : wallPx}
                 strokeLinecap="butt" opacity={outlineMode ? 0.55 : 1} pointerEvents="none" />
-              {!outlineMode && (
+              {!outlineMode && !circleTool && (
                 <line x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
                   stroke="transparent" strokeWidth={REACH_PX * 2} className={styles.wallHit}
                   onPointerDown={(e) => {
@@ -1020,6 +1098,22 @@ export default function FootprintEditor({
         </button>
       )}
 
+      {/* The picked circle's ✕. Sits outside the ring, on the side with room. */}
+      {pickedCircle != null && planCircles(plan)[pickedCircle] && (() => {
+        const c = planCircles(plan)[pickedCircle]
+        return (
+          <button type="button" className={styles.cornerX}
+            style={{ left: Math.min(size.w - 56, X(c.cx + c.r) + 20), top: Y(c.cy) }}
+            onClick={() => {
+              onCommit?.(plan)
+              onChange(removeCircle(plan, pickedCircle))
+              setPickedCircle(null)
+            }}>
+            ✕ Circle
+          </button>
+        )
+      })()}
+
       {/* The picked wall's two ends: drag one to stretch or swing the wall. */}
       {wallEnds.map((g) => (
         <button key={g.part} type="button"
@@ -1068,6 +1162,9 @@ export default function FootprintEditor({
         // being drawn. A picked wall does not: it has the angle ring, and two
         // readouts of the same number is exactly the clutter this replaces.
         angle: ('withAngle' in c && c.withAngle) ? wallAngleOffSquareDeg(c.w.x1, c.w.y1, c.w.x2, c.w.y2) % 90 : 0,
+      })), ...planCircles(plan).map((c, i) => ({
+        key: `circle:${i}`, x: X(c.cx + c.r), y: Y(c.cy), valueMm: c.r * 2, vertical: false,
+        live: false, on: pickedCircle === i, what: 'Diameter', prefix: 'Ø ',
       })), ...edges.filter((e) => e.show).map((e) => ({
         key: `edge:${e.i}`, x: e.cx, y: e.cy, valueMm: e.len, vertical: false,
         live: drag?.kind === 'corner', on: false, what: 'Wall',
@@ -1102,7 +1199,7 @@ export default function FootprintEditor({
             disabled={c.live}
             aria-label={`${c.what} ${labelFor(c.valueMm)}. Tap to type it.`}
             onClick={() => setEditing({ key: c.key, text: labelFor(c.valueMm), bad: false })}>
-            {labelFor(c.valueMm)}{'angle' in c && c.angle ? ` · ${c.angle}°` : ''}
+            {'prefix' in c && typeof c.prefix === 'string' ? c.prefix : ''}{labelFor(c.valueMm)}{'angle' in c && c.angle ? ` · ${c.angle}°` : ''}
           </button>
         )
       })}

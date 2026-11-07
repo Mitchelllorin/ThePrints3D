@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  acceptsWall, addCorner, cleanShape, clipToShell, fitPage, houseRects, initialPlan, insideHouse, movedCorner, movedHouse,
+  acceptsWall, addCircle, addCorner, cleanShape, clipToShell, fitPage, houseRects, initialPlan, insideHouse, movedCorner, movedHouse,
+  planCircles, removeCircle, withCircleDiameter,
   removeCorner, resized, shapeOk, snapWallPoint, toBoxes, toShape, withEdgeLength,
   withLength, wallLength, MIN_WALL_MM, PAGE_MARGIN_MM, type DrawItPlan,
 } from './drawItPlan'
@@ -207,5 +208,35 @@ describe('the house at any angle', () => {
     const p = addCorner(shaped(), 0)
     expect(p.shape).toHaveLength(5)
     expect(cleanShape(p.shape!)).toHaveLength(4)
+  })
+})
+
+describe('circles on the sheet', () => {
+  it('keeps the circle where it was dragged, and takes a typed diameter', () => {
+    const p = addCircle(plan(), { cx: 6000, cy: 5000, r: 600 })
+    expect(planCircles(p)).toEqual([{ cx: 6000, cy: 5000, r: 600 }])
+    expect(planCircles(withCircleDiameter(p, 0, 600))[0].r).toBe(300)
+    expect(withCircleDiameter(p, 0, 0)).toBe(p)
+  })
+
+  it('counts as paper: the page grows round it and shifts it with the walls', () => {
+    const p: DrawItPlan = {
+      boxes: [], origin: { x: 100, y: 100 }, page: { w: 5000, d: 5000 }, walls: [],
+      circles: [{ cx: 300, cy: 300, r: 400 }],
+    }
+    const q = fitPage(p)
+    expect(q.origin.x).toBeGreaterThan(100)
+    expect(planCircles(q)[0].cx).toBeGreaterThan(300)
+    expect(planCircles(q)[0].cx - planCircles(q)[0].r).toBeCloseTo(3048, 6)
+  })
+
+  it('stays put when the house is picked up and moved', () => {
+    const p = addCircle(plan(), { cx: 6000, cy: 5000, r: 600 })
+    expect(planCircles(movedHouse(p, 1000, 0, 100))).toEqual(planCircles(p))
+  })
+
+  it('comes off one at a time', () => {
+    const p = addCircle(addCircle(plan(), { cx: 1000, cy: 1000, r: 300 }), { cx: 2000, cy: 2000, r: 300 })
+    expect(removeCircle(p, 0).circles).toEqual([{ cx: 2000, cy: 2000, r: 300 }])
   })
 })

@@ -24,6 +24,13 @@ import { freeAnglePoint } from './wallTraceReducer'
 
 export interface InsideWall { x1: number; y1: number; x2: number; y2: number }
 
+/**
+ * A CIRCLE ON THE SHEET — a round post, a footing, a fire pit, a turning
+ * circle. Page millimetres, same as the walls, so it holds its size against the
+ * print and a diameter typed on it is the diameter you build.
+ */
+export interface DrawItCircle { cx: number; cy: number; r: number }
+
 export interface DrawItPlan {
   boxes: FootprintBox[]
   /** The main box's top-left corner, on the page. */
@@ -40,6 +47,13 @@ export interface DrawItPlan {
    * is dragged.
    */
   shape?: Point[]
+  /**
+   * Circles drawn on the sheet. They are marks on the paper, not part of the
+   * shell: the page grows and shifts them with the walls, but picking the house
+   * up and moving it leaves them where they were drawn — a post does not slide
+   * along with the building you drew it inside.
+   */
+  circles?: DrawItCircle[]
 }
 
 /** Paper round the house on a new sheet: room to move it, room for dimensions.
@@ -75,6 +89,27 @@ export function wallsBounds(walls: readonly InsideWall[]): { x1: number; y1: num
   return { x1, y1, w: Math.max(...xs) - x1, d: Math.max(...ys) - y1 }
 }
 
+// ── Circles ────────────────────────────────────────────────────────────────
+
+/** The circles on the sheet, when there are none yet. */
+export function planCircles(plan: DrawItPlan): DrawItCircle[] {
+  return plan.circles ?? []
+}
+
+export function addCircle(plan: DrawItPlan, c: DrawItCircle): DrawItPlan {
+  return { ...plan, circles: [...planCircles(plan), c] }
+}
+
+export function removeCircle(plan: DrawItPlan, i: number): DrawItPlan {
+  return { ...plan, circles: planCircles(plan).filter((_, k) => k !== i) }
+}
+
+/** A diameter typed on the circle: the figure a post or a footing is ordered by. */
+export function withCircleDiameter(plan: DrawItPlan, i: number, mm: number): DrawItPlan {
+  if (!(mm > 0)) return plan
+  return { ...plan, circles: planCircles(plan).map((c, k) => (k === i ? { ...c, r: mm / 2 } : c)) }
+}
+
 export function initialPlan(first: FootprintBox): DrawItPlan {
   return {
     boxes: [first],
@@ -97,9 +132,11 @@ export function houseOutline(plan: DrawItPlan): Point[] {
   return plan.shape ?? footprintOutline(houseRects(plan))
 }
 
-function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[]): Rect {
-  const xs = [...rects.flatMap((r) => [r.x1, r.x2]), ...walls.flatMap((w) => [w.x1, w.x2])]
-  const ys = [...rects.flatMap((r) => [r.y1, r.y2]), ...walls.flatMap((w) => [w.y1, w.y2])]
+function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[], circles: readonly DrawItCircle[] = []): Rect {
+  const xs = [...rects.flatMap((r) => [r.x1, r.x2]), ...walls.flatMap((w) => [w.x1, w.x2]),
+    ...circles.flatMap((c) => [c.cx - c.r, c.cx + c.r])]
+  const ys = [...rects.flatMap((r) => [r.y1, r.y2]), ...walls.flatMap((w) => [w.y1, w.y2]),
+    ...circles.flatMap((c) => [c.cy - c.r, c.cy + c.r])]
   return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) }
 }
 
@@ -112,8 +149,8 @@ function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[]): Rect {
 export function fitPage(plan: DrawItPlan): DrawItPlan {
   // Nothing on the paper yet: there is no extent to fit, and asking for one
   // would produce Infinity and a page to match.
-  if (!plan.shape && plan.boxes.length === 0 && plan.walls.length === 0) return plan
-  const b = boundsOf(plan.shape ? [shapeBounds(plan.shape)] : houseRects(plan), plan.walls)
+  if (!plan.shape && plan.boxes.length === 0 && plan.walls.length === 0 && planCircles(plan).length === 0) return plan
+  const b = boundsOf(plan.shape ? [shapeBounds(plan.shape)] : houseRects(plan), plan.walls, planCircles(plan))
   const dx = Math.max(0, MIN_CLEAR_MM - b.x1)
   const dy = Math.max(0, MIN_CLEAR_MM - b.y1)
   const w = Math.max(plan.page.w + dx, b.x2 + dx + MIN_CLEAR_MM)
@@ -124,6 +161,7 @@ export function fitPage(plan: DrawItPlan): DrawItPlan {
     origin: { x: plan.origin.x + dx, y: plan.origin.y + dy },
     page: { w, d },
     walls: plan.walls.map((k) => ({ x1: k.x1 + dx, y1: k.y1 + dy, x2: k.x2 + dx, y2: k.y2 + dy })),
+    ...(plan.circles ? { circles: plan.circles.map((c) => ({ ...c, cx: c.cx + dx, cy: c.cy + dy })) } : {}),
     ...(plan.shape ? { shape: plan.shape.map((q) => ({ x: q.x + dx, y: q.y + dy })) } : {}),
   }
 }
