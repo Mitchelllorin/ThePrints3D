@@ -52,7 +52,7 @@ import {
 import {
   acceptsWall, addCorner, clipToShell, fitPage, houseOutline, houseRects, MIN_WALL_MM, movedCorner, movedHouse, removeCorner, resized,
   shapeOk, snapWallPoint, withEdgeLength, withLength, wallLength,
-  addCircle, planCircles, removeCircle, withCircleDiameter,
+  addCircle, circleString, planCircles, removeCircle, withCircleDiameter,
   type DrawItPlan, type InsideWall,
 } from '../../services/drawItPlan'
 import { parseSizeMm } from '../../services/drawnProject'
@@ -673,6 +673,8 @@ export default function FootprintEditor({
   // about 4-1/2" — and never thinner than a line you can see.
   const wallPx = Math.max(3, 114 * f.s)
   const circleDrag = drag?.kind === 'circle' ? drag : null
+  /** The walls each circle is built from — a ring of short straight bays. */
+  const circleStrings = planCircles(plan).map((c) => circleString(c))
 
   // Walls on screen: the committed ones, plus the one being drawn.
   const drawing = drag?.kind === 'draw' ? { x1: drag.from.x, y1: drag.from.y, x2: drag.to.x, y2: drag.to.y } : null
@@ -957,21 +959,36 @@ export default function FootprintEditor({
             onPointerDown={pressPaper} onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
         )}
 
-        {/* CIRCLES — a round post, a footing, a pit. Under the walls, because a
-            wall is what gets built; the ring is drawn in the same ink as a wall
-            so on a print it reads as part of the drawing. */}
+        {/* CIRCLES ARE CURVED WALLS. The ring is the line they are set out to —
+            a trammel point and a string — and the chords under it are what gets
+            framed: one stud bay a wall, so the sheathing has studs to bend over.
+            Square caps, because consecutive chords share an end and a butt cap
+            would notch the outside of every break. */}
         {planCircles(plan).map((c, i) => {
           const on = pickedCircle === i
+          const s = circleStrings[i]
           return (
             <g key={`o${i}`}>
               <circle cx={X(c.cx)} cy={Y(c.cy)} r={c.r * f.s}
-                fill={on ? 'rgba(61,154,232,0.20)' : 'rgba(61,154,232,0.10)'}
-                stroke={on ? '#3d9ae8' : onPrint ? '#0f172a' : '#cbd5e1'}
-                strokeWidth={on ? 2.5 : 2} pointerEvents="none" />
+                fill="none" stroke={on ? '#3d9ae8' : '#64748b'}
+                strokeWidth={on ? 2 : 1.5} strokeDasharray="7 5" opacity={on ? 1 : 0.7}
+                pointerEvents="none" />
+              {s.walls.map((w, k) => (
+                <line key={k} x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
+                  stroke={on ? '#3d9ae8' : onPrint ? '#0f172a' : '#cbd5e1'}
+                  strokeWidth={on ? wallPx + 2 : wallPx} strokeLinecap="square"
+                  opacity={outlineMode ? 0.55 : 1} pointerEvents="none" />
+              ))}
               <circle cx={X(c.cx)} cy={Y(c.cy)} r={c.r * f.s}
                 fill="none" stroke="transparent" strokeWidth={REACH_PX} className={styles.wallHit}
                 onPointerDown={(e) => begin(e, { kind: 'circle', from: { x: c.cx, y: c.cy }, to: { x: c.cx, y: c.cy }, tapped: i })}
                 onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+              {!outlineMode && s.walls.map((w, k) => (
+                <line key={`h${k}`} x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
+                  stroke="transparent" strokeWidth={REACH_PX} className={styles.wallHit}
+                  onPointerDown={(e) => begin(e, { kind: 'circle', from: { x: w.x1, y: w.y1 }, to: { x: w.x1, y: w.y1 }, tapped: i })}
+                  onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+              ))}
             </g>
           )
         })}

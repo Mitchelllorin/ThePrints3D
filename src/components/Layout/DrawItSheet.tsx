@@ -27,7 +27,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { WALL_TYPES, } from '../../data/members'
 import { shellThicknessMm } from '../../services/drawnProject'
-import { wallsBounds, wallsPlan, type DrawItPlan } from '../../services/drawItPlan'
+import { wallsBounds, wallsPlan, planWalls, type DrawItPlan } from '../../services/drawItPlan'
 import { formatMeasureMm } from '../../services/unitConverter'
 import FootprintEditor from './FootprintEditor'
 import styles from './DrawItSheet.module.css'
@@ -106,12 +106,13 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   }
 
   const frame = () => {
-    const b = wallsBounds(plan.walls)
+    const walls = planWalls(plan)
+    const b = wallsBounds(walls)
     if (!b) return
     startDrawnProject({
       widthMm: b.w, depthMm: b.d, wallTypeKey, floor: 'none', name: 'New project',
       page: { originMm: { x: 0, y: 0 }, wMm: plan.page.w, dMm: plan.page.d },
-      freeWalls: plan.walls,
+      freeWalls: walls,
     })
     // THE WALLS ARE ALREADY UP: a drawn project's shell draws itself standing,
     // but the model was left marked unbuilt, so the step chip asked you to
@@ -121,7 +122,7 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
   }
 
   const lead = tool === 'circle'
-    ? 'Drag out from the centre of the circle. Tap one to set its diameter or take it out.'
+    ? 'Drag out from the centre. A circle goes up as short walls round it, one bay each. Tap it to set the diameter.'
     : selectedWall != null
     ? 'Drag the wall, or its ring, to set it. Tap the number to type the length.'
     : 'Tap the paper to start a wall, tap again to turn the corner. Tap the last end to finish.'
@@ -168,8 +169,8 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
 
         <div className={styles.rest}>
           <p className={styles.echo}>
-            {plan.walls.length} wall{plan.walls.length === 1 ? '' : 's'}
-            {(plan.circles?.length ?? 0) > 0 ? ` · ${plan.circles!.length} circle${plan.circles!.length === 1 ? '' : 's'}` : ''}
+            {planWalls(plan).length} wall{planWalls(plan).length === 1 ? '' : 's'}
+            {(plan.circles?.length ?? 0) > 0 ? ` · ${plan.circles!.length} circle${plan.circles!.length === 1 ? '' : 's'} of short walls` : ''}
             {printOn ? ' over the print' : ''} · tap one to pick it
           </p>
 
@@ -183,8 +184,8 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
             ))}
           </select>
 
-          {/* WHAT THE PAPER DRAWS. Walls are the building; circles are the
-              round things in it — a post, a footing, a fire pit. */}
+          {/* WHAT THE PAPER DRAWS. Walls are straight runs; a circle is a
+              curved wall — drawn as the ring, built as short walls round it. */}
           <div className={styles.row} role="group" aria-label="What to draw">
             <button className={`${styles.mode} ${tool === 'wall' ? styles.chosen : ''}`}
               onClick={() => { setTool('wall'); setSelectedWall(null) }} aria-pressed={tool === 'wall'}>
@@ -211,7 +212,7 @@ export default function DrawItSheet({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* THE ONE THAT FINISHES IT, pinned to the bottom edge of the sheet. */}
-        <button className={styles.go} onClick={frame} disabled={plan.walls.length === 0}>
+        <button className={styles.go} onClick={frame} disabled={planWalls(plan).length === 0}>
           Frame the walls
         </button>
       </div>

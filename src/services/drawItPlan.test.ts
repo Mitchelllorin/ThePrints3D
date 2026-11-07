@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   acceptsWall, addCircle, addCorner, cleanShape, clipToShell, fitPage, houseRects, initialPlan, insideHouse, movedCorner, movedHouse,
-  planCircles, removeCircle, withCircleDiameter,
+  circleString, planCircles, planWalls, removeCircle, withCircleDiameter,
   removeCorner, resized, shapeOk, snapWallPoint, toBoxes, toShape, withEdgeLength,
   withLength, wallLength, MIN_WALL_MM, PAGE_MARGIN_MM, type DrawItPlan,
 } from './drawItPlan'
@@ -233,6 +233,38 @@ describe('circles on the sheet', () => {
   it('stays put when the house is picked up and moved', () => {
     const p = addCircle(plan(), { cx: 6000, cy: 5000, r: 600 })
     expect(planCircles(movedHouse(p, 1000, 0, 100))).toEqual(planCircles(p))
+  })
+
+  it('goes up as short straight walls, one bay each, joints shared exactly', () => {
+    const c = { cx: 0, cy: 0, r: 1828.8 }   // a 12 ft circle
+    const s = circleString(c)
+    expect(s.chords).toBe(28)
+    expect(s.chordMm).toBeGreaterThan(380)
+    expect(s.chordMm).toBeLessThan(420)     // a 16" bay, to the millimetre
+    // Every corner is on the ring, and one chord's end is the next one's start:
+    // a break is one joint, not two ends a hair apart.
+    for (const w of s.walls) {
+      expect(Math.hypot(w.x1 - c.cx, w.y1 - c.cy)).toBeCloseTo(c.r, 6)
+      expect(Math.hypot(w.x2 - c.cx, w.y2 - c.cy)).toBeCloseTo(c.r, 6)
+    }
+    for (let i = 1; i < s.walls.length; i++) {
+      expect(s.walls[i].x1).toBe(s.walls[i - 1].x2)
+      expect(s.walls[i].y1).toBe(s.walls[i - 1].y2)
+    }
+    expect(s.walls[s.walls.length - 1].x2).toBe(s.walls[0].x1)
+    expect(s.walls[s.walls.length - 1].y2).toBe(s.walls[0].y1)
+  })
+
+  it('is never a stubby polygon, and a 1 ft circle is still framed as walls', () => {
+    expect(circleString({ cx: 0, cy: 0, r: 150 }).chords).toBe(8)
+    expect(circleString({ cx: 0, cy: 0, r: 0 }).walls).toEqual([])
+  })
+
+  it('adds its string to the plan walls, and follows a typed diameter', () => {
+    const p = addCircle({ ...plan(), walls: [] }, { cx: 5000, cy: 5000, r: 1500 })
+    const before = planWalls(p).length
+    expect(before).toBe(23)                 // 2π × 1500 / 406.4, rounded
+    expect(planWalls(withCircleDiameter(p, 0, 4000)).length).toBe(31)
   })
 
   it('comes off one at a time', () => {

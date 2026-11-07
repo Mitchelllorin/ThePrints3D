@@ -110,6 +110,69 @@ export function withCircleDiameter(plan: DrawItPlan, i: number, mm: number): Dra
   return { ...plan, circles: planCircles(plan).map((c, k) => (k === i ? { ...c, r: mm / 2 } : c)) }
 }
 
+// ── The string a circle is built from ──────────────────────────────────────
+
+/**
+ * A CIRCLE IS NOT A WALL, AND A CURVED WALL IS NOT A CURVE.
+ *
+ * What goes up is a string of short straight walls round the ring — one stud bay
+ * each, chord after chord — and the sheathing bends over them. That is how a
+ * curved wall or a gazebo wall is really framed: a plate bent round the circle
+ * in bays, and a stud at every break. So the circle on the sheet is the line the
+ * string is set out to, and the walls are the chords.
+ */
+export const STUD_BAY_MM = 406.4   // 16" on centre — the framing's own spacing
+/** Fewer than this and it is a stubby polygon, not a ring. */
+const MIN_CHORDS = 8
+/** Past this nobody is framing it, and the plan stops reading. */
+const MAX_CHORDS = 240
+
+export interface CircleString {
+  walls: InsideWall[]
+  /** How many short walls the ring went up as. */
+  chords: number
+  /** The length of each chord — one bay of wall. */
+  chordMm: number
+}
+
+/**
+ * The ring as walls: `n` chords, `n` as close to a bay each as a whole number
+ * can get. Consecutive chords share an end to the last bit — the same angle is
+ * worked out for both — so each break is one joint, not two ends a hair apart.
+ */
+export function circleString(c: DrawItCircle, bayMm = STUD_BAY_MM): CircleString {
+  const r = Math.abs(c.r)
+  if (r < 1) return { walls: [], chords: 0, chordMm: 0 }
+  const n = Math.max(MIN_CHORDS, Math.min(MAX_CHORDS,
+    Math.round((2 * Math.PI * r) / Math.max(1, bayMm))))
+  // One point per break, worked out once and walked twice, so a chord's start is
+  // the same number as its neighbour's end — and the ring closes on itself
+  // exactly instead of leaving the last break a rounding-error apart.
+  const pts = Array.from({ length: n }, (_, i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
+    return { x: c.cx + r * Math.cos(a), y: c.cy + r * Math.sin(a) }
+  })
+  const walls: InsideWall[] = pts.map((p, i) => {
+    const q = pts[(i + 1) % n]
+    return { x1: p.x, y1: p.y, x2: q.x, y2: q.y }
+  })
+  return { walls, chords: n, chordMm: 2 * r * Math.sin(Math.PI / n) }
+}
+
+/**
+ * EVERYTHING ON THE SHEET THAT GETS BUILT: the drawn walls, then the string
+ * under each circle.
+ *
+ * The string is worked out from the circle every time rather than stored beside
+ * it, so a diameter typed on the ring re-flows its bays and nothing can drift
+ * out of step with the number that governs it.
+ */
+export function planWalls(plan: DrawItPlan): InsideWall[] {
+  const rings = planCircles(plan)
+  if (rings.length === 0) return plan.walls
+  return [...plan.walls, ...rings.flatMap((c) => circleString(c).walls)]
+}
+
 export function initialPlan(first: FootprintBox): DrawItPlan {
   return {
     boxes: [first],
