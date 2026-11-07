@@ -204,8 +204,12 @@ export const MANUFACTURER_PARTS: readonly ManufacturerPart[] = [
     },
     verification: 'unverified',
     verificationNote:
-      'TJ-7001 is the U.S. guide, on ICC-ES ESR-1387 and NDS allowable stresses. The Canadian equivalents (TJ-9500 East / TJ-9505 West) are not public, ' +
-      'so no Canadian-basis figure could be traced. Every number here is left exactly as it was, and the plate says which edition it came from.',
+      'TJ-7001 is the U.S. guide, on ICC-ES ESR-1387 and NDS allowable stresses, so these are not Canadian specified strengths. ' +
+      "Weyerhaeuser's Canadian guides are public and were checked: TJ-9505 (West, April 2023) offers 2.2E Parallam in 3-1/2, 5-1/4 and 7 in widths at 9-1/4 to 19 in deep, " +
+      'and TJ-9500 (East, February 2026) carries 2.0E Parallam at 3-1/2, 5-1/4 and 7 in by 9-1/4 to 18 in. ' +
+      'This beam is 20 in deep, which neither Canadian edition offers; CCMC 11161-R is the Canadian evaluation behind both. ' +
+      'Their tables give CSA O86 specified strengths rather than the ASD values on this plate, and the Parallam rows could not be read off the PDF without ambiguity, ' +
+      'so every figure here is left exactly as it was.',
     modelling: 'reference-only',
     pitchLine:
       'A beam whose whole selling point is that it has no plies to nail wrong — and an app that can show the wall it carries outliving it.',

@@ -112,11 +112,12 @@ export const MEMBERS: readonly MemberSpec[] = [
   /**
    * A MANUFACTURER'S LINE, IN THE CATALOGUE.
    *
-   * West Fraser's 3000Fb 1.9E LVL, from their own LVL User's Guide (United
-   * States edition, 25.1097 — 2026-07-22). 11-1/2" is one of the depths their
-   * 1-3/4" 1.9E table lists, and it is deliberately not one the generic LVL rows
-   * already carry: a maker's row that duplicated a generic size would shadow it
-   * in the lookup and put two different beams behind one id.
+   * West Fraser's 3000Fb 1.9E LVL, from their own LVL User's Guide (Canadian
+   * edition, 2026-07-14 v1.1). 11-1/2" is in the 1-3/4" 1.9E available-sizes
+   * list, which runs 5-1/2" to 24" with the 24" depth restricted to multiple
+   * member units. It is deliberately not a depth the generic LVL rows already
+   * carry: a maker's row that duplicated a generic size would shadow it in the
+   * lookup and put two different beams behind one id.
    */
   eng('lvl', 'West Fraser LVL', '3000Fb 1.9E', 1.75, '1-3/4', 11.5, '11-1/2', ['header', 'beam']),
 
@@ -140,7 +141,13 @@ export const MEMBERS: readonly MemberSpec[] = [
   /**
    * Parallam PSL, from Weyerhaeuser's 2.2E deep-beam specifier's guide (TJ-7001,
    * April 2026), which lists 3-1/2" and 5-1/4" widths against 20", 22" and 24"
-   * depths. 3-1/2 × 20 is one of those published pairs.
+   * depths. 3-1/2 × 20 is one of those published pairs — in the U.S. edition.
+   *
+   * The Canadian guides run shallower. TJ-9505 (West, April 2023) offers 2.2E
+   * Parallam at 9-1/4" to 19" deep, and TJ-9500 (East, February 2026) carries
+   * 2.0E at 9-1/4" to 18" with no 2.2E row at all. So a framer here cannot buy
+   * this beam at 20". Left at 20" rather than resized, because which depth
+   * replaces it is Mitchell's call and not a number to guess at.
    */
   eng('psl', 'Parallam PSL', '2.2E', 3.5, '3-1/2', 20, '20', ['beam']),
 
