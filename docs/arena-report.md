@@ -119,8 +119,8 @@ pretending KL was computed.
   35.09% of Vr, sag 23.32% of L/360 — "holds to 4× — nothing on this plate takes
   it", which is the honest verdict on a 19" member over 12 ft.
 - **Where it does fail, for the clip**: at a 24 ft span the same member is over
-  L/360 from 2.2× and reaches factored resistance at 3.5×, bending — 28.19% at
-  1× and 3.55× on the ramp. That is the run to film if Parallam is the specimen.
+  L/360 from 2.15× and reaches factored resistance at 3.55×, bending — 28.19%
+  at 1×. That is the run to film if Parallam is the specimen.
 
 ## Not on the bench, and what each is waiting for
 
