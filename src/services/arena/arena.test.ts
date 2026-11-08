@@ -187,8 +187,8 @@ describe('the bench', () => {
     expect(env.exceedsL360At!).toBeLessThan(env.failedAt!)
     expect(env.failedAt!).toBeGreaterThan(1)
     expect(env.failedAt!).toBeLessThanOrEqual(4)
-    expect(envelopeLine(env)).toMatch(/Factored resistance at \d\.\d×/)
-    expect(envelopeLine(env)).toMatch(/over L\/360 from \d\.\d×/)
+    expect(envelopeLine(env)).toMatch(/Factored resistance at \d\.\d\d×/)
+    expect(envelopeLine(env)).toMatch(/over L\/360 from \d\.\d\d×/)
   })
 
   it('will not rate a part it has no plate for', () => {
