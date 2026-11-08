@@ -31,7 +31,7 @@ describe('a manufacturer part, modelled', () => {
 
   // The point of modelling them at all: the plies are the product.
   it('lays a glulam up as its real lamination count', () => {
-    const nordic = getManufacturerPart('nordic-lam-24f-e-es1m1-6-3_4x18')!
+    const nordic = getManufacturerPart('nordic-lam-24f-e-es1m1-7x18')!
     expect(surfaceKind(nordic)).toBe('glulam')
     // 18" deep, 1-1/2" laminations.
     expect(laminationCount(nordic)).toBe(12)
@@ -51,7 +51,7 @@ describe('a manufacturer part, modelled', () => {
   // Parallam's selling point is that it has no plies. Drawing it as a stack
   // would be the opposite of the product.
   it('draws the strand products as one billet, not a stack', () => {
-    for (const id of ['weyerhaeuser-parallam-2_2e-3_1_2x20', 'lp-lsl-1_35e-1_3_4x9-1_2']) {
+    for (const id of ['weyerhaeuser-parallam-2_2e-3_1_2x19', 'lp-lsl-1_35e-1_3_4x9-1_2']) {
       const part = getManufacturerPart(id)!
       expect(surfaceKind(part)).toBe(part.product.toLowerCase().includes('lsl') ? 'lsl' : 'psl')
       expect(partPlyCount(part)).toBe(1)
@@ -60,7 +60,7 @@ describe('a manufacturer part, modelled', () => {
   })
 
   it('separates the plies along their own glue line when spread', () => {
-    const nordic = getManufacturerPart('nordic-lam-24f-e-es1m1-6-3_4x18')!
+    const nordic = getManufacturerPart('nordic-lam-24f-e-es1m1-7x18')!
     const tight = size(buildPartModel(nordic, { spread: 0 })!.group)
     const apart = size(buildPartModel(nordic, { spread: 1 })!.group)
     expect(apart.y).toBeGreaterThan(tight.y * 1.05)
@@ -69,7 +69,7 @@ describe('a manufacturer part, modelled', () => {
   })
 
   it('names the maker on the model, so a clip can prove whose part it is', () => {
-    const part = getManufacturerPart('nordic-lam-24f-e-es1m1-6-3_4x18')!
+    const part = getManufacturerPart('nordic-lam-24f-e-es1m1-7x18')!
     const model = buildPartModel(part)!
     expect(model.group.userData.brandPart).toBe(part.id)
     expect(model.group.userData.manufacturer).toBe('Nordic Structures')
@@ -79,7 +79,7 @@ describe('a manufacturer part, modelled', () => {
 
 describe('the brand surface resolver', () => {
   it('finds a part from the stock name a cut list already writes', () => {
-    const name = getMember('glulam-6-3_4x18')!.name
+    const name = getMember('glulam-7x18')!.name
     expect(brandForMemberName(name)?.manufacturer).toBe('Nordic Structures')
     expect(brandForMemberName('2×4')).toBeNull()
   })
@@ -102,7 +102,7 @@ describe('a header cut from a maker\'s part', () => {
       height: 3.5,
       thickness: 0.14,
       openings: [{ centerM: 2, widthM: 0.9, type: 'door' }],
-      headerMemberId: 'nordic-lam-24f-e-es1m1-6-3_4x18',
+      headerMemberId: 'nordic-lam-24f-e-es1m1-7x18',
     })
     const branded = group.children.filter((c) => c.userData.brandPart)
     expect(branded).toHaveLength(1)
@@ -121,7 +121,7 @@ describe('a header cut from a maker\'s part', () => {
       height: 2.4,
       thickness: 0.14,
       openings: [{ centerM: 2, widthM: 0.9, type: 'door' }],
-      headerMemberId: 'nordic-lam-24f-e-es1m1-6-3_4x18',
+      headerMemberId: 'nordic-lam-24f-e-es1m1-7x18',
     })
     expect(group.children.filter((c) => c.userData.brandPart)).toHaveLength(0)
     // The header is still there, and still on the cut list.

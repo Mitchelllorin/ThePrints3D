@@ -168,7 +168,14 @@ export function specimenFor(part: ManufacturerPart): ArenaSpecimen {
     }
   }
 
-  const fb = readNumber(field(part, ...FIELD_ALIASES.bending) ?? '')
+  const fbRead = readNumber(field(part, ...FIELD_ALIASES.bending) ?? '')
+  // A depth-dependent factor on Fb, applied wherever Fb is used. Nordic's
+  // PR-L294(C) note (6) is the reason this exists: over 381 mm deep, Fbx × 0.88.
+  // It is applied here rather than folded into the plate so the printed figure
+  // stays the maker's and the factor stays visible beside it.
+  const bf = part.fbFactor
+  const depthMm = member.depthIn * 25.4
+  const fb = fbRead != null && bf && depthMm > bf.overDepthMm ? fbRead * bf.factor : fbRead
   const fv = readNumber(field(part, ...FIELD_ALIASES.shear) ?? '')
   // The plain modulus, not Parallam's 'Adjusted modulus' — an Emin, which is a
   // stability figure and would understate the beam's stiffness.

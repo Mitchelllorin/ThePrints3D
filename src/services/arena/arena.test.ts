@@ -5,15 +5,15 @@ import {
   verdictAt,
   type ArenaSpecimen,
 } from './index'
-import { arenaRoster } from './specimen'
+import { arenaRoster, specimenFor } from './specimen'
 import { getManufacturerPart } from '../../data/manufacturerParts'
 
 const roster = arenaRoster()
 const byId = (id: string) => roster.find((s) => s.id === id) as ArenaSpecimen
 
 const WEST_FRASER = 'west-fraser-lvl-3000fb-1_9e'
-const NORDIC = 'nordic-lam-24f-e-es1m1-6-3_4x18'
-const PARALLAM = 'weyerhaeuser-parallam-2_2e-3_1_2x20'
+const NORDIC = 'nordic-lam-24f-e-es1m1-7x18'
+const PARALLAM = 'weyerhaeuser-parallam-2_2e-3_1_2x19'
 const LP = 'lp-lsl-1_35e-1_3_4x9-1_2'
 
 describe('the arena roster', () => {
@@ -48,6 +48,18 @@ describe('the arena roster', () => {
     expect(nordic.missing).toContain('Bending stress (Fb)')
     expect(nordic.missing).toContain('Shear stress (Fv)')
     expect(nordic.missing).toContain('Modulus of elasticity (E)')
+  })
+
+  it("applies a maker's depth-dependent factor on Fb where the report gives one", () => {
+    // PR-L294(C) note (6): over 381 mm deep, tabulated Fbx × 0.88. Nordic has no
+    // Fb on its plate today, so give it one and check the factor is applied —
+    // it must not wait on somebody remembering the note when an Fb is added.
+    const base = getManufacturerPart(NORDIC)!
+    const withFb = { ...base, rated: [...base.rated, { label: 'Bending stress', value: '1000', unit: 'psi' }] }
+    // 18" = 457.2 mm, over the 381 mm trigger.
+    expect(specimenFor(withFb).limits.fbPsi).toBeCloseTo(880, 10)
+    // A member under the trigger takes the tabulated figure as it stands.
+    expect(specimenFor({ ...withFb, memberId: 'sawn-2x12' }).limits.fbPsi).toBe(1000)
   })
 
   it('refuses a beam whose depth has no published factor behind it', () => {

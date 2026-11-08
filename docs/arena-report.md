@@ -89,17 +89,21 @@ KL was computed.
 
 ## Not on the bench, and what each is waiting for
 
-- **Nordic Lam 24F-E/ES1M1** (glulam 6-3/4 × 18, `glulam-6-3_4x18`). The plate as
-  read carries none of the four figures the bench needs: Fb, Fv, E and the
-  bending depth factor. Source APA Product Report PR-L294(C), Nordic Structures,
-  rev. 2025-12-21. Until those are on the plate it does not run — and the width
-  is a separate question: 6-3/4" sits inside the layup's 7-1/2" limit in Table 1
-  of that report, but Nordic publish 1-3/4, 3-1/2, 5-1/2 and 7, so this size is
-  at best built to order.
-- **Parallam PSL 2.2E** (3-1/2 × 20, `psl-3-1_2x20`). Fb 2900 psi, Fv 290 psi and
-  E 2 200 000 psi are read; the bending depth factor is not. At 20" deep the
+- **Nordic Lam 24F-E/ES1M1** (glulam 7 × 18, `glulam-7x18`). The plate as read
+  carries none of the four figures the bench needs: Fb, Fv, E and the bending
+  depth factor. Source APA Product Report PR-L294(C), Nordic Structures, rev.
+  2025-12-21. Until those are on the plate it does not run. The width moved from
+  6-3/4" to 7" on Mitchell's call (8 Nov 2026) so the row is a published Nordic
+  width; note (6) of that report — Fbx × 0.88 over 381 mm deep, and this member
+  is 457 mm — is carried on the plate and applied in code the moment an Fb
+exists.
+- **Parallam PSL 2.2E** (3-1/2 × 19, `psl-3-1_2x19`). Fb 2900 psi, Fv 290 psi and
+  E 2 200 000 psi are read; the bending depth factor is not. At 19" deep the
   12"-tabulated value cannot be used without it, and the bench will not invent
-  1.0. Source Trus Joist TJ-7001, April 2026.
+  1.0. The depth is now a Canadian size: TJ-9505 (West, April 2023) runs 2.2E
+  beams at 9-1/4 to 19 in, and 19" is its deepest — the 18" the order named is
+  not a depth in that guide. The stress figures are still TJ-7001's U.S.
+  allowable values and the part stays `unverified`.
 - **LP SolidStart LSL 1.35E** — off the bench by decision, not by a missing
   figure: it is a rim board, and the cited document is LP's rim-board guide.
 

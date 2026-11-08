@@ -51,6 +51,24 @@ export interface RatedField {
   note?: string
 }
 
+/**
+ * A factor the maker's own report applies to bending strength at depth, over and
+ * above the depth factor.
+ *
+ * Nordic's PR-L294(C) note (6) is the case this exists for: "When the member
+ * depth is greater than 381 mm (15 inches), the tabulated Fbx values shall be
+ * multiplied by a factor of 0.88." Carried as data rather than as a remark in a
+ * comment, because the bench applies it — a factor that lives only in prose is
+ * one the next person to add an Fb will not apply.
+ */
+export interface StrengthFactor {
+  factor: number
+  /** Applies above this depth, in millimetres. */
+  overDepthMm: number
+  /** The note the report prints beside it. */
+  note: string
+}
+
 /** Where a part sits in the assembly F.U.S.E. scores. */
 export interface PartLayer {
   id: LayerId
@@ -93,29 +111,39 @@ export interface ManufacturerPart {
   modelling: 'reference-only' | 'fully-modelled'
   /** One line for the sheet and the pitch, in the trade's register. */
   pitchLine: string
+  /** A depth-dependent factor on Fb, applied wherever Fb is used. */
+  fbFactor?: StrengthFactor
 }
 
 export const MANUFACTURER_PARTS: readonly ManufacturerPart[] = [
   {
-    id: 'nordic-lam-24f-e-es1m1-6-3_4x18',
+    id: 'nordic-lam-24f-e-es1m1-7x18',
     manufacturer: 'Nordic Structures',
     product: 'Nordic Lam',
     designation: '24F-E/ES1M1',
-    memberId: 'glulam-6-3_4x18',
+    memberId: 'glulam-7x18',
     layer: { id: 'framing', material: 'wood' },
     rated: [
       // Dimensions and limits, straight off Table 1 of the product report.
       { label: 'Layup', value: '24F-E/ES1M1' },
-      { label: 'Width', value: '6-3/4', unit: 'in', note: 'Permitted by Table 1 (max 7-1/2) but not one of Nordic\'s four published beam widths — 1-3/4, 3-1/2, 5-1/2, 7' },
+      { label: 'Width', value: '7', unit: 'in', note: 'Moved off 6-3/4 on Mitchell\'s call, 8 Nov 2026 — 6-3/4 is permitted by Table 1 (38–191 mm) but is not one of Nordic\'s published beam widths: 1-3/4, 3-1/2, 5-1/2, 7' },
       { label: 'Depth', value: '18', unit: 'in' },
-      { label: 'Depth : width', value: '2.667', unit: ':1', note: '18 ÷ 6-3/4, derived — the layup is capped at 12:1' },
-      { label: 'Length, maximum', value: '80', unit: 'ft' },
+      { label: 'Depth : width', value: '2.571428571428571', unit: ':1', note: '18 ÷ 7, derived — the layup is capped at 12:1' },
+      { label: 'Length, maximum', value: '80', unit: 'ft', note: 'A maximum, not a stock list — 24.4 m, per §2 of the report' },
       { label: 'Width range, layup', value: '1-1/2 – 7-1/2', unit: 'in' },
       { label: 'Depth, maximum', value: '36', unit: 'in' },
+      { label: 'Bending factor over 381 mm', value: '0.88', unit: '×', note: 'PR-L294(C) note (6): tabulated Fbx × 0.88 when the member is deeper than 381 mm (15"). This member is 457 mm, so it applies to any Fbx used' },
+      { label: 'Stock lengths', value: 'Generic list', note: 'Nordic publishes a maximum length (80 ft), not a stock list in this report, so the app\'s generic engineered lengths are what the buy list uses' },
       { label: 'Fabrication', value: 'ANSI A190.1' },
       { label: 'Product report', value: 'APA PR-L294(C)', note: 'Also covered by ESR-4874' },
       { label: 'Species', value: 'SPF, mechanically graded', note: 'Black spruce, per the report' },
     ],
+    // Note (6) of the report, applied by the bench wherever Fb is used.
+    fbFactor: {
+      factor: 0.88,
+      overDepthMm: 381,
+      note: 'APA PR-L294(C) note (6) — Fbx × 0.88 for members deeper than 381 mm',
+    },
     basis:
       "Nordic does not publish a service life for Nordic Lam, and F.U.S.E. does not invent one. " +
       "The member is scored with the app's own figure for structural timber — 90 years in a dry wall — " +
@@ -127,7 +155,8 @@ export const MANUFACTURER_PARTS: readonly ManufacturerPart[] = [
     verification: 'verified',
     verificationNote:
       'Table 1 of PR-L294(C) confirms the 38–191 mm width range, the 914 mm depth cap under the 12:1 limit, and lengths to 24.4 m (80 ft); ' +
-      'CCMC 13216-R is the Canadian evaluation behind it. The plate flags 6-3/4: Table 1 permits it, Nordic does not publish it as a stock width.',
+      'CCMC 13216-R is the Canadian evaluation behind it. 7 in (178 mm) sits inside that range. ' +
+      'Note (6) of the same report is carried on the plate and applied in code: over 381 mm deep, Fbx × 0.88 — this member is 457 mm.',
     modelling: 'reference-only',
     pitchLine:
       'Their layup, their widths, their depth limit — a beam a framer can pick, and see where it sits when the wall ages.',
@@ -170,33 +199,33 @@ export const MANUFACTURER_PARTS: readonly ManufacturerPart[] = [
       'Their 1.9E line and their own depth factor, so a 1.9E beam stops being a number in a guide and becomes a beam in a wall.',
   },
   {
-    id: 'weyerhaeuser-parallam-2_2e-3_1_2x20',
+    id: 'weyerhaeuser-parallam-2_2e-3_1_2x19',
     manufacturer: 'Weyerhaeuser',
     product: 'Parallam PSL',
     designation: '2.2E',
-    memberId: 'psl-3-1_2x20',
+    memberId: 'psl-3-1_2x19',
     layer: { id: 'framing', material: 'wood' },
     rated: [
       // The 2.2E design-stress block of the deep-beam guide, plus the two
       // stiffness figures carried beside it.
       { label: 'Grade', value: '2.2E' },
-      { label: 'Width', value: '3-1/2', unit: 'in' },
-      { label: 'Depth', value: '20', unit: 'in' },
+      { label: 'Width', value: '3-1/2', unit: 'in', note: 'TJ-9505 (West Canada) lists 2.2E beams in 3-1/2, 5-1/4 and 7 in widths' },
+      { label: 'Depth', value: '19', unit: 'in', note: 'The deepest 2.2E depth in TJ-9505 — its depths stop at 19". There is no 18" in that guide' },
       { label: 'Modulus of elasticity', value: '2.2 × 10⁶', unit: 'psi' },
       { label: 'Adjusted modulus', value: '1,118,190', unit: 'psi', note: 'Emin, per the guide' },
-      { label: 'Flexural stress', value: '2900', unit: 'psi', note: 'At a 12" depth' },
+      { label: 'Flexural stress', value: '2900', unit: 'psi', note: 'At a 12" depth — the U.S. (ASD) figure from TJ-7001, still not a Canadian specified strength' },
       { label: 'Tension stress', value: '2300', unit: 'psi', note: 'At a 4 ft length' },
       { label: 'Compression perpendicular', value: '625', unit: 'psi' },
       { label: 'Compression parallel', value: '2900', unit: 'psi' },
       { label: 'Horizontal shear', value: '290', unit: 'psi' },
       { label: 'Shear modulus', value: '137,500', unit: 'psi' },
-      { label: 'Lengths available', value: '48 and 60', unit: 'ft' },
+      { label: 'Stock lengths', value: 'Generic list', note: 'TJ-9505 prints a maximum offering, not a stock-length list, so the app\'s generic engineered lengths stand' },
       { label: 'Code evaluation', value: 'ICC-ES ESR-1387' },
     ],
     basis:
       'Weyerhaeuser publishes no service life for Parallam, so F.U.S.E. scores it with the app\'s own timber figure. ' +
       'The bending and tension values are reference values at a 12" depth and a 4 ft length, and the guide gives a depth and a length factor for anything else: ' +
-      'this row is 20" deep, so the stress the beam carries is the tabulated figure reduced by those factors, not the figure on its own. ' +
+      'this row is 19" deep, so the stress the beam carries is the tabulated figure reduced by those factors, not the figure on its own. ' +
       'The guide forbids cutting, notching and drilling except as the engineer of record approves — a wall in this app can be remodelled freely, and that beam could not.',
     source: {
       label: "Trus Joist 2.2E Parallam PSL Deep Beam Specifier's Guide, TJ-7001 (April 2026)",
@@ -204,12 +233,10 @@ export const MANUFACTURER_PARTS: readonly ManufacturerPart[] = [
     },
     verification: 'unverified',
     verificationNote:
-      'TJ-7001 is the U.S. guide, on ICC-ES ESR-1387 and NDS allowable stresses, so these are not Canadian specified strengths. ' +
-      "Weyerhaeuser's Canadian guides are public and were checked: TJ-9505 (West, April 2023) offers 2.2E Parallam in 3-1/2, 5-1/4 and 7 in widths at 9-1/4 to 19 in deep, " +
-      'and TJ-9500 (East, February 2026) carries 2.0E Parallam at 3-1/2, 5-1/4 and 7 in by 9-1/4 to 18 in. ' +
-      'This beam is 20 in deep, which neither Canadian edition offers; CCMC 11161-R is the Canadian evaluation behind both. ' +
-      'Their tables give CSA O86 specified strengths rather than the ASD values on this plate, and the Parallam rows could not be read off the PDF without ambiguity, ' +
-      'so every figure here is left exactly as it was.',
+      'The section is Canadian: 3-1/2 × 19 is in TJ-9505 (West, April 2023), whose 2.2E header and beam table runs 9-1/4, 9-1/2, 11-1/4, 11-7/8, 14, 16 and 19 in deep at 3-1/2, 5-1/4 and 7 in widths. ' +
+      'The strength figures are not: TJ-7001 is the U.S. guide, on ICC-ES ESR-1387 and NDS allowable stresses, so they are not Canadian specified strengths, and the depth factor a 19" member needs is still not on the plate. ' +
+      'TJ-9500 (East, February 2026) carries 2.0E only, to 18 in, so 19 in is a West-Canada size. CCMC 11161-R is the Canadian evaluation behind both. ' +
+      'No figure was changed in this pass — the size changed, the stresses did not.',
     modelling: 'reference-only',
     pitchLine:
       'A beam whose whole selling point is that it has no plies to nail wrong — and an app that can show the wall it carries outliving it.',
