@@ -49,7 +49,8 @@ describe('walls drawn one at a time', () => {
     const walls = createDrawnProject({ ...spec, freeWalls: ring.walls }).drawing.parsedWalls
     expect(walls).toHaveLength(ring.chords)
     expect(walls.every((w) => w.bend === true)).toBe(true)
-    expect(walls.filter((w) => w.sharedStartStud)).toHaveLength(ring.chords - 1)
+    // The ring closes, so every chord shares its start with the one before it.
+    expect(walls.filter((w) => w.sharedStartStud)).toHaveLength(ring.chords)
   })
 
   it('lays no floor, because a floor is a closed shape and this is not one', () => {

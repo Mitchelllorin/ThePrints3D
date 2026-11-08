@@ -33,8 +33,9 @@ export interface InsideWall {
   bend?: boolean
   /**
    * The stud at this wall's START break is the one the chord before it stood up.
-   * Set on every chord but the first of a ring, so a break carries ONE stud
-   * instead of one from each side of it.
+   * Set on every chord of a ring — the first one included, because the ring
+   * closes and the last chord's end stud is already standing at that break — so
+   * a break carries ONE stud instead of one from each side of it.
    */
   sharedStartStud?: boolean
 }
@@ -193,8 +194,10 @@ export function circleString(c: DrawItCircle): CircleString {
       x1: p.x, y1: p.y, x2: q.x, y2: q.y,
       bend: true,
       // This chord's start is where the one before it ended, and that chord's
-      // own end stud is already at the joint — so this end brings none.
-      sharedStartStud: i > 0,
+      // own end stud is already at the joint — so this end brings none. The
+      // first chord is no exception: the ring closes, so the chord before IT is
+      // the last one, and its end stud is already standing at the first break.
+      sharedStartStud: true,
     }
   })
   return { walls, chords: n, chordMm: 2 * r * Math.sin(Math.PI / n) }

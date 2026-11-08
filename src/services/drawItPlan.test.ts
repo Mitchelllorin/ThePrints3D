@@ -271,11 +271,12 @@ describe('circles on the sheet', () => {
     const s = circleString({ cx: 0, cy: 0, r: 1828.8 })
     // Every chord is a bend, so none of them frames a corner post or a lap.
     expect(s.walls.every((w) => w.bend === true)).toBe(true)
-    // The first chord stands the stud at its own start; every other chord's
-    // start break is the previous chord's end break, which already has one.
-    expect(s.walls[0].sharedStartStud).toBe(false)
-    expect(s.walls.slice(1).every((w) => w.sharedStartStud === true)).toBe(true)
-    expect(s.walls.filter((w) => !w.sharedStartStud)).toHaveLength(1)
+    // Every chord's start break is the previous chord's end break, which already
+    // has a stud on it — and the first chord is not the exception, because the
+    // ring closes and the chord before it is the last one. So the ring stands
+    // exactly one stud per break: n studs for n chords.
+    expect(s.walls.every((w) => w.sharedStartStud === true)).toBe(true)
+    expect(s.walls.filter((w) => !w.sharedStartStud)).toHaveLength(0)
   })
 
   it('lays the bays out by the radius, tight on a tight bend and never past a stud space', () => {
