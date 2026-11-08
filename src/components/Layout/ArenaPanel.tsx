@@ -27,9 +27,8 @@
  * A part whose plate is missing a figure does not run. It sits on the roster with
  * the missing field named, which is the honest answer to "why is this maker not
  * on the bench": Nordic's report publishes a layup and a depth limit and no
- * strength values at all, and Parallam's 20" depth needs a depth factor TJ-7001
- * does not print. When those plates catch up, the row lights up on its own —
- * nothing in the code is holding them back.
+ * strength values at all. When that plate catches up, the row lights up on its
+ * own — nothing in the code is holding it back.
  */
 import { useEffect, useMemo, useState } from 'react'
 import {

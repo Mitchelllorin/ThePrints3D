@@ -5,7 +5,7 @@ bench's own output for the case it is set to; nothing is rounded to look tidy.
 
 ## What changed from the first run
 
-Three things were wrong and are fixed in the code, not only in this page:
+Four things were wrong and are fixed in the code, not only in this page:
 
 1. **The versus run is gone.** It ranked a Canadian specified strength against a
    U.S. allowable stress on one ramp and declared a winner. Parts on different
@@ -20,6 +20,14 @@ Three things were wrong and are fixed in the code, not only in this page:
    Deflection stays on specified (unfactored) load. Only bending or shear
    reaching factored resistance produces FAILED; sag past L/360 gets its own
    readout and never the word failed.
+4. **Parallam is on the bench, on its Canadian figures.** TJ-9505 page 4
+   publishes the 2.2E specified strengths — Fb 5,360 psi, Fv 540 psi, E
+   2.2 × 10⁶ psi — and the same page's factored-resistance table prints
+   Mr 80,445 ft-lb and Vr 21,545 lb for 3-1/2 × 19. The U.S. allowable stresses
+   this plate used to carry are gone, so the plate stands on one basis. The
+   bench derives 80,444.7 ft-lb and 21,546 lb from those strengths; the gap is
+   the guide's own rounding, and reproducing the printed table is what proves
+   the reading of it.
 
 ## The case
 
@@ -54,15 +62,16 @@ O86 to the specified strengths shown."
 | KT | 1.00 | untreated | CSA O86:19 Cl. 6.4.3 |
 | KL | 1.00 | **assumed, not checked** — the bench has no bracing control | CSA O86:19 Cl. 6.5.3.7 / 7.5.6.4 |
 | KZb (size) | 1.0058072206386928 | the maker's own depth factor at 11-1/2": (12 / 11.5) ^ (1 / 7.35) | West Fraser LVL User's Guide, Canadian edition — applied instead of, not on top of, a code depth factor |
+| KZb (size, PSL) | 0.9502709841765127 | the maker's own depth factor at 19": (12 / 19) ^ 0.111 | TJ-9505 note (3) — the PSL exponent, applied the same way |
 | Dead load factor | 1.25 | principal combination | NBCC 2020 Table 4.1.3.2-A |
 | Live load factor | 1.50 | principal combination | NBCC 2020 Table 4.1.3.2-A |
 | Deflection basis | specified | a floor sags under the load it carries, not a factored one | CSA O86:19 Cl. 5.4.2 (serviceability); limit L/360 is the app's |
 
-**KL is the one soft factor.** Both makers require lateral support at bearing and
-at 24 in o.c. along the span (TJ-9500 condition). If the beam on the bench is not
-braced that way, Mr is lower than the bench prints. The bench cannot police a
-bracing condition it has no control for, so it says so here instead of pretending
-KL was computed.
+**KL is the one soft factor.** Every guide cited here requires lateral support at
+bearing and along the span (TJ-9505, PR-L294(C), PR-L349(C)). If the beam on the
+bench is not braced that way, Mr is lower than the bench prints. The bench cannot
+police a bracing condition it has no control for, so it says so here instead of
+pretending KL was computed.
 
 ## West Fraser LVL 3000Fb 1.9E — canadian-verified
 
@@ -87,6 +96,32 @@ KL was computed.
   2.85 times it. Two different numbers, two different events. On a 0.05 ramp the
   continuous crossings are 1.642× and 2.845×.
 
+## Parallam PSL 2.2E — canadian-verified
+
+- Section 3-1/2 × 19 from catalogue row `psl-3-1_2x19`; S = 210.5833 in³,
+  I = 2000.5417 in⁴, A = 66.5 in².
+- Plate: Fb 5,360 psi at a 12" depth · Fv 540 psi · E 2 200 000 psi · depth
+  factor (12/d)^0.111, which at 19" is 0.9502709841765127.
+- Factored resistances: Mr/S = **4584.107227667498 psi**, Mr =
+  965 336.58 lb·in = 80 444.715 ft-lb; Vr = **21 546 lb**, which on 1.5V/A is
+  486.00 psi.
+- **The check that matters**: TJ-9505 page 4 prints Mr 80,445 ft-lb and
+  Vr 21,545 lb for this width and depth, and the bench derives 80,444.7 and
+  21,546. The chain is right — or the table was read wrong, and both would show.
+- Source: Trus Joist Beam, Header, and Column Specifier's Guide (W. Canada),
+  TJ-9505, April 2023 — NBC / CSA O86 specified strengths, so this is a real
+  rating rather than a reference.
+- **At 1×**: factored load 315 plf, Mf 68 040 lb·in, Vf 1890 lb.
+  - Bending: demand 323.10 psi against 4584.11 psi — **7.05% of Mr**.
+  - Shear: 42.63 psi against 486.00 psi — **8.77% of Vr**.
+  - Sag: 0.0233 in against 0.400 in — **5.83% of L/360** (specified load).
+- **At 12 ft it does not fail on the ramp**: at 4× bending is 28.19% of Mr, shear
+  35.09% of Vr, sag 23.32% of L/360 — "holds to 4× — nothing on this plate takes
+  it", which is the honest verdict on a 19" member over 12 ft.
+- **Where it does fail, for the clip**: at a 24 ft span the same member is over
+  L/360 from 2.2× and reaches factored resistance at 3.5×, bending — 28.19% at
+  1× and 3.55× on the ramp. That is the run to film if Parallam is the specimen.
+
 ## Not on the bench, and what each is waiting for
 
 - **Nordic Lam 24F-E/ES1M1** (glulam 7 × 18, `glulam-7x18`). The plate as read
@@ -97,13 +132,6 @@ KL was computed.
   width; note (6) of that report — Fbx × 0.88 over 381 mm deep, and this member
   is 457 mm — is carried on the plate and applied in code the moment an Fb
 exists.
-- **Parallam PSL 2.2E** (3-1/2 × 19, `psl-3-1_2x19`). Fb 2900 psi, Fv 290 psi and
-  E 2 200 000 psi are read; the bending depth factor is not. At 19" deep the
-  12"-tabulated value cannot be used without it, and the bench will not invent
-  1.0. The depth is now a Canadian size: TJ-9505 (West, April 2023) runs 2.2E
-  beams at 9-1/4 to 19 in, and 19" is its deepest — the 18" the order named is
-  not a depth in that guide. The stress figures are still TJ-7001's U.S.
-  allowable values and the part stays `unverified`.
 - **LP SolidStart LSL 1.35E** — off the bench by decision, not by a missing
   figure: it is a rim board, and the cited document is LP's rim-board guide.
 
