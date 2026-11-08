@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nordic Structures Nordic Lam — theprints3d.com</title>
+<style>
+  :root{
+    --canvas:#0b0f14; --panel:21 28 37; --panel-a:.78; --panel-solid:#151c25;
+    --panel-2:#1e2833; --line:#2c3a4a;
+    --ink:#e8eef5; --ink-2:#aebccd; --muted:#7b8ca1;
+    --accent:#3d9ae8; --ok:#3fbf6e; --warn:#e0a03a; --bad:#e5643f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--canvas); color:var(--ink);
+    font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+  .page{max-width:860px; margin:0 auto; padding:40px 28px 64px; display:grid; gap:22px}
+  header{display:grid; gap:6px; border-bottom:1px solid var(--line); padding-bottom:18px}
+  .kick{font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--muted)}
+  h1{margin:0; font-size:30px; line-height:1.15; letter-spacing:-.01em}
+  h1 .m{color:var(--accent)}
+  .sub{margin:0; color:var(--ink-2); max-width:62ch}
+  section{display:grid; gap:10px}
+  h2{margin:0; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  table{width:100%; border-collapse:collapse; font-size:14px}
+  th,td{text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); vertical-align:top}
+  th[scope=row]{font-weight:500; color:var(--ink-2); width:34%}
+  thead th{font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  td.num,th.num{font-variant-numeric:tabular-nums; white-space:nowrap}
+  td.note{color:var(--muted); font-size:12.5px}
+  .u{color:var(--muted); font-size:12.5px}
+  .plate{background:rgba(var(--panel) / var(--panel-a));
+    border:1px solid var(--line); border-radius:10px; padding:16px 18px; display:grid; gap:8px}
+  .plate .name{font-size:17px; font-weight:600}
+  .plate .meta{color:var(--ink-2); font-size:13.5px}
+  .plate .line{color:var(--ink-2)}
+  .basis{background:var(--panel-solid); border-radius:8px; padding:14px 16px;
+    color:var(--ink-2); font-size:13.5px; display:grid; gap:8px}
+  .basis b{color:var(--ink); font-weight:600}
+  .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--muted)}
+  .legend span i{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px}
+  footer{border-top:1px solid var(--line); padding-top:16px; color:var(--muted); font-size:12.5px;
+    display:grid; gap:6px}
+  a{color:var(--accent)}
+  @media print{
+    :root{--canvas:#fff; --ink:#0c1a2b; --ink-2:#3d5068; --muted:#63758c; --line:#c9d5e1;
+      --panel-solid:#f3f6f9; --panel:255 255 255; --panel-a:1; --accent:#12658f}
+    body{font-size:12px}
+    .page{padding:0; gap:14px}
+    h1{font-size:24px}
+    @page{margin:14mm}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <p class="kick">Manufacturer preview · 2026-11-06</p>
+    <h1>Nordic Lam in ThePrints3D<span class="m">.</span></h1>
+    <p class="sub">Their layup, their widths, their depth limit — a beam a framer can pick, and see where it sits when the wall ages.</p>
+  </header>
+
+  <section>
+    <h2>The part, as it is in the model</h2>
+    <div class="plate">
+      <span class="name">Nordic Lam 6-3/4 × 18</span>
+      <span class="meta">Nordic Structures · designation 24F-E/ES1M1</span>
+      <span class="line">beam · header · stocked to 48 ft</span>
+      <span class="line">Scored as Wood framing in the framing layer.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Rated — your published figures</h2>
+    <table>
+      <tbody>
+<tr>
+        <th scope="row">Layup</th>
+        <td class="num">24F-E/ES1M1</td>
+        <td class="note"></td>
+      </tr>
+<tr>
+        <th scope="row">Width</th>
+        <td class="num">6-3/4 <span class="u">in</span></td>
+        <td class="note"></td>
+      </tr>
+<tr>
+        <th scope="row">Depth</th>
+        <td class="num">18 <span class="u">in</span></td>
+        <td class="note"></td>
+      </tr>
+<tr>
+        <th scope="row">Depth : width</th>
+        <td class="num">2.67 <span class="u">:1</span></td>
+        <td class="note">Layup is capped at 12:1</td>
+      </tr>
+<tr>
+        <th scope="row">Length, maximum</th>
+        <td class="num">80 <span class="u">ft</span></td>
+        <td class="note"></td>
+      </tr>
+<tr>
+        <th scope="row">Width range, layup</th>
+        <td class="num">1-1/2 – 7-1/2 <span class="u">in</span></td>
+        <td class="note"></td>
+      </tr>
+<tr>
+        <th scope="row">Depth, maximum</th>
+        <td class="num">36 <span class="u">in</span></td>
+        <td class="note"></td>
+      </tr>
+<tr>
+        <th scope="row">Fabrication</th>
+        <td class="num">ANSI A190.1</td>
+        <td class="note"></td>
+      </tr>
+<tr>
+        <th scope="row">Product report</th>
+        <td class="num">APA PR-L294(C)</td>
+        <td class="note">Also covered by ESR-4874</td>
+      </tr>
+<tr>
+        <th scope="row">Species</th>
+        <td class="num">SPF, mechanically graded</td>
+        <td class="note">Black spruce, per the report</td>
+      </tr>
+      </tbody>
+    </table>
+    <p class="sub" style="font-size:12.5px">Source: <a href="https://www.nordic.ca/sites/default/files/datasheet/file/APA_PR-L294C_2025-12-21.pdf">APA Product Report PR-L294(C) — Nordic Lam, Nordic Structures</a></p>
+  </section>
+
+  <section>
+    <h2>F.U.S.E. — the assembly it sits in, aged 25 years</h2>
+    <table>
+      <thead>
+        <tr><th>Site</th><th>Your member</th><th>First thing to go</th><th class="num">Gone</th></tr>
+      </thead>
+      <tbody>
+<tr>
+        <th scope="row">Temperate</th>
+        <td class="num" style="color:#3fb950">holds past 25</td>
+        <td>nothing inside 25</td>
+        <td class="num">0</td>
+      </tr>
+<tr>
+        <th scope="row">Wet coast</th>
+        <td class="num" style="color:#f85149">year 23</td>
+        <td>Gypsum 1/2″ — year 13</td>
+        <td class="num">4</td>
+      </tr>
+<tr>
+        <th scope="row">Hot and humid</th>
+        <td class="num" style="color:#f85149">year 24</td>
+        <td>Gypsum 1/2″ — year 13</td>
+        <td class="num">4</td>
+      </tr>
+<tr>
+        <th scope="row">High desert</th>
+        <td class="num" style="color:#3fb950">holds past 25</td>
+        <td>nothing inside 25</td>
+        <td class="num">0</td>
+      </tr>
+<tr>
+        <th scope="row">Continental</th>
+        <td class="num" style="color:#3fb950">holds past 25</td>
+        <td>nothing inside 25</td>
+        <td class="num">0</td>
+      </tr>
+<tr>
+        <th scope="row">Sheltered lot</th>
+        <td class="num" style="color:#3fb950">holds past 25</td>
+        <td>nothing inside 25</td>
+        <td class="num">0</td>
+      </tr>
+      </tbody>
+    </table>
+    <div class="legend">
+      <span><i style="background:#3fb950"></i>Holding</span>
+      <span><i style="background:#d2a106"></i>Wearing</span>
+      <span><i style="background:#f0883e"></i>Critical</span>
+      <span><i style="background:#f85149"></i>Failed</span>
+    </div>
+    <div class="basis">
+      <span><b>What this is.</b> Nordic does not publish a service life for Nordic Lam, and F.U.S.E. does not invent one. The member is scored with the app's own figure for structural timber — 90 years in a dry wall — so the year column is the model's, not Nordic's.</span>
+      <span><b>The assembly.</b> Fiber-cement lap over housewrap on OSB, 2 storeys, metal roof over it, closed roof space, nothing repainted. Six sites, 25 years.</span>
+      <span><b>What this is not.</b> A warranty, a code ruling, or a substitute for the local trade.
+        F.U.S.E. reports the order failures arrive in; it does not promise the year.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>What happens next</h2>
+    <div class="basis">
+      <span>Send one product line and its span data. It goes into the catalogue as a real member —
+        width, depth, layup or gauge, stock lengths — and comes back as this sheet, with the
+        spec figures checked against your own table and your name on the member a contractor picks.</span>
+      <span>Nothing ships with your name on it until you have read the sheet and said yes.</span>
+    </div>
+  </section>
+
+  <footer>
+    <span>ThePrints3D — theprints3d.com · Mitchell Lorin McKnight</span>
+    <span>Generated from data/manufacturerParts.ts and services/fuse on 2026-11-06.
+      6 sites, horizon 25 years, worst site loses 4 layers.</span>
+  </footer>
+
+</div>
+</body>
+</html>

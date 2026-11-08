@@ -160,16 +160,37 @@ async function openPage(frame, plan = 'medium') {
 
   await page.goto(URL_, { waitUntil: 'domcontentloaded', timeout: 60_000 })
   await click(page, /^Launch$/)
-  await page.waitForTimeout(1500)
 
+  /**
+   * THE FRONT DOOR RANKED ITS DOORS, SO THE RECORDER HAS TO WALK THE RANK.
+   *
+   * An empty workspace used to show seven equal chips, the three plans among
+   * them, so clicking a plan name straight after Launch worked. It is now
+   * three ranked doors — draw it, open a plan, look at a finished one — with
+   * the plans folded behind "Other ways to start". The recorder clicked the
+   * plan name, found nothing, and failed with "preset not offered", which
+   * blamed the workspace for a front door that had simply moved.
+   *
+   * So: open the drawer, then pick the plan, then pick how it opens. Each step
+   * waits for the control rather than for a sleep, because the workspace mounts
+   * lazily and timing it is what made this brittle in the first place.
+   */
   const label = PLAN_LABEL[plan] ?? PLAN_LABEL.medium
-  if (!(await click(page, new RegExp(label)))) {
-    throw new Error(`preset "${label}" not offered — did the workspace open?`)
+  if (!(await click(page, /Other ways to start/))) {
+    // Already-expanded state, or a workspace that opened with a model: either
+    // way the plan may simply be on screen, so fall through rather than die.
+    log('  ! "Other ways to start" not offered — trying the plan directly')
   }
-  await page.waitForTimeout(600)
-  if (!(await click(page, /Show it built/))) {
+  if (!(await waitForText(page, new RegExp(label), 45_000))) {
+    throw new Error(`preset "${label}" never appeared — is it still behind a different chip?`)
+  }
+  if (!(await click(page, new RegExp(label)))) {
+    throw new Error(`preset "${label}" is on screen but would not take a click`)
+  }
+  if (!(await waitForText(page, /Show it built/, 15_000))) {
     throw new Error('"Show it built" not offered after picking the plan')
   }
+  await click(page, /Show it built/)
 
   await page.waitForFunction(() => typeof window.__cinema?.measure === 'function', { timeout: 60_000 })
 
@@ -202,6 +223,25 @@ async function openPage(frame, plan = 'medium') {
 
   if (errors.length) log(`  ! page errors during setup: ${errors.slice(0, 3).join(' | ')}`)
   return page
+}
+
+/** Wait until an on-screen control whose label matches exists. */
+async function waitForText(page, re, timeout) {
+  return page
+    .waitForFunction((src) => {
+      const rx = new RegExp(src)
+      for (const el of document.querySelectorAll('button,[role=button]')) {
+        const t = (el.innerText || el.getAttribute('aria-label') || '').trim()
+        if (!rx.test(t)) continue
+        const r = el.getBoundingClientRect()
+        if (r.width < 1 || r.height < 1) continue
+        if (!(r.right > 0 && r.left < innerWidth && r.bottom > 0 && r.top < innerHeight)) continue
+        return true
+      }
+      return false
+    }, re.source, { timeout, polling: 250 })
+    .then(() => true)
+    .catch(() => false)
 }
 
 /** Click the first on-screen control whose label matches. */

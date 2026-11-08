@@ -277,6 +277,65 @@ const NAMEPLATE: Shot = {
   ],
 }
 
+/**
+ * REPLY — the clip that goes to a supplier, not to a customer.
+ *
+ * A manufacturer has one question when a stranger emails them a datasheet:
+ * what did you actually do with my part. So this take answers that and stops.
+ * The building is up in the first second, a wall is selected early so the plate
+ * is legible before the camera arrives at it, and the explode is the only
+ * motion that matters — parts leaving along the axis they would come off in
+ * says "this is a model of real construction" faster than any caption can.
+ *
+ * Chrome stays ON. A clean plate looks like a marketing render, and a marketing
+ * render is the one thing a technical contact is trained to discount. The rails,
+ * the plate and the app's own readouts on screen are the evidence that this is
+ * a working tool and not a one-off illustration made for their inbox.
+ *
+ * It does NOT open on the launch screen, and it does not name a manufacturer:
+ * the part in this take is the plan's own, and a caption claiming otherwise
+ * would be the only dishonest frame in the file.
+ */
+const REPLY: Shot = {
+  id: 'reply',
+  title: 'Reply to a maker',
+  duration: 14,
+  plan: 'medium',
+  chrome: true,
+  cam: [
+    { at: 0, az: 30, elev: 20, dist: AIR.normal },
+    { at: 5, az: 62, elev: 27, dist: AIR.tight, ease: 'easeInOut' },
+    { at: 9.5, az: 98, elev: 17, dist: AIR.tight, ease: 'easeInOut' },
+    { at: 14, az: 126, elev: 24, dist: AIR.normal, ease: 'easeOutSoft' },
+  ],
+  cues: [
+    /**
+     * ASSEMBLED AT FRAME ONE, ASSERTED RATHER THAN ASSUMED.
+     *
+     * The first cut of this shot had no zero cue and opened with wall panels
+     * already drifting off the slab. Arming sets the shot's explode to 0, but
+     * the geometry that lands on screen is whatever the build left behind a
+     * frame or two later — so the state has to be written onto the timeline, not
+     * hoped for. Same reason TURNTABLE pins its opening value.
+     */
+    { at: 0, explode: 0, over: 0.01 },
+    { at: 0.4, caption: 'Built from the print' },
+    { at: 2.6, selectWall: 0, caption: 'Every member carries its rated values' },
+    /**
+     * HALF, NOT FULL.
+     *
+     * At 0.75 the camera has to pull back to hold the spread and every part
+     * ends up small — and the take finished on a ring of panels floating in
+     * empty grid, which reads as the model falling to pieces. Half open keeps
+     * the assembly legible while still showing that parts come off along their
+     * own axes, and it settles back to a quarter open so the last frame holds
+     * both halves of the claim: it comes apart, and it comes back.
+     */
+    { at: 6, explode: 0.5, over: 4.5, ease: 'easeInOut', caption: 'Parts leave on their assembly axis' },
+    { at: 11, explode: 0.22, over: 2.5, ease: 'easeInOut', caption: 'Back together — nothing lost' },
+  ],
+}
+
 /** Everything the recorder can render, in the order a batch renders them. */
 export const SHOTS: Shot[] = [
   HERO,
@@ -287,6 +346,7 @@ export const SHOTS: Shot[] = [
   TURNTABLE,
   VERTICAL,
   NAMEPLATE,
+  REPLY,
 ]
 
-export { HERO, EXPLODE, STOREYS, TRADES, PLAN_TO_MODEL, TURNTABLE, VERTICAL, NAMEPLATE }
+export { HERO, EXPLODE, STOREYS, TRADES, PLAN_TO_MODEL, TURNTABLE, VERTICAL, NAMEPLATE, REPLY }
