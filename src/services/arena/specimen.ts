@@ -212,6 +212,25 @@ export function specimenFor(part: ManufacturerPart): ArenaSpecimen {
 }
 
 /**
+ * Parts that are in the catalogue and NOT on the bench, and why.
+ *
+ * LP SolidStart LSL is a rim board. A rim board is the shallow member nailed to
+ * the joist ends to close the floor and carry the sheathing edge — LP's own
+ * cited guide is titled "OSB & LSL Rim Board". Putting one on a 12 ft floor span
+ * asks it to do a job it is not sold for, and a FAILED chip against a product
+ * that was never offered for that job is a false accusation dressed up as a
+ * test. It keeps its catalogue row and its plate; it comes off the bench.
+ */
+const OFF_THE_BENCH: ReadonlyMap<string, string> = new Map([
+  ['lp-lsl-1_35e-1_3_4x9-1_2', 'rim board — not a floor beam'],
+])
+
+/** Why a part is off the bench, or null when it is on it. */
+export function benchExclusion(id: string): string | null {
+  return OFF_THE_BENCH.get(id) ?? null
+}
+
+/**
  * The whole bench, branded parts first and in catalogue order, because the
  * roster's job is to put the makers' products in front of a framer — not to
  * list every stick the app can draw. Generic rows are not specimens: they are
@@ -219,7 +238,9 @@ export function specimenFor(part: ManufacturerPart): ArenaSpecimen {
  * plate to stand on has nothing to be honest about.
  */
 export function arenaRoster(): ArenaSpecimen[] {
-  return MANUFACTURER_PARTS.map(specimenFor)
+  return MANUFACTURER_PARTS
+    .filter((p) => !OFF_THE_BENCH.has(p.id))
+    .map(specimenFor)
 }
 
 /** The parts that can actually be run today. */

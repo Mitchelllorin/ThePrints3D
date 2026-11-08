@@ -7,8 +7,20 @@
  *
  * The bench is the same one CircuiTry3D and AutoMotive3D run — real branded
  * parts, one shared ramp, F.U.S.E. calling the grade — with the specimen swapped
- * for a beam and the stressor swapped for load. Pick one part for a solo run, two
- * for a versus run, and push the load until something lets go.
+ * for a beam and the stressor swapped for load. One part, one ramp.
+ *
+ * THERE IS NO VERSUS RUN, ON PURPOSE. A strength figure is only meaningful on the
+ * basis it was tabulated on, and two parts from two documents are not something
+ * the bench can rank without becoming a comparison nobody asked the makers to
+ * enter. If a framer wants to know which part carries more, they run each one and
+ * read its own envelope.
+ *
+ * TWO LIMITS, KEPT APART. Bending and shear are strength limit states: 1.25D + 1.5L
+ * against factored resistance, and only those two can produce a FAILED chip.
+ * Sag past L/360 is a serviceability limit on specified load — it gets its own
+ * chip that says "OVER L/360" and never the word failed, because nothing has
+ * broken. The factor chain the verdict used is printed under the numbers, so the
+ * arithmetic can be checked against the report rather than taken on trust.
  *
  * WHAT IT DOES NOT DO YET, AND WHY THAT IS PRINTED RATHER THAN FAKED.
  *
@@ -22,12 +34,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   DEFAULT_SETUP, PHASE_COLOR, PHASE_LABEL, RAMP_MAX, RAMP_STEP,
-  arenaRoster, duelFor, envelopeLine, envelopeOf, isRateable, verdictAt,
-  type ArenaSpecimen, type ArenaVerdict, type BenchSetup,
+  arenaRoster, envelopeLine, envelopeOf, factorNote, isRateable, verdictAt,
+  type ArenaSpecimen, type BenchSetup,
 } from '../../services/arena'
 import styles from './ArenaPanel.module.css'
-
-const MAX_PICKED = 2
 
 /** What each basis means, on the card, in the trade's words. */
 const BASIS_LABEL: Record<ArenaSpecimen['basis'], string> = {
@@ -36,11 +46,14 @@ const BASIS_LABEL: Record<ArenaSpecimen['basis'], string> = {
   insufficient: 'No rating',
 }
 
+const pct = (u: number) => (Number.isFinite(u) ? `${(u * 100).toFixed(1)}%` : '—')
+const num = (n: number) => (Number.isFinite(n) ? Math.round(n).toLocaleString('en-CA') : '—')
+
 export default function ArenaPanel() {
   const roster = useMemo(() => arenaRoster(), [])
-  const [picked, setPicked] = useState<string[]>(() => {
+  const [pickedId, setPickedId] = useState<string | null>(() => {
     const first = roster.find(isRateable)
-    return first ? [first.id] : []
+    return first ? first.id : null
   })
   const [setup, setSetup] = useState<BenchSetup>(DEFAULT_SETUP)
   const [multiple, setMultiple] = useState(1)
@@ -63,45 +76,37 @@ export default function ArenaPanel() {
     return () => window.clearInterval(id)
   }, [running])
 
-  const pickedSpecs = picked
-    .map((id) => roster.find((s) => s.id === id))
-    .filter((s): s is ArenaSpecimen => s != null)
-  const running_ = pickedSpecs.filter(isRateable)
-  const verdicts: ArenaVerdict[] = running_.map((s) => verdictAt(s, setup, multiple))
-  const duel = running_.length > 1 ? duelFor(running_, setup) : null
-  const winner = duel?.winnerId ? roster.find((s) => s.id === duel.winnerId) : null
+  const picked = pickedId ? roster.find((s) => s.id === pickedId) ?? null : null
+  const running_ = picked && isRateable(picked) ? picked : null
+  const verdict = running_ ? verdictAt(running_, setup, multiple) : null
 
-  const toggle = (id: string) => {
-    setPicked((cur) => {
-      if (cur.includes(id)) return cur.filter((x) => x !== id)
-      const next = [...cur, id].slice(-MAX_PICKED)
-      return next
-    })
+  const pick = (id: string) => {
+    setPickedId((cur) => (cur === id ? null : id))
     setMultiple(1)
     setRunning(false)
   }
 
-  const canRun = running_.length > 0
+  const canRun = running_ != null
   const started = multiple > 1
 
   return (
     <div className={styles.panel}>
       <div className={styles.head}>
         <span className={styles.mark}>ARENA</span>
-        <span className={styles.sub}>Load bench · one ramp</span>
+        <span className={styles.sub}>Load bench · one ramp · CSA O86</span>
       </div>
 
-      {/* THE ROSTER. Every branded part in the catalogue, including the ones the
-          bench cannot run — a maker should be able to see what is stopping them. */}
+      {/* THE ROSTER. Every branded part the bench may run, plus the ones it
+          cannot — a maker should be able to see what is stopping them. */}
       <div className={styles.roster}>
         {roster.map((s) => {
-          const on = picked.includes(s.id)
+          const on = pickedId === s.id
           const rated = isRateable(s)
           return (
             <button
               key={s.id}
               className={`${styles.card} ${on ? styles.cardOn : ''} ${rated ? '' : styles.cardOff}`}
-              onClick={() => toggle(s.id)}
+              onClick={() => pick(s.id)}
               aria-pressed={on}
               title={rated ? `${s.label} — ${s.basisNote}` : s.basisNote}
             >
@@ -170,46 +175,44 @@ export default function ArenaPanel() {
         />
       </div>
 
-      {duel && (
-        <p className={styles.duel}>
-          {winner
-            ? `${winner.label} lasts longest — to ${(duel.entries[0].endurance).toFixed(1)}×`
-            : `Level at ${(duel.entries[0].endurance).toFixed(1)}× — neither runs out first.`}
-        </p>
-      )}
-
-      {verdicts.map((v) => (
-        <div key={v.specimen.id} className={styles.verdict}>
+      {verdict && (
+        <div className={styles.verdict}>
           <div className={styles.verdictHead}>
-            <span className={styles.phase} style={{ color: PHASE_COLOR[v.phase], borderColor: PHASE_COLOR[v.phase] }}>
-              {PHASE_LABEL[v.phase]}
+            <span className={styles.phase} style={{ color: PHASE_COLOR[verdict.phase], borderColor: PHASE_COLOR[verdict.phase] }}>
+              {PHASE_LABEL[verdict.phase]}
             </span>
-            <span className={styles.gov}>{v.mode}</span>
+            {verdict.exceedsL360 && (
+              <span className={styles.service}>OVER L/360</span>
+            )}
+            <span className={styles.gov}>{verdict.mode}</span>
           </div>
 
-          {/* RATED BESIDE ACTUAL — the gap is the lesson, and it is the reason
-              this beats reading the datasheet. */}
+          {/* DEMAND BESIDE RESISTANCE — the gap is the lesson, and it is the
+              reason this beats reading the datasheet. Bending and shear are
+              factored load over factored resistance; the sag is specified load. */}
           <dl className={styles.numbers}>
             <dt>Bending</dt>
-            <dd>{Math.round(v.demand.bendingPsi)} / {Math.round(v.capacity.bendingPsi)} psi</dd>
+            <dd>{num(verdict.demand.bendingPsi)} / {num(verdict.capacity.bendingPsi)} psi · {pct(verdict.utilisation.bending)} of Mr</dd>
             <dt>Shear</dt>
-            <dd>{Math.round(v.demand.shearPsi)} / {Math.round(v.capacity.shearPsi)} psi</dd>
+            <dd>{num(verdict.demand.shearLb)} / {num(verdict.capacity.shearLb)} lb · {pct(verdict.utilisation.shear)} of Vr</dd>
             <dt>Sag</dt>
-            <dd>{v.demand.deflectionIn.toFixed(3)} / {v.demand.allowIn.toFixed(3)} in</dd>
+            <dd>{verdict.demand.deflectionIn.toFixed(3)} / {verdict.demand.allowIn.toFixed(3)} in · {pct(verdict.utilisation.deflection)} of L/360</dd>
           </dl>
 
-          {v.phase !== 'nominal' && (
+          <p className={styles.factors}>{factorNote(verdict.capacity.factors)}</p>
+
+          {(verdict.phase !== 'nominal' || verdict.exceedsL360) && (
             <>
-              <p className={styles.why}>{v.why}</p>
-              <p className={styles.fix}>{v.fix}</p>
+              <p className={styles.why}>{verdict.why}</p>
+              <p className={styles.fix}>{verdict.fix}</p>
             </>
           )}
         </div>
-      ))}
+      )}
 
       {!canRun && (
         <p className={styles.empty}>
-          Nothing on the bench yet. Pick a part with a rating on it.
+          Nothing on the bench. Pick a part with a rating on it.
         </p>
       )}
     </div>

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_SETUP, arenaRoster, capacityOf, depthFactorFor, duelFor, envelopeOf,
-  envelopeLine, isRateable, loadPlf, sectionOf, severityFor, verdictAt,
+  DEFAULT_SETUP, capacityOf, depthFactorFor, envelopeLine, envelopeOf,
+  factoredLoadPlf, factorsFor, isRateable, loadPlf, phaseForStrength, sectionOf,
+  verdictAt,
   type ArenaSpecimen,
 } from './index'
+import { arenaRoster } from './specimen'
+import { getManufacturerPart } from '../../data/manufacturerParts'
 
 const roster = arenaRoster()
 const byId = (id: string) => roster.find((s) => s.id === id) as ArenaSpecimen
@@ -14,9 +17,16 @@ const PARALLAM = 'weyerhaeuser-parallam-2_2e-3_1_2x20'
 const LP = 'lp-lsl-1_35e-1_3_4x9-1_2'
 
 describe('the arena roster', () => {
-  it('puts every branded part on a card', () => {
-    expect(roster).toHaveLength(4)
-    expect(roster.map((s) => s.id)).toEqual([NORDIC, WEST_FRASER, PARALLAM, LP])
+  it('puts every branded part that may be run on a card', () => {
+    expect(roster).toHaveLength(3)
+    expect(roster.map((s) => s.id)).toEqual([NORDIC, WEST_FRASER, PARALLAM])
+  })
+
+  it('keeps the rim board off the bench, in the catalogue', () => {
+    // LP's own cited guide is its rim-board guide. A rim board is not a floor
+    // beam, so it does not get a FAILED chip for a job it was never sold for.
+    expect(roster.map((s) => s.id)).not.toContain(LP)
+    expect(getManufacturerPart(LP)).toBeTruthy()
   })
 
   it('reads the Canadian plate as a real rating', () => {
@@ -29,14 +39,6 @@ describe('the arena roster', () => {
     expect(wf.limits.depthExponent).toBeCloseTo(1 / 7.35, 10)
     expect(wf.member.widthIn).toBe(1.75)
     expect(wf.member.depthIn).toBe(11.5)
-  })
-
-  it('runs the U.S. plate, and says which basis it is on', () => {
-    const lp = byId(LP)
-    expect(isRateable(lp)).toBe(true)
-    expect(lp.basis).toBe('us-reference')
-    expect(lp.limits.fbPsi).toBe(1730)
-    expect(lp.limits.depthExponent).toBeCloseTo(0.12, 10)
   })
 
   it('refuses a plate with no strength values on it, and names what it needs', () => {
@@ -70,27 +72,66 @@ describe('the bench', () => {
     // (12 / 11.5) ^ (1 / 7.35) — a bit over 1 because the beam is shallower than
     // the 12" the tabulated value is quoted at.
     expect(depthFactorFor(byId(WEST_FRASER))).toBeCloseTo(1.005807, 6)
-    expect(capacityOf(byId(WEST_FRASER), DEFAULT_SETUP).bendingPsi).toBeCloseTo(5576.2, 0)
   })
 
-  it('scales the load linearly with the ramp', () => {
+  it('carries the factor chain on every member, and names the depth as the maker\'s', () => {
+    const f = factorsFor(byId(WEST_FRASER))
+    expect(f.phi).toBe(0.9)
+    expect(f.kd).toBe(1)
+    expect(f.kh).toBe(1)
+    expect(f.ks).toBe(1)
+    expect(f.kt).toBe(1)
+    expect(f.kl).toBe(1)
+    expect(f.depthIsMaker).toBe(true)
+    // Factored resistance is the tabulated strength, its depth factor, and φ.
+    expect(capacityOf(byId(WEST_FRASER), DEFAULT_SETUP).bendingPsi)
+      .toBeCloseTo(5544 * 1.005807 * 0.9, 1)
+  })
+
+  it('resists shear on two-thirds of the section, not the whole of it', () => {
+    // Vr = φ Fv (2/3) A — the 1.5V/A comparison is the peak fibre, so the
+    // resistance as a force is two-thirds of the area at the tabulated stress.
+    const c = capacityOf(byId(WEST_FRASER), DEFAULT_SETUP)
+    expect(c.shearLb).toBeCloseTo(0.9 * 554 * (2 / 3) * 20.125, 6)
+    expect(c.shearPsi).toBeCloseTo(0.9 * 554, 6)
+  })
+
+  it('loads strength on 1.25D + 1.5L and deflection on the load as entered', () => {
     expect(loadPlf(DEFAULT_SETUP, 1)).toBe(220)
     expect(loadPlf(DEFAULT_SETUP, 2)).toBe(440)
+    // 1.25 × 15 + 1.5 × 40 = 78.75 psf, over a 4 ft tributary.
+    expect(factoredLoadPlf(DEFAULT_SETUP, 1)).toBe(315)
+    expect(factoredLoadPlf(DEFAULT_SETUP, 2)).toBe(630)
   })
 
-  it('grades severity on the family bands', () => {
-    expect(severityFor(0)).toBe(0)
-    expect(severityFor(0.7)).toBeCloseTo(0.45, 6)
-    expect(severityFor(1)).toBeCloseTo(1.2, 6)
-    expect(severityFor(1.35)).toBeCloseTo(2, 6)
-    expect(severityFor(3)).toBe(3)
-    // Monotonic: more load never grades better.
-    let prev = -1
-    for (let u = 0; u <= 3; u += 0.05) {
-      const s = severityFor(u)
-      expect(s).toBeGreaterThanOrEqual(prev)
-      prev = s
-    }
+  it('compares factored demand with factored resistance, and sag with L/360', () => {
+    const v = verdictAt(byId(WEST_FRASER), DEFAULT_SETUP, 1)
+    expect(v.utilisation.bending).toBeCloseTo(v.demand.bendingPsi / v.capacity.bendingPsi, 10)
+    expect(v.utilisation.shear).toBeCloseTo(v.demand.shearPsi / v.capacity.shearPsi, 10)
+    // Deflection is the SPECIFIED load — not the factored one.
+    expect(v.demand.loadPlf).toBe(220)
+    expect(v.demand.factoredLoadPlf).toBe(315)
+  })
+
+  it('grades only a strength limit as failed', () => {
+    expect(phaseForStrength(0.69)).toBe('nominal')
+    expect(phaseForStrength(0.7)).toBe('stressed')
+    expect(phaseForStrength(0.9)).toBe('critical')
+    expect(phaseForStrength(0.999)).toBe('critical')
+    expect(phaseForStrength(1)).toBe('failed')
+    expect(phaseForStrength(1.4)).toBe('failed')
+  })
+
+  it('never calls sag past L/360 a failure', () => {
+    const wf = byId(WEST_FRASER)
+    // 1.75×: past L/360, nowhere near factored resistance.
+    const v = verdictAt(wf, DEFAULT_SETUP, 1.75)
+    expect(v.utilisation.deflection).toBeGreaterThan(1)
+    expect(v.utilisation.bending).toBeLessThan(1)
+    expect(v.utilisation.shear).toBeLessThan(1)
+    expect(v.exceedsL360).toBe(true)
+    expect(v.strengthFailed).toBe(false)
+    expect(v.phase).not.toBe('failed')
   })
 
   it('holds a beam at the entered load and breaks it at four times', () => {
@@ -99,6 +140,7 @@ describe('the bench', () => {
     const heavy = verdictAt(wf, DEFAULT_SETUP, 4)
     expect(heavy.severity).toBeGreaterThan(light.severity)
     expect(heavy.phase).toBe('failed')
+    expect(heavy.strengthFailed).toBe(true)
     expect(heavy.demand.bendingPsi).toBeCloseTo(light.demand.bendingPsi * 4, 6)
   })
 
@@ -107,33 +149,26 @@ describe('the bench', () => {
     const v = verdictAt(wf, DEFAULT_SETUP, 1)
     const worst = Math.max(...Object.values(v.utilisation))
     expect(v.utilisation[v.governing]).toBeCloseTo(worst, 10)
-    // A 12-ft floor member on this load is governed by how far it sags.
+    // A 12-ft floor member on this load sags before it reaches resistance.
     expect(v.governing).toBe('deflection')
+    expect(v.strengthGoverning).toBe('bending')
   })
 
-  it('reports where the beam goes, and never claims a survivor broke', () => {
+  it('reports the break and the sag separately, and never merges them', () => {
     const wf = byId(WEST_FRASER)
     const env = envelopeOf(wf, DEFAULT_SETUP)
+    expect(env.exceedsL360At).not.toBeNull()
     expect(env.failedAt).not.toBeNull()
+    // The floor bounces before the member reaches factored resistance.
+    expect(env.exceedsL360At!).toBeLessThan(env.failedAt!)
     expect(env.failedAt!).toBeGreaterThan(1)
     expect(env.failedAt!).toBeLessThanOrEqual(4)
-    expect(envelopeLine(env)).toMatch(/Goes at \d\.\d×/)
+    expect(envelopeLine(env)).toMatch(/Factored resistance at \d\.\d×/)
+    expect(envelopeLine(env)).toMatch(/over L\/360 from \d\.\d×/)
   })
 
   it('will not rate a part it has no plate for', () => {
     expect(() => verdictAt(byId(NORDIC), DEFAULT_SETUP, 1)).toThrow(/not on the bench/)
     expect(() => envelopeOf(byId(NORDIC), DEFAULT_SETUP)).toThrow(/not on the bench/)
-  })
-})
-
-describe('a versus run', () => {
-  it('puts the deeper beam last, on one shared ramp', () => {
-    const duel = duelFor([byId(LP), byId(WEST_FRASER)], DEFAULT_SETUP)
-    expect(duel.entries).toHaveLength(2)
-    expect(duel.winnerId).toBe(WEST_FRASER)
-    const lp = duel.entries.find((e) => e.specimen.id === LP)!
-    const wf = duel.entries.find((e) => e.specimen.id === WEST_FRASER)!
-    expect(wf.endurance).toBeGreaterThan(lp.endurance)
-    expect(duel.allFailed).toBe(true)
   })
 })
