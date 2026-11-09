@@ -246,7 +246,10 @@ export default function RailCascade() {
   const [layersOpen, setLayersOpen] = useState(false)
   const [framingOpen, setFramingOpen] = useState(false)
   const [fuseOpen, setFuseOpen] = useState(false)
-  const [arenaOpen, setArenaOpen] = useState(false)
+  // The Ramp lives in the store, not here: its strip is fixed to the bottom
+  // edge, and the layout needs the flag to stand the explode bar aside.
+  const arenaOpen = useFloorplanLocalStore((s) => s.arenaOpen)
+  const setArenaOpen = useFloorplanLocalStore((s) => s.setArenaOpen)
   // The family drawer is its own sheet, not a rail section: it closes nothing
   // and nothing closes it but itself.
   const [familyOpen, setFamilyOpen] = useState(false)
@@ -359,6 +362,7 @@ export default function RailCascade() {
     if (id === 'arena') {
       const next = !arenaOpen
       closeDrawers(); setPlaceOpen(false); setPlaceObjectType(null)
+      setDrawerOpen('place', false)
       setLayersOpen(false); setFramingOpen(false); setFuseOpen(false)
       setArenaOpen(next)
       return
@@ -603,7 +607,7 @@ export default function RailCascade() {
       )}
 
       {arenaOpen && (
-        <div className={styles.col} style={{ minWidth: 208, maxHeight: '100%' }}>
+        <div style={{ display: 'contents' }}>
           <ArenaPanel />
         </div>
       )}

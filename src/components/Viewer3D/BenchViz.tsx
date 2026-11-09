@@ -22,6 +22,14 @@
  * a bug), and the char is a colour change on the beam's own material, not a
  * second object.
  *
+ * WHERE THE PART LANDS. The canvas is the whole viewport, and the dashboard /
+ * failure card are DOM surfaces over its bottom edge. Centring the beam in the
+ * raw canvas would park it behind that chrome, so the projection is shifted up
+ * by half the chrome's height (see benchViewOffsetPx): the part ends centred in
+ * the band that is actually visible, which is what the acceptance test measures.
+ * The offset is cleared on reset, so the camera the user left is the camera they
+ * get back.
+ *
  * NOTHING HERE RUNS PER FRAME IN REACT. The ramp already re-renders the panel at
  * ~11 Hz; this component writes to materials, transforms and the camera inside
  * `useFrame`, and React sees the store only when the break lands, the specimen
@@ -34,7 +42,7 @@ import { useAppStore } from '../../store/useAppStore'
 import { useBenchStore } from '../../store/useBenchStore'
 import { arenaRoster, isRateable } from '../../services/arena'
 import {
-  BENCH_SWEEP_SECONDS, BENCH_Y, benchBeam, benchPose, easeInOut, lerpPose,
+  BENCH_SWEEP_SECONDS, BENCH_Y, benchBeam, benchPose, benchViewOffsets, easeInOut, lerpPose,
   type BenchPose,
 } from '../../services/arena/bench'
 import { cameraControls } from './cameraControls'
@@ -86,6 +94,54 @@ export default function BenchViz() {
     beamMat.dispose(); supportMat.dispose(); hotMat.dispose()
     smoke.forEach((s) => s.mat.dispose())
   }, [beamMat, supportMat, hotMat, smoke])
+
+  /* ── the visible band ───────────────────────────────────────────────────── */
+
+  const viewOffsetX = useRef(0)
+  const viewOffsetY = useRef(0)
+  const lastMeasure = useRef(0)
+
+  const clearView = useCallback(() => {
+    if (viewOffsetX.current === 0 && viewOffsetY.current === 0) return
+    viewOffsetX.current = 0
+    viewOffsetY.current = 0
+    camera.clearViewOffset()
+  }, [camera])
+
+  /**
+   * How much of the canvas the bottom chrome owns, measured from the surfaces
+   * themselves. The strip carries id `arena-strip`; the card `bench-fail-card`.
+   * Both are DOM, so this is the one place the scene asks the page a question.
+   */
+  const chromeBottomPx = useCallback((canvasHeight: number) => {
+    if (typeof document === 'undefined') return 0
+    let top = canvasHeight
+    for (const id of ['arena-strip', 'bench-fail-card']) {
+      const el = document.getElementById(id)
+      if (!el) continue
+      const r = el.getBoundingClientRect()
+      if (r.height > 0) top = Math.min(top, r.top)
+    }
+    return Math.max(0, canvasHeight - top)
+  }, [])
+
+  const applyView = useCallback((force = false) => {
+    const now = performance.now()
+    if (!force && now - lastMeasure.current < 200) return
+    lastMeasure.current = now
+    if (!beam) return
+    const aspect = size.width / Math.max(1, size.height)
+    const pose = benchPose([0, BENCH_Y, 0], beam.lengthM, aspect)
+    const off = benchViewOffsets(pose, beam, {
+      widthPx: size.width,
+      heightPx: size.height,
+      chromeBottomPx: chromeBottomPx(size.height),
+    })
+    if (Math.abs(off.x - viewOffsetX.current) < 0.5 && Math.abs(off.y - viewOffsetY.current) < 0.5) return
+    viewOffsetX.current = off.x
+    viewOffsetY.current = off.y
+    camera.setViewOffset(size.width, size.height, off.x, off.y, size.width, size.height)
+  }, [beam, camera, chromeBottomPx, size.width, size.height])
 
   /* ── the fade ───────────────────────────────────────────────────────────── */
 
@@ -156,6 +212,7 @@ export default function BenchViz() {
       clock.current = 0
       restoreFade()
       resetBurn()
+      clearView()
       return
     }
     const ctl = cameraControls.current
@@ -165,10 +222,19 @@ export default function BenchViz() {
     }
     phase.current = 'sweep'
     clock.current = 0
-  }, [breakState, camera, restoreFade, resetBurn])
+    // The card/strip are in the DOM by the time this effect runs, so measure
+    // the visible band now rather than on the first frame.
+    applyView(true)
+  }, [breakState, camera, restoreFade, resetBurn, clearView, applyView])
+
+  // A rotation or a window resize moves the band; re-measure while broken.
+  useEffect(() => {
+    if (!breakState) return
+    applyView(true)
+  }, [size.width, size.height, breakState, applyView])
 
   // The bench is a thing you opened; closing it puts the scene back.
-  useEffect(() => () => { restoreFade(); resetBurn() }, [restoreFade, resetBurn])
+  useEffect(() => () => { restoreFade(); resetBurn(); clearView() }, [restoreFade, resetBurn, clearView])
 
   useFrame((_, delta) => {
     const b = useBenchStore.getState().break
@@ -177,6 +243,7 @@ export default function BenchViz() {
         phase.current = 'idle'
         restoreFade()
         resetBurn()
+        clearView()
       }
       return
     }
@@ -186,12 +253,13 @@ export default function BenchViz() {
     const target = benchPose(centre, beam.lengthM, aspect)
 
     if (phase.current === 'sweep') {
+      applyView()
       clock.current = Math.min(BENCH_SWEEP_SECONDS, clock.current + delta)
       const k = easeInOut(clock.current / BENCH_SWEEP_SECONDS)
       setCameraPreset(lerpPose(from.current ?? target, target, k))
       applyFade(k)
       // Everything is gone by the time the part is centred; now it can burn.
-      if (k >= 1) { phase.current = 'burn'; clock.current = 0 }
+      if (k >= 1) { phase.current = 'burn'; clock.current = 0; applyView(true) }
       return
     }
 

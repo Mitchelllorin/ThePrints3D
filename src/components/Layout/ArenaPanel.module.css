@@ -1,76 +1,119 @@
-/* ARENA — the Break It dashboard. Glass over the model, like every persistent
-   panel in the family: tint plus blur, never alpha alone, and a 0.72 floor. */
+/* THE RAMP — a slim glass strip along the bottom edge, never more than a third
+   of the screen tall (BREAK-IT §5). Persistent chrome over a 3D view: tint plus
+   blur, never alpha alone, with an opaque fallback where backdrop-filter is
+   missing. The sheet is transient — the user opened it — so it may be solid.
 
-.panel {
+   Placement clears the rail's left column (--rail-w). The Place drawer's tab is
+   taken off the screen while this is open (EdgeDrawer hidden), so the strip
+   owns the bottom edge and the canvas keeps two thirds of the height. */
+
+.strip {
+  position: fixed;
+  left: calc(var(--rail-w, 44px) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-hud);
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 4px;
+  padding: 8px 10px;
+  max-height: 33dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
   background: rgba(21, 28, 37, 0.8);
   backdrop-filter: blur(14px) saturate(1.15);
   -webkit-backdrop-filter: blur(14px) saturate(1.15);
   border: 1px solid #2c3a4a;
-  border-radius: 10px;
-  overflow-y: auto;
-  max-height: min(74vh, 560px);
+  border-radius: 12px;
   color: #e8eef5;
   font-size: 13px;
 }
 
+.strip::-webkit-scrollbar { display: none; }
+
 @supports not (backdrop-filter: blur(1px)) {
-  .panel { background: rgba(21, 28, 37, 0.94); }
+  .strip { background: rgba(21, 28, 37, 0.94); }
 }
 
-.head { display: flex; align-items: baseline; gap: 8px; }
-.mark { font-weight: 700; letter-spacing: 0.14em; font-size: 12px; color: #e8eef5; }
-.sub { font-size: 11px; color: #7b8ca1; }
+/* ── the head line — one line, and it carries the ramp's own number ────────── */
 
-/* ── the presets ───────────────────────────────────────────────────────────── */
-
-.presets { display: flex; flex-direction: column; gap: 6px; }
-
-.preset {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-height: 48px;
-  justify-content: center;
-  padding: 6px 9px;
-  text-align: left;
-  background: #1e2833;
-  border: 1px solid #2c3a4a;
-  border-radius: 8px;
-  color: inherit;
-  cursor: pointer;
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.mark { font-weight: 700; letter-spacing: 0.14em; font-size: 13px; }
+.rampValue {
+  font-size: 13px;
+  font-weight: 700;
+  color: #aebccd;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.presetOn { border-color: #f0883e; background: #2a2119; }
-.presetName { font-weight: 700; font-size: 13px; }
-.presetMeta { font-size: 10px; color: #aebccd; font-variant-numeric: tabular-nums; }
+/* ── the gauges — one thin row, three numbers, three 3px bars ─────────────── */
 
-/* ── the ramp ─────────────────────────────────────────────────────────────── */
+.gauges { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.mini { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.miniTop { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; }
+.miniName { font-size: 13px; font-weight: 600; }
+.miniPct { font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
-.ramp { display: flex; flex-direction: column; gap: 6px; }
-.rampRow { display: flex; align-items: baseline; gap: 8px; }
-.rampValue { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.rampUnit { font-size: 11px; color: #7b8ca1; font-variant-numeric: tabular-nums; }
-
-/* The ramp's own meter: load against the end of the dial, accent-coloured so it
-   cannot be mistaken for one of the strength bands. */
-.rampMeter {
+.miniTrack {
   position: relative;
-  height: 4px;
+  height: 3px;
   border-radius: 999px;
   background: #10161d;
   overflow: hidden;
 }
 
-.rampFill {
-  display: block;
-  height: 100%;
-  background: #3d9ae8;
-  border-radius: 999px;
+.miniFill { display: block; height: 100%; border-radius: 999px; transition: width 90ms linear; }
+
+/* The limit mark, at the end of the bar the fill is capped at. */
+.miniLimit {
+  position: absolute;
+  top: -1px;
+  right: 0;
+  width: 2px;
+  height: 5px;
+  background: #e8eef5;
+  opacity: 0.5;
 }
+
+/* ── the presets — one row of chips, generic labels only ──────────────────── */
+
+.presets {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.presets::-webkit-scrollbar { display: none; }
+
+.preset {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  min-height: 48px;
+  padding: 4px 12px;
+  text-align: left;
+  background: #1e2833;
+  border: 1px solid #2c3a4a;
+  border-radius: 9px;
+  color: inherit;
+  cursor: pointer;
+}
+
+.presetOn { border-color: #f0883e; background: #2a2119; }
+.presetName { font-weight: 700; font-size: 13px; white-space: nowrap; }
+.presetMeta {
+  font-size: 13px;
+  color: #aebccd;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── the ramp slider ──────────────────────────────────────────────────────── */
 
 .range {
   width: 100%;
@@ -78,18 +121,24 @@
   accent-color: #3d9ae8;
 }
 
-.buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* ── the verbs — 48px, 6px apart, thumb-first ─────────────────────────────── */
 
-.push, .hold, .reset {
+.actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 6px;
+}
+
+.push, .hold, .parts, .reset, .close {
   min-height: 48px;
-  border-radius: 8px;
+  border-radius: 9px;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .push {
-  grid-column: 1 / -1;
   border: 1px solid #3d9ae8;
   background: #3d9ae8;
   color: #04121f;
@@ -98,82 +147,132 @@
 .push:disabled, .hold:disabled { opacity: 0.45; cursor: default; }
 
 .hold {
+  min-width: 48px;
+  padding: 0 10px;
   border: 1px solid #3d9ae8;
   background: transparent;
   color: #e8eef5;
 }
 
-/* A hold that is running differs in shape as well as colour: filled, and with
-   the seconds on the label. */
+/* A hold that is running differs in shape as well as colour. */
 .holdOn { background: #22303f; border-color: #f0883e; color: #f0883e; }
 
+.parts {
+  min-width: 48px;
+  padding: 0 10px;
+  border: 1px solid #2c3a4a;
+  background: #1e2833;
+  color: #e8eef5;
+}
+
 .reset {
+  min-width: 48px;
+  padding: 0 10px;
   border: 1px solid #2c3a4a;
   background: #151c25;
   color: #aebccd;
 }
 
-/* ── the gauges ───────────────────────────────────────────────────────────── */
+.empty { margin: 0; font-size: 13px; color: #aebccd; }
 
-.gauges { display: flex; flex-direction: column; gap: 8px; }
-.gauge { display: flex; flex-direction: column; gap: 3px; }
-.gaugeTop { display: flex; align-items: baseline; justify-content: space-between; }
-.gaugeName { font-size: 12px; font-weight: 600; }
-.gaugePct { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* ── the parts sheet — transient, so it may be solid ──────────────────────── */
 
-.track {
-  position: relative;
-  height: 8px;
-  border-radius: 999px;
-  background: #10161d;
-  overflow: hidden;
+.sheet {
+  position: fixed;
+  left: calc(var(--rail-w, 44px) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: var(--z-sheet);
+  display: flex;
+  flex-direction: column;
+  max-height: 70dvh;
+  border: 1px solid #2c3a4a;
+  border-radius: 12px;
+  background: rgba(21, 28, 37, 0.97);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  color: #e8eef5;
+  font-size: 13px;
 }
 
-.fill { display: block; height: 100%; border-radius: 999px; transition: width 90ms linear; }
-
-/* The limit, drawn where the limit is: at the end of the track, because the
-   fill is capped there and past it the bar reads past the line instead of
-   merely full. */
-.limitMark {
-  position: absolute;
-  top: -2px;
-  right: 0;
-  width: 2px;
-  height: 12px;
-  background: #e8eef5;
-  opacity: 0.45;
+@supports not (backdrop-filter: blur(1px)) {
+  .sheet { background: #151c25; }
 }
 
-.gaugeFoot {
+.sheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid #2c3a4a;
+}
+
+.close {
+  padding: 0 14px;
+  border: 1px solid #4a5a6c;
+  background: transparent;
+  color: #e8eef5;
+}
+
+.sheetBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+
+.sheetFoot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid #2c3a4a;
+}
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.fieldLabel { display: flex; justify-content: space-between; font-size: 13px; color: #aebccd; }
+.fieldLabel b { color: #e8eef5; font-variant-numeric: tabular-nums; }
+.meta { margin: 0; font-size: 13px; color: #7b8ca1; font-variant-numeric: tabular-nums; }
+
+.checks { display: flex; flex-direction: column; gap: 8px; }
+.check { display: flex; flex-direction: column; gap: 3px; }
+.checkFoot {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 10px;
+  font-size: 13px;
   color: #7b8ca1;
   font-variant-numeric: tabular-nums;
 }
-
 .owner { color: #aebccd; text-align: right; }
 
-.service {
-  font-size: 10px;
+.verdictLine { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.phase {
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  padding: 2px 7px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+.gov { font-size: 13px; font-weight: 600; }
+
+.service {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
   border: 1px solid #e0a03a;
   border-radius: 999px;
   color: #e0a03a;
   align-self: flex-start;
 }
 
-/* ── the job ──────────────────────────────────────────────────────────────── */
-
-.field { display: flex; flex-direction: column; gap: 4px; margin: 0; }
-.fieldLabel { display: flex; justify-content: space-between; font-size: 12px; color: #aebccd; }
-.fieldLabel b { color: #e8eef5; font-variant-numeric: tabular-nums; }
-.meta { margin: 0; font-size: 11px; color: #7b8ca1; font-variant-numeric: tabular-nums; }
-
-/* ── the specimen ─────────────────────────────────────────────────────────── */
+/* ── the specimen roster ──────────────────────────────────────────────────── */
 
 .roster { display: flex; flex-direction: column; gap: 6px; }
 
@@ -186,7 +285,7 @@
   text-align: left;
   background: #1e2833;
   border: 1px solid #2c3a4a;
-  border-radius: 8px;
+  border-radius: 9px;
   color: inherit;
   cursor: pointer;
 }
@@ -195,59 +294,32 @@
 .cardOff { opacity: 0.72; cursor: default; }
 
 .cardTop { display: flex; align-items: center; gap: 8px; }
-.cardName { font-weight: 600; font-size: 12px; }
-.cardLine { font-size: 10px; color: #aebccd; font-variant-numeric: tabular-nums; }
-.cardMissing { font-size: 10px; color: #e0a03a; }
+.cardName { font-weight: 600; font-size: 13px; }
+.cardLine { font-size: 13px; color: #aebccd; font-variant-numeric: tabular-nums; }
+.cardMissing { font-size: 13px; color: #e0a03a; }
 
 .chip {
   margin-left: auto;
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 2px 6px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
   border-radius: 999px;
   border: 1px solid #2c3a4a;
   color: #aebccd;
+  white-space: nowrap;
 }
 
 .chip_canadian_verified { color: #3fbf6e; border-color: #3fbf6e; }
 .chip_us_reference { color: #e0a03a; border-color: #e0a03a; }
 .chip_insufficient { color: #7b8ca1; }
 
-/* ── the verdict ──────────────────────────────────────────────────────────── */
-
-.verdict { display: flex; flex-direction: column; gap: 6px; }
-.verdictHead { display: flex; align-items: center; gap: 8px; }
-
-.phase {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 2px 7px;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-}
-
-.gov { font-size: 12px; font-weight: 600; }
-.why { margin: 0; font-size: 11px; line-height: 1.45; color: #aebccd; }
-
-.factors {
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.4;
-  color: #7b8ca1;
-  font-variant-numeric: tabular-nums;
-}
-
-.empty { margin: 0; font-size: 11px; color: #aebccd; }
-
-/* ── the leaderboard ──────────────────────────────────────────────────────── */
+/* ── your breaks ──────────────────────────────────────────────────────────── */
 
 .section { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid #2c3a4a; }
 .sectionHead {
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #7b8ca1;
 }
@@ -261,24 +333,21 @@
   padding: 6px 8px;
   border-radius: 6px;
   background: #151c25;
-  font-size: 10px;
+  font-size: 13px;
 }
 
-.runName { font-size: 11px; font-weight: 600; }
+.runName { font-size: 13px; font-weight: 600; }
 .runMeta { grid-column: 1 / 2; color: #aebccd; font-variant-numeric: tabular-nums; }
 .runWhen { grid-row: 1 / 3; align-self: center; color: #7b8ca1; font-variant-numeric: tabular-nums; }
 
-.pb { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; font-size: 10px; }
-.pbLabel { font-size: 11px; }
+.pb { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; font-size: 13px; }
+.pbLabel { font-size: 13px; }
 .pbValue { color: #e8eef5; font-variant-numeric: tabular-nums; text-align: right; }
 .pbCount { grid-column: 1 / -1; color: #7b8ca1; font-variant-numeric: tabular-nums; }
 
-.pbNote { margin: 0; font-size: 10px; line-height: 1.4; color: #7b8ca1; }
-
-.brokenLine { margin: 0; font-size: 12px; line-height: 1.45; color: #f0883e; }
-
-/* On a 360 px phone the column is 208 px wide; nothing here sets a min-width,
-   and the buttons stay at 48 px so a gloved thumb still lands. */
-@media (max-width: 380px) {
-  .panel { font-size: 12px; padding: 10px; gap: 8px; }
+/* Short landscape phones: the strip keeps its one-third cap and scrolls. */
+@media (max-height: 420px) {
+  .strip { max-height: 38dvh; gap: 3px; padding: 6px 8px; }
+  .preset { min-height: 44px; }
+  .push, .hold, .parts, .reset, .close { min-height: 44px; }
 }
