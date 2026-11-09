@@ -262,6 +262,10 @@ interface FloorplanLocalState {
    *  state; this mirrors it so things outside the rail can stand aside. */
   railPanelOpen: boolean
   setRailPanelOpen: (open: boolean) => void
+  /** The Ramp is open. Lifted out of the rail so the layout can stand the
+   *  explode bar aside and the strip can sit on the bottom edge by itself. */
+  arenaOpen: boolean
+  setArenaOpen: (open: boolean) => void
   /** Which locked feature the user just reached for, or null when the upgrade
    *  sheet is closed. It is the REASON rather than a bare open/closed flag so
    *  the sheet can answer the question actually asked — "editing walls is part
@@ -493,6 +497,8 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   askDrawerOpen: false,
   railPanelOpen: false,
   setRailPanelOpen: (open) => set({ railPanelOpen: open }),
+  arenaOpen: false,
+  setArenaOpen: (open) => set({ arenaOpen: open }),
   cutListSeen: false,
   markCutListSeen: () => set({ cutListSeen: true }),
   pendingImport: null,

@@ -1,28 +1,30 @@
 /* THE FAILURE CARD — transient, so it may be solid. It is the one surface in
-   the app that earns an opaque block: it carries four lines of running text
-   that have to be read while the room behind it glows. Position is the bottom
-   edge, clear of the part the sweep centred, and clear of the rail by the width
-   token the rail publishes. */
+   the app that earns an opaque block: it carries running text that has to be
+   read while the part behind it glows. Position is the bottom edge, clear of
+   the rail on the left; the Place tab is off the screen while The Ramp is open,
+   so the card has that edge to itself. Capped well inside a third of the
+   screen: the canvas has to keep two thirds at every moment, including this one. */
 
 .card {
   position: fixed;
-  z-index: 20;
+  z-index: var(--z-sheet);
   left: calc(var(--rail-w, 44px) + 8px);
-  right: calc(env(safe-area-inset-right) + 8px);
-  bottom: calc(env(safe-area-inset-bottom) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px;
-  border-radius: 10px;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 12px;
   border: 1px solid #3a2a25;
-  background: rgba(24, 15, 13, 0.94);
+  background: rgba(24, 15, 13, 0.95);
   backdrop-filter: blur(10px) saturate(1.1);
   -webkit-backdrop-filter: blur(10px) saturate(1.1);
   color: #f4ece8;
-  font-size: 12px;
-  max-height: 46vh;
+  font-size: 13px;
+  max-height: 30dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 @supports not (backdrop-filter: blur(1px)) {
@@ -32,17 +34,17 @@
 .top { display: flex; align-items: center; gap: 8px; }
 
 .chip {
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 2px 7px;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
   border: 1px solid currentColor;
   border-radius: 999px;
 }
 
-.part { font-size: 14px; font-weight: 700; }
+.part { font-size: 15px; font-weight: 700; }
 
-.maker { margin: 0; font-size: 11px; color: #c3b2ab; }
+.line { margin: 0; font-size: 13px; color: #c3b2ab; }
 .what { margin: 0; font-size: 13px; font-weight: 600; }
 
 .numbers {
@@ -50,23 +52,15 @@
   grid-template-columns: auto 1fr;
   gap: 2px 10px;
   margin: 0;
-  padding: 8px;
+  padding: 6px 8px;
   border-radius: 6px;
   background: #1d1412;
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 .numbers dt { color: #b39d95; }
 .numbers dd { margin: 0; text-align: right; }
-
-.factors {
-  margin: 0;
-  font-size: 10px;
-  line-height: 1.4;
-  color: #9c8a83;
-  font-variant-numeric: tabular-nums;
-}
 
 .actions { display: flex; gap: 8px; }
 

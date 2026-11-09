@@ -946,6 +946,7 @@ export default function WorkspaceLayout() {
   const settingsDrawerOpen = useFloorplanLocalStore((s) => s.settingsDrawerOpen)
   const askDrawerOpen = useFloorplanLocalStore((s) => s.askDrawerOpen)
   const placeDrawerOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
+  const arenaOpen = useFloorplanLocalStore((s) => s.arenaOpen)
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
   const startTutorial = useFloorplanLocalStore((s) => s.startTutorial)
 
@@ -1474,7 +1475,7 @@ export default function WorkspaceLayout() {
           instead of a bar across the middle of the bottom. RETAINED on mobile
           even with the Place sheet open (Android parity) — it just lifts above the
           sheet so it never overlaps. Hidden only during calibration. */}
-      {hasDrawings && !calibrationMode && !traceMode && (
+      {hasDrawings && !calibrationMode && !traceMode && !arenaOpen && (
         <div className={`${styles.explodeBar} ${placeDrawerOpen ? styles.explodeBarLifted : ''}`}>
           {/* A little bomb — but DRAWN, not an emoji. Every other icon in this
               chrome is a thin monochrome glyph taking its colour from the theme;

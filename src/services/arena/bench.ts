@@ -109,8 +109,8 @@ export interface BenchPreset {
  */
 const PARALLAM_24: BenchPreset = {
   id: 'parallam-24-ft',
-  label: 'Parallam 24 ft',
-  note: '3-1/2 × 19 PSL, 24 ft span. Bending rupture; sags past L/360 first.',
+  label: 'Crack the 24 ft',
+  note: '24 ft span. Bending rupture at midspan; sags past L/360 first.',
   specimenId: 'weyerhaeuser-parallam-2_2e-3_1_2x19',
   setup: { ...DEFAULT_SETUP, spanFt: 24 },
   breaks: { check: 'bending', at: 3.55 },
@@ -126,8 +126,8 @@ const PARALLAM_24: BenchPreset = {
  */
 const WEST_FRASER_12: BenchPreset = {
   id: 'west-fraser-12-ft',
-  label: 'West Fraser 12 ft',
-  note: '1-3/4 × 11-1/2 LVL, 12 ft span. Bending rupture at 2.85×.',
+  label: 'Split the 12 ft',
+  note: '12 ft span. Bending rupture at 2.85×.',
   specimenId: 'west-fraser-lvl-3000fb-1_9e',
   setup: { ...DEFAULT_SETUP, spanFt: 12 },
   breaks: { check: 'bending', at: 2.85 },
@@ -304,6 +304,126 @@ export function benchPose(
     ],
     target: [centre[0], centre[1], centre[2]],
   }
+}
+
+/**
+ * HOW FAR UP THE FRAME THE PART SITS WHEN CHROME OWNS THE FOOT.
+ *
+ * The canvas is the whole viewport; the strip and the failure card are DOM
+ * surfaces over its bottom edge. Centring the part in the raw viewport puts it
+ * behind that chrome, so the projection is shifted up by half the chrome's
+ * height: the full-image centre then lands at the centre of the band that is
+ * actually visible. Zero chrome is zero shift, and the shift is capped at half
+ * the canvas so a sheet cannot push the part off the top.
+ */
+export function benchViewOffsetPx(canvasHeightPx: number, chromeBottomPx: number): number {
+  if (!Number.isFinite(canvasHeightPx) || canvasHeightPx <= 0) return 0
+  const chrome = Math.max(0, Math.min(canvasHeightPx, Number.isFinite(chromeBottomPx) ? chromeBottomPx : 0))
+  return chrome / 2
+}
+
+/**
+ * WHERE TO SHIFT THE PROJECTION SO THE PART'S BOX LANDS DEAD CENTRE.
+ *
+ * The chrome shift (benchViewOffsetPx) moves the frame up, but perspective does
+ * not put the box's centre exactly on the target's projection: the near end of
+ * a long member projects larger than the far end, so the box creeps toward the
+ * near side. Fifteen pixels is not a framing error, but "centred" is a claim
+ * about the box, so the offset is solved from the box itself: project it, see
+ * where its centre landed, and move the projection by that much. Both axes,
+ * because the same asymmetry leans the box sideways as well.
+ */
+export interface BenchViewOffsets { x: number; y: number }
+
+export function benchViewOffsets(
+  pose: BenchPose,
+  beam: { lengthM: number; depthM: number; widthM: number },
+  frame: { widthPx: number; heightPx: number; fovDeg?: number; chromeBottomPx?: number },
+): BenchViewOffsets {
+  const W = Math.max(1, frame.widthPx)
+  const H = Math.max(1, frame.heightPx)
+  const requested = Number.isFinite(frame.chromeBottomPx ?? 0) ? frame.chromeBottomPx ?? 0 : 0
+  const chrome = Math.max(0, Math.min(H, requested))
+  const box = projectBenchBox(pose, beam, { widthPx: W, heightPx: H, fovDeg: frame.fovDeg })
+  return { x: box.cx - W / 2, y: box.cy - (H - chrome) / 2 }
+}
+
+/** What a projected bounding box looks like on the canvas, in CSS px. */
+export interface BenchBoxOnScreen {
+  left: number
+  right: number
+  top: number
+  bottom: number
+  width: number
+  height: number
+  cx: number
+  cy: number
+}
+
+/**
+ * PROJECT THE PART'S BOX TO THE SCREEN — the acceptance test for the sweep.
+ *
+ * "The part ends centred in the visible canvas, filling about the middle third"
+ * is a claim about pixels, so it is checked in pixels rather than asserted in a
+ * comment. The eight corners of the beam's own box are transformed onto the
+ * camera plane and through the same perspective divide the renderer uses
+ * (fov, aspect, and the view offset the sweep applies), and the result is the
+ * rectangle a screenshot would show.
+ *
+ * For a long, thin member the length is the axis that has to fit: a 24 ft beam
+ * at a three-quarter view projects its depth to a few pixels, so "a third of
+ * the height" would mean putting the ends off screen. The box is therefore
+ * measured against the frame's WIDTH, which is the tight axis on a phone.
+ */
+export function projectBenchBox(
+  pose: BenchPose,
+  beam: { lengthM: number; depthM: number; widthM: number },
+  frame: { widthPx: number; heightPx: number; fovDeg?: number; offsetXPx?: number; offsetYPx?: number },
+): BenchBoxOnScreen {
+  const W = Math.max(1, frame.widthPx)
+  const H = Math.max(1, frame.heightPx)
+  const fov = frame.fovDeg ?? 55
+  const offX = frame.offsetXPx ?? 0
+  const offY = frame.offsetYPx ?? 0
+  const tanV = Math.tan((fov * Math.PI) / 360)
+  const tanH = tanV * (W / H)
+
+  const [px, py, pz] = pose.position
+  const [tx, ty, tz] = pose.target
+  const forward = normalise([tx - px, ty - py, tz - pz])
+  const right = normalise(cross(forward, [0, 1, 0]))
+  const up = cross(right, forward)
+
+  const hx = beam.lengthM / 2
+  const hy = beam.depthM / 2
+  const hz = beam.widthM / 2
+  let left = Infinity, rightPx = -Infinity, top = Infinity, bottom = -Infinity
+
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {
+    const dx = tx + sx * hx - px
+    const dy = ty + sy * hy - py
+    const dz = tz + sz * hz - pz
+    const zc = dx * forward[0] + dy * forward[1] + dz * forward[2]
+    if (zc <= 1e-4) continue
+    const xc = dx * right[0] + dy * right[1] + dz * right[2]
+    const yc = dx * up[0] + dy * up[1] + dz * up[2]
+    const x = W / 2 + (xc / (zc * tanH)) * (W / 2) - offX
+    const y = H / 2 - (yc / (zc * tanV)) * (H / 2) - offY
+    if (x < left) left = x
+    if (x > rightPx) rightPx = x
+    if (y < top) top = y
+    if (y > bottom) bottom = y
+  }
+
+  return {
+    left, right: rightPx, top, bottom,
+    width: rightPx - left, height: bottom - top,
+    cx: (left + rightPx) / 2, cy: (top + bottom) / 2,
+  }
+}
+
+function cross(a: [number, number, number], b: [number, number, number]): [number, number, number] {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
 
 function normalise(v: [number, number, number]): [number, number, number] {

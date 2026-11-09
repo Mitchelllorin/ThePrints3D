@@ -252,6 +252,9 @@ export default function FloorplanPanel() {
   // tracing workflow; Place (bottom) holds the catalog + editors.
   const buildDrawerOpen = useFloorplanLocalStore((s) => s.buildDrawerOpen)
   const placeDrawerOpen = useFloorplanLocalStore((s) => s.placeDrawerOpen)
+  // The Ramp's strip owns the bottom edge while it is open; a peeking Place tab
+  // under it is both an overlap and a slice off the canvas the break needs.
+  const arenaOpen = useFloorplanLocalStore((s) => s.arenaOpen)
   const setDrawerOpen = useFloorplanLocalStore((s) => s.setDrawerOpen)
   // The wall-type picker shows before tracing begins, and can be reopened
   // mid-session via the indicator chip. In the store so a canvas tap can close it.
@@ -2353,6 +2356,7 @@ export default function FloorplanPanel() {
           tabLabel="Place"
           tabIcon="▦"
           tourTab="place-tab"
+          hidden={arenaOpen}
           /* Same happy-place invariant as Build: no drawer over the workspace
              while actively tracing. */
           open={placeDrawerOpen && !tracingActive}

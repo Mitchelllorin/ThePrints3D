@@ -37,15 +37,23 @@ interface EdgeDrawerProps {
    * tab is kept only as a fallback for a drawer that isn't in the rail.
    */
   inRail?: boolean
+  /**
+   * Take the whole drawer — tab included — off the screen. Used by the bottom
+   * Place drawer while The Ramp is open: the strip owns that edge, and a 46px
+   * tab peeking under it is both an overlap and a slice off the canvas the
+   * break needs. Closing the drawer is not enough; a closed drawer still shows
+   * its tab.
+   */
+  hidden?: boolean
   children: ReactNode
   className?: string
 }
 
 const SIDE_CLASS = { left: styles.left, right: styles.right, bottom: styles.bottom } as const
 
-export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, title, clickThrough, tourTab, inRail, children, className }: EdgeDrawerProps) {
+export default function EdgeDrawer({ side, open, onToggle, tabLabel, tabIcon, title, clickThrough, tourTab, inRail, hidden, children, className }: EdgeDrawerProps) {
   return (
-    <div className={`${styles.root} ${SIDE_CLASS[side]} ${open ? styles.open : ''} ${clickThrough ? styles.clickThrough : ''} ${inRail ? styles.inRail : ''} ${className ?? ''}`}>
+    <div className={`${styles.root} ${SIDE_CLASS[side]} ${open ? styles.open : ''} ${clickThrough ? styles.clickThrough : ''} ${inRail ? styles.inRail : ''} ${hidden ? styles.hidden : ''} ${className ?? ''}`} aria-hidden={hidden || undefined}>
       {!inRail && (
         <button
           className={styles.tab}

@@ -201,6 +201,10 @@
   border-radius: 10px 10px 0 0;
 }
 
+/* Off the screen entirely, tab included. A closed bottom drawer still leaves its
+   tab peeking; while The Ramp owns the bottom edge, nothing else does. */
+.hidden { display: none; }
+
 /* ── Click-through mode ──────────────────────────────────────────────────────
    While the user is tapping the PRINT (tracing / calibrating), the open drawer
    must not swallow taps that land between controls — on a phone it covers most

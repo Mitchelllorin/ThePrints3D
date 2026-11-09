@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BENCH_FILL, BENCH_SWEEP_SECONDS, PRESETS, benchLevelFor, benchPose, breakFor,
-  easeInOut, envelopeOf, holdsAt, presetBreakVerdict, serviceLevelFor,
+  BENCH_FILL, BENCH_SWEEP_SECONDS, BENCH_Y, PRESETS, benchLevelFor, benchPose, breakFor,
+  benchViewOffsetPx, benchViewOffsets, easeInOut, envelopeOf, holdsAt, presetBreakVerdict,
+  projectBenchBox, serviceLevelFor,
   specimenForPreset, verdictAt,
 } from './index'
 import { benchRecordInput, personalBests, readRuns, recordBenchRun, runsFrom } from './index'
@@ -77,6 +78,15 @@ describe('the presets', () => {
     expect(b.factorLine).toMatch(/φ 0\.90/)
   })
 
+  it('gives the camera exactly ONE part to land on, per preset', () => {
+    for (const p of PRESETS) {
+      const b = breakFor(presetBreakVerdict(p)!)!
+      expect(b.isolate.target, p.id).toBe(p.specimenId)
+      expect(b.isolate.hideOthers, p.id).toBe(true)
+      expect(b.isolate.card, p.id).toBe(true)
+    }
+  })
+
   it('never hands the camera a failure for sag past L/360', () => {
     const s = specimenForPreset(PARALLAM)!
     const sagging = verdictAt(s, PARALLAM.setup, 2.2)
@@ -111,6 +121,45 @@ describe('the sweep', () => {
       expect(fill).toBeCloseTo(BENCH_FILL, 10)
       expect(pose.target).toEqual([0, 1.35, 0])
     }
+  })
+
+  it('lands the part centred in the canvas left above the chrome, at about a third', () => {
+    // Section 4 of BREAK-IT, as pixels: at the end of the sweep the part's own
+    // box must sit in the middle of the VISIBLE band and span about a third of
+    // it — not the centre of a viewport whose foot is covered.
+    const beam = { lengthM: 24 * 0.3048, depthM: 3.5 * 0.0254, widthM: 1.75 * 0.0254 }
+    const cases: Array<[number, number, number]> = [
+      [360, 640, 178],   // portrait, strip up
+      [360, 640, 236],   // portrait, card up
+      [640, 360, 150],   // landscape
+      [700, 700, 0],     // square, no chrome
+    ]
+    for (const [W, H, chrome] of cases) {
+      const pose = benchPose([0, BENCH_Y, 0], beam.lengthM, W / H)
+      const off = benchViewOffsets(pose, beam, { widthPx: W, heightPx: H, chromeBottomPx: chrome })
+      const box = projectBenchBox(pose, beam, {
+        widthPx: W, heightPx: H, offsetXPx: off.x, offsetYPx: off.y,
+      })
+      const visibleH = H - chrome
+      // Solved from the box, so the box is where it was asked to be.
+      expect(Math.abs(box.cx - W / 2)).toBeLessThan(0.5)
+      expect(Math.abs(box.cy - visibleH / 2)).toBeLessThan(0.5)
+      // About a third of the width — a long thin member is framed on its length.
+      expect(box.width).toBeGreaterThan((W / 3) * 0.75)
+      expect(box.width).toBeLessThan((W / 3) * 1.15)
+      // And wholly inside the visible band, clear of the chrome.
+      expect(box.left).toBeGreaterThanOrEqual(-0.5)
+      expect(box.right).toBeLessThanOrEqual(W + 0.5)
+      expect(box.top).toBeGreaterThanOrEqual(-0.5)
+      expect(box.bottom).toBeLessThanOrEqual(visibleH + 0.5)
+    }
+  })
+
+  it('shifts by half the chrome, and never by more than half the canvas', () => {
+    expect(benchViewOffsetPx(640, 0)).toBe(0)
+    expect(benchViewOffsetPx(640, 200)).toBe(100)
+    expect(benchViewOffsetPx(640, 9999)).toBe(320)
+    expect(benchViewOffsetPx(640, -40)).toBe(0)
   })
 
   it('eases end to end over about a second', () => {

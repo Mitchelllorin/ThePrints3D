@@ -20,10 +20,12 @@ export {
 
 export {
   BENCH_FILL, BENCH_LEVEL_COLOR, BENCH_LEVEL_LABEL, BENCH_SWEEP_SECONDS, BENCH_Y,
-  IN_TO_M, PRESETS, benchBeam, benchLevelFor, benchPose, breakFor, defaultSpecimenId, easeInOut,
+  IN_TO_M, PRESETS, benchBeam, benchLevelFor, benchPose, benchViewOffsetPx, benchViewOffsets,
+  breakFor, defaultSpecimenId, easeInOut, projectBenchBox,
   holdsAt, lerpPose, presetBreakVerdict, presetById, presetEnvelope, serviceLevelFor,
   specimenForPreset,
-  type BenchBreak, type BenchIsolate, type BenchLevel, type BenchPose, type BenchPreset,
+  type BenchBoxOnScreen, type BenchBreak, type BenchIsolate, type BenchLevel, type BenchPose,
+  type BenchPreset, type BenchViewOffsets,
 } from './bench'
 
 export {
