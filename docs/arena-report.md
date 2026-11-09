@@ -122,6 +122,27 @@ pretending KL was computed.
   L/360 from 2.15× and reaches factored resistance at 3.55×, bending — 28.19%
   at 1×. That is the run to film if Parallam is the specimen.
 
+## Cross-checks against the makers' own factored tables
+
+The order of 8 Nov 14:45 asks for the same factored-resistance cross-check that
+cleared the Parallam, on the other two branded members. The honest answer for
+both is that there is no printed factored value to compare:
+
+- **West Fraser LVL 3000Fb 1.9E.** The Canadian edition of the user's guide
+  prints specified strengths, the depth factor and no factored-resistance table;
+  it tells the reader to "obtain factored resistances [by applying] the
+  appropriate formulae from CSA O86 to the specified strengths shown" (quoted
+  above). There is therefore no printed Mr/Vr to put beside the bench's
+  193,581 lb·in and 6,689.55 lb. They stay **derived on the same chain the
+  Parallam check proved**, not confirmed against a second printed number.
+- **Nordic Lam 24F-E/ES1M1.** No comparison is possible yet: the plate as read
+  carries no Fb, Fv or E, so the bench has nothing to derive a factored
+  resistance from and the part does not run. Inventing a figure to make a
+  comparison exist would be the one thing the order forbids.
+
+Neither maker's guide was re-read to produce this section; it records what the
+sources already in this repo print, and the citations are the ones above.
+
 ## Not on the bench, and what each is waiting for
 
 - **Nordic Lam 24F-E/ES1M1** (glulam 7 × 18, `glulam-7x18`). The plate as read
