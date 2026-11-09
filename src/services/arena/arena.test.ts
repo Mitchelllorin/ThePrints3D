@@ -20,6 +20,9 @@ describe('the arena roster', () => {
   it('puts every branded part that may be run on a card', () => {
     expect(roster).toHaveLength(3)
     expect(roster.map((s) => s.id)).toEqual([NORDIC, WEST_FRASER, PARALLAM])
+    // Two of the three can be run: the LVL and the PSL. Nordic's report prints no
+    // strength values at all, so it sits on the roster saying what it needs.
+    expect(roster.filter(isRateable)).toHaveLength(2)
   })
 
   it('keeps the rim board off the bench, in the catalogue', () => {
@@ -62,13 +65,22 @@ describe('the arena roster', () => {
     expect(specimenFor({ ...withFb, memberId: 'sawn-2x12' }).limits.fbPsi).toBe(1000)
   })
 
-  it('refuses a beam whose depth has no published factor behind it', () => {
+  it('rates Parallam on its Canadian specified strengths, and lands on its own table', () => {
     const psl = byId(PARALLAM)
-    // The figures are on the plate under its own headings — flexural stress,
-    // horizontal shear — so the only thing it is missing is the depth factor a
-    // 20" member would need and TJ-7001 does not print here.
-    expect(psl.missing).toEqual(['Bending depth factor'])
-    expect(isRateable(psl)).toBe(false)
+    expect(isRateable(psl)).toBe(true)
+    expect(psl.basis).toBe('canadian-verified')
+    expect(psl.limits.fbPsi).toBe(5360)
+    expect(psl.limits.fvPsi).toBe(540)
+    expect(psl.limits.ePsi).toBe(2_200_000)
+    expect(psl.limits.depthExponent).toBeCloseTo(0.111, 10)
+
+    // The proof that the chain is right: TJ-9505 page 4 prints Mr 80,445 ft-lb
+    // and Vr 21,545 lb for 3-1/2 × 19, and the bench derives the same two
+    // numbers from Fb, Fv, φ and the depth factor. Either both are right or the
+    // reading of the table is wrong — so this is the test that guards the read.
+    const c = capacityOf(psl, DEFAULT_SETUP)
+    expect(c.momentLbIn / 12).toBeCloseTo(80_445, -1)
+    expect(c.shearLb).toBeCloseTo(21_545, -1)
   })
 })
 
@@ -175,8 +187,8 @@ describe('the bench', () => {
     expect(env.exceedsL360At!).toBeLessThan(env.failedAt!)
     expect(env.failedAt!).toBeGreaterThan(1)
     expect(env.failedAt!).toBeLessThanOrEqual(4)
-    expect(envelopeLine(env)).toMatch(/Factored resistance at \d\.\d×/)
-    expect(envelopeLine(env)).toMatch(/over L\/360 from \d\.\d×/)
+    expect(envelopeLine(env)).toMatch(/Factored resistance at \d\.\d\d×/)
+    expect(envelopeLine(env)).toMatch(/over L\/360 from \d\.\d\d×/)
   })
 
   it('will not rate a part it has no plate for', () => {

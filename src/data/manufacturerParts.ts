@@ -206,37 +206,39 @@ export const MANUFACTURER_PARTS: readonly ManufacturerPart[] = [
     memberId: 'psl-3-1_2x19',
     layer: { id: 'framing', material: 'wood' },
     rated: [
-      // The 2.2E design-stress block of the deep-beam guide, plus the two
-      // stiffness figures carried beside it.
+      // The CANADIAN specified-strength block — TJ-9505 page 4, "Specified
+      // Strengths and Moduli of Elasticity (Standard Term)". These replaced the
+      // U.S. (ASD) figures this plate used to carry: a plate can only stand on
+      // one basis, and the bench can only rate one of them.
       { label: 'Grade', value: '2.2E' },
       { label: 'Width', value: '3-1/2', unit: 'in', note: 'TJ-9505 (West Canada) lists 2.2E beams in 3-1/2, 5-1/4 and 7 in widths' },
       { label: 'Depth', value: '19', unit: 'in', note: 'The deepest 2.2E depth in TJ-9505 — its depths stop at 19". There is no 18" in that guide' },
+      { label: 'Flexural stress', value: '5,360', unit: 'psi', note: 'Specified Fb at a 12" depth — TJ-9505, page 4' },
+      { label: 'Bending depth factor', value: '(12/d)^0.111', note: 'TJ-9505 note (3): PSL flexural stress is adjusted for depth, and this is the maker\'s exponent' },
+      { label: 'Horizontal shear', value: '540', unit: 'psi', note: 'Specified Fv — a flat figure, not depth-adjusted' },
       { label: 'Modulus of elasticity', value: '2.2 × 10⁶', unit: 'psi' },
-      { label: 'Adjusted modulus', value: '1,118,190', unit: 'psi', note: 'Emin, per the guide' },
-      { label: 'Flexural stress', value: '2900', unit: 'psi', note: 'At a 12" depth — the U.S. (ASD) figure from TJ-7001, still not a Canadian specified strength' },
-      { label: 'Tension stress', value: '2300', unit: 'psi', note: 'At a 4 ft length' },
-      { label: 'Compression perpendicular', value: '625', unit: 'psi' },
-      { label: 'Compression parallel', value: '2900', unit: 'psi' },
-      { label: 'Horizontal shear', value: '290', unit: 'psi' },
       { label: 'Shear modulus', value: '137,500', unit: 'psi' },
+      { label: 'Tension stress', value: '3,750', unit: 'psi', note: 'Specified ft, already adjusted for volume effects — note (4)' },
+      { label: 'Compression perpendicular', value: '4,630', unit: 'psi' },
+      { label: 'Compression parallel', value: '1,135', unit: 'psi', note: 'For a column, use 800 psi — note (9)' },
       { label: 'Stock lengths', value: 'Generic list', note: 'TJ-9505 prints a maximum offering, not a stock-length list, so the app\'s generic engineered lengths stand' },
-      { label: 'Code evaluation', value: 'ICC-ES ESR-1387' },
+      { label: 'Code evaluation', value: 'CCMC 11161-R' },
     ],
     basis:
       'Weyerhaeuser publishes no service life for Parallam, so F.U.S.E. scores it with the app\'s own timber figure. ' +
-      'The bending and tension values are reference values at a 12" depth and a 4 ft length, and the guide gives a depth and a length factor for anything else: ' +
-      'this row is 19" deep, so the stress the beam carries is the tabulated figure reduced by those factors, not the figure on its own. ' +
+      'The strengths are Canadian specified strengths from TJ-9505, quoted at a 12" depth, and the guide gives the exponent for adjusting one to any other depth: ' +
+      'this row is 19" deep, so the value it is rated at is (12/19)^0.111 of the tabulated figure. ' +
       'The guide forbids cutting, notching and drilling except as the engineer of record approves — a wall in this app can be remodelled freely, and that beam could not.',
     source: {
-      label: "Trus Joist 2.2E Parallam PSL Deep Beam Specifier's Guide, TJ-7001 (April 2026)",
-      url: 'https://www.weyerhaeuser.com/application/files/6017/7757/7574/TJ-7001_2.2E_Parallam_PSL_Deep_Beam.pdf',
+      label: "Trus Joist Beam, Header, and Column Specifier's Guide (W. Canada), TJ-9505 (April 2023)",
+      url: 'https://www.weyerhaeuser.com/application/files/8416/8488/0366/TJ-9505.pdf',
     },
-    verification: 'unverified',
+    verification: 'verified',
     verificationNote:
-      'The section is Canadian: 3-1/2 × 19 is in TJ-9505 (West, April 2023), whose 2.2E header and beam table runs 9-1/4, 9-1/2, 11-1/4, 11-7/8, 14, 16 and 19 in deep at 3-1/2, 5-1/4 and 7 in widths. ' +
-      'The strength figures are not: TJ-7001 is the U.S. guide, on ICC-ES ESR-1387 and NDS allowable stresses, so they are not Canadian specified strengths, and the depth factor a 19" member needs is still not on the plate. ' +
-      'TJ-9500 (East, February 2026) carries 2.0E only, to 18 in, so 19 in is a West-Canada size. CCMC 11161-R is the Canadian evaluation behind both. ' +
-      'No figure was changed in this pass — the size changed, the stresses did not.',
+      'Canadian basis, NBC 2020 / CSA O86-19: TJ-9505 page 4 lists "Specified Strengths and Moduli of Elasticity (Standard Term)" — 2.2E Beam at Fb 5,360 psi, ft 3,750 psi, fc 1,135 psi, fcll 4,630 psi, Fv 540 psi, E 2.2 × 10⁶ psi, G 137,500 psi — and note (3) gives the PSL depth adjustment (12/d)^0.111. ' +
+      'The cross-check is the same page\'s factored-resistance table: for 3-1/2 × 19 it prints Mr 80,445 ft-lb and Vr 21,545 lb, and φ 0.9 applied to those strengths and the depth factor reproduces them. ' +
+      'The U.S. (ASD) figures from TJ-7001 that this row used to carry are gone, because a plate cannot stand on two bases. ' +
+      'CCMC 11161-R is the Canadian evaluation behind the product.',
     modelling: 'reference-only',
     pitchLine:
       'A beam whose whole selling point is that it has no plies to nail wrong — and an app that can show the wall it carries outliving it.',

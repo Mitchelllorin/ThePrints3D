@@ -414,6 +414,9 @@ export function capacityOf(s: ArenaSpecimen, setup: BenchSetup): Capacity {
 export interface ArenaVerdict {
   specimen: ArenaSpecimen
   multiple: number
+  /** The clear span this was worked out on, ft — carried so a failure card can
+   *  state the job without being handed the setup a second time. */
+  spanFt: number
   /** Strength phase. Deflection never sets this — see `exceedsL360`. */
   phase: ArenaPhase
   severity: number
@@ -482,6 +485,7 @@ export function verdictAt(s: ArenaSpecimen, setup: BenchSetup, multiple: number)
   return {
     specimen: s,
     multiple,
+    spanFt: setup.spanFt,
     phase,
     severity,
     utilisation,
@@ -529,8 +533,10 @@ export function envelopeOf(s: ArenaSpecimen, setup: BenchSetup): Envelope {
 
 /** One line for the bench card. Strength first, sag second, never merged. */
 export function envelopeLine(env: Envelope): string {
-  const sag = env.exceedsL360At != null ? ` · over L/360 from ${env.exceedsL360At.toFixed(1)}×` : ''
-  if (env.failedAt != null) return `Factored resistance at ${env.failedAt.toFixed(1)}×${sag}`
+  // Two decimals, because the ramp steps in 0.05 — one decimal would print
+  // 2.85× as 2.8×, and a limit rounded for looks is still a wrong limit.
+  const sag = env.exceedsL360At != null ? ` · over L/360 from ${env.exceedsL360At.toFixed(2)}×` : ''
+  if (env.failedAt != null) return `Factored resistance at ${env.failedAt.toFixed(2)}×${sag}`
   if (env.exceedsL360At != null) return `Holds to ${RAMP_MAX}× in strength${sag}`
   return `Holds to ${RAMP_MAX}× — nothing on this plate takes it.`
 }

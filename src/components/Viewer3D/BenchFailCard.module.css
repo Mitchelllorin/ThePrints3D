@@ -1,0 +1,92 @@
+/* THE FAILURE CARD — transient, so it may be solid. It is the one surface in
+   the app that earns an opaque block: it carries four lines of running text
+   that have to be read while the room behind it glows. Position is the bottom
+   edge, clear of the part the sweep centred, and clear of the rail by the width
+   token the rail publishes. */
+
+.card {
+  position: fixed;
+  z-index: 20;
+  left: calc(var(--rail-w, 44px) + 8px);
+  right: calc(env(safe-area-inset-right) + 8px);
+  bottom: calc(env(safe-area-inset-bottom) + 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #3a2a25;
+  background: rgba(24, 15, 13, 0.94);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  color: #f4ece8;
+  font-size: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .card { background: rgba(24, 15, 13, 0.98); }
+}
+
+.top { display: flex; align-items: center; gap: 8px; }
+
+.chip {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.part { font-size: 14px; font-weight: 700; }
+
+.maker { margin: 0; font-size: 11px; color: #c3b2ab; }
+.what { margin: 0; font-size: 13px; font-weight: 600; }
+
+.numbers {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: #1d1412;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.numbers dt { color: #b39d95; }
+.numbers dd { margin: 0; text-align: right; }
+
+.factors {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #9c8a83;
+  font-variant-numeric: tabular-nums;
+}
+
+.actions { display: flex; gap: 8px; }
+
+.dismiss, .reset {
+  min-height: 48px;
+  flex: 1;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dismiss {
+  border: 1px solid #4a3a34;
+  background: transparent;
+  color: #f4ece8;
+}
+
+.reset {
+  border: 1px solid #f85149;
+  background: #f85149;
+  color: #1a0a08;
+}
