@@ -4,6 +4,9 @@ import { OrbitControls, Grid } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { cameraControls } from './cameraControls'
 import CinemaBridge, { CinemaCaption } from '../../cinema/CinemaBridge'
+import BenchViz from './BenchViz'
+import BenchFailCard from './BenchFailCard'
+import { useBenchStore } from '../../store/useBenchStore'
 import '../../cinema/cinema.css'
 import { cinema } from '../../cinema/cinemaRuntime'
 import * as THREE from 'three'
@@ -281,6 +284,12 @@ function CameraTether({ controlsRef }: { controlsRef: React.MutableRefObject<Orb
   useFrame(() => {
     const ctrl = controlsRef.current
     if (!ctrl) return
+    // A BREAK OWNS THE TARGET. The leash is measured around the print, and the
+    // bench stands at the origin — so on a drawing whose centre is anywhere
+    // else the tether would pull the camera's target off the failing part and
+    // the sweep would land on empty ground. While a break is isolated, the pose
+    // is the bench's to set; the leash resumes the moment it is reset.
+    if (useBenchStore.getState().break) return
     const cx = overlay.position[0]
     const cz = overlay.position[1]
     const [w, d] = overlay.scale
@@ -1139,6 +1148,9 @@ export default function ModelViewer() {
         <TourUnderReveal />
         <ExplodeDriver />
         <CinemaBridge />
+        {/* THE BENCH. Renders nothing unless the arena is open; when a part
+            fails it sweeps the camera and dips every other material. */}
+        <BenchViz />
         {/* THE BUILT MODEL, hidden in plan view.
             FloorplanOverlay stays outside this group on purpose — the print and
             the lines you have traced on it ARE the 2D view, and they are what
@@ -1206,6 +1218,10 @@ export default function ModelViewer() {
       {/* The lower third. Renders nothing at all unless a shot is rolling and
           that shot has a caption up, so it costs the live app one null. */}
       <CinemaCaption />
+
+      {/* The failure card. Outside the Canvas, on the bottom edge, so it can
+          carry real text and real buttons without inheriting a camera. */}
+      <BenchFailCard />
 
       {/* No "Building 3D model…" popup — the 3D just updates as you trace; a
           flashing build banner on every rebuild is noise. */}

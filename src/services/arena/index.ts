@@ -19,6 +19,19 @@ export {
 } from './specimen'
 
 export {
+  BENCH_FILL, BENCH_LEVEL_COLOR, BENCH_LEVEL_LABEL, BENCH_SWEEP_SECONDS, BENCH_Y,
+  IN_TO_M, PRESETS, benchBeam, benchLevelFor, benchPose, breakFor, defaultSpecimenId, easeInOut,
+  holdsAt, lerpPose, presetBreakVerdict, presetById, presetEnvelope, serviceLevelFor,
+  specimenForPreset,
+  type BenchBreak, type BenchIsolate, type BenchLevel, type BenchPose, type BenchPreset,
+} from './bench'
+
+export {
+  RUN_METRIC_KEYS, benchRecordInput, personalBests, readRuns, recordBenchRun, runWhen,
+  runsFrom, type BenchRun, type PersonalBest,
+} from './history'
+
+export {
   CHECK_LABEL, DEAD_FACTOR, DEFAULT_SETUP, DEFLECTION_DIVISOR,
   KH_SINGLE, KL_ASSUMED_BRACED, KD_STANDARD, KS_DRY, KT_UNTREATED, LIVE_FACTOR,
   PHASE_COLOR, PHASE_LABEL, PHI, RAMP_MAX, RAMP_STEP, STRENGTH_CHECKS,

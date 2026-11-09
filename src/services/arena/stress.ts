@@ -414,6 +414,9 @@ export function capacityOf(s: ArenaSpecimen, setup: BenchSetup): Capacity {
 export interface ArenaVerdict {
   specimen: ArenaSpecimen
   multiple: number
+  /** The clear span this was worked out on, ft — carried so a failure card can
+   *  state the job without being handed the setup a second time. */
+  spanFt: number
   /** Strength phase. Deflection never sets this — see `exceedsL360`. */
   phase: ArenaPhase
   severity: number
@@ -482,6 +485,7 @@ export function verdictAt(s: ArenaSpecimen, setup: BenchSetup, multiple: number)
   return {
     specimen: s,
     multiple,
+    spanFt: setup.spanFt,
     phase,
     severity,
     utilisation,
