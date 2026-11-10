@@ -437,7 +437,9 @@ export default function RailCascade() {
           last child, pinned to the foot) was the first thing pushed out of it. */}
       <div className={styles.railCol}>
         <nav ref={railRef} className={`${styles.rail} ${railWrap ? styles.railWrap : ''}`} aria-label="Menus">
-          {RAIL.filter((r) => r.id !== 'framing' || hasDrawings).map(({ id, icon, label }) => (
+          {/* In the Arena the workspace is the show: the rail steps down to the one
+              button that leaves it (Mitchell, 9 Nov — menus stayed up over the bench). */}
+          {RAIL.filter((r) => (arenaOpen ? r.id === 'arena' : r.id !== 'framing' || hasDrawings)).map(({ id, icon, label }) => (
             <Fragment key={id}>
               <button
                 className={`${styles.icon} ${active[id] ? styles.active : ''}`}

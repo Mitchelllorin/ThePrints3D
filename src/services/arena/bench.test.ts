@@ -123,7 +123,7 @@ describe('the sweep', () => {
     }
   })
 
-  it('lands the part centred in the canvas left above the chrome, at about a third', () => {
+  it('lands the part centred in the canvas left above the chrome, at about BENCH_FILL', () => {
     // Section 4 of BREAK-IT, as pixels: at the end of the sweep the part's own
     // box must sit in the middle of the VISIBLE band and span about a third of
     // it — not the centre of a viewport whose foot is covered.
@@ -144,9 +144,9 @@ describe('the sweep', () => {
       // Solved from the box, so the box is where it was asked to be.
       expect(Math.abs(box.cx - W / 2)).toBeLessThan(0.5)
       expect(Math.abs(box.cy - visibleH / 2)).toBeLessThan(0.5)
-      // About a third of the width — a long thin member is framed on its length.
-      expect(box.width).toBeGreaterThan((W / 3) * 0.75)
-      expect(box.width).toBeLessThan((W / 3) * 1.15)
+      // Close in: about BENCH_FILL of the width — a long thin member is framed on its length.
+      expect(box.width).toBeGreaterThan(W * BENCH_FILL * 0.75)
+      expect(box.width).toBeLessThan(W * BENCH_FILL * 1.25)
       // And wholly inside the visible band, clear of the chrome.
       expect(box.left).toBeGreaterThanOrEqual(-0.5)
       expect(box.right).toBeLessThanOrEqual(W + 0.5)

@@ -1108,7 +1108,7 @@ export default function WorkspaceLayout() {
   }
   const hasDrawings = drawings.length > 0
   // Onboarding card persists until a plan is actually loaded — no dismiss.
-  const showUploadHint = !hasDrawings
+  const showUploadHint = !hasDrawings && !arenaOpen
 
   /**
    * A FILE IS NOT AN ANSWER TO "WHO FINDS THE WALLS?" — SO ASK.

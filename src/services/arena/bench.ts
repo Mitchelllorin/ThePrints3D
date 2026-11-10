@@ -109,7 +109,7 @@ export interface BenchPreset {
  */
 const PARALLAM_24: BenchPreset = {
   id: 'parallam-24-ft',
-  label: 'Crack the 24 ft',
+  label: 'PSL beam · 24 ft span',
   note: '24 ft span. Bending rupture at midspan; sags past L/360 first.',
   specimenId: 'weyerhaeuser-parallam-2_2e-3_1_2x19',
   setup: { ...DEFAULT_SETUP, spanFt: 24 },
@@ -126,7 +126,7 @@ const PARALLAM_24: BenchPreset = {
  */
 const WEST_FRASER_12: BenchPreset = {
   id: 'west-fraser-12-ft',
-  label: 'Split the 12 ft',
+  label: 'LVL beam · 12 ft span',
   note: '12 ft span. Bending rupture at 2.85×.',
   specimenId: 'west-fraser-lvl-3000fb-1_9e',
   setup: { ...DEFAULT_SETUP, spanFt: 12 },
@@ -256,7 +256,7 @@ export interface BenchPose {
 }
 
 /** The share of the frame the part should fill when the sweep ends. */
-export const BENCH_FILL = 1 / 3
+export const BENCH_FILL = 0.7
 /** Sweep length. Around a second, eased — the order's number, not a guess. */
 export const BENCH_SWEEP_SECONDS = 1
 /** How far above the ground plane the bench stands, metres. */
