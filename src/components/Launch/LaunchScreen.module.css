@@ -109,6 +109,13 @@
   transition: color 0.15s ease;
 }
 .familyHub {
+  /* mobile.css stretches every link to a 48px touch box; sit the label at the
+     bottom of that box so it stays close to the app row under it. */
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  width: max-content;
+  margin: 0 auto 2px;
   font-size: 11.5px;
   font-weight: 600;
   color: #b6c2d1;
