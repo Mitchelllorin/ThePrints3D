@@ -92,3 +92,28 @@
 .legalLink:focus-visible { color: #cbd5e1; }
 
 .sep { color: #475569; }
+
+/* ── Family line ───────────────────────────────────────────────────────────────
+   Same on every family landing page: one quiet line, the hub a touch bigger. */
+.family {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #64748b;
+}
+.familyHub,
+.familyLink {
+  color: #94a3b8;
+  text-decoration: none;
+  padding: 4px 2px;
+  transition: color 0.15s ease;
+}
+.familyHub {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #b6c2d1;
+}
+.familyHub:hover,
+.familyHub:focus-visible,
+.familyLink:hover,
+.familyLink:focus-visible { color: var(--bp-accent, #38bdf8); }

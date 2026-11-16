@@ -15,7 +15,14 @@ import { useState } from 'react'
 import Logo3DBadge from '../Layout/Logo3DBadge'
 import StudioCredit from '../Layout/StudioCredit'
 import PrivacyPolicy from '../Legal/PrivacyPolicy'
+import family from '../../data/family.json'
 import styles from './LaunchScreen.module.css'
+
+/** The four main apps. One without a site yet stays off until it has one. */
+const MAIN_APPS = ['CircuiTry3D', 'ThePrints3D', 'AutoMotive3D', 'ElectriMotive3D']
+const SIBLINGS = family.apps.filter(
+  (app) => app.site && app.name !== 'ThePrints3D' && MAIN_APPS.includes(app.name),
+)
 
 export default function LaunchScreen({ onLaunch }: { onLaunch: () => void }) {
   const [showPrivacy, setShowPrivacy] = useState(false)
@@ -51,6 +58,22 @@ export default function LaunchScreen({ onLaunch }: { onLaunch: () => void }) {
         </p>
 
         <StudioCredit />
+
+        {/* The family line, the same on every family landing page: the hub a
+            touch bigger, then the other main apps. */}
+        <p className={styles.family}>
+          <a className={styles.familyHub} href={family.home} target="_blank" rel="noopener noreferrer">
+            3D Learning Family
+          </a>
+          {SIBLINGS.map((app) => (
+            <span key={app.name}>
+              <span className={styles.sep} aria-hidden="true">{' · '}</span>
+              <a className={styles.familyLink} href={app.site as string} target="_blank" rel="noopener noreferrer">
+                {app.name}
+              </a>
+            </span>
+          ))}
+        </p>
       </div>
     </div>
   )
