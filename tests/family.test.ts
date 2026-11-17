@@ -6,10 +6,10 @@ import { FAMILY_SELF } from '../src/components/Layout/FamilyDrawer'
 // The same order as 3dlearningfamily.com and the family band on every site:
 // the three apps people can use now, then the shop. The same list, file for
 // file, in CircuiTry3D and AutoMotive3D.
-const ORDER = ['CircuiTry3D', 'ThePrints3D', 'AutoMotive3D', 'TheAtom3D', 'TheCell3D', 'AnyBody3D', 'AnyPlanet3D', 'ThePyramids3D']
+const ORDER = ['CircuiTry3D', 'ThePrints3D', 'AutoMotive3D', 'ElectriMotive3D', 'TheAtom3D', 'TheCell3D', 'AnyBody3D', 'AnyPlanet3D', 'ThePyramids3D']
 
 describe('the 3D Learning Family', () => {
-  it('is all eight, in family order, and includes this app', () => {
+  it('is all nine, in family order, and includes this app', () => {
     expect(family.apps.map((a) => a.name)).toEqual(ORDER)
     expect(family.apps.some((a) => a.name === FAMILY_SELF)).toBe(true)
   })
