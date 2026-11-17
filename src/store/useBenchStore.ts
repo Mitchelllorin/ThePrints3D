@@ -23,6 +23,13 @@ import { create } from 'zustand'
 import { DEFAULT_SETUP, RAMP_MAX, type BenchSetup } from '../services/arena/stress'
 import type { BenchBreak } from '../services/arena/bench'
 import { defaultSpecimenId } from '../services/arena/bench'
+import { fileBenchEnd } from '../services/arena/runEnd'
+// Sends the spine to the family collector (no-op until a build carries the
+// endpoint). Started here rather than in main.tsx only because main.tsx has
+// Mitchell's local edits in progress; it can move there with them.
+import { startFuseSync } from '../lib/fuseShare'
+
+startFuseSync()
 
 /** Round to the ramp's 0.05 grid so 0.1 accumulation cannot drift the reading. */
 function snap(m: number): number {
@@ -45,6 +52,8 @@ interface BenchState {
   holdStartedAt: number | null
   /** The moment, once something has failed. Null while the bench is standing. */
   break: BenchBreak | null
+  /** This run is already in the spine (it broke, or it held to the top). */
+  runFiled: boolean
 
   setOpen: (open: boolean) => void
   setSpecimen: (id: string | null) => void
@@ -64,6 +73,11 @@ interface BenchState {
   reset: () => void
 }
 
+/** File a run that ended without a break, once, before the bench re-arms. */
+function endRun(s: BenchState, held = false): void {
+  if (!s.break && !s.runFiled && s.multiple > 1) fileBenchEnd(s.specimenId, s.setup, s.multiple, held)
+}
+
 export const useBenchStore = create<BenchState>((set) => ({
   open: false,
   specimenId: defaultSpecimenId(),
@@ -73,17 +87,22 @@ export const useBenchStore = create<BenchState>((set) => ({
   holding: false,
   holdStartedAt: null,
   break: null,
+  runFiled: false,
 
   setOpen: (open) => set({ open }),
-  setSpecimen: (id) => set({ specimenId: id, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null }),
-  setSetup: (patch) => set((s) => ({ setup: { ...s.setup, ...patch }, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null })),
-  applyPreset: (specimenId, setup) => set({ specimenId, setup, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null }),
+  setSpecimen: (id) => set((s) => (endRun(s), { specimenId: id, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null, runFiled: false })),
+  setSetup: (patch) => set((s) => (endRun(s), { setup: { ...s.setup, ...patch }, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null, runFiled: false })),
+  applyPreset: (specimenId, setup) => set((s) => (endRun(s), { specimenId, setup, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null, runFiled: false })),
   setMultiple: (m) => set({ multiple: Math.min(RAMP_MAX, Math.max(1, snap(m))), holding: false, holdStartedAt: null }),
 
   push: () => set((s) => {
     if (s.break) return {}
     const next = snap(s.multiple + 0.1)
-    if (next >= RAMP_MAX) return { multiple: RAMP_MAX, running: false }
+    if (next >= RAMP_MAX) {
+      // Carried the load to the top of the ramp: that is a result, filed now.
+      endRun({ ...s, multiple: RAMP_MAX }, true)
+      return { multiple: RAMP_MAX, running: false, runFiled: true }
+    }
     return { multiple: next }
   }),
 
@@ -96,11 +115,11 @@ export const useBenchStore = create<BenchState>((set) => ({
     return { holding: true, running: false, holdStartedAt: Date.now() }
   }),
 
-  fail: (b) => set({ break: b, running: false, holding: false, holdStartedAt: null }),
+  fail: (b) => set({ break: b, running: false, holding: false, holdStartedAt: null, runFiled: true }),
   // Dismissing re-arms the ramp as well as restoring the scene. Leaving it
   // parked at 3.55× would make the next tap of More an instant second break —
   // the same run filed twice, which is not a run.
-  dismiss: () => set({ break: null, multiple: 1, running: false, holding: false, holdStartedAt: null }),
+  dismiss: () => set({ break: null, multiple: 1, running: false, holding: false, holdStartedAt: null, runFiled: false }),
 
-  reset: () => set({ multiple: 1, running: false, holding: false, holdStartedAt: null, break: null }),
+  reset: () => set((s) => (endRun(s), { multiple: 1, running: false, holding: false, holdStartedAt: null, break: null, runFiled: false })),
 }))
