@@ -28,7 +28,7 @@
  * kept up. Everything else comes out of the drawings, including the fact that a
  * wrap is protected (see services/fuse/building.ts).
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useSceneConfig } from '../../store/useSceneConfig'
@@ -41,6 +41,7 @@ import {
   type AssemblyState, type BuildShape,
 } from '../../services/fuse'
 import styles from './FusePanel.module.css'
+import { levelFromRisk4, recordLevelChange } from '../../lib/fuseRecord'
 
 /** A tick on the timeline, at the year a layer goes. */
 function Tick({ year, level }: { year: number; level: AssemblyState['level'] }) {
@@ -122,6 +123,28 @@ export default function FusePanel() {
   const states = reading.states
   const stepIndex = states.length === 0 ? 0 : Math.min(step, states.length - 1)
   const shown = states[stepIndex]
+
+  // The timeline is a model of years, not a record of anything that happened —
+  // so what gets filed is a verdict per layer, once, when its grade changes as
+  // the scrubber moves. Moving year 3 → year 4 and back does not log twice.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    for (const s of states) {
+      recordLevelChange(window.localStorage, {
+        app: 'theprints3d',
+        subject: s.label,
+        family: s.id,
+        level: levelFromRisk4(s.level),
+        failure: s.failsYear != null && s.failsYear <= year ? s.mode : null,
+        metrics: [
+          { key: 'reserve', rated: 100, actual: Math.round(s.reserve * 100), unit: '%' },
+          { key: 'wet-time', rated: Math.round(s.wetCapacity * 100), actual: Math.round(s.wetTime * 100), unit: '%' },
+        ],
+        note: s.failsYear == null ? 'holding' : `goes in year ${s.failsYear}`,
+        basis: 'model',
+      })
+    }
+  }, [states, year])
 
   // Built once and reused by every jump, so two verdicts cannot land the camera
   // in two slightly different places.

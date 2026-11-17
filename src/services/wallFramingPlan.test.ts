@@ -40,6 +40,33 @@ describe('the overlay transform', () => {
   })
 })
 
+describe('a curved wall is a run of bends, not a row of corners', () => {
+  // Two chords of a ring, sharing an end exactly as the sheet lays them out.
+  const p0 = { x: 100, y: 100 }, p1 = { x: 300, y: 105 }, p2 = { x: 500, y: 100 }
+  const plans = planWalls(input([
+    w(p0.x, p0.y, p1.x, p1.y, { bend: true }),
+    w(p1.x, p1.y, p2.x, p2.y, { bend: true, sharedStartStud: true }),
+  ]))
+
+  it('gives a bend no corner post, no plate lap and nothing to trim', () => {
+    // Every chord shares both its ends, so on a straight wall each end would be
+    // a corner, lapped and doubled. On a bend it is none of those.
+    expect(plans[0].opts.capLap).toBeUndefined()
+    expect(plans[0].opts.endTrim).toBeUndefined()
+    expect(plans[0].opts.bend).toBe(true)
+  })
+
+  it('frames the chord at its own length, break to break', () => {
+    const chordM = Math.hypot(p1.x - p0.x, p1.y - p0.y) * 0.01   // 1 px = 10 mm
+    expect(plans[0].length).toBeCloseTo(chordM, 6)
+  })
+
+  it('passes the shared break stud on, so the joint is framed once', () => {
+    expect(plans[0].opts.sharedStartStud).toBeUndefined()
+    expect(plans[1].opts.sharedStartStud).toBe(true)
+  })
+})
+
 describe('corners: one wall runs through, the other butts into it', () => {
   // An L: one wall east-west, one north-south, meeting at (100,100).
   const plans = planWalls(input([w(100, 100, 600, 100), w(100, 100, 100, 500)]))

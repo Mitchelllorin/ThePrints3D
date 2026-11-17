@@ -1,0 +1,86 @@
+/* THE FAILURE CARD — transient, so it may be solid. It is the one surface in
+   the app that earns an opaque block: it carries running text that has to be
+   read while the part behind it glows. Position is the bottom edge, clear of
+   the rail on the left; the Place tab is off the screen while The Ramp is open,
+   so the card has that edge to itself. Capped well inside a third of the
+   screen: the canvas has to keep two thirds at every moment, including this one. */
+
+.card {
+  position: fixed;
+  z-index: var(--z-sheet);
+  left: calc(var(--rail-w, 44px) + 8px);
+  right: calc(env(safe-area-inset-right, 0px) + 8px);
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #3a2a25;
+  background: rgba(24, 15, 13, 0.95);
+  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: blur(10px) saturate(1.1);
+  color: #f4ece8;
+  font-size: 13px;
+  max-height: 30dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .card { background: rgba(24, 15, 13, 0.98); }
+}
+
+.top { display: flex; align-items: center; gap: 8px; }
+
+.chip {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.part { font-size: 15px; font-weight: 700; }
+
+.line { margin: 0; font-size: 13px; color: #c3b2ab; }
+.what { margin: 0; font-size: 13px; font-weight: 600; }
+
+.numbers {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #1d1412;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.numbers dt { color: #b39d95; }
+.numbers dd { margin: 0; text-align: right; }
+
+.actions { display: flex; gap: 8px; }
+
+.dismiss, .reset {
+  min-height: 48px;
+  flex: 1;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.dismiss {
+  border: 1px solid #4a3a34;
+  background: transparent;
+  color: #f4ece8;
+}
+
+.reset {
+  border: 1px solid #f85149;
+  background: #f85149;
+  color: #1a0a08;
+}

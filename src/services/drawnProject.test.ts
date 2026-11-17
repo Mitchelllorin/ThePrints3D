@@ -43,6 +43,16 @@ describe('walls drawn one at a time', () => {
     expect(Math.hypot(walls[1].x2 - walls[1].x1, walls[1].y2 - walls[1].y1) * DRAWN_MM_PER_PX).toBeCloseTo(8 * FT, 6)
   })
 
+  it('carries a curved wall through as a run of bends, not as a set of corners', async () => {
+    const { circleString } = await import('./drawItPlan')
+    const ring = circleString({ cx: 5000, cy: 5000, r: 1500 })
+    const walls = createDrawnProject({ ...spec, freeWalls: ring.walls }).drawing.parsedWalls
+    expect(walls).toHaveLength(ring.chords)
+    expect(walls.every((w) => w.bend === true)).toBe(true)
+    // The ring closes, so every chord shares its start with the one before it.
+    expect(walls.filter((w) => w.sharedStartStud)).toHaveLength(ring.chords)
+  })
+
   it('lays no floor, because a floor is a closed shape and this is not one', () => {
     expect(createDrawnProject({ ...spec, freeWalls: free }).floorAreas).toHaveLength(0)
   })

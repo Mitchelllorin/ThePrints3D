@@ -12,6 +12,9 @@
  */
 import * as THREE from 'three'
 import { joistProfile } from '../data/traceLayers'
+import { getManufacturerPart } from '../data/manufacturerParts'
+import { getMember } from '../data/members'
+import { buildPartModel } from './manufacturer/model'
 import {
   type EnvelopeLayer, type CladdingSpec, type BoardSpec,
   LEDGE_DROP_M, LEDGE_BEARING_EXTRA_M, WEEP_SPACING_M, TIE_SPACING_M, FLASHING_UPTURN_M,
@@ -115,6 +118,18 @@ export interface WallFramingOpts {
    *  rough-opening width. Studs are dropped through the opening and replaced with
    *  king + jack studs, a header, cripples (and a sill for windows). */
   openings?: WallOpening[]
+  /**
+   * Cut this wall's headers from a MANUFACTURER'S part instead of the generic
+   * LVL the span calls for. A part id from `data/manufacturerParts.ts`.
+   *
+   * Opt-in and undefined by default: the stock a header comes out of is a
+   * specification decision, so nothing starts substituting a maker's beam for
+   * the catalogue one on its own. Given a part, the header is drawn as that part
+   * — its laminations, its own depth — but only where the real section fits
+   * between the opening and the top plate; a beam that overruns the wall is not
+   * the maker's beam, so it falls back to the catalogue header.
+   */
+  headerMemberId?: string
   /** Corner cap-plate lap. At each end that meets a corner, the upper (cap) top
    *  plate either extends OVER the adjoining wall by one framing-member width
    *  ('lap') or is pulled back that far so it receives the neighbour's lapping
@@ -147,6 +162,18 @@ export interface WallFramingOpts {
    * says which wall runs through.
    */
   endTrim?: { start?: number; end?: number }
+  /**
+   * A facet of a CURVED WALL. A bend is not a corner: the run carries on round
+   * the arc rather than arriving at right angles, so nothing butts into it and
+   * there is no corner post or corner backer at either end.
+   */
+  bend?: boolean
+  /**
+   * The stud at this end's break is the one the facet before it stood up — it is
+   * in the model already, so this end adds none. A break gets ONE stud rather
+   * than one from each side of it.
+   */
+  sharedStartStud?: boolean
 }
 
 /**
@@ -215,10 +242,13 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     deflectionGapMm = 0,
     opacity = 1,
     openings = [],
+    headerMemberId,
     capLap,
     tees = [],
     packs = [],
     endTrim,
+    bend = false,
+    sharedStartStud = false,
   } = opts
 
   const group = new THREE.Group()
@@ -289,8 +319,11 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // outside face. Lower plate one way, cap the other — that is the lap.
   //
   // A tee arrival (endTrim) stops at the face of the wall it lands on, cap and all.
-  const trimA = (capLap?.start === 'back' ? depth : 0) + (endTrim?.start ?? 0)
-  const trimB = (capLap?.end === 'back' ? depth : 0) + (endTrim?.end ?? 0)
+  // A bend takes no lap: there is no corner arriving at right angles for the
+  // plates to tie to, so the chord is plated its whole length.
+  const lap = bend ? undefined : capLap
+  const trimA = (lap?.start === 'back' ? depth : 0) + (endTrim?.start ?? 0)
+  const trimB = (lap?.end === 'back' ? depth : 0) + (endTrim?.end ?? 0)
   const bodyL = -half + trimA
   const bodyR = half - trimB
   const bodyLen = Math.max(0.02, bodyR - bodyL)
@@ -339,8 +372,8 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
     // so a lapping cap is simply full length and nothing projects past the line.
     let capL = -half + (endTrim?.start ?? 0)
     let capR = half - (endTrim?.end ?? 0)
-    if (capLap?.start === 'lap') capL += depth
-    if (capLap?.end === 'lap') capR -= depth
+    if (lap?.start === 'lap') capL += depth
+    if (lap?.end === 'lap') capR -= depth
     const capLen = Math.max(0.02, capR - capL)
     add(new THREE.BoxGeometry(capLen, PLATE_H_M, depth), (capL + capR) / 2, height - PLATE_H_M / 2, 0, memberInfo('cap plate'), cut('cap plate', capLen))
   }
@@ -375,19 +408,21 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
   // pulls from the outside face of the building: that is where the sheathing starts.
   const endA = bodyL + studW / 2
   const endB = bodyR - studW / 2
-  const xs: number[] = [endA, endB]
+  // A shared break belongs to the facet before this one, so this end starts no
+  // stud there — the joint carries one, not two.
+  const xs: number[] = sharedStartStud ? [endB] : [endA, endB]
   // Which of those positions are PACK studs — ends, corner posts, either side of
   // a tee. They keep the plain "stud" label (the takeoff counts studs), and are
   // marked separately so the member colours can draw them the way a panel
   // layout does: the packs picked out from the field.
-  const packKeys = new Set<number>([endA, endB].map((x) => Math.round(x * 1000)))
+  const packKeys = new Set<number>(xs.map((x) => Math.round(x * 1000)))
   for (let d = spacingM; d < length - studW; d += spacingM) {
     // EXACT, not rounded to the millimetre: the claim is that a stud centre is
     // one spacing from the face, and 16" is 0.4064 m, not 0.406. The dedupe
     // below still keys on millimetres, which is all that rounding was for.
     const x = -half + d
     // Don't stack a field stud on an end stud, or put one past a trimmed end.
-    if (x < endA + studW || x > endB - studW) continue
+    if (x < (sharedStartStud ? bodyL + studW : endA + studW) || x > endB - studW) continue
     xs.push(x)
   }
   // END PACKS — and a real CORNER POST where two walls meet.
@@ -418,8 +453,10 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
       )
     }
   }
-  cornerPost(bodyL, 1, capLap?.start)
-  cornerPost(bodyR, -1, capLap?.end)
+  if (!bend) {
+    cornerPost(bodyL, 1, lap?.start)
+    cornerPost(bodyR, -1, lap?.end)
+  }
 
   // TEES — where another wall lands on the face of this one.
   //
@@ -572,8 +609,23 @@ export function buildWallFraming(opts: WallFramingOpts): THREE.Group {
 
     // Header spanning the opening and bearing on every jack under it.
     const headerLen = op.w + studW * 2 * nJacks
-    add(new THREE.BoxGeometry(headerLen, headerDepth, studDepth), op.x, roTop + headerDepth / 2, 0,
-      steel ? memberInfo('box-beam header') : 'LVL header', cut('header', headerLen, headerStock, headerPlies))
+    // A header cut from a maker's part is DRAWN as that part: one box per
+    // lamination with a glue line between, so the beam reads as a Nordic Lam
+    // rather than as another tan box. The cut is stamped on every ply, or the
+    // takeoff loses the header the moment it becomes a real product.
+    const brandPart = !steel && headerMemberId ? getManufacturerPart(headerMemberId) : null
+    const brandModel = brandPart ? buildPartModel(brandPart, { lengthM: headerLen }) : null
+    if (brandModel && roTop + brandModel.depthM <= studTop + 1e-6) {
+      const brandStock = getMember(brandPart!.memberId)?.name ?? brandPart!.product
+      for (const ply of brandModel.group.children) {
+        ply.userData.cut = cut('header', headerLen, brandStock, headerPlies)
+      }
+      brandModel.group.position.set(op.x, roTop, 0)
+      group.add(brandModel.group)
+    } else {
+      add(new THREE.BoxGeometry(headerLen, headerDepth, studDepth), op.x, roTop + headerDepth / 2, 0,
+        steel ? memberInfo('box-beam header') : 'LVL header', cut('header', headerLen, headerStock, headerPlies))
+    }
 
     // Cripple studs above the header up to the top plate/track.
     const cripBot = roTop + headerDepth

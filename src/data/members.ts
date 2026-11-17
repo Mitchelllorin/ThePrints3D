@@ -109,12 +109,27 @@ export const MEMBERS: readonly MemberSpec[] = [
   eng('lvl', 'LVL', '2.0E', 1.75, '1-3/4', 16, '16', ['header', 'beam']),
   eng('lvl', 'LVL', '2.0E', 1.75, '1-3/4', 18, '18', ['beam']),
 
+  /**
+   * A MANUFACTURER'S LINE, IN THE CATALOGUE.
+   *
+   * West Fraser's 3000Fb 1.9E LVL, from their own LVL User's Guide (Canadian
+   * edition, 2026-07-14 v1.1). 11-1/2" is in the 1-3/4" 1.9E available-sizes
+   * list, which runs 5-1/2" to 24" with the 24" depth restricted to multiple
+   * member units. It is deliberately not a depth the generic LVL rows already
+   * carry: a maker's row that duplicated a generic size would shadow it in the
+   * lookup and put two different beams behind one id.
+   */
+  eng('lvl', 'West Fraser LVL', '3000Fb 1.9E', 1.75, '1-3/4', 11.5, '11-1/2', ['header', 'beam']),
+
   // ── LSL — tall-wall studs, headers, rim ──
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 3.5, '3-1/2', ['stud', 'plate']),
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 5.5, '5-1/2', ['stud', 'plate', 'header']),
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 7.25, '7-1/4', ['header', 'rim']),
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 9.25, '9-1/4', ['header', 'rim']),
   eng('lsl', 'LSL', '1.55E', 1.75, '1-3/4', 11.875, '11-7/8', ['header', 'rim', 'beam']),
+
+  /** Another maker's line: LP SolidStart LSL at the 1.35E grade, 1-3/4 × 9-1/2. */
+  eng('lsl', 'LP SolidStart LSL', '1.35E', 1.75, '1-3/4', 9.5, '9-1/2', ['header', 'rim']),
 
   // ── PSL — posts, columns, heavy beams ──
   eng('psl', 'PSL', '2.2E', 3.5, '3-1/2', 3.5, '3-1/2', ['post']),
@@ -123,7 +138,45 @@ export const MEMBERS: readonly MemberSpec[] = [
   eng('psl', 'PSL', '2.2E', 5.25, '5-1/4', 11.875, '11-7/8', ['beam']),
   eng('psl', 'PSL', '2.2E', 5.25, '5-1/4', 14, '14', ['beam']),
 
+  /**
+   * Parallam PSL, at the depth a framer here can actually buy.
+   *
+   * It was 3-1/2 × 20, which comes off Weyerhaeuser's U.S. deep-beam guide
+   * (TJ-7001) and off neither Canadian edition: TJ-9505 (West, April 2023)
+   * offers 2.2E Parallam in 3-1/2, 5-1/4 and 7 in widths at 9-1/4 to 19 in deep,
+   * and TJ-9500 (East, February 2026) carries 2.0E only, to 18 in. Mitchell's
+   * call, 8 Nov 2026: use the deepest 2.2E size offered for West Canada — which
+   * is 19", not the 18" the order named. TJ-9505 gives the 2.2E beam depths as
+   * 9-1/4, 9-1/2, 11-1/4, 11-7/8, 14, 16 and 19 inches, and its floor and snow
+   * tables stop at a 19" column; 18" is not in that guide, so writing it in
+   * would have produced a beam nobody can buy, which is the one outcome this
+   * change was made to stop. The id changed with the size — `psl-3-1_2x19` —
+   * because an id that still said 20 would be a beam the model draws at a depth
+   * the name denies.
+   */
+  eng('psl', 'Parallam PSL', '2.2E', 3.5, '3-1/2', 19, '19', ['beam']),
+
   // ── Glulam — exposed and long-span beams ──
+  /**
+   * A MANUFACTURER'S LINE, IN THE CATALOGUE.
+   *
+   * Nordic Structures' Nordic Lam, modelled from their own published product
+   * report rather than from a generic glulam assumption: the 24F-E/ES1M1 layup
+   * is mechanically graded SPF, and its published width ceiling is 7-1/2" — not
+   * the 8-3/4" a Douglas-fir table would lead you to.
+   *
+   * It is a preview row: it exists so their part can be put in front of them
+   * and taken out again, and the generic glulam rows below are what the app
+   * frames with otherwise. See data/manufacturerParts.ts for the specs and the
+   * source each figure came from.
+   *
+   * The width is 7 in, not the 6-3/4" it first carried. Table 1 of PR-L294(C)
+   * permits 38–191 mm, but Nordic publish four beam widths — 1-3/4, 3-1/2, 5-1/2
+   * and 7 — and 6-3/4 is none of them. Mitchell's call, 8 Nov 2026: move it to
+   * the published width. At 18 × 7 the depth-to-width ratio is 2.57, well under
+   * the 12:1 the layup is capped at.
+   */
+  eng('glulam', 'Nordic Lam', '24F-E/ES1M1', 7, '7', 18, '18', ['beam', 'header']),
   eng('glulam', 'Glulam', '24F-V4', 3.125, '3-1/8', 9, '9', ['beam', 'header']),
   eng('glulam', 'Glulam', '24F-V4', 3.125, '3-1/8', 12, '12', ['beam', 'header']),
   eng('glulam', 'Glulam', '24F-V4', 5.125, '5-1/8', 12, '12', ['beam']),

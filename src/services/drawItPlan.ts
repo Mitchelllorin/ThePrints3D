@@ -22,7 +22,30 @@ import { placeBoxes, footprintOutline, type FootprintBox, type Point, type Rect 
 import { cornerShift, normalizeBoxes, snapTo, type Grip } from './footprintEdit'
 import { freeAnglePoint } from './wallTraceReducer'
 
-export interface InsideWall { x1: number; y1: number; x2: number; y2: number }
+export interface InsideWall {
+  x1: number; y1: number; x2: number; y2: number
+  /**
+   * A FACET OF A CURVED WALL, not a corner. The next chord carries on round the
+   * arc rather than arriving at right angles, so there is nothing for this wall
+   * to butt into: it is framed at its own length, break to break, with no corner
+   * post, no plate lap and no corner extension.
+   */
+  bend?: boolean
+  /**
+   * The stud at this wall's START break is the one the chord before it stood up.
+   * Set on every chord of a ring — the first one included, because the ring
+   * closes and the last chord's end stud is already standing at that break — so
+   * a break carries ONE stud instead of one from each side of it.
+   */
+  sharedStartStud?: boolean
+}
+
+/**
+ * A CIRCLE ON THE SHEET — a round post, a footing, a fire pit, a turning
+ * circle. Page millimetres, same as the walls, so it holds its size against the
+ * print and a diameter typed on it is the diameter you build.
+ */
+export interface DrawItCircle { cx: number; cy: number; r: number }
 
 export interface DrawItPlan {
   boxes: FootprintBox[]
@@ -40,6 +63,13 @@ export interface DrawItPlan {
    * is dragged.
    */
   shape?: Point[]
+  /**
+   * Circles drawn on the sheet. They are marks on the paper, not part of the
+   * shell: the page grows and shifts them with the walls, but picking the house
+   * up and moving it leaves them where they were drawn — a post does not slide
+   * along with the building you drew it inside.
+   */
+  circles?: DrawItCircle[]
 }
 
 /** Paper round the house on a new sheet: room to move it, room for dimensions.
@@ -75,6 +105,118 @@ export function wallsBounds(walls: readonly InsideWall[]): { x1: number; y1: num
   return { x1, y1, w: Math.max(...xs) - x1, d: Math.max(...ys) - y1 }
 }
 
+// ── Circles ────────────────────────────────────────────────────────────────
+
+/** The circles on the sheet, when there are none yet. */
+export function planCircles(plan: DrawItPlan): DrawItCircle[] {
+  return plan.circles ?? []
+}
+
+export function addCircle(plan: DrawItPlan, c: DrawItCircle): DrawItPlan {
+  return { ...plan, circles: [...planCircles(plan), c] }
+}
+
+export function removeCircle(plan: DrawItPlan, i: number): DrawItPlan {
+  return { ...plan, circles: planCircles(plan).filter((_, k) => k !== i) }
+}
+
+/** A diameter typed on the circle: the figure a post or a footing is ordered by. */
+export function withCircleDiameter(plan: DrawItPlan, i: number, mm: number): DrawItPlan {
+  if (!(mm > 0)) return plan
+  return { ...plan, circles: planCircles(plan).map((c, k) => (k === i ? { ...c, r: mm / 2 } : c)) }
+}
+
+// ── The string a circle is built from ──────────────────────────────────────
+
+/**
+ * A CIRCLE IS NOT A WALL, AND A CURVED WALL IS NOT A CURVE.
+ *
+ * What goes up is a string of short straight walls round the ring — one stud bay
+ * each, chord after chord — and the sheathing bends over them. That is how a
+ * curved wall or a gazebo wall is really framed: a plate bent round the circle
+ * in bays, and a stud at every break. So the circle on the sheet is the line the
+ * string is set out to, and the walls are the chords.
+ */
+/** 16" on centre — the framing's own spacing, and the longest a curved bay goes. */
+export const STUD_BAY_MM = 406.4
+/** 8" on centre — the tightest a bay is laid out, so a small ring is not slivers. */
+const MIN_CHORD_MM = 203.2
+/**
+ * THE BAY ON A CURVE IS A QUARTER OF THE RADIUS.
+ *
+ * That is the framing rule for a curved plate read as a number: 3" of spacing
+ * per foot of radius, so a 4 ft radius frames at 12", an 8 ft at 24". It is
+ * also why a ring always comes out around 25 straight walls however big it is —
+ * a quarter of the radius as the chord is a little over 14° at every break.
+ */
+const CHORD_PER_RADIUS = 0.25
+/** Fewer than this and it is a stubby polygon, not a ring. */
+const MIN_CHORDS = 8
+/** Past this nobody is framing it, and the plan stops reading. */
+const MAX_CHORDS = 240
+
+export interface CircleString {
+  walls: InsideWall[]
+  /** How many short walls the ring went up as. */
+  chords: number
+  /** The length of each chord — one bay of wall. */
+  chordMm: number
+}
+
+/**
+ * The ring as walls: `n` chords, `n` as close to a bay each as a whole number
+ * can get. Consecutive chords share an end to the last bit — the same point is
+ * worked out once and walked twice — so each break is one joint, not two ends a
+ * hair apart, and the ring closes on itself exactly.
+ *
+ * The bay is a quarter of the radius, held between 8" and 16": a tighter curve
+ * gets closer studs because the plate has to bend round it, and a bay is held
+ * to a stud space because the skin still has to land on something. The chord
+ * comes out a millimetre or two either side of the target — the count is a
+ * whole number of walls, so the ring is shared out between them.
+ */
+export function circleString(c: DrawItCircle): CircleString {
+  const r = Math.abs(c.r)
+  if (r < 1) return { walls: [], chords: 0, chordMm: 0 }
+  const bay = Math.min(STUD_BAY_MM, Math.max(MIN_CHORD_MM, r * CHORD_PER_RADIUS))
+  const n = Math.max(MIN_CHORDS, Math.min(MAX_CHORDS,
+    Math.round((2 * Math.PI * r) / bay)))
+  // One point per break, worked out once and walked twice, so a chord's start is
+  // the same number as its neighbour's end — and the ring closes on itself
+  // exactly instead of leaving the last break a rounding-error apart.
+  const pts = Array.from({ length: n }, (_, i) => {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
+    return { x: c.cx + r * Math.cos(a), y: c.cy + r * Math.sin(a) }
+  })
+  const walls: InsideWall[] = pts.map((p, i) => {
+    const q = pts[(i + 1) % n]
+    return {
+      x1: p.x, y1: p.y, x2: q.x, y2: q.y,
+      bend: true,
+      // This chord's start is where the one before it ended, and that chord's
+      // own end stud is already at the joint — so this end brings none. The
+      // first chord is no exception: the ring closes, so the chord before IT is
+      // the last one, and its end stud is already standing at the first break.
+      sharedStartStud: true,
+    }
+  })
+  return { walls, chords: n, chordMm: 2 * r * Math.sin(Math.PI / n) }
+}
+
+/**
+ * EVERYTHING ON THE SHEET THAT GETS BUILT: the drawn walls, then the string
+ * under each circle.
+ *
+ * The string is worked out from the circle every time rather than stored beside
+ * it, so a diameter typed on the ring re-flows its bays and nothing can drift
+ * out of step with the number that governs it.
+ */
+export function planWalls(plan: DrawItPlan): InsideWall[] {
+  const rings = planCircles(plan)
+  if (rings.length === 0) return plan.walls
+  return [...plan.walls, ...rings.flatMap((c) => circleString(c).walls)]
+}
+
 export function initialPlan(first: FootprintBox): DrawItPlan {
   return {
     boxes: [first],
@@ -97,9 +239,11 @@ export function houseOutline(plan: DrawItPlan): Point[] {
   return plan.shape ?? footprintOutline(houseRects(plan))
 }
 
-function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[]): Rect {
-  const xs = [...rects.flatMap((r) => [r.x1, r.x2]), ...walls.flatMap((w) => [w.x1, w.x2])]
-  const ys = [...rects.flatMap((r) => [r.y1, r.y2]), ...walls.flatMap((w) => [w.y1, w.y2])]
+function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[], circles: readonly DrawItCircle[] = []): Rect {
+  const xs = [...rects.flatMap((r) => [r.x1, r.x2]), ...walls.flatMap((w) => [w.x1, w.x2]),
+    ...circles.flatMap((c) => [c.cx - c.r, c.cx + c.r])]
+  const ys = [...rects.flatMap((r) => [r.y1, r.y2]), ...walls.flatMap((w) => [w.y1, w.y2]),
+    ...circles.flatMap((c) => [c.cy - c.r, c.cy + c.r])]
   return { x1: Math.min(...xs), y1: Math.min(...ys), x2: Math.max(...xs), y2: Math.max(...ys) }
 }
 
@@ -112,8 +256,8 @@ function boundsOf(rects: readonly Rect[], walls: readonly InsideWall[]): Rect {
 export function fitPage(plan: DrawItPlan): DrawItPlan {
   // Nothing on the paper yet: there is no extent to fit, and asking for one
   // would produce Infinity and a page to match.
-  if (!plan.shape && plan.boxes.length === 0 && plan.walls.length === 0) return plan
-  const b = boundsOf(plan.shape ? [shapeBounds(plan.shape)] : houseRects(plan), plan.walls)
+  if (!plan.shape && plan.boxes.length === 0 && plan.walls.length === 0 && planCircles(plan).length === 0) return plan
+  const b = boundsOf(plan.shape ? [shapeBounds(plan.shape)] : houseRects(plan), plan.walls, planCircles(plan))
   const dx = Math.max(0, MIN_CLEAR_MM - b.x1)
   const dy = Math.max(0, MIN_CLEAR_MM - b.y1)
   const w = Math.max(plan.page.w + dx, b.x2 + dx + MIN_CLEAR_MM)
@@ -124,6 +268,7 @@ export function fitPage(plan: DrawItPlan): DrawItPlan {
     origin: { x: plan.origin.x + dx, y: plan.origin.y + dy },
     page: { w, d },
     walls: plan.walls.map((k) => ({ x1: k.x1 + dx, y1: k.y1 + dy, x2: k.x2 + dx, y2: k.y2 + dy })),
+    ...(plan.circles ? { circles: plan.circles.map((c) => ({ ...c, cx: c.cx + dx, cy: c.cy + dy })) } : {}),
     ...(plan.shape ? { shape: plan.shape.map((q) => ({ x: q.x + dx, y: q.y + dy })) } : {}),
   }
 }

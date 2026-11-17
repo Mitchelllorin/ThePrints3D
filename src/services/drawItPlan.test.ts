@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  acceptsWall, addCorner, cleanShape, clipToShell, fitPage, houseRects, initialPlan, insideHouse, movedCorner, movedHouse,
+  acceptsWall, addCircle, addCorner, cleanShape, clipToShell, fitPage, houseRects, initialPlan, insideHouse, movedCorner, movedHouse,
+  circleString, planCircles, planWalls, removeCircle, withCircleDiameter,
   removeCorner, resized, shapeOk, snapWallPoint, toBoxes, toShape, withEdgeLength,
   withLength, wallLength, MIN_WALL_MM, PAGE_MARGIN_MM, type DrawItPlan,
 } from './drawItPlan'
@@ -207,5 +208,95 @@ describe('the house at any angle', () => {
     const p = addCorner(shaped(), 0)
     expect(p.shape).toHaveLength(5)
     expect(cleanShape(p.shape!)).toHaveLength(4)
+  })
+})
+
+describe('circles on the sheet', () => {
+  it('keeps the circle where it was dragged, and takes a typed diameter', () => {
+    const p = addCircle(plan(), { cx: 6000, cy: 5000, r: 600 })
+    expect(planCircles(p)).toEqual([{ cx: 6000, cy: 5000, r: 600 }])
+    expect(planCircles(withCircleDiameter(p, 0, 600))[0].r).toBe(300)
+    expect(withCircleDiameter(p, 0, 0)).toBe(p)
+  })
+
+  it('counts as paper: the page grows round it and shifts it with the walls', () => {
+    const p: DrawItPlan = {
+      boxes: [], origin: { x: 100, y: 100 }, page: { w: 5000, d: 5000 }, walls: [],
+      circles: [{ cx: 300, cy: 300, r: 400 }],
+    }
+    const q = fitPage(p)
+    expect(q.origin.x).toBeGreaterThan(100)
+    expect(planCircles(q)[0].cx).toBeGreaterThan(300)
+    expect(planCircles(q)[0].cx - planCircles(q)[0].r).toBeCloseTo(3048, 6)
+  })
+
+  it('stays put when the house is picked up and moved', () => {
+    const p = addCircle(plan(), { cx: 6000, cy: 5000, r: 600 })
+    expect(planCircles(movedHouse(p, 1000, 0, 100))).toEqual(planCircles(p))
+  })
+
+  it('goes up as short straight walls, one bay each, joints shared exactly', () => {
+    const c = { cx: 0, cy: 0, r: 1828.8 }   // a 12 ft circle
+    const s = circleString(c)
+    expect(s.chords).toBe(28)
+    expect(s.chordMm).toBeGreaterThan(380)
+    expect(s.chordMm).toBeLessThan(420)     // a 16" bay, to the millimetre
+    // Every corner is on the ring, and one chord's end is the next one's start:
+    // a break is one joint, not two ends a hair apart.
+    for (const w of s.walls) {
+      expect(Math.hypot(w.x1 - c.cx, w.y1 - c.cy)).toBeCloseTo(c.r, 6)
+      expect(Math.hypot(w.x2 - c.cx, w.y2 - c.cy)).toBeCloseTo(c.r, 6)
+    }
+    for (let i = 1; i < s.walls.length; i++) {
+      expect(s.walls[i].x1).toBe(s.walls[i - 1].x2)
+      expect(s.walls[i].y1).toBe(s.walls[i - 1].y2)
+    }
+    expect(s.walls[s.walls.length - 1].x2).toBe(s.walls[0].x1)
+    expect(s.walls[s.walls.length - 1].y2).toBe(s.walls[0].y1)
+  })
+
+  it('is never a stubby polygon, and a 1 ft circle is still framed as walls', () => {
+    expect(circleString({ cx: 0, cy: 0, r: 150 }).chords).toBe(8)
+    expect(circleString({ cx: 0, cy: 0, r: 0 }).walls).toEqual([])
+  })
+
+  it('adds its string to the plan walls, and follows a typed diameter', () => {
+    const p = addCircle({ ...plan(), walls: [] }, { cx: 5000, cy: 5000, r: 1500 })
+    const before = planWalls(p).length
+    expect(before).toBe(25)                 // the bay is r/4 = 375 mm, so 25 chords
+    expect(planWalls(withCircleDiameter(p, 0, 4000)).length).toBe(31)
+  })
+
+  it('frames each break once: one stud at a joint, not one from each side', () => {
+    const s = circleString({ cx: 0, cy: 0, r: 1828.8 })
+    // Every chord is a bend, so none of them frames a corner post or a lap.
+    expect(s.walls.every((w) => w.bend === true)).toBe(true)
+    // Every chord's start break is the previous chord's end break, which already
+    // has a stud on it — and the first chord is not the exception, because the
+    // ring closes and the chord before it is the last one. So the ring stands
+    // exactly one stud per break: n studs for n chords.
+    expect(s.walls.every((w) => w.sharedStartStud === true)).toBe(true)
+    expect(s.walls.filter((w) => !w.sharedStartStud)).toHaveLength(0)
+  })
+
+  it('lays the bays out by the radius, tight on a tight bend and never past a stud space', () => {
+    // A quarter of the radius is the bay — 3" of spacing per foot of radius, the
+    // trade rule for a bent plate — held between 8" and 16".
+    const tight = circleString({ cx: 0, cy: 0, r: 609.6 })
+    expect(tight.chordMm).toBeLessThanOrEqual(203.2)   // 8", the floor
+    expect(tight.chordMm).toBeGreaterThan(195)         // the chord, not the target
+    // 6 ft radius: the bay is held to a stud space, and rounding the count to a
+    // whole number leaves the chord a hair long — 16-1/8", not exactly 16".
+    const mid = circleString({ cx: 0, cy: 0, r: 1828.8 })
+    expect(mid.chordMm).toBeGreaterThan(400)
+    expect(mid.chordMm).toBeLessThan(420)
+    // A bigger ring does not space its bays wider than a stud space: the skin
+    // still has to land on something, so past a 5'-4" radius the count grows.
+    expect(circleString({ cx: 0, cy: 0, r: 4000 }).chordMm).toBeLessThanOrEqual(406.4)
+  })
+
+  it('comes off one at a time', () => {
+    const p = addCircle(addCircle(plan(), { cx: 1000, cy: 1000, r: 300 }), { cx: 2000, cy: 2000, r: 300 })
+    expect(removeCircle(p, 0).circles).toEqual([{ cx: 2000, cy: 2000, r: 300 }])
   })
 })

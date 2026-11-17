@@ -295,8 +295,13 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
   const spacingM = input.studSpacingIn * 0.0254
   return userWalls.map(({ wall, scaleMmPerPx }, i) => {
     const thicknessM = renderWallThicknessM(wall, scaleMmPerPx)
-    const startCorner = (counts.get(key(wall.x1, wall.y1)) ?? 0) > 1
-    const endCorner = (counts.get(key(wall.x2, wall.y2)) ?? 0) > 1
+    // A FACET OF A CURVED WALL IS NOT A CORNER. The next chord carries on round
+    // the arc rather than arriving at right angles, so there is nothing to butt
+    // into, nothing to lap, and no outside face to be extended out to. The chord
+    // is framed at its own length, break to break.
+    const isBend = !!wall.bend
+    const startCorner = !isBend && (counts.get(key(wall.x1, wall.y1)) ?? 0) > 1
+    const endCorner = !isBend && (counts.get(key(wall.x2, wall.y2)) ?? 0) > 1
     const a = toWorld(wall.x1, wall.y1)
     const b = toWorld(wall.x2, wall.y2)
     // Extend any end that meets another wall by half the thickness, so the
@@ -350,13 +355,15 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
         topTrackStyle: input.steelTrackTop === 'double' ? 'deep' : input.steelTrackTop,
         deflectionGapMm: input.steelTrackTop === 'slotted' ? input.steelDeflectionGapMm : 0,
         openings: wallOpenings,
-        capLap: { start: startCorner ? capMode : undefined, end: endCorner ? capMode : undefined },
+        capLap: isBend ? undefined : { start: startCorner ? capMode : undefined, end: endCorner ? capMode : undefined },
+        bend: isBend || undefined,
+        sharedStartStud: wall.sharedStartStud || undefined,
         tees: tees[i].map((t) => startOff + t * rawLen),
         packs: [
           ...(wall.studPacks ?? []).map((p) => ({ atM: startOff + p.atFrac * rawLen, studs: p.studs })),
           ...tubPacks[i].map((p) => ({ atM: startOff + p.t * rawLen, studs: p.studs })),
         ],
-        endTrim: endTrim.start || endTrim.end ? endTrim : undefined,
+        endTrim: !isBend && (endTrim.start || endTrim.end) ? endTrim : undefined,
       },
     }
   })

@@ -71,6 +71,11 @@ jobs:
 
       - name: Build web app (capacitor mode)
         run: npm run build -- --mode capacitor
+        env:
+          # The F.U.S.E. collector URL (repo variable FUSE_ENDPOINT). Empty: nothing is
+          # sent and every run stays on the device. Set it only once the Play Data
+          # Safety form says anonymous failure records are sent.
+          VITE_FUSE_ENDPOINT: ${{ vars.FUSE_ENDPOINT }}
 
       - name: Sync Capacitor to Android
         run: |
