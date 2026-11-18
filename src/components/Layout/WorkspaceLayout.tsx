@@ -1110,7 +1110,9 @@ export default function WorkspaceLayout() {
   }
   const hasDrawings = drawings.length > 0
   // Onboarding card persists until a plan is actually loaded — no dismiss.
-  const showUploadHint = !hasDrawings && !arenaOpen
+  // Not while the import question is up: the start menu's text showed through
+  // it and read as one muddle (Mitchell, 18 Nov).
+  const showUploadHint = !hasDrawings && !arenaOpen && !pendingImport
 
   /**
    * A FILE IS NOT AN ANSWER TO "WHO FINDS THE WALLS?" — SO ASK.
@@ -1288,6 +1290,7 @@ export default function WorkspaceLayout() {
           file — so it may sit over the model and be as solid as it likes; one
           tap answers it, Cancel and Escape put it away. */}
       {pendingImport && (
+        <div className={styles.importScrim}>
         <div
           className={styles.importChoice}
           role="dialog"
@@ -1312,6 +1315,7 @@ export default function WorkspaceLayout() {
           <button className={styles.importChoiceCancel} onClick={() => setPendingImport(null)}>
             Cancel
           </button>
+        </div>
         </div>
       )}
 

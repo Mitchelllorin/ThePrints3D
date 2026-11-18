@@ -40,12 +40,23 @@
    running on it. TRANSIENT: the user summoned it by choosing a file, it leaves
    in one tap, so it is allowed to sit over the model and be solid. Two answers
    the same size, because neither is the real way in. */
+/* The import question owns the screen while it is up: a dim scrim over the
+   rails and the model, and the question in the middle of it, so nothing else's
+   text competes with it (Mitchell, 18 Nov). */
+.importScrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(4, 8, 14, 0.62);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
 .importChoice {
-  position: absolute;
-  left: 50%;
-  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
-  transform: translateX(-50%);
-  z-index: var(--z-sheet);
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
