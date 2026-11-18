@@ -1,47 +1,44 @@
-/* The length chip on a wall being drawn. Text over the canvas goes in a chip
-   with its own tint and blur (family rule 3), at or above the 0.72 alpha floor.
-   Worst case checked: #f1f5f9 on rgb(15 23 42 / .82) composited over pure white
-   is about 10:1, over pure black about 17:1. */
+/* The readouts on a wall being drawn: its length, the corner angle, an arc's
+   radius, a circle's radius. Plain text over the model — no plate, no card —
+   read from a hard dark outline (--ink-on-model) so it holds over white print
+   and dark walls alike. A slim input appears only while a number is typed. */
 .chip {
   pointer-events: auto;
-  background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.82);
-  backdrop-filter: blur(14px) saturate(1.15);
-  -webkit-backdrop-filter: blur(14px) saturate(1.15);
-  border: 1px solid var(--bp-accent, #38bdf8);
-  border-radius: 10px;
+  background: none;
+  border: 0;
   color: var(--bp-text, #f1f5f9);
+  text-shadow: var(--ink-on-model);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-@supports not (backdrop-filter: blur(1px)) {
-  .chip { background: rgba(var(--bp-panel-rgb, 15, 23, 42), 0.94); }
 }
 .length {
   min-width: 48px;
   min-height: 48px;
-  padding: 0 14px;
+  padding: 0 6px;
   background: none;
   border: 0;
   color: inherit;
-  font-size: 16px;
-  font-weight: 700;
+  text-shadow: inherit;
+  font-size: 17px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   cursor: text;
 }
+/* A secondary readout (corner angle, radius): same ink, a touch smaller. */
+.minor { font-size: 15px; font-weight: 700; color: var(--bp-accent, #7dd3fc); }
 .form {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 4px 0 8px;
+  gap: 4px;
 }
 .input {
-  width: 96px;
+  width: 92px;
   min-height: 40px;
   box-sizing: border-box;
   padding: 0 8px;
-  border-radius: 8px;
-  border: 1px solid #334155;
-  background: #0f172a;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(15, 23, 42, 0.55);
   color: var(--bp-text, #f1f5f9);
   font-size: 16px;              /* 16px stops mobile browsers zooming on focus */
   font-variant-numeric: tabular-nums;
@@ -55,7 +52,44 @@
   background: none;
   border: 0;
   color: var(--bp-accent, #38bdf8);
+  text-shadow: var(--ink-on-model);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
+}
+/* Contextual controls beside the point being drawn (Undo, Done): outlined
+   text, 48px to touch, no fill. */
+.ctx {
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+.ctxBtn {
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 6px;
+  background: none;
+  border: 0;
+  color: var(--bp-text, #f1f5f9);
+  text-shadow: var(--ink-on-model);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ctxBtn > span {
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  padding: 4px 8px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.label {
+  pointer-events: none;
+  color: var(--bp-accent, #7dd3fc);
+  text-shadow: var(--ink-on-model);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
 }

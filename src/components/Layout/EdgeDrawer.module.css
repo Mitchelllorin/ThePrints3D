@@ -263,6 +263,17 @@
 /* Closed: push fully off-screen PAST the 46px inset (else the panel's right edge
    peeks a 46px strip over the rail). */
 .inRail.left:not(.open) { transform: translateX(calc(-100% - 48px)); }
+/* CALIBRATION IS PLAIN TEXT IN ITS OWN SPACE. While the scale is being set the
+   drawer has no surface (see .clickThrough) — its words float over the plan.
+   At left:46 / top:56 those words sat on the top icon row (Save, Open, Undo)
+   and across the second column of a wrapped rail, and read as part of the
+   menu. They start past the rail's real width (RailCascade keeps --rail-w
+   true: 44px, or 96px once it wraps into two columns) and below the top icons. */
+.clickThrough.inRail.left {
+  left: calc(var(--rail-w, 44px) + 8px);
+  top: calc(var(--top-icons-top, 52px) + var(--top-icons-h, 40px) + 16px);
+  width: min(248px, calc(100vw - var(--rail-w, 44px) - 16px));
+}
 .inRail.bottom { left: 46px; }               /* clear the rail on the bottom sheet too */
 .inRail.bottom:not(.open) { transform: translateY(100%); }
 

@@ -603,10 +603,10 @@
 /* ── Live measurement readout — running length while tracing ─────────────── */
 .measureHud {
   position: absolute;
-  /* Below the top icon row (bottom at 46px) so it never overlaps the icons. */
-  top: 52px;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Below the top icon row and clear of the rail, so it never sits on either.
+     (top:52 centred put it straight on Save / Open / Undo.) */
+  top: calc(var(--top-icons-top, 52px) + var(--top-icons-h, 40px) + 16px);
+  left: calc(var(--rail-w, 44px) + 8px);
   z-index: var(--z-hud);
   display: flex;
   align-items: center;
