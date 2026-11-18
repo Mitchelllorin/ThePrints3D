@@ -10,9 +10,9 @@
  * The box is worked out once per object, in the object's own frame, so a
  * frame costs eight projections per plate, not a walk over every stud.
  */
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useUISettingsStore } from '../../store/useUISettingsStore'
 import { convexHull, layoutNameplates, type Box, type PlateRequest, type Pt, type Tier } from '../../services/nameplateLayout'
 import { measureEpoch, measurePlate } from './plateMeasure'
@@ -29,6 +29,15 @@ import {
  */
 const EDGE_GAP = 8
 const OBSTACLE_MS = 400
+/**
+ * Half the side of the square kept clear round the cursor (or finger, while it
+ * is down). A plate never lands on the point you are moving: drawing or
+ * dragging a wall, the plate used to sit right over its end, so you could not
+ * see where you were putting it (Mitchell, 18 Nov).
+ */
+const POINTER_CLEAR = 56
+/** Plates re-place when the cursor moves this far, not on every pixel. */
+const POINTER_STEP = 24
 const CONTROLS = 'button, input, select, [role="slider"], [role="dialog"], [data-hud]'
 function readObstacles(canvas: HTMLElement, layer: Element | null): Box[] {
   const c = canvas.getBoundingClientRect()
@@ -84,6 +93,31 @@ function shown(obj: THREE.Object3D): boolean {
 export default function NameplateTracker() {
   const last = useRef({ sig: NaN, prevDirs: new Map<string, number>() })
   const obstacles = useRef<{ at: number; boxes: Box[] }>({ at: -Infinity, boxes: [] })
+  /** The cursor, in canvas pixels; null when it is off the canvas or the finger is up. */
+  const ptr = useRef<{ x: number; y: number } | null>(null)
+  const gl = useThree((s) => s.gl)
+  useEffect(() => {
+    const el = gl.domElement
+    const at = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect()
+      ptr.current = { x: e.clientX - r.left, y: e.clientY - r.top }
+    }
+    const off = (e: PointerEvent) => {
+      if (e.type === 'pointerleave' || e.pointerType !== 'mouse') ptr.current = null
+    }
+    el.addEventListener('pointermove', at, { passive: true })
+    el.addEventListener('pointerdown', at, { passive: true })
+    el.addEventListener('pointerup', off)
+    el.addEventListener('pointercancel', off)
+    el.addEventListener('pointerleave', off)
+    return () => {
+      el.removeEventListener('pointermove', at)
+      el.removeEventListener('pointerdown', at)
+      el.removeEventListener('pointerup', off)
+      el.removeEventListener('pointercancel', off)
+      el.removeEventListener('pointerleave', off)
+    }
+  }, [gl])
 
   useFrame(({ camera, size, gl }) => {
     const tier = useUISettingsStore.getState().nameplateTier
@@ -96,6 +130,8 @@ export default function NameplateTracker() {
     for (let i = 0; i < 16; i++) sig += e[i] * (i + 1)
     // Zoom on an orthographic camera lives in the projection, not the pose.
     sig += camera.projectionMatrix.elements[0] * 23 + camera.projectionMatrix.elements[5] * 29
+    const pt = ptr.current
+    sig += pt ? Math.round(pt.x / POINTER_STEP) * 37 + Math.round(pt.y / POINTER_STEP) * 41 + 43 : 0
     for (const s of src.values()) {
       const m = s.object.matrixWorld.elements
       sig += m[12] * 3 + m[13] * 5 + m[14] * 11 + (s.object.visible ? 1 : 0)
@@ -161,7 +197,10 @@ export default function NameplateTracker() {
     }
 
     const centre = n ? { x: cx / n, y: cy / n } : { x: size.width / 2, y: size.height / 2 }
-    const layout = layoutNameplates(reqs, bounds, centre, last.current.prevDirs, obstacles.current.boxes)
+    const keepClear = pt
+      ? [...obstacles.current.boxes, { x: pt.x - POINTER_CLEAR, y: pt.y - POINTER_CLEAR, w: 2 * POINTER_CLEAR, h: 2 * POINTER_CLEAR }]
+      : obstacles.current.boxes
+    const layout = layoutNameplates(reqs, bounds, centre, last.current.prevDirs, keepClear)
     last.current.prevDirs = new Map(layout.plates.map((p) => [p.id, p.dir]))
     publishNameplateLayout(layout)
   })

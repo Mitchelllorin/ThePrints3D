@@ -14,6 +14,8 @@
  * other. Same parser as Draw it, so 12, 12 6, 12'6" and 3.6 m all read.
  */
 import { useCallback, useRef, useState } from 'react'
+import * as THREE from 'three'
+import { useFrame } from '@react-three/fiber'
 import { Html, Line } from '@react-three/drei'
 import styles from './WallDimension.module.css'
 
@@ -21,6 +23,13 @@ type P3 = [number, number, number]
 
 const STOP_KINDS = ['pointerdown', 'pointerup', 'pointermove', 'click', 'dblclick'] as const
 const stopHere = (e: Event) => e.stopPropagation()
+
+const _a = new THREE.Vector3()
+const _b = new THREE.Vector3()
+/** Pixels off the line, so the chip never sits on the wall it measures. */
+const SIDE_PX = 34
+/** Keep the chip at least this far, along the wall, from the end you are moving. */
+const END_CLEAR_PX = 120
 
 /** Arrowhead barbs at `tip`, pointing away from `from`. */
 function barbs(from: P3, tip: P3, len: number): [P3, P3, P3] {
@@ -52,6 +61,17 @@ export default function WallDimension({
   const [draft, setDraft] = useState('')
   const [bad, setBad] = useState(false)
   const chipRef = useRef<HTMLDivElement | null>(null)
+  /**
+   * WHERE THE CHIP SITS. It used to sit on the middle of the wall, which on a
+   * short wall is right over the end you are dragging — the number covered the
+   * point you were trying to place (Mitchell, 18 Nov). It now hangs off the
+   * START of the wall, toward the end but never within END_CLEAR_PX of it, and
+   * SIDE_PX off the line on its upper side; on a wall too short for that it
+   * sits just behind the start. Placed in screen pixels each frame, so it holds
+   * the same distance at any zoom.
+   */
+  const placeRef = useRef<HTMLDivElement | null>(null)
+  const lastXY = useRef('')
 
   /**
    * The label lives in the canvas's own container, so a tap on it would ALSO
@@ -68,10 +88,32 @@ export default function WallDimension({
   }, [])
 
   const end = typing?.end ?? liveEnd
+  const lift: P3 = [start[0], start[1] + 0.02, start[2]]
+  useFrame(({ camera, size }) => {
+    const el = placeRef.current
+    if (!el) return
+    _a.set(lift[0], lift[1], lift[2]).project(camera)
+    _b.set(end[0], lift[1], end[2]).project(camera)
+    const ax = (_a.x + 1) / 2 * size.width, ay = (1 - _a.y) / 2 * size.height
+    const bx = (_b.x + 1) / 2 * size.width, by = (1 - _b.y) / 2 * size.height
+    let dx = bx - ax, dy = by - ay
+    const L = Math.hypot(dx, dy)
+    if (L < 1) { dx = 1; dy = 0 } else { dx /= L; dy /= L }
+    // The upper side of the line, so the number reads above the wall.
+    let nx = -dy, ny = dx
+    if (ny > 0) { nx = -nx; ny = -ny }
+    const along = L > END_CLEAR_PX + 40 ? Math.min(L * 0.3, L - END_CLEAR_PX) : -56
+    const x = dx * along + nx * SIDE_PX
+    const y = dy * along + ny * SIDE_PX
+    const key = `${Math.round(x)},${Math.round(y)}`
+    if (key !== lastXY.current) {
+      lastXY.current = key
+      el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
+    }
+  })
   const len = Math.hypot(end[0] - start[0], end[2] - start[2])
   if (len < 0.05 && !typing) return null
   const barb = Math.min(0.35, len * 0.25)
-  const mid: P3 = [(start[0] + end[0]) / 2, start[1] + 0.02, (start[2] + end[2]) / 2]
 
   const submit = () => {
     if (typing && onTyped(draft, typing.endPixel)) { setTyping(null); setDraft(''); setBad(false) }
@@ -87,7 +129,8 @@ export default function WallDimension({
           <Line points={barbs(end, start, barb)} color={color} lineWidth={4} />
         </>
       )}
-      <Html position={mid} center zIndexRange={[10, 10]}>
+      <Html position={lift} center zIndexRange={[10, 10]}>
+        <div ref={placeRef}>
         <div ref={attachChip} className={styles.chip}>
           {typing ? (
             <form className={styles.form} onSubmit={(e) => { e.preventDefault(); submit() }}>
@@ -117,6 +160,7 @@ export default function WallDimension({
               {label}
             </button>
           )}
+        </div>
         </div>
       </Html>
     </>
