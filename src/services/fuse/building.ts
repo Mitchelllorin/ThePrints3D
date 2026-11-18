@@ -301,7 +301,7 @@ export const MATERIALS: Record<string, MaterialSpec> = {
   'roofing:asphalt-shingle': M(
     'Asphalt shingles · 3-tab / architectural', 22, [0.6, 0.25, 0.5, 0.05], 0.5, 0.6,
     'Loss of the granules, then the mat, then the seal strips let go',
-    'A shingle dies from the top down and from the bottom up at once: the sun burns off the granules that protect the asphalt, and a hot, unventilated attic cooks the underside until the mat is brittle and the seal strips release in the first gale.',
+    'A shingle dies from the top down and from the bottom up at once: the sun burns off the granules that protect the asphalt, and a hot, unventilated attic overheats the underside until the mat is brittle and the seal strips release in the first gale.',
     'Have it inspected after the first big wind of its second decade, and keep the attic venting working — the shingle is only half the reason a roof dies young.',
     { aimM: 0, standoffM: 14, from: 'above', reveal: null },
     'IRC R905 — roof covering installation',
