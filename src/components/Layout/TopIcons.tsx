@@ -38,6 +38,20 @@ function PlanSheetIcon() {
   )
 }
 
+/** A disk: save and load jobs. Thin monochrome, like the plan sheet. */
+function SaveIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden
+    >
+      <path d="M4 4h12.5L20 7.5V20H4z" />
+      <path d="M8 4v5h7V4" />
+      <path d="M7.5 20v-6h9v6" />
+    </svg>
+  )
+}
+
 interface BtnProps {
   label: string
   glyph: ReactNode
@@ -67,12 +81,17 @@ interface Props {
   onUndo: () => void
   /** Opens the file picker — the way to the NEXT plan, with one already open. */
   onOpenPlan: () => void
+  /** Save & load jobs. On the top bar because a job list you cannot find is a
+   *  job list that does not exist (Mitchell, 18 Nov: it has to be right there in
+   *  the main UI, not inside Settings). */
+  onOpenJobs: () => void
   canUndo?: boolean
 }
 
 export default function TopIcons(p: Props) {
   return (
     <div className={styles.bar}>
+      <IconBtn label="Save" glyph={<SaveIcon />} showLabel onClick={p.onOpenJobs} />
       <IconBtn label="Open" glyph={<PlanSheetIcon />} showLabel onClick={p.onOpenPlan} />
       <IconBtn label="Undo" glyph="↩" showLabel disabled={!p.canUndo} onClick={p.onUndo} />
       <IconBtn label="Zoom in" glyph="+" onClick={() => zoomCamera(0.83)} />

@@ -623,6 +623,8 @@ export default function WorkspaceLayout() {
   // DRAW IT — the typed-sizes way in. Opened from the start card, closes itself
   // the moment a project exists.
   const [drawItOpen, setDrawItOpen] = useState(false)
+  // Save & load, from the top bar (TopIcons): the job list as its own sheet.
+  const [jobsOpen, setJobsOpen] = useState(false)
   /** The tour and the sample plans, folded away until asked for. */
   const [moreWays, setMoreWays] = useState(false)
   /** Sheets picked and waiting on the one question asked before anything runs:
@@ -1341,7 +1343,9 @@ export default function WorkspaceLayout() {
         onUndo={smartUndo}
         canUndo={canUndo}
         onOpenPlan={() => fileInputRef.current?.click()}
+        onOpenJobs={() => setJobsOpen(true)}
       />
+      {jobsOpen && <ProjectLibrary onClose={() => setJobsOpen(false)} />}
 
       {/* RIGHT drawer — Settings & view. Always mounted so its tab stays on the
           edge; the body retracts off-screen until opened. The Explode control
