@@ -24,47 +24,45 @@ export default function InferencePrompt() {
     : suggestion.kind === 'wall-line-snap' ? 'Align'
     : 'Snap'
 
+  // Plain text over the model, in its own band under the top icons and clear
+  // of the rail — the bottom band belongs to the trace controls, and the old
+  // pill sat on top of them.
   return (
     <div
       role="status"
       style={{
         position: 'absolute',
-        left: '50%',
-        bottom: 96,
-        transform: 'translateX(-50%)',
+        left: 'calc(var(--rail-w, 44px) + 8px)',
+        top: 'calc(var(--top-icons-top, 52px) + var(--top-icons-h, 40px) + 8px)',
+        maxWidth: 'calc(100vw - var(--rail-w, 44px) - 16px)',
         display: 'flex',
+        flexWrap: 'wrap',
         alignItems: 'center',
-        gap: 10,
-        padding: '7px 10px 7px 13px',
-        borderRadius: 999,
-        background: 'rgba(15,23,42,0.86)',
-        border: '1px solid rgba(34,211,238,0.5)',
-        boxShadow: '0 4px 14px rgba(0,0,0,0.35)',
-        color: '#e5e7eb',
-        fontSize: 13,
-        whiteSpace: 'nowrap',
-        zIndex: 'var(--z-sheet)',
-        backdropFilter: 'blur(4px)',
+        columnGap: 6,
+        color: '#f1f5f9',
+        textShadow: 'var(--ink-on-model)',
+        fontSize: 14,
+        fontWeight: 600,
+        zIndex: 'var(--z-hud)',
         pointerEvents: 'auto',
       }}
     >
-      <span aria-hidden style={{ opacity: 0.9 }}>💡</span>
       <span>{suggestion.message}</span>
       <button
         onClick={apply}
         style={{
-          border: 'none', borderRadius: 999, padding: '4px 12px',
-          background: '#22d3ee', color: '#083344', fontWeight: 600, fontSize: 12.5, cursor: 'pointer',
+          minWidth: 48, minHeight: 48, padding: '0 6px', background: 'none', border: 'none',
+          color: '#67e8f9', textShadow: 'var(--ink-on-model)', fontWeight: 700, fontSize: 14, cursor: 'pointer',
         }}
       >
-        {verb}
+        <span style={{ border: '1.5px solid #67e8f9', borderRadius: 6, padding: '4px 10px' }}>{verb}</span>
       </button>
       <button
         onClick={dismiss}
         aria-label="Dismiss suggestion"
         style={{
-          border: 'none', background: 'transparent', color: '#94a3b8',
-          fontSize: 16, lineHeight: 1, cursor: 'pointer', padding: '0 2px',
+          minWidth: 48, minHeight: 48, border: 'none', background: 'none', color: '#e2e8f0',
+          textShadow: 'var(--ink-on-model)', fontSize: 20, lineHeight: 1, cursor: 'pointer',
         }}
       >
         ×

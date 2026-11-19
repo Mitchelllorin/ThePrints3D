@@ -107,6 +107,16 @@ interface FloorplanLocalState {
   traceStyle: TraceStyle
   /** Anchor of the active rubber-band segment (line style only) */
   traceStart: [number, number] | null
+  /** First point of the wall run in progress — tap it to close the shape. */
+  traceRunStart: [number, number] | null
+  /** Direction of the last wall in the run (unit, print pixels), so the next
+   *  wall can be held square or straight on to it. Null at a run's first point. */
+  tracePrevDir: [number, number] | null
+  /** What the trace draws on the walls layer: runs of walls, or a circle
+   *  (a round room or a column, built as short bent walls round it). */
+  traceShape: 'wall' | 'circle'
+  /** A finger (not a mouse) is down on the trace surface: show the loupe. */
+  traceTouchDown: boolean
   traceStroke: [number, number][]
   /** Walls reduced from a finished freehand stroke, awaiting keep/discard */
   pendingWalls: ParsedWall[] | null
@@ -289,7 +299,11 @@ interface FloorplanLocalState {
   setOffPrintWarn: (v: boolean) => void
   setPlumbNudge: (v: PlumbNudge | null) => void
   setTraceStyle: (v: TraceStyle) => void
-  setTraceStart: (v: [number, number] | null) => void
+  /** Move the anchor. A new run starts when there was none; `prevDir` is the
+   *  wall just drawn into it, so the next one can be held to it. */
+  setTraceStart: (v: [number, number] | null, prevDir?: [number, number] | null) => void
+  setTraceShape: (v: 'wall' | 'circle') => void
+  setTraceTouchDown: (v: boolean) => void
   setTraceStroke: (v: [number, number][] | ((prev: [number, number][]) => [number, number][])) => void
   setPendingWalls: (v: ParsedWall[] | null) => void
   setHoverPixel: (v: [number, number] | null) => void
@@ -427,6 +441,10 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   plumbNudge: null,
   traceStyle: 'line',
   traceStart: null,
+  traceRunStart: null,
+  tracePrevDir: null,
+  traceShape: 'wall',
+  traceTouchDown: false,
   traceStroke: [],
   pendingWalls: null,
   hoverPixel: null,
@@ -513,7 +531,13 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   setOffPrintWarn: (v) => set({ offPrintWarn: v }),
   setPlumbNudge: (v) => set({ plumbNudge: v }),
   setTraceStyle: (v) => set({ traceStyle: v, traceStart: null, traceStroke: [], pendingWalls: null }),
-  setTraceStart: (v) => set({ traceStart: v }),
+  setTraceStart: (v, prevDir) => set((s) => ({
+    traceStart: v,
+    traceRunStart: v == null ? null : (s.traceStart == null || s.traceRunStart == null ? v : s.traceRunStart),
+    tracePrevDir: v != null && prevDir ? prevDir : null,
+  })),
+  setTraceShape: (v) => set({ traceShape: v, traceStart: null, traceRunStart: null, tracePrevDir: null }),
+  setTraceTouchDown: (v) => set({ traceTouchDown: v }),
   setPendingWalls: (v) => set({ pendingWalls: v }),
   setTraceStroke: (v) => {
     if (typeof v === 'function') {

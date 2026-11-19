@@ -10,12 +10,15 @@
  */
 
 import { tapCycle } from './tapCycle'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { ThreeEvent } from '@react-three/fiber'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useThree, type ThreeEvent } from '@react-three/fiber'
 import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import PrintWalkabout from './PrintWalkabout'
 import WallDimension from './WallDimension'
+import { TraceAids, Loupe, BendHandle } from './DrawAids'
+import { DRAW, arcWalls, bulgeForRadius, arcOf, curveBayMm, endsOf, isDoubleTap, movedCorner, pointAtCornerAngle, segsOf, slidWall, snapDrawPoint, type DrawSnap } from '../../services/drawSystem'
+import { circleString } from '../../services/drawItPlan'
 import { formatMeasureMm } from '../../services/unitConverter'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
@@ -41,12 +44,8 @@ const FRAMING_TO_WALLTYPE: Record<string, WallType> = {
 }
 import {
   extendWallToNearbyWall,
-  reduceStrokeToWall,
   reduceStrokeToWalls,
   snapPointToWalls,
-  snapTraceWallToExisting,
-  snapWallToPrintLine,
-  squareWallToAxis,
 } from '../../services/wallTraceReducer'
 import { ensureInkBuffer, getInkBuffer, snapSegmentToInk } from '../../services/inkRaster'
 import { getCatalogItem, ELECTRICAL_TRAY_ORDER, OUTLET_TYPES, isWallMountedType, deviceMountHeightM } from '../../data/objectCatalog'
@@ -95,6 +94,8 @@ function rayToGround(e: ThreeEvent<PointerEvent>, y = 0): THREE.Vector3 | null {
 /** Where the finger was on the floor at the last move of a wall drag. One
  *  drag at a time, so it lives here rather than in a ref. See onDragStart. */
 const wallDragGround: { current: THREE.Vector3 | null } = { current: null }
+/** Where a wall drag began, and every user wall as it was then. */
+const wallDragStart: { current: { ground: THREE.Vector3 | null; walls: ParsedWall[] } | null } = { current: null }
 
 const DEFAULT_WIDTH = 12
 const DEFAULT_DEPTH = 8
@@ -163,6 +164,7 @@ function RubberBandPreview({
   calibrationMode,
   mmPerPx,
   onTypedLength,
+  draw,
 }: {
   planeLocalToTrace: (pixel: [number, number]) => [number, number, number]
   floorsRectWorld: (x1: number, y1: number, x2: number, y2: number) => [number, number, number][]
@@ -173,6 +175,8 @@ function RubberBandPreview({
   mmPerPx: number | null
   /** A length typed on the dimension, toward `endPixel`. False if unreadable. */
   onTypedLength: (text: string, endPixel: [number, number]) => boolean
+  /** The drawing system, handed in as one stable object (see drawRef). */
+  draw: DrawBridge
 }) {
   const activeUnit = useConfigStore((s) => s.activeUnit)
   const lengthFormat = useConfigStore((s) => s.lengthFormat)
@@ -182,28 +186,41 @@ function RubberBandPreview({
   const traceStyle      = useFloorplanLocalStore((s) => s.traceStyle)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const traceStart      = useFloorplanLocalStore((s) => s.traceStart)
+  const traceRunStart   = useFloorplanLocalStore((s) => s.traceRunStart)
+  const tracePrevDir    = useFloorplanLocalStore((s) => s.tracePrevDir)
+  const traceShape      = useFloorplanLocalStore((s) => s.traceShape)
+  const traceTouchDown  = useFloorplanLocalStore((s) => s.traceTouchDown)
   const squareWalls     = useFloorplanLocalStore((s) => s.squareWalls)
   const calibrationA    = useFloorplanLocalStore((s) => s.calibrationA)
   const calibrationB    = useFloorplanLocalStore((s) => s.calibrationB)
 
+  const walls = traceMode && !tracePaused && traceStyle === 'line' && activeTraceLayer === 'framing'
+  const circle = walls && traceShape === 'circle'
+  /**
+   * THE RUBBER BAND IS THE WALL YOU WILL GET. It is snapped by the same call
+   * the tap commits with — angle held, end caught, corner lined up — so the end
+   * never jumps when you let go, and the guide shows why it went where it did.
+   */
   const tracePreviewPoints = useMemo(() => {
     if (!traceMode || tracePaused || traceStyle !== 'line' || activeTraceLayer === 'floors' || activeTraceLayer === 'roof' || !traceStart || !hoverPixel) return null
-    // The rubber band shows the SQUARED line. Previewing the raw pointer and then
-    // squaring on commit means the wall jumps at the moment you let go, so you
-    // are aiming at something that is not what you will get.
-    // Free angle previews the same whole-degree end the commit will lay down.
-    const end = squareWalls
-      ? squarePointToAxis(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
-      : freeAnglePoint(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
+    const snap = walls && !circle ? draw.snap(hoverPixel) : null
+    const end: [number, number] = snap ? [snap.point.x, snap.point.y]
+      : circle ? hoverPixel
+      : (squareWalls
+        ? squarePointToAxis(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1])
+        : freeAnglePoint(traceStart[0], traceStart[1], hoverPixel[0], hoverPixel[1]))
     return {
+      snap,
       start: planeLocalToTrace(traceStart),
       end: planeLocalToTrace(end),
-      endPixel: end as [number, number],
+      endPixel: end,
       lenPx: Math.hypot(end[0] - traceStart[0], end[1] - traceStart[1]),
-      // Free angle only: a diagonal reads its angle on the chip next to its length.
-      angleDeg: squareWalls ? 0 : wallAngleOffSquareDeg(traceStart[0], traceStart[1], end[0], end[1]),
+      // A diagonal reads its angle off square beside its length.
+      angleDeg: wallAngleOffSquareDeg(traceStart[0], traceStart[1], end[0], end[1]),
     }
-  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace, squareWalls])
+  // traceRunStart / tracePrevDir / squareWalls feed draw.snap through its ref.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [traceMode, tracePaused, traceStyle, activeTraceLayer, traceStart, hoverPixel, planeLocalToTrace, squareWalls, traceRunStart, tracePrevDir, walls, circle, draw])
 
   const floorsPreviewRect = useMemo(() => {
     if (!traceMode || tracePaused || (activeTraceLayer !== 'floors' && activeTraceLayer !== 'roof') || !traceStart || !hoverPixel) return null
@@ -218,23 +235,69 @@ function RubberBandPreview({
     return [start, end] as [[number, number, number], [number, number, number]]
   }, [calibrationA, calibrationB, hoverPixel, calibrationMode, planeLocalToTrace])
 
+  const scaleAt = walls && traceStart ? draw.scaleAt(hoverPixel ?? traceStart) : null
+  const fmt = (px: number) => (mmPerPx ? formatMeasureMm(px * mmPerPx, activeUnit, lengthFormat) : '')
+
   return (
     <>
-      {/* A WALL gets its dimension on it and can take a typed length; a pipe
-          or a wire run keeps the plain rubber band. */}
-      {tracePreviewPoints && activeTraceLayer === 'framing' && mmPerPx ? (
+      {/* A CIRCLE: centre down, the band is its radius. Type the radius on it. */}
+      {circle && tracePreviewPoints && mmPerPx ? (
+        <>
+          <Line points={Array.from({ length: 73 }, (_, i) => {
+            const t = (i / 72) * Math.PI * 2
+            return planeLocalToTrace([traceStart![0] + Math.cos(t) * tracePreviewPoints.lenPx, traceStart![1] + Math.sin(t) * tracePreviewPoints.lenPx])
+          })} color={activeLineColor} lineWidth={3} dashed dashSize={0.25} gapSize={0.15} />
+          <WallDimension
+            start={tracePreviewPoints.start}
+            end={tracePreviewPoints.end}
+            endPixel={tracePreviewPoints.endPixel}
+            color={activeLineColor}
+            label={`R ${fmt(tracePreviewPoints.lenPx)}`}
+            onTyped={draw.typedCircle}
+          />
+        </>
+      ) : tracePreviewPoints && activeTraceLayer === 'framing' && mmPerPx ? (
+        /* A WALL gets its dimension on it and can take a typed length; a pipe
+           or a wire run keeps the plain rubber band. */
         <WallDimension
           start={tracePreviewPoints.start}
           end={tracePreviewPoints.end}
           endPixel={tracePreviewPoints.endPixel}
           color={activeLineColor}
-          label={formatMeasureMm(tracePreviewPoints.lenPx * mmPerPx, activeUnit, lengthFormat)
-            + (tracePreviewPoints.angleDeg % 90 ? ` · ${tracePreviewPoints.angleDeg}°` : '')}
+          label={fmt(tracePreviewPoints.lenPx)
+            + (tracePreviewPoints.angleDeg % 90 && !tracePrevDir ? ` · ${tracePreviewPoints.angleDeg}°` : '')}
           onTyped={onTypedLength}
         />
       ) : tracePreviewPoints && (
         <Line points={[tracePreviewPoints.start, tracePreviewPoints.end]} color={activeLineColor} lineWidth={4} />
       )}
+      {walls && !circle && traceStart && scaleAt && (
+        <TraceAids
+          toWorld={planeLocalToTrace}
+          worldPerScreenPx={scaleAt.worldPerScreenPx}
+          anchor={traceStart}
+          runStart={traceRunStart}
+          prevDir={tracePrevDir}
+          snap={tracePreviewPoints?.snap ?? null}
+          color={activeLineColor}
+          onTypedAngle={draw.typedAngle}
+          onUndo={draw.undo}
+          onDone={draw.done}
+          canUndo={!!tracePrevDir}
+          showControls={!traceTouchDown}
+        />
+      )}
+      {/* The loupe: only while a finger is down, so it never hides anything. */}
+      {walls && traceTouchDown && hoverPixel && scaleAt && (() => {
+        const p: [number, number] = tracePreviewPoints?.endPixel ?? (() => { const q = draw.snap(hoverPixel).point; return [q.x, q.y] as [number, number] })()
+        const segs = draw.segments()
+        if (traceStart && tracePreviewPoints) segs.push([traceStart[0], traceStart[1], p[0], p[1]])
+        return (
+          <Loupe at={planeLocalToTrace(p)} pixel={p} rasterUrl={draw.raster()}
+            pxPerPrintPx={scaleAt.pxPerPrintPx} segments={segs}
+            snapped={!!tracePreviewPoints?.snap && tracePreviewPoints.snap.kind !== 'free' && tracePreviewPoints.snap.kind !== 'none'} />
+        )
+      })()}
       {floorsPreviewRect && (
         <Line
           points={raiseRectPts(floorsPreviewRect, traceElevation)}
@@ -250,6 +313,22 @@ function RubberBandPreview({
       )}
     </>
   )
+}
+
+/**
+ * What the live preview needs from the overlay, as one object whose methods
+ * read the overlay's latest state through a ref — so the preview re-renders on
+ * pointer moves alone, never because the overlay made a new closure.
+ */
+interface DrawBridge {
+  snap: (pixel: [number, number]) => DrawSnap
+  scaleAt: (pixel: [number, number]) => { pxPerPrintPx: number; worldPerScreenPx: number }
+  typedAngle: (text: string, toward: [number, number]) => boolean
+  typedCircle: (text: string, endPixel: [number, number]) => boolean
+  undo: () => void
+  done: () => void
+  segments: () => Array<[number, number, number, number]>
+  raster: () => string | null
 }
 
 export default function FloorplanOverlay() {
@@ -289,6 +368,12 @@ export default function FloorplanOverlay() {
   const traceStyle = useFloorplanLocalStore((s) => s.traceStyle)
   const traceStart = useFloorplanLocalStore((s) => s.traceStart)
   const setTraceStart = useFloorplanLocalStore((s) => s.setTraceStart)
+  const tracePrevDir = useFloorplanLocalStore((s) => s.tracePrevDir)
+  const traceShape = useFloorplanLocalStore((s) => s.traceShape)
+  const setTraceTouchDown = useFloorplanLocalStore((s) => s.setTraceTouchDown)
+  const undoApp = useAppStore((s) => s.undo)
+  const addUserTracedWalls = useAppStore((s) => s.addUserTracedWalls)
+  const getThree = useThree((s) => s.get)
   const setOffPrintWarn = useFloorplanLocalStore((s) => s.setOffPrintWarn)
   const setPlumbNudge = useFloorplanLocalStore((s) => s.setPlumbNudge)
   const traceStroke = useFloorplanLocalStore((s) => s.traceStroke)
@@ -323,7 +408,6 @@ export default function FloorplanOverlay() {
   const showAreaOutlines = planView || (traceMode && (activeTraceLayer === 'roof' || activeTraceLayer === 'floors'))
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
-  const squareWalls = useFloorplanLocalStore((s) => s.squareWalls)
   const wallRoleChosen = useFloorplanLocalStore((s) => s.wallRoleChosen)
   const wallTypeChosen = useFloorplanLocalStore((s) => s.wallTypeChosen)
   const traceBand = useFloorplanLocalStore((s) => s.traceBand)
@@ -656,6 +740,7 @@ export default function FloorplanOverlay() {
     checkpointHistory()
     if (isWall) {
       wallDragGround.current = rayToGround(event, wallBaseY(next.wallIndex))
+      wallDragStart.current = { ground: wallDragGround.current?.clone() ?? null, walls: userWalls.map((w) => ({ ...w })) }
       useFloorplanLocalStore.getState().setGestureLock(true)
     }
     setDrag(next)
@@ -677,25 +762,52 @@ export default function FloorplanOverlay() {
     if (drag.kind === 'rotate') { updateOverlay({ rotationDeg: overlay.rotationDeg + event.movementX * 0.5 }, false); return }
     if (drag.kind === 'corner') { applyScale((drag.signX ?? 1) * dx, (drag.signZ ?? 1) * dz); return }
     if (drag.kind === 'edge') { applyScale((drag.axis === 'x' ? dx : 0), (drag.axis === 'z' ? dz : 0)); return }
-    // Wall drags: translate the whole wall, or just one endpoint, in pixel space.
+    // Wall drags: slide the wall, or move a corner — the walls joined to it
+    // go with it (services/drawSystem: slidWall, movedCorner), measured from
+    // where the drag began so nothing creeps.
     if ((drag.kind === 'wall' || drag.kind === 'wall-end') && drawing && drag.wallIndex != null) {
-      const w = userWalls[drag.wallIndex]
-      if (!w) return
-      // Follow the floor point under the finger; fall back to screen movement
-      // only when the ray misses the floor (looking at the horizon).
+      const st = wallDragStart.current
+      const w0 = st?.walls[drag.wallIndex]
+      if (!st || !w0) return
       const g = rayToGround(event, wallBaseY(drag.wallIndex))
-      const last = wallDragGround.current
-      let wx = dx, wz = dz
-      if (g && last) { wx = g.x - last.x; wz = g.z - last.z }
-      if (g) wallDragGround.current = g
-      const [dpx, dpy] = worldDeltaToPixel(wx, wz)
+      if (!g || !st.ground) return
+      const [dpx, dpy] = worldDeltaToPixel(g.x - st.ground.x, g.z - st.ground.z)
+      // Only walls on the same storey are joined to this one.
+      const lvl = w0.level ?? 0
+      const idx = st.walls.map((w, i) => ((w.level ?? 0) === lvl ? i : -1)).filter((i) => i >= 0)
+      const same = idx.map((i) => st.walls[i])
+      const me = idx.indexOf(drag.wallIndex)
+      let changed: Map<number, ParsedWall>
       if (drag.kind === 'wall') {
-        moveUserWall(drawing.id, drag.wallIndex, { x1: w.x1 + dpx, y1: w.y1 + dpy, x2: w.x2 + dpx, y2: w.y2 + dpy })
-      } else if (drag.end === 'start') {
-        moveUserWall(drawing.id, drag.wallIndex, { x1: w.x1 + dpx, y1: w.y1 + dpy })
+        changed = slidWall(same, me, { x: dpx, y: dpy }, 1)
       } else {
-        moveUserWall(drawing.id, drag.wallIndex, { x2: w.x2 + dpx, y2: w.y2 + dpy })
+        const at = drag.end === 'start' ? { x: w0.x1, y: w0.y1 } : { x: w0.x2, y: w0.y2 }
+        // The corner lands where the drawing system says: on an end or a wall,
+        // or held square to the wall it is on.
+        const fixed = drag.end === 'start' ? { x: w0.x2, y: w0.y2 } : { x: w0.x1, y: w0.y1 }
+        const others = same.filter((_, k) => k !== me)
+        const q = snapDrawPoint({ x: at.x + dpx, y: at.y + dpy }, {
+          from: fixed, ends: endsOf(others).filter((e) => Math.hypot(e.x - at.x, e.y - at.y) > 1),
+          lines: segsOf(others).filter((sg) => Math.hypot(sg.a.x - at.x, sg.a.y - at.y) > 1 && Math.hypot(sg.b.x - at.x, sg.b.y - at.y) > 1),
+          tol: DRAW.REACH_PX / scaleAt([at.x, at.y]).pxPerPrintPx,
+          square: useFloorplanLocalStore.getState().squareWalls,
+        }).point
+        changed = movedCorner(same, at, q, 1)
       }
+      for (const [k, w] of changed) {
+        const cur = userWalls[idx[k]]
+        if (cur && (cur.x1 !== w.x1 || cur.y1 !== w.y1 || cur.x2 !== w.x2 || cur.y2 !== w.y2)) {
+          moveUserWall(drawing.id, idx[k], { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 })
+        }
+      }
+      // Walls that moved back to where they started (the drag reversed).
+      idx.forEach((ui, k) => {
+        if (changed.has(k)) return
+        const w = st.walls[ui], cur = userWalls[ui]
+        if (cur && (cur.x1 !== w.x1 || cur.y1 !== w.y1 || cur.x2 !== w.x2 || cur.y2 !== w.y2)) {
+          moveUserWall(drawing.id, ui, { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 })
+        }
+      })
     }
   }
 
@@ -728,6 +840,9 @@ export default function FloorplanOverlay() {
    * its end. Two fingers are still pinch and nothing else.
    */
   const pressPixel = useRef<[number, number] | null>(null)
+  /** Long-press to finish a run: the timer, and whether it fired this press. */
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressed = useRef(false)
   /** The anchor was dropped by this drag, so a pinch can take it back. */
   const dragAnchored = useRef(false)
   const fingers = useRef(new Set<number>())
@@ -757,6 +872,27 @@ export default function FloorplanOverlay() {
     pointerDownScreen.current = { x: event.nativeEvent.clientX, y: event.nativeEvent.clientY }
     pressPixel.current = toPixel(rayToTracePlane(event) ?? event.point)
     dragAnchored.current = false
+    longPressed.current = false
+    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    const wallsLayer = traceMode && !tracePaused && traceStyle === 'line' && activeTraceLayer === 'framing'
+    if (wallsLayer) {
+      // A FINGER GETS A LOUPE: the point is drawn above it while it is down.
+      if (event.nativeEvent.pointerType === 'touch') {
+        setTraceTouchDown(true)
+        setHoverPixel(pressPixel.current)
+      }
+      // LONG-PRESS FINISHES. Held still on a run in progress, the run ends
+      // where it is — no wall is added, and lifting the finger adds none.
+      if (traceStart) {
+        longPressTimer.current = setTimeout(() => {
+          longPressTimer.current = null
+          if (!pointerDownScreen.current || pinched.current) return
+          longPressed.current = true
+          endRun()
+          setTraceTouchDown(false)
+        }, DRAW.LONG_PRESS_MS)
+      }
+    }
     if (traceMode && traceStyle === 'freehand') {
       event.stopPropagation()
       const pixel = worldToPixel(rayToTracePlane(event) ?? event.point)
@@ -840,8 +976,9 @@ export default function FloorplanOverlay() {
    * wall in every way but where its end came from. `onPrint` is whether it
    * locked onto a printed line — if not, and it lands off the sheet, ask.
    */
-  const commitWall = (base: ParsedWall, start: [number, number], onPrint: boolean) => {
-    if (!drawing) return
+  /** Stamp a wall with what it is: role from where it was drawn unless one was
+   *  picked, stud size from the role unless one was picked, and the storey. */
+  const stampWall = (base: ParsedWall): ParsedWall => {
     // Stamp the picked framing/role/material onto the wall so the build frames
     // (or, for CMU, leaves solid) and renders it as chosen — not always wood.
     // ROLE COMES FROM WHERE YOU DREW IT, unless you have picked one by hand.
@@ -856,7 +993,7 @@ export default function FloorplanOverlay() {
     // inferred interior wall gets 2x4 rather than the exterior 2x8.
     const framingType = wallTypeChosen ? activeWallType : defaultWallTypeForRole(roleForWall)
     const isMasonry = framingType === 'cmu'
-    const wall: ParsedWall = {
+    return {
       ...base,
       framingType,
       wallRole: roleForWall,
@@ -869,6 +1006,29 @@ export default function FloorplanOverlay() {
       exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
       level: activeLevel,
     }
+  }
+
+  /**
+   * THE LAST WALL OF THE RUN, kept so it can still be bent into an arc (drag
+   * its middle) or taken back with Undo. `walls` is how many walls it went in
+   * as one undo step — straight, or one wall per bay once bent — so a bend or
+   * an Undo only ever replaces exactly that wall.
+   */
+  type Leg = { start: [number, number]; end: [number, number]; prevDir: [number, number] | null; bulge: number }
+  const lastLeg = useRef<Leg | null>(null)
+  /** The same, as state, for drawing its bend ring. */
+  const [legShown, setLegShown] = useState<Leg | null>(null)
+  const setLeg = (v: Leg | null) => { lastLeg.current = v; setLegShown(v) }
+
+  /**
+   * Stamp the wall with what it is and put it in the drawing. Shared by a
+   * tapped end and a TYPED length, so a wall whose length was typed is the same
+   * wall in every way but where its end came from. `onPrint` is whether it
+   * locked onto a printed line — if not, and it lands off the sheet, ask.
+   */
+  const commitWall = (base: ParsedWall, start: [number, number], onPrint: boolean) => {
+    if (!drawing) return
+    const wall = stampWall(base)
     // New wall is appended last among user walls, so its user-index is the
     // count before the add — captured for the "line it up?" nudge below.
     const newUserIndex = drawing.parsedWalls.filter((w) => w.source === 'user').length
@@ -889,7 +1049,99 @@ export default function FloorplanOverlay() {
       // decides whether to snap it or keep the offset on purpose.
       maybeNudgePlumb(wall, newUserIndex)
     }
-    setTraceStart([wall.x2, wall.y2])
+    const L = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1) || 1
+    const dir: [number, number] = [(wall.x2 - wall.x1) / L, (wall.y2 - wall.y1) / L]
+    setLeg({
+      start: [wall.x1, wall.y1], end: [wall.x2, wall.y2],
+      prevDir: useFloorplanLocalStore.getState().tracePrevDir, bulge: 0,
+    })
+    // The end just drawn is the next start; the wall just drawn is what the
+    // next one is held square or straight on to.
+    setTraceStart([wall.x2, wall.y2], dir)
+  }
+
+  /** Several walls in one step (a circle, an arc): stamped, added, one undo. */
+  const commitWalls = (bases: ParsedWall[]) => {
+    if (!drawing || bases.length === 0) return
+    addUserTracedWalls(drawing.id, bases.map(stampWall))
+  }
+
+  /** The screen size of a print pixel where the pointer is — the drawing
+   *  system's reach is in screen pixels, so a finger's width means the same
+   *  thing at any zoom. */
+  const scaleAt = (pixel: [number, number]) => {
+    const { camera, size } = getThree()
+    const v = new THREE.Vector3()
+    const sc = (p: [number, number, number]) => { v.set(p[0], p[1], p[2]).project(camera); return [(v.x + 1) / 2 * size.width, (1 - v.y) / 2 * size.height] }
+    const a = sc(planeLocalToTrace(pixel))
+    const bx = sc(planeLocalToTrace([pixel[0] + 50, pixel[1]]))
+    const by = sc(planeLocalToTrace([pixel[0], pixel[1] + 50]))
+    const pxPerPrintPx = Math.max(1e-3, (Math.hypot(bx[0] - a[0], bx[1] - a[1]) + Math.hypot(by[0] - a[0], by[1] - a[1])) / 100)
+    const worldPerPrintPx = width / imageWidth
+    return { pxPerPrintPx, worldPerScreenPx: worldPerPrintPx / pxPerPrintPx }
+  }
+
+  /** The walls a wall being drawn can land on: the print's own (detected) and
+   *  the ones drawn on this storey; plus, for an exterior wall upstairs, the
+   *  exterior walls below, as lines only, so the shell carries up plumb. */
+  const traceRefs = () => {
+    if (!drawing) return { refWalls: [] as ParsedWall[], belowWalls: [] as ParsedWall[] }
+    // Snap only against the PRINT lines + walls on the SAME storey, so a
+    // 2nd-floor wall snaps to the plan and to its own level — never to the
+    // ground-floor wall directly beneath it (same footprint, other level).
+    const refWalls = drawing.parsedWalls.filter(
+      (w) => (w.source ?? 'auto') !== 'user' || (w.level ?? 0) === activeLevel,
+    )
+    // EXTERIOR walls only, and only while tracing an exterior wall: the shell
+    // carries up plumb and inline storey to storey, so the wall below is a
+    // genuine reference line. Interior partitions do NOT — a second floor has
+    // stairs, and that opening alone changes the layout.
+    const belowWalls = activeLevel > 0 && activeWallRole === 'exterior-bearing'
+      ? drawing.parsedWalls.filter((w) => w.source === 'user'
+          && (w.level ?? 0) === activeLevel - 1
+          && w.wallRole === 'exterior-bearing')
+      : []
+    return { refWalls, belowWalls }
+  }
+
+  /** THE ONE SNAP. The preview and the tap that commits both call this. */
+  const snapTrace = (pixel: [number, number]): DrawSnap => {
+    const { refWalls, belowWalls } = traceRefs()
+    const st = useFloorplanLocalStore.getState()
+    const from = st.traceStart
+    const tol = DRAW.REACH_PX / scaleAt(pixel).pxPerPrintPx
+    return snapDrawPoint({ x: pixel[0], y: pixel[1] }, {
+      from: from ? { x: from[0], y: from[1] } : null,
+      prevDir: st.tracePrevDir ? { x: st.tracePrevDir[0], y: st.tracePrevDir[1] } : null,
+      runStart: st.traceRunStart && from ? { x: st.traceRunStart[0], y: st.traceRunStart[1] } : null,
+      ends: endsOf(refWalls),
+      lines: segsOf([...refWalls, ...belowWalls]),
+      tol,
+      square: st.squareWalls,
+    })
+  }
+
+  /** Finish the run where it is: no wall, the anchor lifts, the band stops. */
+  const endRun = () => {
+    setTraceStart(null); setTracePaused(false); setHoverPixel(null)
+    lastTapRef.current = null
+    setLeg(null)
+  }
+
+  /**
+   * UNDO, beside the corner: the last wall goes and the run steps back to
+   * where that wall started, still drawing. A run with nothing left in it
+   * simply ends.
+   */
+  const undoLastWall = () => {
+    const leg = lastLeg.current
+    const st = useFloorplanLocalStore.getState()
+    if (!leg || !st.traceStart || Math.hypot(leg.end[0] - st.traceStart[0], leg.end[1] - st.traceStart[1]) > 1e-6) {
+      undoApp(); endRun(); return
+    }
+    undoApp()
+    setLeg(null)
+    setTraceStart(leg.start, leg.prevDir)
   }
 
   /**
@@ -914,8 +1166,89 @@ export default function FloorplanOverlay() {
     setHoverPixel([base.x2, base.y2])
     return true
   }
+
+  /** A TYPED corner angle: the wall leaves the corner at exactly that angle to
+   *  the wall before, at the length it is drawn, on the side it is drawn. */
+  const commitTypedAngle = (text: string, toward: [number, number]): boolean => {
+    const deg = parseFloat(text.replace(/[^0-9.]/g, ''))
+    if (!drawing || !traceStart || !tracePrevDir || !(deg > 0 && deg < 360)) return false
+    const len = Math.hypot(toward[0] - traceStart[0], toward[1] - traceStart[1])
+    if (len < 1) return false
+    const q = pointAtCornerAngle({ x: tracePrevDir[0], y: tracePrevDir[1] }, { x: traceStart[0], y: traceStart[1] }, deg > 180 ? 360 - deg : deg, len, { x: toward[0], y: toward[1] })
+    commitWall({ x1: traceStart[0], y1: traceStart[1], x2: q.x, y2: q.y, thickness: 8, source: 'user', detectionConfidence: 1 } as ParsedWall, traceStart, false)
+    setHoverPixel([q.x, q.y])
+    return true
+  }
+
+  /** A circle from its centre: the ring of short bent walls it is built as. */
+  const commitCircle = (centre: [number, number], rPx: number) => {
+    const mmPerPx = drawing?.scaleMmPerPx
+    if (!drawing || !mmPerPx || !(rPx > 0)) return false
+    const ring = circleString({ cx: centre[0] * mmPerPx, cy: centre[1] * mmPerPx, r: rPx * mmPerPx })
+    commitWalls(ring.walls.map((w) => ({
+      x1: w.x1 / mmPerPx, y1: w.y1 / mmPerPx, x2: w.x2 / mmPerPx, y2: w.y2 / mmPerPx,
+      bend: true, sharedStartStud: true, thickness: 8, source: 'user', detectionConfidence: 1,
+    } as ParsedWall)))
+    setTraceStart(null); setHoverPixel(null)
+    return true
+  }
+  const commitTypedCircle = (text: string): boolean => {
+    const mm = parseSizeMm(text.replace(/^\s*r\s*/i, ''))
+    const c = useFloorplanLocalStore.getState().traceStart
+    if (!drawing?.scaleMmPerPx || !c || mm == null || !(mm > 0)) return false
+    return commitCircle(c, mm / drawing.scaleMmPerPx)
+  }
+
+  /**
+   * BEND THE LAST WALL. Its two ends stay where they are — so the walls either
+   * side stay on — and the middle follows the drag: the wall goes in again as
+   * one short bent wall per bay. The bend replaces the straight wall as one
+   * step, so Undo puts the straight wall back.
+   */
+  const bendLastWall = (bulgePx: number): boolean => {
+    const leg = lastLeg.current
+    const mmPerPx = drawing?.scaleMmPerPx
+    if (!drawing || !leg || !mmPerPx) return false
+    // Take the wall (straight, or bent before — one undo step either way)
+    // back out, then put the arc in.
+    undoApp()
+    const a = { x: leg.start[0], y: leg.start[1] }, b = { x: leg.end[0], y: leg.end[1] }
+    const arc = arcOf(a, b, bulgePx)
+    const bayPx = arc ? curveBayMm(arc.r * mmPerPx) / mmPerPx : Infinity
+    const walls = arcWalls(a, b, bulgePx, bayPx).map((w) => ({ ...w, thickness: 8, source: 'user', detectionConfidence: 1 } as ParsedWall))
+    if (walls.length === 1) addUserTracedWall(drawing.id, stampWall(walls[0]))
+    else commitWalls(walls)
+    setLeg({ ...leg, bulge: bulgePx })
+    // The run carries on from the arc's end, tangent to it.
+    const pts = walls[walls.length - 1]
+    const L = Math.hypot(pts.x2 - pts.x1, pts.y2 - pts.y1) || 1
+    setTraceStart(leg.end, [(pts.x2 - pts.x1) / L, (pts.y2 - pts.y1) / L])
+    return true
+  }
+  const bendToRadius = (text: string): boolean => {
+    const leg = lastLeg.current
+    const mm = parseSizeMm(text.replace(/^\s*r\s*/i, ''))
+    if (!leg || !drawing?.scaleMmPerPx || mm == null || !(mm > 0)) return false
+    const chord = Math.hypot(leg.end[0] - leg.start[0], leg.end[1] - leg.start[1])
+    return bendLastWall(bulgeForRadius(chord, mm / drawing.scaleMmPerPx, leg.bulge < 0 ? -1 : 1))
+  }
+
   // Handed to the preview through a ref, so the preview gets one stable
-  // function and the commit (which stamps the time) is only ever run by a tap.
+  // object and the commits (which stamp the time) only ever run from a tap.
+  const drawRef = useRef({ snapTrace, scaleAt, commitTypedAngle, commitTypedCircle, undoLastWall, endRun, rasterUrl: imageUrl, userWalls })
+  useEffect(() => { drawRef.current = { snapTrace, scaleAt, commitTypedAngle, commitTypedCircle, undoLastWall, endRun, rasterUrl: imageUrl, userWalls } })
+  const activeLevelRef = useRef(activeLevel)
+  useEffect(() => { activeLevelRef.current = activeLevel })
+  const drawBridge = useMemo<DrawBridge>(() => ({
+    snap: (p) => drawRef.current.snapTrace(p),
+    scaleAt: (p) => drawRef.current.scaleAt(p),
+    typedAngle: (t, toward) => drawRef.current.commitTypedAngle(t, toward),
+    typedCircle: (t) => drawRef.current.commitTypedCircle(t),
+    undo: () => drawRef.current.undoLastWall(),
+    done: () => drawRef.current.endRun(),
+    segments: () => drawRef.current.userWalls.filter((w) => (w.level ?? 0) === activeLevelRef.current).map((w) => [w.x1, w.y1, w.x2, w.y2] as [number, number, number, number]),
+    raster: () => drawRef.current.rasterUrl,
+  }), [])
   const commitTypedRef = useRef(commitTypedWall)
   useEffect(() => { commitTypedRef.current = commitTypedWall })
   const onTypedLength = useCallback(
@@ -1045,76 +1378,36 @@ export default function FloorplanOverlay() {
         }
       }
 
-      // Snap only against the PRINT lines + walls on the SAME storey, so a
-      // 2nd-floor wall snaps to the plan and to its own level — never to the
-      // ground-floor wall directly beneath it (same footprint, other level).
-      const refWalls = drawing.parsedWalls.filter(
-        (w) => (w.source ?? 'auto') !== 'user' || (w.level ?? 0) === activeLevel,
-      )
-      // Walls on the storey directly below — used ONLY to align this floor plumb
-      // over the one beneath (perpendicular line-snap), never corner-merged
-      // across levels. So a wall traced a hair off lands plumb above its mate.
-      // EXTERIOR walls only, and only while tracing an exterior wall: the shell
-      // carries up plumb and inline storey to storey, so the wall below is a
-      // genuine reference line. Interior partitions do NOT — a second floor has
-      // stairs, and that opening alone changes the layout — so referencing them
-      // dragged upstairs partitions onto downstairs lines that no longer apply.
-      const belowWalls = activeLevel > 0 && activeWallRole === 'exterior-bearing'
-        ? drawing.parsedWalls.filter((w) => w.source === 'user'
-            && (w.level ?? 0) === activeLevel - 1
-            && w.wallRole === 'exterior-bearing')
-        : []
-      // Rubber-band: tap A anchors, tap B commits, B becomes the next A so
-      // consecutive segments share an exact corner point.
-      const snapped = snapPointToWalls(pixel[0], pixel[1], refWalls)
+      // A CIRCLE: the first tap is the centre, the second sets the radius.
+      if (traceShape === 'circle') {
+        if (!traceStart) { setTraceStart(pixel); setHoverPixel(pixel); return }
+        const r = Math.hypot(pixel[0] - traceStart[0], pixel[1] - traceStart[1])
+        if (r * scaleAt(pixel).pxPerPrintPx < DRAW.REACH_PX) { setTraceStart(null); return }
+        commitCircle(traceStart, r)
+        return
+      }
+
+      // THE DRAWING SYSTEM (services/drawSystem.ts, shared with Draw it): the
+      // end lands where the rubber band showed it — square or straight on to
+      // the last wall, or to the plan, held loosely; on a wall end; run on to a
+      // wall; level with a corner. The start of each wall is exactly the end of
+      // the one before, so corners never come apart.
+      const snap = snapTrace(pixel)
       if (!traceStart) {
-        setTraceStart([snapped.x, snapped.y])
+        setTraceStart([snap.point.x, snap.point.y])
         setHoverPixel(pixel)
         return
       }
-      // Prefer snapping the whole segment ONTO the nearest parallel print line
-      // (so a trace a hair off the printed wall lands exactly on it, at the
-      // print's real angle). Generous tolerances so you don't have to be exact;
-      // only fall back to ortho squaring when nothing parallel is reasonably near.
-      const printLine = snapWallToPrintLine(traceStart[0], traceStart[1], snapped.x, snapped.y, [...refWalls, ...belowWalls], squareWalls ? 28 : 4, 42)
-      // FREE ANGLE lays the wall where the arrow pointed. reduceStrokeToWall
-      // rounds every stroke to 0/45/90, which is how "Angle" used to give you a
-      // 45 when you drew a 30. An end that caught a corner keeps the corner.
-      const caught = snapped.x !== pixel[0] || snapped.y !== pixel[1]
-      const freeEnd = caught ? [snapped.x, snapped.y] : freeAnglePoint(traceStart[0], traceStart[1], snapped.x, snapped.y)
-      const reduced = printLine
-        ? { x1: printLine.x1, y1: printLine.y1, x2: printLine.x2, y2: printLine.y2, thickness: 8, source: 'user' as const, detectionConfidence: 1 }
-        : !squareWalls
-          ? (Math.hypot(freeEnd[0] - traceStart[0], freeEnd[1] - traceStart[1]) < 12 ? null
-            : { x1: traceStart[0], y1: traceStart[1], x2: freeEnd[0], y2: freeEnd[1], thickness: 8, source: 'user' as const, detectionConfidence: 1 })
-          : reduceStrokeToWall([
-              { x: traceStart[0], y: traceStart[1] },
-              { x: snapped.x, y: snapped.y },
-            ])
-      if (!reduced || Math.hypot(reduced.x2 - reduced.x1, reduced.y2 - reduced.y1) < 12) {
-        // Tap landed on the anchor — treat as "end this wall run"
-        setTraceStart(null)
-        return
-      }
-      // No detected wall to lock onto? Snap the segment onto the actual ink under
-      // the stroke, so faint/dashed/undetected printed lines still trace cleanly.
-      let inkSnapped = false
-      if (!printLine) {
-        const buf = getInkBuffer(drawing.id)
-        const ink = buf && snapSegmentToInk(reduced.x1, reduced.y1, reduced.x2, reduced.y2, buf)
-        if (ink) {
-          reduced.x1 = ink.x1; reduced.y1 = ink.y1; reduced.x2 = ink.x2; reduced.y2 = ink.y2
-          inkSnapped = true
-        }
-      }
-      const snappedWall = snapTraceWallToExisting(reduced, refWalls)
-      // Final squaring: a near-horizontal/vertical wall ends up EXACTLY square
-      // even if it snapped onto a slightly-crooked print/reference line. Genuine
-      // diagonals are left alone. Kills the "it drew me a crooked wall" case.
-      // 45° tolerance = ALWAYS snap to the nearer axis. The old 7° let anything
-      // worse through as "deliberate", which is how crooked walls got in.
-      const base = squareWallToAxis(extendWallToNearbyWall(snappedWall, refWalls), squareWalls ? 45 : 0)
-      commitWall(base, traceStart, !!printLine || inkSnapped)
+      // A tap back on the anchor (the last point) finishes the run.
+      const tol = DRAW.REACH_PX / scaleAt(pixel).pxPerPrintPx
+      if (Math.hypot(snap.point.x - traceStart[0], snap.point.y - traceStart[1]) < tol) { endRun(); return }
+      const base = {
+        x1: traceStart[0], y1: traceStart[1], x2: snap.point.x, y2: snap.point.y,
+        thickness: 8, source: 'user' as const, detectionConfidence: 1,
+      } as ParsedWall
+      commitWall(base, traceStart, snap.kind === 'end' || snap.kind === 'line' || snap.kind === 'close')
+      // The first point again: the shape is closed and the run is done.
+      if (snap.closes) endRun()
       return
     }
 
@@ -1134,6 +1427,11 @@ export default function FloorplanOverlay() {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     event.stopPropagation()
     const pixel = toPixel(rayToTracePlane(event) ?? event.point)
+    if (longPressTimer.current && pointerDownScreen.current) {
+      const d = pointerDownScreen.current
+      const lim = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
+      if (Math.hypot(event.nativeEvent.clientX - d.x, event.nativeEvent.clientY - d.y) > lim) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+    }
     if (dragDrawsWalls() && pointerDownScreen.current) {
       // A pinch is not a wall: give back an anchor this gesture dropped, and
       // keep the arrow still while the fingers zoom.
@@ -1145,6 +1443,7 @@ export default function FloorplanOverlay() {
       const down = pointerDownScreen.current
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
+      if (moved > limit && longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
       if (!traceStart && pressPixel.current && moved > limit) {
         commitTraceOrCalibrationPoint(event, pressPixel.current)
         dragAnchored.current = true
@@ -1237,6 +1536,10 @@ export default function FloorplanOverlay() {
     // drifting cursor can no longer commit a point.
     const down = pointerDownScreen.current
     pointerDownScreen.current = null
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+    setTraceTouchDown(false)
+    // The long-press already finished the run: the lift adds nothing.
+    if (longPressed.current) { longPressed.current = false; event.stopPropagation(); return }
     // A pinch is never a tap. The second finger's press takes over the press
     // point, so the first finger up uses it up and the last one up arrived
     // with nothing to measure against — and read as a tap, dropping a corner.
@@ -1268,11 +1571,9 @@ export default function FloorplanOverlay() {
       const now = performance.now()
       const sx = event.nativeEvent.clientX
       const sy = event.nativeEvent.clientY
-      const lt = lastTapRef.current
-      const within = lt && now - lt.t < 500 && Math.hypot(sx - lt.x, sy - lt.y) < 50
-      if (within) {
+      if (isDoubleTap(lastTapRef.current, now, sx, sy)) {
         // Second quick tap in ~the same spot → finish this run.
-        setTraceStart(null); setTracePaused(false); setHoverPixel(null); lastTapRef.current = null
+        endRun()
         return
       }
       lastTapRef.current = { t: now, x: sx, y: sy, count: 1 }
@@ -1285,6 +1586,8 @@ export default function FloorplanOverlay() {
   // print); just reset, and let freehand commit whatever it had.
   const handleWorkspacePointerCancel = (event: ThreeEvent<PointerEvent>) => {
     pointerDownScreen.current = null
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+    setTraceTouchDown(false)
     if (drawing && traceMode && traceStyle === 'freehand') commitFreehandStroke(event)
   }
 
@@ -1908,7 +2211,39 @@ export default function FloorplanOverlay() {
         calibrationMode={overlay.calibrationMode}
         mmPerPx={drawing?.scaleMmPerPx ?? null}
         onTypedLength={onTypedLength}
+        draw={drawBridge}
       />
+
+      {/* BEND THE LAST WALL: the ring on its middle. The run carries on from
+          its end either way, so bending never costs the corner. */}
+      {(() => {
+        const leg = legShown
+        if (!drawing?.scaleMmPerPx || !traceMode || tracePaused || traceStyle !== 'line' || activeTraceLayer !== 'framing'
+          || traceShape !== 'wall' || !traceStart || !leg
+          || Math.hypot(leg.end[0] - traceStart[0], leg.end[1] - traceStart[1]) > 1e-6) return null
+        const sc = scaleAt(leg.end)
+        // Too short on screen to hold a ring clear of both its ends.
+        if (Math.hypot(leg.end[0] - leg.start[0], leg.end[1] - leg.start[1]) * sc.pxPerPrintPx < 110) return null
+        const mmPerPx = drawing.scaleMmPerPx
+        return (
+          <BendHandle
+            key={`${leg.start.join(',')}:${leg.end.join(',')}`}
+            a={leg.start} b={leg.end} bulge={leg.bulge}
+            toWorld={planeLocalToTrace}
+            worldPerScreenPx={sc.worldPerScreenPx}
+            toPixel={(e) => { const p = rayToTracePlane(e); return p ? toPixel(p) : null }}
+            color={activeLineColor}
+            radiusLabel={(b) => {
+              const arc = arcOf({ x: leg.start[0], y: leg.start[1] }, { x: leg.end[0], y: leg.end[1] }, b)
+              if (!arc) return null
+              const { activeUnit, lengthFormat } = useConfigStore.getState()
+              return `R ${formatMeasureMm(arc.r * mmPerPx, activeUnit, lengthFormat)}`
+            }}
+            onBend={(b) => { bendLastWall(b) }}
+            onTypedRadius={bendToRadius}
+          />
+        )
+      })()}
 
       {/* Committed floor and roof areas — outlines at each area's storey
           elevation.

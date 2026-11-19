@@ -21,6 +21,7 @@
 import { placeBoxes, footprintOutline, type FootprintBox, type Point, type Rect } from './footprint'
 import { cornerShift, normalizeBoxes, snapTo, type Grip } from './footprintEdit'
 import { freeAnglePoint } from './wallTraceReducer'
+import { arcOf, arcWalls, bulgeForRadius, curveBayMm, endsOf, snapDrawPoint, type DrawSnap, type Pt as DrawPt } from './drawSystem'
 
 export interface InsideWall {
   x1: number; y1: number; x2: number; y2: number
@@ -38,6 +39,13 @@ export interface InsideWall {
    * a break carries ONE stud instead of one from each side of it.
    */
   sharedStartStud?: boolean
+  /**
+   * A CURVED WALL, drawn as one: how far its middle bows off the straight line
+   * between its ends, in millimetres, to the left of start→end positive. The
+   * ends stay where they are, so the walls either side stay joined. It is built
+   * as short straight walls round the arc, one bay each (see planWalls).
+   */
+  bulge?: number
 }
 
 /**
@@ -139,8 +147,6 @@ export function withCircleDiameter(plan: DrawItPlan, i: number, mm: number): Dra
  */
 /** 16" on centre — the framing's own spacing, and the longest a curved bay goes. */
 export const STUD_BAY_MM = 406.4
-/** 8" on centre — the tightest a bay is laid out, so a small ring is not slivers. */
-const MIN_CHORD_MM = 203.2
 /**
  * THE BAY ON A CURVE IS A QUARTER OF THE RADIUS.
  *
@@ -149,7 +155,7 @@ const MIN_CHORD_MM = 203.2
  * also why a ring always comes out around 25 straight walls however big it is —
  * a quarter of the radius as the chord is a little over 14° at every break.
  */
-const CHORD_PER_RADIUS = 0.25
+// (The rule itself lives in drawSystem.curveBayMm, shared with arcs.)
 /** Fewer than this and it is a stubby polygon, not a ring. */
 const MIN_CHORDS = 8
 /** Past this nobody is framing it, and the plan stops reading. */
@@ -178,7 +184,7 @@ export interface CircleString {
 export function circleString(c: DrawItCircle): CircleString {
   const r = Math.abs(c.r)
   if (r < 1) return { walls: [], chords: 0, chordMm: 0 }
-  const bay = Math.min(STUD_BAY_MM, Math.max(MIN_CHORD_MM, r * CHORD_PER_RADIUS))
+  const bay = curveBayMm(r)
   const n = Math.max(MIN_CHORDS, Math.min(MAX_CHORDS,
     Math.round((2 * Math.PI * r) / bay)))
   // One point per break, worked out once and walked twice, so a chord's start is
@@ -213,8 +219,30 @@ export function circleString(c: DrawItCircle): CircleString {
  */
 export function planWalls(plan: DrawItPlan): InsideWall[] {
   const rings = planCircles(plan)
-  if (rings.length === 0) return plan.walls
-  return [...plan.walls, ...rings.flatMap((c) => circleString(c).walls)]
+  const walls = plan.walls.some((w) => w.bulge) ? plan.walls.flatMap(bentWalls) : plan.walls
+  if (rings.length === 0) return walls
+  return [...walls, ...rings.flatMap((c) => circleString(c).walls)]
+}
+
+/** A curved wall as what gets framed: one short bent wall per bay. A straight
+ *  wall is itself. */
+export function bentWalls(w: InsideWall): InsideWall[] {
+  if (!w.bulge) return [w]
+  const a = { x: w.x1, y: w.y1 }, b = { x: w.x2, y: w.y2 }
+  const arc = arcOf(a, b, w.bulge)
+  if (!arc) return [{ ...w, bulge: undefined }]
+  return arcWalls(a, b, w.bulge, curveBayMm(arc.r))
+}
+
+/** A curved wall's radius, or null when it is straight. */
+export function wallRadius(w: InsideWall): number | null {
+  return w.bulge ? arcOf({ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }, w.bulge)?.r ?? null : null
+}
+
+/** A radius typed on a curved wall: the ends stay, the bow changes. */
+export function withRadius(w: InsideWall, r: number): InsideWall {
+  if (!(r > 0)) return w
+  return { ...w, bulge: bulgeForRadius(wallLength(w), r, (w.bulge ?? 1) < 0 ? -1 : 1) }
 }
 
 export function initialPlan(first: FootprintBox): DrawItPlan {
@@ -267,7 +295,7 @@ export function fitPage(plan: DrawItPlan): DrawItPlan {
     ...plan,
     origin: { x: plan.origin.x + dx, y: plan.origin.y + dy },
     page: { w, d },
-    walls: plan.walls.map((k) => ({ x1: k.x1 + dx, y1: k.y1 + dy, x2: k.x2 + dx, y2: k.y2 + dy })),
+    walls: plan.walls.map((k) => ({ ...k, x1: k.x1 + dx, y1: k.y1 + dy, x2: k.x2 + dx, y2: k.y2 + dy })),
     ...(plan.circles ? { circles: plan.circles.map((c) => ({ ...c, cx: c.cx + dx, cy: c.cy + dy })) } : {}),
     ...(plan.shape ? { shape: plan.shape.map((q) => ({ x: q.x + dx, y: q.y + dy })) } : {}),
   }
@@ -309,7 +337,7 @@ export function movedHouse(start: DrawItPlan, dxMm: number, dyMm: number, snapMm
   return {
     ...start,
     origin: { x, y },
-    walls: start.walls.map((k) => ({ x1: k.x1 + mx, y1: k.y1 + my, x2: k.x2 + mx, y2: k.y2 + my })),
+    walls: start.walls.map((k) => ({ ...k, x1: k.x1 + mx, y1: k.y1 + my, x2: k.x2 + mx, y2: k.y2 + my })),
     ...(start.shape ? { shape: start.shape.map((q) => ({ x: q.x + mx, y: q.y + my })) } : {}),
   }
 }
@@ -429,6 +457,21 @@ export function snapWallPoint(plan: DrawItPlan, p: Point, o: SnapOpts): Point {
   if (o.from && lock === 'y') q.y = o.from.y
   if (o.from && lock === 'x') q.x = o.from.x
   return q
+}
+
+/**
+ * WHERE A WALL BEING DRAWN LANDS — the shared drawing system (drawSystem.ts)
+ * over this sheet: the plan's walls are the ends and lines to land on, the
+ * shell's inside face too when there is a house, and the clean length step is
+ * the grid. Says what it did, so the sheet can draw the guide and the corner.
+ */
+export function drawPoint(plan: DrawItPlan, p: Point, o: SnapOpts & { prevDir?: DrawPt | null; runStart?: DrawPt | null }): DrawSnap {
+  const lines = landingLines(plan, o.shellMm, o.skip, o.noShell).map(({ a, b }) => ({ a, b }))
+  const walls = o.skip == null ? plan.walls : plan.walls.filter((_, i) => i !== o.skip)
+  return snapDrawPoint(p, {
+    from: o.from ?? null, prevDir: o.prevDir ?? null, runStart: o.runStart ?? null,
+    ends: endsOf(walls), lines, tol: o.tolMm, grid: o.gridMm, square: !o.free,
+  })
 }
 
 /**

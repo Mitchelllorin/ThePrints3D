@@ -476,6 +476,9 @@ export function inferCorners(walls: ParsedWall[], tolerancePx = 20): ParsedWall[
       // it — angled walls came out square the moment you carried on from them.
       // A diagonal's corner is already exact: the next wall starts on its end.
       if (!isSquare(a) || !isSquare(b)) continue
+      // A facet of a curved wall meets its neighbour at the break it shares;
+      // squaring it into a corner would kink the curve.
+      if (a.bend || b.bend) continue
       const aHoriz = Math.abs(a.y2 - a.y1) < Math.abs(a.x2 - a.x1)
       const bHoriz = Math.abs(b.y2 - b.y1) < Math.abs(b.x2 - b.x1)
       if (aHoriz === bHoriz) continue // parallel — skip

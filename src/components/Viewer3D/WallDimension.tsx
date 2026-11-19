@@ -18,6 +18,8 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { Html, Line } from '@react-three/drei'
 import styles from './WallDimension.module.css'
+import { freeArea, placeClear, regionOf } from './hudPlace'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 
 type P3 = [number, number, number]
 
@@ -89,7 +91,7 @@ export default function WallDimension({
 
   const end = typing?.end ?? liveEnd
   const lift: P3 = [start[0], start[1] + 0.02, start[2]]
-  useFrame(({ camera, size }) => {
+  useFrame(({ camera, size, gl }) => {
     const el = placeRef.current
     if (!el) return
     _a.set(lift[0], lift[1], lift[2]).project(camera)
@@ -103,12 +105,28 @@ export default function WallDimension({
     let nx = -dy, ny = dx
     if (ny > 0) { nx = -nx; ny = -ny }
     const along = L > END_CLEAR_PX + 40 ? Math.min(L * 0.3, L - END_CLEAR_PX) : -56
-    const x = dx * along + nx * SIDE_PX
-    const y = dy * along + ny * SIDE_PX
-    const key = `${Math.round(x)},${Math.round(y)}`
+    // In order: off the start toward the end, above the line; the same below
+    // it; behind the start; square off the start either side. The first that
+    // is clear of the end being dragged (and the loupe over it) and clear of
+    // the rail and the top icons wins.
+    const cands = [
+      { x: dx * along + nx * SIDE_PX, y: dy * along + ny * SIDE_PX },
+      { x: dx * along - nx * SIDE_PX, y: dy * along - ny * SIDE_PX },
+      { x: -dx * 64 + nx * SIDE_PX, y: -dy * 64 + ny * SIDE_PX },
+      { x: -dx * 64 - nx * SIDE_PX, y: -dy * 64 - ny * SIDE_PX },
+      { x: nx * 64, y: ny * 64 },
+      { x: -nx * 64, y: -ny * 64 },
+      // Then anywhere round the start, further out.
+      ...Array.from({ length: 12 }, (_, i) => ({ x: Math.cos(i * Math.PI / 6) * 96, y: Math.sin(i * Math.PI / 6) * 96 })),
+    ]
+    const box = { w: el.offsetWidth || 90, h: el.offsetHeight || 48 }
+    const o = placeClear({ x: ax, y: ay }, cands, box, freeArea(size),
+      [{ x: bx, y: by }, ...(useFloorplanLocalStore.getState().traceTouchDown ? [{ x: bx, y: by - 96 }] : []),
+        ...[regionOf('[data-trace-ctx]', gl.domElement), regionOf('[data-trace-corner]', gl.domElement)].filter((r): r is NonNullable<typeof r> => !!r)], 56)
+    const key = `${Math.round(o.x)},${Math.round(o.y)}`
     if (key !== lastXY.current) {
       lastXY.current = key
-      el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`
+      el.style.transform = `translate(${Math.round(o.x)}px, ${Math.round(o.y)}px)`
     }
   })
   const len = Math.hypot(end[0] - start[0], end[2] - start[2])

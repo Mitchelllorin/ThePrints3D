@@ -53,8 +53,12 @@ import {
   acceptsWall, addCorner, clipToShell, fitPage, houseOutline, houseRects, MIN_WALL_MM, movedCorner, movedHouse, removeCorner, resized,
   shapeOk, snapWallPoint, withEdgeLength, withLength, wallLength,
   addCircle, circleString, planCircles, removeCircle, withCircleDiameter,
+  drawPoint, planWalls, wallRadius, withRadius,
   type DrawItPlan, type InsideWall,
 } from '../../services/drawItPlan'
+import {
+  DRAW, arcPoints, cornerAngleDeg, isDoubleTap, movedCorner as moveCorner, pointAtCornerAngle, slidWall, type DrawSnap,
+} from '../../services/drawSystem'
 import { parseSizeMm } from '../../services/drawnProject'
 import { wallAngleOffSquareDeg } from '../../services/wallTraceReducer'
 import styles from './FootprintEditor.module.css'
@@ -113,7 +117,7 @@ type Drag =
   | { kind: 'move'; start: DrawItPlan }
   /** `tapped` is the wall a press started on: a tap there, rather than a
    *  drag, selects that wall instead of drawing. */
-  | { kind: 'draw'; from: Point; to: Point; tapped?: number }
+  | { kind: 'draw'; from: Point; to: Point; tapped?: number; raw?: Point; snap?: DrawSnap | null }
   | { kind: 'wall'; index: number; part: 'body' | 'a' | 'b'; start: DrawItPlan }
   /** A corner of the shape at any angle. */
   | { kind: 'corner'; index: number; start: DrawItPlan }
@@ -122,6 +126,10 @@ type Drag =
   /** A circle being dragged out from its centre. `tapped` is a circle already
    *  on the sheet that the press landed on, so a tap picks it instead of drawing. */
   | { kind: 'circle'; from: Point; to: Point; tapped?: number }
+  /** A corner of the picked wall: moves it and every wall joined there. */
+  | { kind: 'joint'; at: Point; fixed: Point; start: DrawItPlan }
+  /** The bend ring on a picked wall: bows its middle, ends held. */
+  | { kind: 'bend'; index: number; press: Point; start: DrawItPlan }
 
 /** Fit the paper into the box it sits in. */
 function fitFrame(w: number, h: number, pageW: number, pageD: number): Frame {
@@ -209,6 +217,28 @@ export default function FootprintEditor({
   const [armed, setArmed] = useState<Point | null>(null)
   /** The far end of the chain under a mouse pointer, for the live rubber band. */
   const [hover, setHover] = useState<Point | null>(null)
+  /** What the drawing system did with the hover point: the guide, the marker. */
+  const [hoverSnap, setHoverSnap] = useState<DrawSnap | null>(null)
+  /** The run's first point (tap it to close the shape) and the direction of
+   *  its last wall (the next is held square or straight on to it). */
+  const [runStart, setRunStart] = useState<Point | null>(null)
+  const [prevDir, setPrevDir] = useState<Point | null>(null)
+  /** A finger is drawing: where, on the plan box, for the loupe above it. */
+  const [finger, setFinger] = useState<{ x: number; y: number } | null>(null)
+  const longPress = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressed = useRef(false)
+  const lastPaperTap = useRef<{ t: number; x: number; y: number } | null>(null)
+  /** Where the arrow pointed when the corner angle was tapped to type. */
+  const angleToward = useRef<Point | null>(null)
+  /** Finish the run where it is. */
+  const endRun = () => { setArmed(null); setRunStart(null); setPrevDir(null); setHover(null); setHoverSnap(null) }
+  /** Carry the run on from the end of a wall just drawn. */
+  const chainOn = (w: InsideWall, fromArmed: boolean) => {
+    const L = Math.hypot(w.x2 - w.x1, w.y2 - w.y1) || 1
+    setArmed({ x: w.x2, y: w.y2 })
+    setPrevDir({ x: (w.x2 - w.x1) / L, y: (w.y2 - w.y1) / L })
+    setRunStart(fromArmed && runStart ? runStart : { x: w.x1, y: w.y1 })
+  }
   const [editing, setEditing] = useState<{ key: string; text: string; bad: boolean } | null>(null)
   const [picked, setPicked] = useState<number | null>(null)
   /** The circle tapped, showing its diameter and its remove. */
@@ -429,6 +459,19 @@ export default function FootprintEditor({
 
   // ── Pointer ───────────────────────────────────────────────────────────────
   const snapOpts = { gridMm: snapMm, tolMm: REACH_PX / f.s, shellMm, free, noShell: wallsOnly }
+  /**
+   * THE DRAWING SYSTEM (services/drawSystem.ts — the same rules as tracing in
+   * the workspace). A wall carried on from the parked end is held square or
+   * straight on to the wall before it and can close on the run's first point;
+   * a wall started anywhere else is held to the page.
+   */
+  const chainSnap = (p: Point, from: Point): DrawSnap => {
+    const onRun = !!armed && Math.hypot(from.x - armed.x, from.y - armed.y) < 1e-6
+    return drawPoint(plan, p, {
+      ...snapOpts, tolMm: DRAW.REACH_PX / f.s, from,
+      prevDir: onRun ? prevDir : null, runStart: onRun ? runStart : null,
+    })
+  }
   /** Is this a wall worth keeping? With no shell under it, only its length can say no. */
   const wallOk = (w: InsideWall) => (wallsOnly ? wallLength(w) >= MIN_WALL_MM : acceptsWall(plan, w))
   const begin = (e: ReactPointerEvent<Element>, d: Drag) => {
@@ -439,6 +482,24 @@ export default function FootprintEditor({
     dragFrom.current = { x: e.clientX, y: e.clientY, id: e.pointerId, moved: 0 }
     setDrag(d)
     setEditing(null)
+    longPressed.current = false
+    if (longPress.current) { clearTimeout(longPress.current); longPress.current = null }
+    if (d.kind === 'draw') {
+      // A FINGER GETS A LOUPE: the point, magnified, above it.
+      if (e.pointerType === 'touch') setFinger(local(e))
+      // LONG-PRESS FINISHES the run in progress, adding nothing.
+      if (armed) {
+        longPress.current = setTimeout(() => {
+          longPress.current = null
+          const fr = dragFrom.current
+          if (!fr || fr.moved >= TAP_SLOP_PX) return
+          longPressed.current = true
+          setDrag(null)
+          setFinger(null)
+          endRun()
+        }, DRAW.LONG_PRESS_MS)
+      }
+    }
   }
   const move = (e: ReactPointerEvent<Element>) => {
     const from = dragFrom.current
@@ -446,6 +507,8 @@ export default function FootprintEditor({
     const px = e.clientX - from.x
     const py = e.clientY - from.y
     from.moved = Math.max(from.moved, Math.hypot(px, py))
+    if (from.moved >= TAP_SLOP_PX && longPress.current) { clearTimeout(longPress.current); longPress.current = null }
+    if (finger && e.pointerType === 'touch') setFinger(local(e))
     const dx = px / f.s, dy = py / f.s
     if (drag.kind === 'grip') {
       onChange(resized(drag.start, dragBoxes(drag.start.boxes, drag.grip, dx, dy, snapMm), drag.grip))
@@ -459,9 +522,31 @@ export default function FootprintEditor({
       // ring is a target, and a thumb that rolls while tapping must not draw.
       if (drag.tapped == null) setDrag({ ...drag, to: snapWallPoint(plan, toMm(e), snapOpts) })
     } else if (drag.kind === 'draw') {
-      const to = snapWallPoint(plan, toMm(e), { ...snapOpts, from: drag.from })
+      const snap = chainSnap(toMm(e), drag.from)
+      const to = snap.point
       // With no shell there is nothing to stop a wall at, and nothing to clip it to.
-      setDrag({ ...drag, to: wallsOnly ? to : clipToShell(plan, drag.from, to, shellMm) })
+      setDrag({ ...drag, snap, to: wallsOnly ? to : clipToShell(plan, drag.from, to, shellMm) })
+    } else if (drag.kind === 'joint' && from.moved >= TAP_SLOP_PX) {
+      // MOVE A CORNER: the walls joined there go with it, and a wall that was
+      // square stays square (drawSystem.movedCorner).
+      const q = drawPoint(drag.start, toMm(e), {
+        ...snapOpts, from: drag.fixed,
+        skip: drag.start.walls.findIndex((k) => (Math.hypot(k.x1 - drag.at.x, k.y1 - drag.at.y) < 1 || Math.hypot(k.x2 - drag.at.x, k.y2 - drag.at.y) < 1)),
+      }).point
+      const moved = moveCorner(drag.start.walls, drag.at, q, 1)
+      onChange({ ...drag.start, walls: drag.start.walls.map((k, i) => moved.get(i) ?? k) })
+    } else if (drag.kind === 'bend') {
+      // BEND IT: the middle follows the finger, the ends stay put.
+      const w0 = drag.start.walls[drag.index]
+      const L = wallLength(w0)
+      if (L < 1) return
+      const nx = -(w0.y2 - w0.y1) / L, ny = (w0.x2 - w0.x1) / L
+      const p = toMm(e)
+      const off = (p.x - drag.press.x) * nx + (p.y - drag.press.y) * ny
+      let b = Math.max(-L / 2, Math.min(L / 2, (w0.bulge ?? 0) + off))
+      if (Math.abs(b) < L * 0.02) b = 0
+      const w = { ...w0, bulge: b || undefined }
+      onChange({ ...drag.start, walls: drag.start.walls.map((k, i) => (i === drag.index ? w : k)) })
     } else if (drag.kind === 'corner' && from.moved >= TAP_SLOP_PX) {
       onChange(movedCorner(drag.start, drag.index, toMm(e), snapMm))
     } else if (drag.kind === 'angle') {
@@ -481,8 +566,11 @@ export default function FootprintEditor({
       const w0 = drag.start.walls[drag.index]
       let w: InsideWall
       if (drag.part === 'body') {
+        // SLIDE IT square to itself; the walls on its ends stretch to stay on.
         const sx = Math.round(dx / snapMm) * snapMm, sy = Math.round(dy / snapMm) * snapMm
-        w = { x1: w0.x1 + sx, y1: w0.y1 + sy, x2: w0.x2 + sx, y2: w0.y2 + sy }
+        const moved = slidWall(drag.start.walls, drag.index, { x: sx, y: sy }, 1)
+        onChange({ ...drag.start, walls: drag.start.walls.map((k, i) => moved.get(i) ?? k) })
+        return
       } else {
         const fixed = drag.part === 'a' ? { x: w0.x2, y: w0.y2 } : { x: w0.x1, y: w0.y1 }
         const q = snapWallPoint(drag.start, toMm(e), { ...snapOpts, from: fixed, skip: drag.index })
@@ -496,6 +584,10 @@ export default function FootprintEditor({
     if (!from || e.pointerId !== from.id) return
     const tapped = from.moved < TAP_SLOP_PX
     const d = drag
+    if (longPress.current) { clearTimeout(longPress.current); longPress.current = null }
+    setFinger(null)
+    // The long-press already finished the run: the lift adds nothing.
+    if (longPressed.current) { longPressed.current = false; dragFrom.current = null; setDrag(null); return }
     /** The plan to come back to: as it was when the finger landed. */
     const before = d && 'start' in d ? d.start : plan
     const keep = () => onCommit?.(before)
@@ -522,9 +614,14 @@ export default function FootprintEditor({
       setPickedCircle(null)
       return
     }
+    if (d.kind === 'joint' || d.kind === 'bend') {
+      if (!tapped) keep()
+      return
+    }
     if (d.kind === 'draw') {
       const w = { x1: d.from.x, y1: d.from.y, x2: d.to.x, y2: d.to.y }
-      if (tapped && d.tapped != null) { onSelectWall(d.tapped); return }
+      const fromArmed = !!armed && Math.hypot(d.from.x - armed.x, d.from.y - armed.y) < 1e-6
+      if (tapped && d.tapped != null && !armed) { onSelectWall(d.tapped); return }
       if (!tapped && wallOk(w)) {
         // A WALL IS DRAWN, NOT PICKED. Selecting it here put its two end grips,
         // 48px each, exactly where the next wall starts — so the second wall of
@@ -533,8 +630,10 @@ export default function FootprintEditor({
         // its ends; a drag on the paper keeps drawing.
         keep()
         onChange({ ...plan, walls: [...plan.walls, w] })
-        // The end just drawn is the start of the next wall.
-        setArmed({ x: w.x2, y: w.y2 })
+        // The end just drawn is the start of the next wall — or, back on the
+        // run's first point, the shape is closed and the run is done.
+        if (d.snap?.closes) endRun()
+        else chainOn(w, fromArmed)
         onSelectWall(null)
         return
       }
@@ -543,14 +642,22 @@ export default function FootprintEditor({
         // draws that wall and parks the new end, so a building goes up one
         // wall at a time, round as many corners as it has. A tap back on the
         // parked end finishes the run.
-        const p = d.from
-        if (!armed) { setArmed(p); onSelectWall(null); return }
-        if (Math.hypot(armed.x - p.x, armed.y - p.y) < 6 / f.s) { setArmed(null); onSelectWall(null); return }
+        const t = { t: e.timeStamp, x: e.clientX, y: e.clientY }
+        const again = isDoubleTap(lastPaperTap.current, t.t, t.x, t.y)
+        lastPaperTap.current = again ? null : t
+        if (!armed) { setArmed(d.from); setRunStart(d.from); setPrevDir(null); onSelectWall(null); return }
+        // A DOUBLE TAP, or a tap back on the parked end, finishes the run.
+        if (again) { endRun(); onSelectWall(null); return }
+        const snap = chainSnap(d.raw ?? d.from, armed)
+        const p = snap.point
+        if (Math.hypot(armed.x - p.x, armed.y - p.y) < DRAW.REACH_PX / f.s) { endRun(); onSelectWall(null); return }
         const w = { x1: armed.x, y1: armed.y, x2: p.x, y2: p.y }
         if (wallOk(w)) {
           keep()
           onChange({ ...plan, walls: [...plan.walls, w] })
-          setArmed(p)
+          if (snap.closes) endRun()
+          else chainOn(w, true)
+          setHover(null); setHoverSnap(null)
         }
       }
       onSelectWall(null)
@@ -585,6 +692,16 @@ export default function FootprintEditor({
     if (box > 0) begin(e, { kind: 'slide', box, start: plan })
   }
 
+  /** A mouse over the paper with a run parked: the rubber band follows it,
+   *  snapped exactly as the click will place it. */
+  const paperMove = (e: ReactPointerEvent<Element>) => {
+    move(e)
+    if (armed && e.pointerType === 'mouse' && !dragFrom.current) {
+      const sn = chainSnap(toMm(e), armed)
+      setHover(sn.point); setHoverSnap(sn)
+    }
+  }
+
   const pressPaper = (e: ReactPointerEvent<Element>) => {
     if (circleTool) {
       const p = snapWallPoint(plan, toMm(e), snapOpts)
@@ -599,7 +716,7 @@ export default function FootprintEditor({
       // the last wall is exactly where the next one goes.
       const from = armed && Math.hypot(armed.x - p.x, armed.y - p.y) < 60 / f.s ? armed : p
       onSelectWall(null)
-      begin(e, { kind: 'draw', from, to: from })
+      begin(e, { kind: 'draw', from, to: from, raw: toMm(e) })
       return
     }
     setPicked(null)
@@ -631,6 +748,40 @@ export default function FootprintEditor({
       if (!next.shape || !shapeOk(next.shape)) return false
       onCommit?.(plan)
       onChange(fitPage(next))
+      return true
+    }
+    if (editing.key === 'angle') {
+      const deg = parseFloat(raw.replace(/[^0-9.]/g, ''))
+      const toward = angleToward.current
+      if (!armed || !prevDir || !toward || !(deg > 0 && deg < 360)) return false
+      const len = Math.hypot(toward.x - armed.x, toward.y - armed.y)
+      const q = pointAtCornerAngle(prevDir, armed, deg > 180 ? 360 - deg : deg, len, toward)
+      const w = { x1: armed.x, y1: armed.y, x2: q.x, y2: q.y }
+      if (!wallOk(w)) return false
+      onCommit?.(plan)
+      onChange({ ...plan, walls: [...plan.walls, w] })
+      chainOn(w, true)
+      return true
+    }
+    if (editing.key === 'angleLast' && lastCorner) {
+      const deg = parseFloat(raw.replace(/[^0-9.]/g, ''))
+      if (!(deg > 0 && deg < 360)) return false
+      const w = plan.walls[lastCorner.index]
+      const q = pointAtCornerAngle(lastCorner.prev, { x: w.x1, y: w.y1 }, deg > 180 ? 360 - deg : deg, wallLength(w), { x: w.x2, y: w.y2 })
+      const nw = { ...w, x2: q.x, y2: q.y }
+      if (!wallOk(nw)) return false
+      onCommit?.(plan)
+      onChange({ ...plan, walls: plan.walls.map((k, j) => (j === lastCorner.index ? nw : k)) })
+      const L = wallLength(nw) || 1
+      setArmed(q); setPrevDir({ x: (nw.x2 - nw.x1) / L, y: (nw.y2 - nw.y1) / L })
+      return true
+    }
+    if (editing.key.startsWith('radius:')) {
+      const i = Number(editing.key.slice(7))
+      const mm = parseSizeMm(raw.replace(/^\s*r\s*/i, ''))
+      if (mm === null || !(mm > 0) || !plan.walls[i]) return false
+      onCommit?.(plan)
+      onChange({ ...plan, walls: plan.walls.map((k, j) => (j === i ? withRadius(k, mm) : k)) })
       return true
     }
     if (editing.key.startsWith('circle:')) {
@@ -683,11 +834,12 @@ export default function FootprintEditor({
     const len = wallLength(w)
     if (len < 1) return
     const nx = -(w.y2 - w.y1) / len, ny = (w.x2 - w.x1) / len
-    wallChips.push({
-      key, live, w, withAngle,
-      x: X((w.x1 + w.x2) / 2) + nx * WALL_LABEL_PX,
-      y: Y((w.y1 + w.y2) / 2) + ny * WALL_LABEL_PX,
-    })
+    // Off the wall on its left, or its right when the left runs off the plan.
+    let x = X((w.x1 + w.x2) / 2) + nx * WALL_LABEL_PX, y = Y((w.y1 + w.y2) / 2) + ny * WALL_LABEL_PX
+    if (x < 30 || x > size.w - 30 || y < 16 || y > size.h - 16) {
+      x = X((w.x1 + w.x2) / 2) - nx * WALL_LABEL_PX; y = Y((w.y1 + w.y2) / 2) - ny * WALL_LABEL_PX
+    }
+    wallChips.push({ key, live, w, withAngle, x: Math.min(Math.max(x, 30), size.w - 30), y: Math.min(Math.max(y, 16), size.h - 16) })
   }
   const sel = !outlineMode && selectedWall != null && !drawing ? selectedWall : null
   const selW = sel != null ? plan.walls[sel] : undefined
@@ -756,8 +908,10 @@ export default function FootprintEditor({
   /** Where the widget sits: under the wall unless the plan runs out there. */
   const widgetAt = selW ? (() => {
     if (wallLength(selW) < 1) return null
+    // Clear of the wall's number on one side and its bend ring on the other:
+    // past whichever is lower down, or above whichever is higher, by room.
     const mx = X((selW.x1 + selW.x2) / 2), my = Y((selW.y1 + selW.y2) / 2)
-    const halfW = 146, halfH = 58, gap = 30
+    const halfW = 146, halfH = 50, gap = 96
     const below = my + halfH + gap < size.h
     return {
       x: Math.min(Math.max(mx, halfW), Math.max(halfW, size.w - halfW)),
@@ -808,7 +962,95 @@ export default function FootprintEditor({
   })() : null
 
   if (drawing) chipFor(drawing, 'drawing', true, true)
+  else if (armed && hover && Math.hypot(hover.x - armed.x, hover.y - armed.y) * f.s > 12) chipFor({ x1: armed.x, y1: armed.y, x2: hover.x, y2: hover.y }, 'drawing', true, false)
   else if (selectedWall != null && plan.walls[selectedWall]) chipFor(plan.walls[selectedWall], `wall:${selectedWall}`, false, false)
+
+  // ── The drawing system's aids: guide, marker, close ring, corner angle ──
+  const liveSnap: DrawSnap | null = drag?.kind === 'draw' ? drag.snap ?? null : (armed && hover && !drag ? hoverSnap : null)
+  const liveFrom = drag?.kind === 'draw' ? drag.from : armed
+  const onRunNow = !!armed && !!liveFrom && Math.hypot(liveFrom.x - armed.x, liveFrom.y - armed.y) < 1e-6
+  const runOpen = onRunNow && !!runStart && !!armed && Math.hypot(runStart.x - armed.x, runStart.y - armed.y) > 1e-6
+  const clampX = (x: number, half: number) => Math.min(Math.max(x, half + 4), size.w - half - 4)
+  const clampY = (y: number) => Math.min(Math.max(y, 28), size.h - 28)
+  /** The corner angle, inside the corner — tap it to type one. */
+  const cornerChip = onRunNow && armed && prevDir && liveSnap?.cornerDeg != null && liveSnap.cornerDeg > 0 ? (() => {
+    const q = liveSnap.point
+    const L = Math.hypot(q.x - armed.x, q.y - armed.y) || 1
+    let bx = -prevDir.x + (q.x - armed.x) / L, by = -prevDir.y + (q.y - armed.y) / L
+    const bl = Math.hypot(bx, by)
+    if (bl < 1e-6) { bx = -(q.y - armed.y) / L; by = (q.x - armed.x) / L } else { bx /= bl; by /= bl }
+    return { x: clampX(X(armed.x) + bx * 46, 30), y: clampY(Y(armed.y) + by * 46), deg: liveSnap.cornerDeg, toward: q }
+  })() : null
+  /** Between walls (nothing being aimed — a finger is up), the corner just
+   *  made reads its angle instead, and typing it swings the last wall. */
+  const lastCorner = !cornerChip && armed && prevDir && !drag ? (() => {
+    const li = plan.walls.findIndex((k, i) => i === plan.walls.length - 1 && Math.hypot(k.x2 - armed.x, k.y2 - armed.y) < 1)
+    const w = plan.walls[li]
+    if (!w || w.bulge) return null
+    const before = plan.walls.find((k, i) => i !== li && Math.hypot(k.x2 - w.x1, k.y2 - w.y1) < 1 && !k.bulge)
+    if (!before) return null
+    const bl = wallLength(before) || 1
+    const pd = { x: (before.x2 - before.x1) / bl, y: (before.y2 - before.y1) / bl }
+    const deg = Math.round(cornerAngleDeg(pd, { x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }))
+    const L = wallLength(w) || 1
+    let bx = -pd.x + (w.x2 - w.x1) / L, by = -pd.y + (w.y2 - w.y1) / L
+    const b = Math.hypot(bx, by)
+    if (b < 1e-6) { bx = -(w.y2 - w.y1) / L; by = (w.x2 - w.x1) / L } else { bx /= b; by /= b }
+    return { index: li, prev: pd, deg, x: clampX(X(w.x1) + bx * 46, 30), y: clampY(Y(w.y1) + by * 46) }
+  })() : null
+  /** Undo and Done beside the parked end — not out at the edge of the sheet —
+   *  on the side away from where the next wall is heading. */
+  const ctxAt = armed && !drag && !editing ? (() => {
+    const ax = X(armed.x), ay = Y(armed.y)
+    let nx = prevDir ? -prevDir.y : 0.7, ny = prevDir ? prevDir.x : 0.7
+    if (hover) {
+      const hx = X(hover.x) - ax, hy = Y(hover.y) - ay
+      if (nx * hx + ny * hy > 0) { nx = -nx; ny = -ny }
+    } else if (ny < 0) { nx = -nx; ny = -ny }
+    const bx = prevDir ? -prevDir.x * 20 : 0, by = prevDir ? -prevDir.y * 20 : 0
+    return { x: clampX(ax + nx * 70 + bx, 60), y: clampY(ay + ny * 70 + by) }
+  })() : null
+  /** Undo beside the corner: the last wall goes, and the run steps back to
+   *  where that wall started. */
+  const undoLast = () => {
+    const last = plan.walls[plan.walls.length - 1]
+    onUndo?.()
+    if (armed && last && Math.hypot(last.x2 - armed.x, last.y2 - armed.y) < 1) {
+      const back = { x: last.x1, y: last.y1 }
+      if (runStart && Math.hypot(back.x - runStart.x, back.y - runStart.y) < 1) { setArmed(back); setPrevDir(null); return }
+      const before = plan.walls.slice(0, -1).find((k) => Math.hypot(k.x2 - back.x, k.y2 - back.y) < 1)
+      setArmed(back)
+      if (before) { const L = wallLength(before) || 1; setPrevDir({ x: (before.x2 - before.x1) / L, y: (before.y2 - before.y1) / L }) } else setPrevDir(null)
+    } else endRun()
+  }
+  /** The picked wall's bend ring: off the side its bow goes (or, straight, the
+   *  side away from its number), at the top of the bow. */
+  const bendAt = sel != null && selW && wallLength(selW) * f.s > 96 ? (() => {
+    const L = wallLength(selW)
+    const nx = -(selW.y2 - selW.y1) / L, ny = (selW.x2 - selW.x1) / L
+    const b = selW.bulge ?? 0
+    const side = b > 0 ? 1 : -1
+    const mx = (selW.x1 + selW.x2) / 2 + nx * b, my = (selW.y1 + selW.y2) / 2 + ny * b
+    let k = side
+    const inside = (d: number) => {
+      const x = X(mx) + nx * k * d, y = Y(my) + ny * k * d
+      return x > 24 && x < size.w - 24 && y > 24 && y < size.h - 24
+    }
+    if (inside(40)) return { x: X(mx) + nx * k * 40, y: Y(my) + ny * k * 40, rx: X(mx) + nx * k * 84, ry: Y(my) + ny * k * 84 }
+    // No room off that side of the plan: the ring sits on the wall, a little
+    // along from the top of the bow, clear of the move handle in the middle.
+    k = -k
+    const ux = (selW.x2 - selW.x1) / L, uy = (selW.y2 - selW.y1) / L
+    const rx0 = X(mx) + ux * 56, ry0 = Y(my) + uy * 56
+    return { x: rx0, y: ry0, rx: rx0 + nx * k * 36, ry: ry0 + ny * k * 36 }
+  })() : null
+  const selRadius = selW ? wallRadius(selW) : null
+  /** The picked wall's two corners. */
+  const joints = sel != null && selW && wallLength(selW) * f.s > 60 ? [
+    { key: 'ja', at: { x: selW.x1, y: selW.y1 }, fixed: { x: selW.x2, y: selW.y2 } },
+    { key: 'jb', at: { x: selW.x2, y: selW.y2 }, fixed: { x: selW.x1, y: selW.y1 } },
+  ] : []
+  const pressJoint = (e: ReactPointerEvent<Element>, at: Point, fixed: Point) => begin(e, { kind: 'joint', at, fixed, start: plan })
 
   // ── Camera: two fingers, the wheel, a right drag. Heard in the CAPTURE phase,
   // ahead of the grips and the paper, so a camera gesture never reaches them.
@@ -907,7 +1149,7 @@ export default function FootprintEditor({
             it puts down whatever was picked up. */}
         <rect width={size.w} height={size.h} fill={`url(#${ids}g)`} opacity={underlay ? 0.2 : 1}
           className={styles.paper}            onPointerDown={pressPaper}
-            onPointerMove={(e) => { move(e); if (armed && e.pointerType === 'mouse' && !dragFrom.current) setHover(snapWallPoint(plan, toMm(e), { ...snapOpts, from: armed })) }}
+            onPointerMove={paperMove}
             onPointerUp={end} onPointerCancel={end} />
         <rect x={X(0)} y={Y(0)} width={plan.page.w * f.s} height={plan.page.d * f.s}
           fill="none" stroke="#3a4a63" strokeWidth={1} strokeDasharray="6 4" pointerEvents="none" />
@@ -956,7 +1198,7 @@ export default function FootprintEditor({
         {!outlineMode && (
           <rect x={X(bounds.x1)} y={Y(bounds.y1)} width={(bounds.x2 - bounds.x1) * f.s} height={(bounds.y2 - bounds.y1) * f.s}
             fill="transparent" className={styles.paper}
-            onPointerDown={pressPaper} onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+            onPointerDown={pressPaper} onPointerMove={paperMove} onPointerUp={end} onPointerCancel={end} />
         )}
 
         {/* CIRCLES ARE CURVED WALLS. The ring is the line they are set out to —
@@ -1006,9 +1248,15 @@ export default function FootprintEditor({
           const sel = selectedWall === i
           return (
             <g key={`w${i}`}>
-              <line x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
-                stroke={sel ? '#3d9ae8' : onPrint ? '#0f172a' : '#cbd5e1'} strokeWidth={sel ? wallPx + 2 : wallPx}
-                strokeLinecap="butt" opacity={outlineMode ? 0.55 : 1} pointerEvents="none" />
+              {w.bulge ? (
+                <polyline points={arcPoints({ x: w.x1, y: w.y1 }, { x: w.x2, y: w.y2 }, w.bulge, 3 / Math.max(1e-6, f.s)).map((q) => `${X(q.x).toFixed(1)},${Y(q.y).toFixed(1)}`).join(' ')}
+                  fill="none" stroke={sel ? '#3d9ae8' : onPrint ? '#0f172a' : '#cbd5e1'} strokeWidth={sel ? wallPx + 2 : wallPx}
+                  opacity={outlineMode ? 0.55 : 1} pointerEvents="none" />
+              ) : (
+                <line x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
+                  stroke={sel ? '#3d9ae8' : onPrint ? '#0f172a' : '#cbd5e1'} strokeWidth={sel ? wallPx + 2 : wallPx}
+                  strokeLinecap="butt" opacity={outlineMode ? 0.55 : 1} pointerEvents="none" />
+              )}
               {!outlineMode && !circleTool && (
                 <line x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)}
                   stroke="transparent" strokeWidth={REACH_PX * 2} className={styles.wallHit}
@@ -1034,6 +1282,30 @@ export default function FootprintEditor({
           <line x1={X(armed.x)} y1={Y(armed.y)} x2={X(hover.x)} y2={Y(hover.y)}
             stroke="#3d9ae8" strokeWidth={2} strokeDasharray="6 4" pointerEvents="none" />
         )}
+        {/* THE CLOSE RING on the run's first point: green when the next tap closes. */}
+        {runOpen && runStart && (
+          <circle cx={X(runStart.x)} cy={Y(runStart.y)} r={DRAW.REACH_PX * DRAW.CLOSE_REACH}
+            fill={liveSnap?.closes ? 'rgba(74,222,128,0.18)' : 'none'} stroke={liveSnap?.closes ? '#4ade80' : '#3d9ae8'}
+            strokeWidth={liveSnap?.closes ? 3 : 1.5} strokeDasharray={liveSnap?.closes ? undefined : '5 4'} pointerEvents="none" />
+        )}
+        {/* The guide along the held angle, and to the corner it lined up with. */}
+        {liveSnap?.guide && (
+          <line x1={X(liveSnap.guide.a.x)} y1={Y(liveSnap.guide.a.y)} x2={X(liveSnap.guide.b.x)} y2={Y(liveSnap.guide.b.y)}
+            stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="10 6" pointerEvents="none" />
+        )}
+        {liveSnap?.alignGuide && (
+          <line x1={X(liveSnap.alignGuide.a.x)} y1={Y(liveSnap.alignGuide.a.y)} x2={X(liveSnap.alignGuide.b.x)} y2={Y(liveSnap.alignGuide.b.y)}
+            stroke="#f59e0b" strokeWidth={1.2} strokeDasharray="3 4" pointerEvents="none" />
+        )}
+        {/* The marker says what the point caught: a ring on an end, a cross on
+            a wall, a diamond on a line-up. */}
+        {liveSnap && (() => {
+          const mx = X(liveSnap.point.x), my = Y(liveSnap.point.y)
+          if (liveSnap.kind === 'end') return <circle cx={mx} cy={my} r={9} fill="none" stroke="#f59e0b" strokeWidth={2.5} pointerEvents="none" />
+          if (liveSnap.kind === 'line') return <path d={`M${mx - 7} ${my - 7}L${mx + 7} ${my + 7}M${mx - 7} ${my + 7}L${mx + 7} ${my - 7}`} stroke="#f59e0b" strokeWidth={2.5} pointerEvents="none" />
+          if (liveSnap.kind === 'align') return <path d={`M${mx} ${my - 9}L${mx + 9} ${my}L${mx} ${my + 9}L${mx - 9} ${my}Z`} fill="none" stroke="#f59e0b" strokeWidth={2.5} pointerEvents="none" />
+          return null
+        })()}
         {drawing && (
           <line x1={X(drawing.x1)} y1={Y(drawing.y1)} x2={X(drawing.x2)} y2={Y(drawing.y2)}
             stroke="#3d9ae8" strokeWidth={wallPx} strokeDasharray="8 4" pointerEvents="none" />
@@ -1141,6 +1413,35 @@ export default function FootprintEditor({
           onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
       ))}
 
+      {/* The picked wall's corners: drag one to move it — the walls joined
+          there go with it, and square walls stay square. */}
+      {joints.map((g) => (
+        <button key={g.key} type="button"
+          className={[styles.grip, styles.gripCorner, drag?.kind === 'joint' && Math.hypot(drag.at.x - g.at.x, drag.at.y - g.at.y) < 1 ? styles.gripOn : ''].filter(Boolean).join(' ')}
+          style={{ left: X(g.at.x), top: Y(g.at.y) }}
+          aria-label="Drag to move this corner"
+          onPointerDown={(e) => pressJoint(e, g.at, g.fixed)}
+          onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+      ))}
+      {/* The bend ring: drag it and the wall bows into an arc, ends held. */}
+      {bendAt && sel != null && (
+        <button type="button" className={`${styles.grip} ${styles.gripBend}`}
+          style={{ left: bendAt.x, top: bendAt.y }}
+          aria-label="Drag to bend the wall into an arc"
+          onPointerDown={(e) => begin(e, { kind: 'bend', index: sel, press: toMm(e), start: plan })}
+          onPointerMove={move} onPointerUp={end} onPointerCancel={end} />
+      )}
+
+      {/* Undo and Done, beside the parked end. */}
+      {ctxAt && (
+        <div className={styles.ctx} style={{ left: ctxAt.x, top: ctxAt.y }} role="group" aria-label="Wall run">
+          {canUndo && plan.walls.length > 0 && (
+            <button type="button" className={styles.ctxBtn} onClick={undoLast} aria-label="Undo the last wall"><span>Undo</span></button>
+          )}
+          <button type="button" className={styles.ctxBtn} onClick={endRun} aria-label="Finish this run of walls"><span>Done</span></button>
+        </div>
+      )}
+
       {/* THE WALL WIDGET, on the plan by the wall it is about. A transient
           thing the user opened by picking a wall: tapping the paper puts it
           away, and it never covers the wall it names. */}
@@ -1179,7 +1480,16 @@ export default function FootprintEditor({
         // being drawn. A picked wall does not: it has the angle ring, and two
         // readouts of the same number is exactly the clutter this replaces.
         angle: ('withAngle' in c && c.withAngle) ? wallAngleOffSquareDeg(c.w.x1, c.w.y1, c.w.x2, c.w.y2) % 90 : 0,
-      })), ...planCircles(plan).map((c, i) => ({
+      })), ...(cornerChip ? [{
+        key: 'angle', x: cornerChip.x, y: cornerChip.y, valueMm: 0, vertical: false, live: false, on: false, what: 'Corner angle',
+        text: `${cornerChip.deg}°`, minor: true, toward: cornerChip.toward,
+      }] : []), ...(lastCorner ? [{
+        key: 'angleLast', x: lastCorner.x, y: lastCorner.y, valueMm: 0, vertical: false, live: false, on: false, what: 'Corner angle',
+        text: `${lastCorner.deg}°`, minor: true,
+      }] : []), ...(sel != null && selRadius != null && bendAt ? [{
+        key: `radius:${sel}`, x: clampX(bendAt.rx, 40), y: clampY(bendAt.ry), valueMm: selRadius, vertical: false, live: false, on: false, what: 'Radius',
+        prefix: 'R ', minor: true,
+      }] : []), ...planCircles(plan).map((c, i) => ({
         key: `circle:${i}`, x: X(c.cx + c.r), y: Y(c.cy), valueMm: c.r * 2, vertical: false,
         live: false, on: pickedCircle === i, what: 'Diameter', prefix: 'Ø ',
       })), ...edges.filter((e) => e.show).map((e) => ({
@@ -1211,15 +1521,39 @@ export default function FootprintEditor({
         }
         return (
           <button key={c.key} type="button"
-            className={[styles.chip, c.vertical ? styles.chipV : '', c.on ? styles.chipOn : '', c.live ? styles.chipLive : ''].filter(Boolean).join(' ')}
+            className={[styles.chip, c.vertical ? styles.chipV : '', c.on ? styles.chipOn : '', c.live ? styles.chipLive : '', 'minor' in c && c.minor ? styles.chipMinor : ''].filter(Boolean).join(' ')}
             style={{ left: c.x, top: c.y }}
             disabled={c.live}
-            aria-label={`${c.what} ${labelFor(c.valueMm)}. Tap to type it.`}
-            onClick={() => setEditing({ key: c.key, text: labelFor(c.valueMm), bad: false })}>
-            {'prefix' in c && typeof c.prefix === 'string' ? c.prefix : ''}{labelFor(c.valueMm)}{'angle' in c && c.angle ? ` · ${c.angle}°` : ''}
+            aria-label={`${c.what} ${'text' in c ? c.text : labelFor(c.valueMm)}. Tap to type it.`}
+            onClick={() => {
+              if ('toward' in c && c.toward) angleToward.current = c.toward as Point
+              setEditing({ key: c.key, text: 'text' in c && typeof c.text === 'string' ? c.text.replace('°', '') : labelFor(c.valueMm), bad: false })
+            }}>
+            {'text' in c && typeof c.text === 'string' ? c.text : <>{'prefix' in c && typeof c.prefix === 'string' ? c.prefix : ''}{labelFor(c.valueMm)}{'angle' in c && c.angle ? ` · ${c.angle}°` : ''}</>}
           </button>
         )
       })}
+
+      {/* THE LOUPE: while a finger draws, the point magnified above it. */}
+      {finger && drag?.kind === 'draw' && (() => {
+        const Z = 2.5, R = 56
+        const px = X(drag.to.x), py = Y(drag.to.y)
+        const ly = finger.y - DRAW.LOUPE_LIFT_PX < R + 4 ? finger.y + DRAW.LOUPE_LIFT_PX : finger.y - DRAW.LOUPE_LIFT_PX
+        const lx = Math.min(Math.max(finger.x, R + 4), size.w - R - 4)
+        return (
+          <svg className={styles.loupe} style={{ left: lx, top: ly }} width={2 * R} height={2 * R}
+            viewBox={`${px - R / Z} ${py - R / Z} ${(2 * R) / Z} ${(2 * R) / Z}`} aria-hidden>
+            <rect x={px - R} y={py - R} width={2 * R} height={2 * R} fill={underlay ? '#f1f5f9' : '#1e2833'} />
+            {underlay && <image href={underlay.url} x={X(0)} y={Y(0)} width={underlay.wMm * f.s} height={underlay.dMm * f.s} preserveAspectRatio="none" />}
+            {planWalls(plan).map((w, i) => (
+              <line key={i} x1={X(w.x1)} y1={Y(w.y1)} x2={X(w.x2)} y2={Y(w.y2)} stroke={underlay ? '#0f172a' : '#cbd5e1'} strokeWidth={wallPx / Z + 1} />
+            ))}
+            <line x1={X(drag.from.x)} y1={Y(drag.from.y)} x2={px} y2={py} stroke="#3d9ae8" strokeWidth={2.5 / Z * 2} />
+            <path d={`M${px - 6 / Z * 2} ${py}H${px - 2 / Z}M${px + 2 / Z} ${py}H${px + 6 / Z * 2}M${px} ${py - 6 / Z * 2}V${py - 2 / Z}M${px} ${py + 2 / Z}V${py + 6 / Z * 2}`}
+              stroke={drag.snap && drag.snap.kind !== 'free' && drag.snap.kind !== 'none' ? '#16a34a' : '#dc2626'} strokeWidth={1.4 / Z * 2} />
+          </svg>
+        )
+      })()}
 
     </div>
 

@@ -129,6 +129,8 @@ export default function FloorplanPanel() {
   const setTraceMode   = useFloorplanLocalStore((s) => s.setTraceMode)
   const tracePaused    = useFloorplanLocalStore((s) => s.tracePaused)
   const setTracePaused = useFloorplanLocalStore((s) => s.setTracePaused)
+  const traceShape     = useFloorplanLocalStore((s) => s.traceShape)
+  const setTraceShape  = useFloorplanLocalStore((s) => s.setTraceShape)
   const offPrintWarn   = useFloorplanLocalStore((s) => s.offPrintWarn)
   const setOffPrintWarn = useFloorplanLocalStore((s) => s.setOffPrintWarn)
   const plumbNudge     = useFloorplanLocalStore((s) => s.plumbNudge)
@@ -904,7 +906,7 @@ export default function FloorplanPanel() {
           (type / level), Done finishes tracing. To end the current wall run,
           double-tap the workspace (stops the trailing rubber-band). */}
       {tracingActive && showSteps && (
-        <div className={styles.traceBar}>
+        <div className={styles.traceBar} data-trace-bar>
           <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
             {framingActive ? `${activeLevel > 0 ? `L${activeLevel + 1} · ` : ''}${wallChipLabel(activeWallType, activeWallRole, wallTypeChosen, wallRoleChosen)}` : tradeIndicator}
@@ -930,6 +932,18 @@ export default function FloorplanPanel() {
               aria-pressed={!squareWalls}
             >
               {squareWalls ? '⊾ Square' : '∠ Any angle'}
+            </button>
+          )}
+          {/* WALLS OR A CIRCLE. A round room or a column: tap the centre, then
+              the radius (or type it), and it goes up as short bent walls. */}
+          {framingActive && (
+            <button
+              className={`${styles.traceBarBtn} ${traceShape === 'circle' ? styles.traceBarBuild : ''}`}
+              onClick={() => setTraceShape(traceShape === 'circle' ? 'wall' : 'circle')}
+              title={traceShape === 'circle' ? 'Drawing a circle — tap to go back to walls' : 'Draw a circle: tap the centre, then the radius'}
+              aria-pressed={traceShape === 'circle'}
+            >
+              ◯ Circle
             </button>
           )}
           {/* No "End run" button — double-tapping the workspace ends the current

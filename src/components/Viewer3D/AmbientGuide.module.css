@@ -641,7 +641,9 @@
 .placeBar {
   position: absolute;
   left: 12px;
-  bottom: 72px;            /* clear the Place tab + Explode bar along the bottom */
+  /* Down on the bottom band: Place lives in the rail now and the explode
+     column is hidden while tracing, so the band is free. */
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-hud);
   display: flex;
   align-items: center;
@@ -681,39 +683,43 @@
   /* Bottom-left, beside the rail — never on it. At left:12 it sat on top of
      the rail's foot, so Square landed on CLEAR. */
   left: calc(var(--rail-w, 44px) + 8px);
-  bottom: 72px;            /* clear the Place tab + Explode bar along the bottom */
+  /* Down on the bottom band: Place lives in the rail now and the explode
+     column is hidden while tracing, so the band is free. */
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   z-index: var(--z-hud);
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  /* A COLUMN, stacked up from the bottom-left. Every control starts at the same
-     left edge, so nothing can drift toward the middle however long its label is.
-     nowrap put them in one row that could only grow sideways (Done measured at
-     centre-x 229 on a 506px viewport). Wrapping fixed Done but not "Find the
-     rest", which still shared the first row with the spec chip and ran from
-     x=166 to 281 — straight across the centre line at 253. A column cannot do
-     that: width is whatever the widest single control is. */
-  flex-direction: column;
-  align-items: flex-start;
+  /* A ROW ALONG THE BOTTOM, wrapping upward. It was a column stacked up from
+     the bottom-left, which on a phone put four 48px controls up the middle of
+     the plan — the place you are drawing — and a tap meant for a corner landed
+     on "Square". A row keeps them to the bottom band. Every control still
+     starts at the same left edge. The explode column is off while tracing
+     (WorkspaceLayout hides it in trace mode), so the row may use the width. */
+  flex-direction: row;
+  flex-wrap: wrap-reverse;
+  align-items: flex-end;
   gap: 4px;
   padding: 2px;
-  /* No box — the chips (which keep their own faint pill) float bottom-left. */
   background: none;
   border: none;
   pointer-events: all;
-  max-width: min(62vw, 320px);
+  max-width: calc(100vw - var(--rail-w, 44px) - 16px);
 }
 .traceBarChip {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 9px;
+  min-height: 48px;
+  padding: 0 8px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  /* Outlined, no fill: the trace bar sits over the plan you are drawing on. */
+  background: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
   color: #f1f5f9;
+  text-shadow: var(--ink-on-model);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -722,7 +728,7 @@
   flex-shrink: 1;
   min-width: 0;
 }
-.traceBarChip:hover { background: rgba(255, 255, 255, 0.16); }
+.traceBarChip:hover { border-color: #fff; }
 .traceBarDot {
   width: 10px;
   height: 10px;
@@ -731,21 +737,25 @@
   flex-shrink: 0;
 }
 .traceBarBtn {
-  padding: 5px 11px;
+  min-height: 48px;
+  padding: 0 8px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: none;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
   color: #f1f5f9;
+  text-shadow: var(--ink-on-model);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;           /* buttons stay; the chip truncates instead */
 }
-.traceBarBtn:hover { background: rgba(255, 255, 255, 0.18); }
+.traceBarBtn:hover { border-color: #fff; }
+/* On: the accent outline and accent text — still no filled block. */
 .traceBarBuild {
-  background: color-mix(in srgb, var(--bp-accent, #38bdf8) 32%, rgba(0, 0, 0, 0.5));
+  background: none;
   border-color: var(--bp-accent, #38bdf8);
+  color: var(--bp-accent, #7dd3fc);
 }
 
 /* Stud packs on the selected wall — one row per pack: distance, size, remove.
@@ -783,6 +793,9 @@
 .removeBtn:active { background: rgba(229, 100, 63, 0.16); }
 
 /* ── ON THE MODEL, ON A PLATE ───────────────────────────────────────────────
+   (The trace bar and the live length came OFF their plates on 18 Nov 2026 —
+   no solid blocks over the drawing. They are outlined text with the ink
+   outline now; see .traceBarBtn above. The placing bar is unchanged.)
    The placing bar, the trace bar and the live length all float over the 3D
    view, and they were see-through: 8–35% panels and pale text with a soft
    shadow. Over the white print they simply disappeared (Mitchell, 26 Oct 2026:
@@ -790,26 +803,20 @@
    and their size; they get a near-opaque dark backing so they read the same
    over white paper, white walls or the dark background. */
 .placeBar .action,
-.placeBar .secondary,
-.traceBarChip,
-.traceBarBtn {
+.placeBar .secondary {
   background: var(--hud-plate);
   border-color: var(--hud-plate-line);
   color: #f8fafc;
 }
-.placeBar .action,
-.traceBarBuild {
+.placeBar .action {
   background: color-mix(in srgb, var(--bp-accent, #38bdf8) 30%, var(--hud-plate));
   border-color: var(--bp-accent, #38bdf8);
 }
 .placeBar .action:hover,
-.placeBar .secondary:hover,
-.traceBarChip:hover,
-.traceBarBtn:hover {
+.placeBar .secondary:hover {
   background: color-mix(in srgb, #ffffff 12%, var(--hud-plate));
 }
-.placeHint,
-.measureHud {
+.placeHint {
   background: var(--hud-plate);
   border: 1px solid var(--hud-plate-line);
   border-radius: 8px;
@@ -817,8 +824,7 @@
 .placeHint { padding: 5px 9px; color: #f8fafc; }
 .measureHudLabel { color: rgba(255, 255, 255, 0.72); }
 @supports (backdrop-filter: blur(1px)) {
-  .placeBar .action, .placeBar .secondary, .traceBarChip, .traceBarBtn,
-  .placeHint, .measureHud {
+  .placeBar .action, .placeBar .secondary, .placeHint {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
   }

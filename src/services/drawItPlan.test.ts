@@ -300,3 +300,24 @@ describe('circles on the sheet', () => {
     expect(removeCircle(p, 0).circles).toEqual([{ cx: 2000, cy: 2000, r: 300 }])
   })
 })
+
+describe('a curved wall on the sheet', () => {
+  it('is drawn as one wall and built as short bent walls between the same ends', async () => {
+    const { planWalls, wallRadius, withRadius, wallsPlan } = await import('./drawItPlan')
+    const w = { x1: 0, y1: 0, x2: 4000, y2: 0, bulge: 1000 }
+    const p = { ...wallsPlan({ w: 10000, d: 10000 }), walls: [w] }
+    const built = planWalls(p)
+    expect(built.length).toBeGreaterThan(8)
+    expect(built.every((k) => k.bend)).toBe(true)
+    expect(built[0]).toMatchObject({ x1: 0, y1: 0 })
+    expect(built[built.length - 1]).toMatchObject({ x2: 4000, y2: 0 })
+    expect(wallRadius(w)).toBeCloseTo(2500, 6)
+    expect(wallRadius(withRadius(w, 3000))!).toBeCloseTo(3000, 6)
+    expect(wallRadius({ x1: 0, y1: 0, x2: 1, y2: 0 })).toBeNull()
+  })
+  it('keeps its bow when the paper grows', async () => {
+    const { fitPage, wallsPlan } = await import('./drawItPlan')
+    const p = fitPage({ ...wallsPlan({ w: 1000, d: 1000 }), walls: [{ x1: 0, y1: 0, x2: 4000, y2: 0, bulge: 500 }] })
+    expect(p.walls[0].bulge).toBe(500)
+  })
+})
