@@ -743,6 +743,12 @@
   flex-shrink: 0;           /* buttons stay; the chip truncates instead */
 }
 .traceBarBtn:hover { background: rgba(255, 255, 255, 0.18); }
+/* Lift: the one trace-bar verb you reach for mid-run, so it gets a full thumb. */
+.traceBarLift {
+  min-width: 48px;
+  min-height: 48px;
+  font-size: 14px;
+}
 .traceBarBuild {
   background: color-mix(in srgb, var(--bp-accent, #38bdf8) 32%, rgba(0, 0, 0, 0.5));
   border-color: var(--bp-accent, #38bdf8);

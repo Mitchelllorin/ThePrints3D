@@ -335,7 +335,7 @@ describe('cladding', () => {
     expect(recommendedWrb('none', 'steel')).toBe('avb')
     expect(recommendedWrb('panel', 'steel')).toBe('avb')
     expect(recommendedWrb('vinyl-lap', 'steel')).toBe('avb')
-    // …but a wet-applied finish still wins: it will wreck a membrane it bonds to
+    // …but a wet-applied finish still wins: it will damage a membrane it bonds to
     // no matter what is behind it.
     expect(recommendedWrb('stucco', 'steel')).toBe('felt')
     // Wood is unchanged.

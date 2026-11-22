@@ -113,7 +113,7 @@ export default function FinishesPanel() {
           onChange={(v) => setUI({ wrbKind: v })}
         />
       </Row>
-      {/* Wet-applied finishes bond to housewrap and wreck its drainage — a real
+      {/* Wet-applied finishes bond to housewrap and compromise its drainage — a real
           failure, so say so rather than silently building a wall that leaks. */}
       {wantedWrb !== ui.wrbKind && (
         <button className={styles.advice} onClick={() => setUI({ wrbKind: wantedWrb })}>

@@ -22,3 +22,27 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* The sibling line: one quiet row, the names linked to their own sites. */
+.makers {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--bp-text-dim, #94a3b8);
+}
+.lead { color: var(--bp-text-dim, #94a3b8); }
+.sep { color: var(--bp-text-dim, #94a3b8); }
+.makerLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 2px;
+  color: var(--bp-accent, #38bdf8);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 520px) {
+  .makers { font-size: 11px; }
+}

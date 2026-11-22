@@ -279,7 +279,7 @@ export function claddingSpec(kind: CladdingKind): CladdingSpec | null {
  *    AIR/VAPOUR BARRIER over it, not housewrap. Housewrap on a DensGlass wall is
  *    a residential answer to a commercial assembly.
  *
- * Cladding wins where the two disagree, because a wet finish will wreck a
+ * Cladding wins where the two disagree, because a wet finish will damage a
  * membrane it bonds to regardless of what is behind it.
  */
 export function recommendedWrb(kind: CladdingKind, framingMaterial: 'wood' | 'steel' = 'wood'): WrbKind {
@@ -299,7 +299,7 @@ export function recommendedWrb(kind: CladdingKind, framingMaterial: 'wood' | 'st
  *             still names No. 15 felt as the baseline WRB and treats the rest as
  *             approved equivalents. Still the norm under STUCCO (usually two
  *             layers) and under adhered stone, where wet-applied finishes bond to
- *             synthetics and wreck their drainage.
+ *             synthetics and compromise their drainage.
 *  fluid      Fluid-applied membrane â€” rolled or sprayed on, seamless.
  *  avb        Air/vapour barrier over the sheathing â€” self-adhered sheet or
  *             fluid-applied. The standard companion to glass-mat sheathing on

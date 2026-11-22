@@ -22,7 +22,7 @@ export default function ExplodeDriver() {
   const explodeSpeed = useConfigStore((s) => s.explodeSpeed)
   const explodeSpread = useConfigStore((s) => s.explodeSpread)
   // While tracing, keep the scene ASSEMBLED (flat) — an exploded view during a
-  // trace stacks the per-level content into "layered prints" and wrecks tapping.
+  // trace stacks the per-level content into "layered prints" and interferes with tapping.
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
   const cur = useRef(0)
 

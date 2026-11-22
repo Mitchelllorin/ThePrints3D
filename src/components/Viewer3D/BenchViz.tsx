@@ -276,7 +276,7 @@ export default function BenchViz() {
     const char = easeInOut(Math.min(1, Math.max(0, (t - 0.25) / 0.9)))
     beamMat.color.copy(WOOD).lerp(CHAR, char * 0.85)
 
-    // The break itself: both halves drop from midspan for bending, one end
+    // The failure itself: both halves drop from midspan for bending, one end
     // gives way at the support for shear. Small — 4° is a member that has
     // failed, not a mousetrap.
     const droop = THREE.MathUtils.degToRad(4) * easeInOut(Math.min(1, Math.max(0, (t - 0.2) / 0.8)))

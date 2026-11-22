@@ -1,3 +1,4 @@
+import { markImport } from '../services/importTrail'
 import { create } from 'zustand'
 import { current, enableMapSet } from 'immer'
 import { immer } from 'zustand/middleware/immer'
@@ -1633,6 +1634,8 @@ export const useAppStore = create<AppState>()(
       // Onboarding 'mixed' has no classifier equivalent — assume standard single-layer
       const onboardingDrywall = loadOnboardingWizardState().meta.drywall
       const drywallCfg = onboardingDrywall === 'mixed' ? 'single-layer' : onboardingDrywall
+      // An import in flight leaves a trail, so a page killed mid-read can resume.
+      markImport('raster', drawing.name)
       const patch = await runProcessor(drawing, (pct) => {
         set((s) => {
           const d = s.drawings.find((d) => d.id === id)
@@ -1641,6 +1644,7 @@ export const useAppStore = create<AppState>()(
       }, drywallCfg, pageOverride,
         // A wall we cannot measure is built the way this project builds walls.
         useConfigStore.getState().defaultStudSize === '2x6' ? 'stud-2x6' : 'stud-2x4')
+      markImport('done')
 
       set((s) => {
         const d = s.drawings.find((d) => d.id === id)

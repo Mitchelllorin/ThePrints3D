@@ -124,7 +124,7 @@ describe('the sweep', () => {
   })
 
   it('lands the part centred in the canvas left above the chrome, at about BENCH_FILL', () => {
-    // Section 4 of BREAK-IT, as pixels: at the end of the sweep the part's own
+    // Section 4 of the family notes, as pixels: at the end of the sweep the part's own
     // box must sit in the middle of the VISIBLE band and span about a third of
     // it — not the centre of a viewport whose foot is covered.
     const beam = { lengthM: 24 * 0.3048, depthM: 3.5 * 0.0254, widthM: 1.75 * 0.0254 }

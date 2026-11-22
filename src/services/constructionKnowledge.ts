@@ -251,7 +251,7 @@ function buildCards(): KnowledgeCard[] {
    *
    * Researched and written down here rather than left in a chat, because these
    * are the numbers the auto-router has to obey and the ones a tradesperson
-   * will check us against. Every one of them is a hard limit: break it and the
+   * will check us against. Every one of them is a hard limit: exceed it and the
    * model is showing work that would fail an inspection.
    */
   const MEP_ROUGH_IN: Omit<KnowledgeCard, 'keywords'>[] = [

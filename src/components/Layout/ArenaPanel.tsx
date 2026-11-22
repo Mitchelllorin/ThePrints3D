@@ -3,13 +3,13 @@
  *
  * The bench used to be a 208 px side column: a scroll of cards, gauges, roster
  * and history standing between the user and the model. That is a page about a
- * beam, not a beam. The order (BREAK-IT §5) is "less panel, more workspace", so
+ * beam, not a beam. The order is "less panel, more workspace", so
  * what is here now is one glass strip along the bottom edge:
  *
  *   • gauges — the three limits in play, one line of readouts with a 3 px bar
  *     each. Bending and shear are the maker's factored resistance; sag is the
  *     app's L/360 and can never read FAILED.
- *   • presets — one row of chips, each a job proven by a test to break. The
+ *   • presets — one row of chips, each a job proven by a test to reach its limit. The
  *     labels say what happens, generically: the maker's name and part number
  *     belong to the part and its failure card, not to a button.
  *   • the ramp — Push, Hold, Reset, and the load slider. Pushing runs the load
@@ -446,6 +446,18 @@ export default function ArenaPanel() {
           Parts
         </button>
         <button data-testid="ramp-reset" className={styles.reset} onClick={resetBench}>Reset</button>
+        {/* THE WAY OUT. The rail is hidden while the Ramp is open (§9), and the
+            rail's ARENA button was the only close — hiding the menu without
+            this would trap the user on the bench. It rides in the verbs row so
+            the strip keeps its one-third cap: a new row costs the canvas 48 px
+            the order does not give it. */}
+        <button
+          data-testid="ramp-done"
+          className={styles.done}
+          onClick={() => useFloorplanLocalStore.getState().setArenaOpen(false)}
+        >
+          Done
+        </button>
       </div>
     </div>
   )

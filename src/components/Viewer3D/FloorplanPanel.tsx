@@ -902,13 +902,28 @@ export default function FloorplanPanel() {
           the Build drawer is retracted, so the workspace stays clear. The camera
           stays free (tap a corner, drag to orbit): the chip reopens the picker
           (type / level), Done finishes tracing. To end the current wall run,
-          double-tap the workspace (stops the trailing rubber-band). */}
+          tap Lift, or double-tap the workspace (stops the trailing rubber-band). */}
       {tracingActive && showSteps && (
         <div className={styles.traceBar}>
           <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
             {framingActive ? `${activeLevel > 0 ? `L${activeLevel + 1} · ` : ''}${wallChipLabel(activeWallType, activeWallRole, wallTypeChosen, wallRoleChosen)}` : tradeIndicator}
           </button>
+          {/* LIFT — let go of the line that is following you, so the next tap
+              starts a new wall wherever you like. Only there while a run is
+              live. The double-tap still does the same, but it was the ONLY way
+              out on the canvas, it is invisible, and on a phone two slow taps
+              read as two corners and drop a stub wall instead of letting go. */}
+          {traceStart && !tracePaused && (
+            <button
+              data-testid="trace-lift"
+              className={`${styles.traceBarBtn} ${styles.traceBarLift}`}
+              onClick={() => { setTraceStart(null); setHoverPixel(null) }}
+              title="Let go of this line — your next tap starts a new wall"
+            >
+              Lift
+            </button>
+          )}
           {/* "Find the rest" — reachable straight from the slim trace bar (it used
               to live only in the Build panel, which retracts while you trace, so
               you couldn't reach it mid-run). Shows once a framing wall is traced. */}
@@ -932,9 +947,8 @@ export default function FloorplanPanel() {
               {squareWalls ? '⊾ Square' : '∠ Any angle'}
             </button>
           )}
-          {/* No "End run" button — double-tapping the workspace ends the current
-              wall run (the natural "I'm done with this line" gesture) — and no
-              "✓ Done" either. It was a permanent button in the corner of the
+          {/* "End run" is the Lift chip above, shown only mid-run (double-tap
+              still works too) — and there is no "✓ Done" here. It was a permanent button in the corner of the
               workspace whose only purpose was to leave the mode you were in.
               Escape does it on a desktop; on a phone, tapping the rail item you
               started from does (see selectSection in RailCascade). */}
@@ -1012,7 +1026,7 @@ export default function FloorplanPanel() {
         /* Hard invariant: the drawer can NEVER be open while actively tracing —
            even if some state briefly sets buildDrawerOpen, the workspace stays
            clear and the slim trace bar is the interface. */
-        open={buildDrawerOpen && !tracingActive}
+        open={buildDrawerOpen && !tracingActive && !arenaOpen}
         onToggle={() => setDrawerOpen('build', !buildDrawerOpen)}
         /* Click-through is the NARROW FALLBACK, not the default. During active
            tracing the drawer already RETRACTS (see the tracingActive effect), so

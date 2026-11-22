@@ -20,6 +20,7 @@ import { findWallReturns } from './wallReturns'
 import { inferCorners } from './wallTraceReducer'
 import { setInkBuffer } from './inkRaster'
 import { normalizeForDetection } from './rasterNormalize'
+import { markImport } from './importTrail'
 import { shouldOcr, groupIntoLines, type SizedTextToken } from './ocr'
 import { ocrRasterOffThread } from './ocrOffThread'
 import { statedAreaSqM, looksLikeRoomName } from './roomNames'
@@ -47,6 +48,8 @@ export async function processDrawing(
    *  in step 5. Mirrors config `defaultStudSize`. */
   defaultStudType: WallType = 'stud-2x4',
 ): Promise<DrawingPatch> {
+  /** Held outside the try so a failure AFTER the print is on screen keeps it. */
+  let raster: Awaited<ReturnType<typeof rasterizeFile>> | null = null
   try {
     let lastProgress = 0
     const setProgress = (pct: number) => {
@@ -57,7 +60,7 @@ export async function processDrawing(
 
     // 1. Rasterize. For a multi-page set this also PICKS the sheet — the floor
     //    plan is rarely page 1 — unless the caller has named one.
-    const raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8), pageOverride)
+    raster = await rasterizeFile(drawing.file, (p) => setProgress(p * 0.8), pageOverride)
     // Cache a grayscale "ink" buffer so tracing can snap to the actual printed
     // line under the stroke — even on lines detection discarded as noise.
     /**
@@ -90,6 +93,7 @@ export async function processDrawing(
     }
 
     setInkBuffer(drawing.id, detectImage)
+    markImport('detect')
 
     /**
      * START READING THE WORDS NOW, NOT AFTER THE WALLS.
@@ -657,9 +661,43 @@ export async function processDrawing(
       floorNumber: floorNumber ?? drawing.floorNumber,
     }
   } catch (err) {
+    /**
+     * THE PRINT OUTLIVES THE DETECTOR.
+     *
+     * Once the sheet is rasterised the user has their drawing, and a crash in
+     * reading walls off it must not take that away. This used to mark the whole
+     * sheet 'error' and drop the raster, so a scan the detector choked on could
+     * not even be traced over — detector output was the only way in. Now the
+     * sheet comes back ready, with no walls, set to trace by hand. Only a file
+     * that never rasterised at all is an error.
+     */
+    if (raster) {
+      logEvent('detect.failed', { message: err instanceof Error ? err.message : String(err) }, 'warn')
+      return {
+        status: 'ready',
+        manualWalls: true,
+        rasterUrl: raster.blobUrl,
+        rasterWidth: raster.width,
+        rasterHeight: raster.height,
+        pageCount: raster.pageCount,
+        currentPage: raster.page,
+        parsedWalls: [],
+        parsedRooms: [],
+        parsedOpenings: [],
+        parsedText: [],
+        parsedSymbols: [],
+        parsedAnnotationCandidates: [],
+        parseProgress: 100,
+        scaleNotation: raster.scaleNotation ?? drawing.scaleNotation,
+        scaleMmPerPx: drawing.scaleMmPerPx,
+        scaleConfidence: raster.scaleNotation ? 'parsed' : drawing.scaleMmPerPx !== null ? 'inferred' : 'fallback',
+        floorNumber: inferFloorNumber(drawing.name) ?? drawing.floorNumber,
+      }
+    }
+    const why = err instanceof Error ? `: ${err.message}` : ''
     return {
       status: 'error',
-      errorMessage: err instanceof Error ? err.message : 'Processing failed',
+      errorMessage: `Could not open this file${why}. Try a PDF or a photo of the sheet.`,
       parseProgress: 0,
     }
   }

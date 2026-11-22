@@ -1,5 +1,5 @@
 /**
- * BREAK IT — the bench as a thing you break on purpose.
+ * THE BENCH — a part taken past its limit on the ramp, on purpose.
  *
  * The load bench already answers "where do the maker's numbers stop this beam".
  * This is the other half: the same ramp, run until it breaks, with the break

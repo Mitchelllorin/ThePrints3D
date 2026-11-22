@@ -697,6 +697,8 @@ export default function ModelViewer() {
   // deliberate boundary between looking and working.
   const editingSelection = editMode && editSelected !== null
   const orbitEnabled = !overlay.orbitLocked && !placing && !gestureLock && !editingSelection
+  /** The Ramp owns the camera while it is open — see IdleSpin below. */
+  const benchOpen = useBenchStore((s) => s.open)
 
   /**
    * A LOCK MUST NOT OUTLIVE THE GESTURE THAT RAISED IT.
@@ -1204,7 +1206,11 @@ export default function ModelViewer() {
             editing. Anything that owns the view owns the camera too. */}
         <IdleSpin
           controlsRef={controlsRef}
-          allowed={orbitEnabled && !traceMode && !placeObjectType && !calibratingNow && !editSelected}
+          /* NOT WHILE THE BENCH IS UP. The sweep parks the part dead centre and
+             it stays until dismissed; four seconds later the idle spin would
+             rotate it straight back out of the band, so the shot that is meant
+             to hold the failure drifts. The bench owns its own camera. */
+          allowed={orbitEnabled && !traceMode && !placeObjectType && !calibratingNow && !editSelected && !benchOpen}
           force={tourOpeningLine}
         />
 

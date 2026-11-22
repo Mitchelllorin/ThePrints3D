@@ -1,6 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { startJobAutosave } from './services/currentJob'
+import { watchFileInputs } from './services/importTrail'
+import { startPhoneLog } from './dev/phoneLog'
 import { extend } from '@react-three/fiber'
 import * as THREE from 'three'
 import './index.css'
@@ -145,7 +147,10 @@ startCorpusCapture()
  * it. From here every change to what is open saves itself. See
  * services/currentJob.
  */
+startPhoneLog()
 startJobAutosave()
+// A print picked on a phone survives the page being killed under it.
+watchFileInputs()
 
 // The boundary wraps everything, including the front door: a throw during render
 // used to take the whole tree down to a blank page with nothing to tap. The

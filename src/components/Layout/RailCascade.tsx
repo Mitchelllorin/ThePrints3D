@@ -317,10 +317,22 @@ export default function RailCascade() {
   }, [])
   // The rail's width is a token the ambient guide and the nameplates lay
   // themselves out against (see --rail-w), so the second column has to say so.
+  /**
+   * THE RAIL IS NOT ON SCREEN WHILE THE RAMP IS OPEN — so it does not indent
+   * the strip either. Its width is the token The Ramp's strip and failure card
+   * clear themselves against; with the rail hidden they take the full edge.
+   */
   useEffect(() => {
+    if (arenaOpen) return
     document.documentElement.style.setProperty('--rail-w', railWrap ? '96px' : '44px')
     return () => { document.documentElement.style.removeProperty('--rail-w') }
-  }, [railWrap])
+  }, [railWrap, arenaOpen])
+
+  useEffect(() => {
+    if (!arenaOpen) return
+    document.documentElement.style.setProperty('--rail-w', '0px')
+    return () => { document.documentElement.style.removeProperty('--rail-w') }
+  }, [arenaOpen])
 
   const active: Record<Section, boolean> = {
     build: buildOpen,
@@ -435,7 +447,11 @@ export default function RailCascade() {
       {/* The list scrolls; CLEAR sits outside the scroll port, below it. See the
           note on .railCol — when the list got longer than the screen, Clear (its
           last child, pinned to the foot) was the first thing pushed out of it. */}
-      <div className={styles.railCol}>
+      {/* The family rule: menus are CLOSED while the Arena is on. The rail is the
+          workspace's whole side menu, and it used to stand over the bench in
+          every screenshot. Hidden rather than unmounted so its measuring
+          observers keep their refs; the strip carries the way back out (Done). */}
+      <div className={styles.railCol} style={arenaOpen ? { display: 'none' } : undefined}>
         <nav ref={railRef} className={`${styles.rail} ${railWrap ? styles.railWrap : ''}`} aria-label="Menus">
           {/* In the Arena the workspace is the show: the rail steps down to the one
               button that leaves it (Mitchell, 9 Nov — menus stayed up over the bench). */}

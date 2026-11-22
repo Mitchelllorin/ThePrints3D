@@ -275,11 +275,30 @@ export async function rasterizeImage(
     h = Math.round(h * ratio)
   }
 
+  /**
+   * DECODE AT THE SIZE WE KEEP, NOT THE SIZE THE CAMERA SHOT.
+   *
+   * A phone photo is 12–50 MP. Drawing the <img> onto a 3000 px canvas makes
+   * the browser hold the whole full-size bitmap first — 200 MB for a 50 MP
+   * shot — at the instant the page has just come back from the camera, which
+   * is when a phone kills a heavy tab. createImageBitmap with a resize asks
+   * for the small one directly; where it is missing, the <img> path stands.
+   */
+  let source: CanvasImageSource = img
+  if ((w !== img.naturalWidth || h !== img.naturalHeight) && typeof createImageBitmap === 'function') {
+    try {
+      source = await createImageBitmap(file, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' })
+    } catch {
+      source = img
+    }
+  }
+
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
   const ctx = canvas.getContext('2d')!
-  ctx.drawImage(img, 0, 0, w, h)
+  ctx.drawImage(source, 0, 0, w, h)
+  if (source !== img && 'close' in source) (source as ImageBitmap).close()
   onProgress?.(90)
 
   const imageData = ctx.getImageData(0, 0, w, h)

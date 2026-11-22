@@ -1359,7 +1359,7 @@ export default function WorkspaceLayout() {
         tabLabel="Settings"
         tabIcon="⚙"
         tourTab="settings-tab"
-        open={settingsDrawerOpen && !traceMode}
+        open={settingsDrawerOpen && !arenaOpen && !traceMode}
         onToggle={() => setDrawerOpen('settings', !settingsDrawerOpen)}
       >
         <SettingsContent />
@@ -1392,11 +1392,16 @@ export default function WorkspaceLayout() {
 
       {/* Ask is panel-less: a floating bottom overlay (AskAI positions itself),
           mounted only while open so it never leaks over the workspace. */}
-      {askDrawerOpen && !traceMode && <AskAI />}
+      {askDrawerOpen && !arenaOpen && !traceMode && <AskAI />}
 
       {/* Onboarding hint — near-invisible, only when no drawings are loaded. The
           grid itself is the drop target, so this is just a whisper + a few chips. */}
-      {showUploadHint && (
+      {/* THE FRONT-DOOR CARD STAYS OUT OF THE ARENA. It used to sit dead centre
+          over an empty workspace, which is exactly where The Ramp parks the
+          beam — so the sweep landed the part behind Draw it / Open a plan /
+          Show me a finished one. The family rule: while the Ramp is open every other
+          surface is closed. */}
+      {showUploadHint && !arenaOpen && (
         <div className={styles.uploadHint}>
           {/* THREE DOORS, RANKED — not eight, side by side.
               This handed a first-time user seven equal chips (Browse, Scan,

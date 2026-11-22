@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import Logo3DBadge from '../Layout/Logo3DBadge'
 import StudioCredit from '../Layout/StudioCredit'
+import { previousPhoneLog } from '../../dev/phoneLog'
 import PrivacyPolicy from '../Legal/PrivacyPolicy'
 import styles from './LaunchScreen.module.css'
 
@@ -51,6 +52,15 @@ export default function LaunchScreen({ onLaunch }: { onLaunch: () => void }) {
         </p>
 
         <StudioCredit />
+        {/* DEV ONLY: what the last session did before it ended — see dev/phoneLog. */}
+        {import.meta.env.DEV && previousPhoneLog().length > 0 && (
+          <pre
+            data-testid="dev-phone-log"
+            style={{ maxHeight: '30vh', overflowY: 'auto', margin: 0, padding: 8, borderRadius: 6, background: '#000', color: '#9fe', fontSize: 13, textAlign: 'left', whiteSpace: 'pre-wrap', width: '100%' }}
+          >
+            {['last session:', ...previousPhoneLog().slice(-14)].join(String.fromCharCode(10))}
+          </pre>
+        )}
       </div>
     </div>
   )

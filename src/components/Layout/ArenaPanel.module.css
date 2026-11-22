@@ -1,5 +1,5 @@
 /* THE RAMP — a slim glass strip along the bottom edge, never more than a third
-   of the screen tall (BREAK-IT §5). Persistent chrome over a 3D view: tint plus
+   of the screen tall (the family rule). Persistent chrome over a 3D view: tint plus
    blur, never alpha alone, with an opaque fallback where backdrop-filter is
    missing. The sheet is transient — the user opened it — so it may be solid.
 
@@ -125,11 +125,11 @@
 
 .actions {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
   gap: 6px;
 }
 
-.push, .hold, .parts, .reset, .close {
+.push, .hold, .parts, .reset, .done, .close {
   min-height: 48px;
   border-radius: 9px;
   font-weight: 700;
@@ -171,6 +171,16 @@
   border: 1px solid #2c3a4a;
   background: #151c25;
   color: #aebccd;
+}
+
+/* The exit, in the strip's own idiom. It rides in the verbs row, so it costs
+   the canvas no height at all. */
+.done {
+  min-width: 48px;
+  padding: 0 10px;
+  border: 1px solid #4a5a6c;
+  background: transparent;
+  color: #e8eef5;
 }
 
 .empty { margin: 0; font-size: 13px; color: #aebccd; }
@@ -349,5 +359,5 @@
 @media (max-height: 420px) {
   .strip { max-height: 38dvh; gap: 3px; padding: 6px 8px; }
   .preset { min-height: 44px; }
-  .push, .hold, .parts, .reset, .close { min-height: 44px; }
+  .push, .hold, .parts, .reset, .done, .close { min-height: 44px; }
 }

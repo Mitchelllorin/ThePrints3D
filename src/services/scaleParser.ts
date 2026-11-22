@@ -14,7 +14,7 @@ import { RASTER_SCALE } from './constants'
  * drawing sets, three of five came back at 0.94 mm/px for exactly this reason,
  * every one of them a normally-labelled American plan. Worse, the result was
  * flagged `parsed` and so OUTRANKED the paper-anchored inference, which had
- * the right answer on the very sheets the parser was wrecking.
+ * the right answer on the very sheets the parser was misreading.
  *
  * So `/` between two numbers is treated as a FRACTION, never as a ratio, and
  * only `:` separates a metric ratio.
