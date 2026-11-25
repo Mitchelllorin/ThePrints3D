@@ -18,6 +18,7 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { Html, Line } from '@react-three/drei'
 import styles from './WallDimension.module.css'
+import Tap from './Tap'
 import { freeArea, placeClear, regionOf } from './hudPlace'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 
@@ -169,14 +170,13 @@ export default function WallDimension({
               <button type="submit" className={styles.go}>Set</button>
             </form>
           ) : (
-            <button
-              type="button"
+            <Tap
               className={styles.length}
-              onClick={() => setTyping({ end: liveEnd, endPixel })}
+              onTap={() => setTyping({ end: liveEnd, endPixel })}
               aria-label={`Length ${label}. Tap to type an exact length`}
             >
               {label}
-            </button>
+            </Tap>
           )}
         </div>
         </div>

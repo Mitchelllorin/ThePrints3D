@@ -1,6 +1,6 @@
 /**
  * THE DRAW IT SHEET — the house, where it sits on the page, and the walls
- * inside it. No React here; FootprintEditor draws it and DrawItSheet holds it.
+ * inside it. No React here. The workspace drawing tool (FloorplanOverlay) uses its curves.
  *
  * One sheet, one workflow, in the order a house goes up: pull the outline to
  * size, put it where you want it on the page, then draw the inside walls on

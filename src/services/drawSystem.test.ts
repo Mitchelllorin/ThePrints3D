@@ -82,6 +82,15 @@ describe('ends, walls and corners are targets', () => {
     expect(s.alignGuide?.a).toEqual({ x: 0, y: 0 })
     expect(s.cornerDeg).toBe(90)
   })
+  it('lines up only with the first point of the run, not other corners on the plan', () => {
+    // Heading left from (1000,800); a stray corner at (300,0) is near x=306.
+    const s = snapDrawPoint({ x: 306, y: 806 }, {
+      from: { x: 1000, y: 800 }, prevDir: { x: 0, y: 1 }, runStart: { x: 0, y: 0 },
+      ends: [{ x: 300, y: 0 }], tol: 20,
+    })
+    expect(s.kind).toBe('angle')
+    expect(s.point.x).toBeCloseTo(306, 9)
+  })
 })
 
 describe('closing the shape', () => {
@@ -209,5 +218,20 @@ describe('editing after drawing', () => {
     expect(next[0]).toEqual({ x1: 0, y1: 0, x2: 1150, y2: 0 })
     expect(next[2]).toEqual({ x1: 1150, y1: 800, x2: 0, y2: 800 })
     expect(next[3]).toEqual(room[3])
+  })
+})
+
+describe('the print pulls from a shorter reach than your own walls', () => {
+  it('a print end just inside the full reach does not catch the point', () => {
+    const q = snapDrawPoint({ x: 100, y: 12 }, { tol: 20, printEnds: [{ x: 100, y: 0 }] })
+    expect(q.kind).not.toBe('end')
+  })
+  it('your own end at the same distance does', () => {
+    const q = snapDrawPoint({ x: 100, y: 12 }, { tol: 20, ends: [{ x: 100, y: 0 }] })
+    expect(q.kind).toBe('end')
+  })
+  it('a print end very close still catches it', () => {
+    const q = snapDrawPoint({ x: 100, y: 4 }, { tol: 20, printEnds: [{ x: 100, y: 0 }] })
+    expect(q.kind).toBe('end')
   })
 })

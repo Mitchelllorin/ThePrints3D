@@ -18,10 +18,11 @@
  * point and the pointer at any zoom.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Tap from './Tap'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
-import { Html, Line } from '@react-three/drei'
-import { DRAW, type DrawSnap } from '../../services/drawSystem'
+import { Grid, Html, Line } from '@react-three/drei'
+import { DRAW, reachNow, type DrawSnap } from '../../services/drawSystem'
 import styles from './WallDimension.module.css'
 import { freeArea, placeClear } from './hudPlace'
 
@@ -59,7 +60,7 @@ function ring(c: P3, r: number, n = 28): P3[] {
 
 export function TraceAids({
   toWorld, worldPerScreenPx, anchor, runStart, prevDir, snap, color,
-  onTypedAngle, onUndo, onDone, canUndo, showControls,
+  onTypedAngle, onDone, showControls,
 }: {
   toWorld: (px: PX) => P3
   /** World units per screen pixel at the anchor, to size markers in pixels. */
@@ -70,9 +71,10 @@ export function TraceAids({
   snap: DrawSnap | null
   color: string
   onTypedAngle: (text: string, toward: PX) => boolean
-  onUndo: () => void
+  /** Unused: Undo is the one at the top of the screen. */
+  onUndo?: () => void
   onDone: () => void
-  canUndo: boolean
+  canUndo?: boolean
   showControls: boolean
 }) {
   const a3 = toWorld(anchor)
@@ -174,7 +176,7 @@ export function TraceAids({
 
       {/* THE CLOSE RING: the run's first point. Tap inside it to close the shape. */}
       {runOpen && runStart && (
-        <Line points={ring(lift(toWorld(runStart), 0.035), DRAW.REACH_PX * DRAW.CLOSE_REACH * k)}
+        <Line points={ring(lift(toWorld(runStart), 0.035), reachNow() * DRAW.CLOSE_REACH * k)}
           color={closing ? '#4ade80' : color} lineWidth={closing ? 4 : 2} dashed={!closing} dashSize={6 * k} gapSize={5 * k} />
       )}
       {/* The anchor: where this wall starts. */}
@@ -196,11 +198,11 @@ export function TraceAids({
                   <button type="submit" className={styles.go}>Set</button>
                 </form>
               ) : (
-                <button type="button" className={`${styles.length} ${styles.minor}`}
-                  onClick={() => setTyping({ toward: end })}
+                <Tap className={`${styles.length} ${styles.minor}`}
+                  onTap={() => setTyping({ toward: end })}
                   aria-label={`Corner ${snap.cornerDeg} degrees. Tap to type an exact angle`}>
                   {snap.cornerDeg}°
-                </button>
+                </Tap>
               )}
             </div>
           </div>
@@ -212,10 +214,8 @@ export function TraceAids({
         <Html position={lift(a3)} center zIndexRange={[10, 10]}>
           <div ref={ctrlRef} data-trace-ctx>
             <div ref={stopCtrl as (el: HTMLDivElement | null) => void} className={styles.ctx} role="group" aria-label="Wall run">
-              {canUndo && (
-                <button type="button" className={styles.ctxBtn} onClick={onUndo} aria-label="Undo the last wall"><span>Undo</span></button>
-              )}
-              <button type="button" className={styles.ctxBtn} onClick={onDone} aria-label="Finish this run of walls"><span>Done</span></button>
+              {/* No Undo here: the Undo at the top does it, and one is enough. */}
+              <Tap className={styles.ctxBtn} onTap={onDone} aria-label="Finish this run of walls"><span>Done</span></Tap>
             </div>
           </div>
         </Html>
@@ -399,13 +399,84 @@ export function BendHandle({
                   <button type="submit" className={styles.go}>Set</button>
                 </form>
               ) : (
-                <button type="button" className={`${styles.length} ${styles.minor}`} onClick={() => setTyping(true)}
-                  aria-label={`Arc radius ${label}. Tap to type a radius`}>{label}</button>
+                <Tap className={`${styles.length} ${styles.minor}`} onTap={() => setTyping(true)}
+                  aria-label={`Arc radius ${label}. Tap to type a radius`}>{label}</Tap>
               )}
             </div>
           </div>
         </Html>
       )}
+    </>
+  )
+}
+
+/**
+ * GRAPH PAPER, ENDLESS — the Draw it sheet's dark squared paper. Looking straight down to draw, the workspace is a sheet
+ * of squared paper with no edge: a plan you imported lies on it, and with no
+ * plan it is the paper. Draw one building or fifty, anywhere on it.
+ *
+ * Squares are a foot (bold every 10 ft), or 100 mm (bold every metre) in metric.
+ * It sits just under the print, so the print reads on top and the squares show
+ * through where the print is light. It catches no taps.
+ */
+export function GraphPaper({ y, metric }: { y: number; metric: boolean }) {
+  const cell = metric ? 0.1 : 0.3048
+  const section = metric ? 1 : 3.048
+  return (
+    <group position={[0, y, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.006, 0]} raycast={() => null} renderOrder={-2}>
+        <planeGeometry args={[4000, 4000]} />
+        <meshBasicMaterial color="#1e2833" depthWrite={false} />
+      </mesh>
+      <Grid
+        position={[0, -0.004, 0]}
+        infiniteGrid
+        cellSize={cell}
+        cellThickness={0.8}
+        cellColor="#2b3b5c"
+        sectionSize={section}
+        sectionThickness={1.2}
+        sectionColor="#3d5480"
+        fadeDistance={600}
+        fadeStrength={0.6}
+        raycast={() => null}
+        renderOrder={-1}
+      />
+    </group>
+  )
+}
+
+/**
+ * EVERY WALL'S LENGTH, the way the Draw it sheet showed them: plain text beside
+ * each wall, off the line, while you draw. Curve facets and stubs are left
+ * bare, or a circle would wear a ring of numbers. Taps go through to the paper.
+ */
+export function WallLengths({ walls, toWorld, label, offsetPx, minPx }: {
+  walls: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number; bend?: boolean }>
+  toWorld: (px: PX) => P3
+  label: (lenPx: number) => string
+  /** How far off the wall, in sheet pixels. */
+  offsetPx: number
+  /** Walls shorter than this, in sheet pixels, get no number. */
+  minPx: number
+}) {
+  const shown = walls.filter((w) => !w.bend && Math.hypot(w.x2 - w.x1, w.y2 - w.y1) >= minPx).slice(0, 300)
+  return (
+    <>
+      {shown.map((w, i) => {
+        const L = Math.hypot(w.x2 - w.x1, w.y2 - w.y1)
+        const nx = -(w.y2 - w.y1) / L, ny = (w.x2 - w.x1) / L
+        const m = toWorld([(w.x1 + w.x2) / 2 + nx * offsetPx, (w.y1 + w.y2) / 2 + ny * offsetPx])
+        return (
+          <Html key={`${i}:${w.x1},${w.y1}`} position={[m[0], m[1] + 0.05, m[2]]} center zIndexRange={[5, 5]}
+            style={{ pointerEvents: 'none' }}>
+            <span style={{
+              color: '#e2e8f0', textShadow: 'var(--ink-on-model)', fontSize: 12, fontWeight: 600,
+              whiteSpace: 'nowrap', userSelect: 'none',
+            }}>{label(L)}</span>
+          </Html>
+        )
+      })}
     </>
   )
 }

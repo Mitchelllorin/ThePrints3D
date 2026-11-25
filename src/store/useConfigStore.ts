@@ -50,6 +50,9 @@ export interface AppConfig {
   // ── Corners ───────────────────────────────────────────────────────────────
   /** Auto-square perpendicular traced walls that meet near a shared point. */
   cornerInferEnabled: boolean
+  /** Graph paper under the drawing while drawing flat. Off by default: it is a
+   *  look some like, not something drawing needs. */
+  graphPaper: boolean
   /** How close (px) two wall ends must be to be treated as one corner. */
   cornerTolerancePx: number
 
@@ -153,6 +156,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   wallTraceSnapLinePx: 18,
   wallTraceStyle: 'both',
   cornerInferEnabled: true,
+  graphPaper: false,
   cornerTolerancePx: 20,
   gridSnapM: 0.25,
   activeUnit: 'ft',

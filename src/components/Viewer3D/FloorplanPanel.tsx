@@ -176,6 +176,7 @@ export default function FloorplanPanel() {
   const activeWallRole = useFloorplanLocalStore((s) => s.activeWallRole)
   const setActiveWallRole = useFloorplanLocalStore((s) => s.setActiveWallRole)
   const squareWalls    = useFloorplanLocalStore((s) => s.squareWalls)
+  const graphPaper     = useConfigStore((s) => s.graphPaper)
   const setSquareWalls = useFloorplanLocalStore((s) => s.setSquareWalls)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
@@ -907,6 +908,19 @@ export default function FloorplanPanel() {
           double-tap the workspace (stops the trailing rubber-band). */}
       {tracingActive && showSteps && (
         <div className={styles.traceBar} data-trace-bar>
+          {/* BACK, to the step before. On a plan that is the scale-and-position
+              step, with the print free to move, and drawing picks up again when
+              it is set. On a blank sheet there is no step before: it stops
+              drawing. Nothing drawn is lost either way. */}
+          <button className={styles.traceBarBtn} title="Back to the step before"
+            onClick={() => {
+              cancelTracing()
+              if (onDrawnSheet || !drawing) return
+              setPendingTrace(true)
+              startCalibration()
+            }}>
+            ← Back
+          </button>
           <button className={styles.traceBarChip} onClick={openPicker} title="Change type / level">
             <span className={styles.traceBarDot} style={{ background: LAYER_COLORS[activeTraceLayer] }} />
             {framingActive ? `${activeLevel > 0 ? `L${activeLevel + 1} · ` : ''}${wallChipLabel(activeWallType, activeWallRole, wallTypeChosen, wallRoleChosen)}` : tradeIndicator}
@@ -934,6 +948,17 @@ export default function FloorplanPanel() {
               {squareWalls ? '⊾ Square' : '∠ Any angle'}
             </button>
           )}
+          {/* GRAPH PAPER, on or off — the same switch as in Settings. */}
+          {framingActive && (
+            <button
+              className={`${styles.traceBarBtn} ${graphPaper ? styles.traceBarBuild : ''}`}
+              onClick={() => useConfigStore.getState().set({ graphPaper: !graphPaper })}
+              title={graphPaper ? 'Graph paper on — tap to hide it' : 'Graph paper off — tap to show it'}
+              aria-pressed={graphPaper}
+            >
+              ▦ Grid
+            </button>
+          )}
           {/* WALLS OR A CIRCLE. A round room or a column: tap the centre, then
               the radius (or type it), and it goes up as short bent walls. */}
           {framingActive && (
@@ -944,6 +969,18 @@ export default function FloorplanPanel() {
               aria-pressed={traceShape === 'circle'}
             >
               ◯ Circle
+            </button>
+          )}
+          {/* FRAME IT — the button the old Draw it sheet ended on. Drawing is
+              done when you say so: stop drawing, stand the walls, frame them.
+              Same on a print and on a blank sheet. */}
+          {framingActive && wallCount > 0 && (
+            <button
+              className={`${styles.traceBarBtn} ${styles.traceBarBuild}`}
+              onClick={() => { cancelTracing(); setPlanView(false); standWalls() }}
+              title="Stop drawing, stand the walls up and frame them"
+            >
+              🔨 Frame it
             </button>
           )}
           {/* No "End run" button — double-tapping the workspace ends the current

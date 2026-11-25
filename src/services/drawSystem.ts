@@ -27,10 +27,11 @@ export interface Seg { a: Pt; b: Pt }
 
 /** The numbers the system runs on. One place, so every app feels the same. */
 export const DRAW = {
-  /** Square, straight on and the plan axes hold a wall within this many degrees. */
-  SQUARE_TOL_DEG: 9,
+  /** Square, straight on and the plan axes hold a wall within this many degrees.
+   *  9 was too strong: an angled wall kept sticking to square on the way past. */
+  SQUARE_TOL_DEG: 6,
   /** A 45 holds within this many — tighter, so a real 40° wall is not stolen. */
-  DIAG_TOL_DEG: 5,
+  DIAG_TOL_DEG: 4,
   /** With squaring off, square and 45 still pull in from this close. */
   FREE_MAGNET_DEG: 3,
   /** The start point's reach, as a multiple of the ordinary reach: closing a
@@ -38,14 +39,39 @@ export const DRAW = {
   CLOSE_REACH: 1.6,
   /** Screen pixels a finger has to land within to catch an end or a wall. */
   REACH_PX: 18,
-  /** A press held still this long ends the run (long-press to finish). */
-  LONG_PRESS_MS: 550,
-  /** A second tap this soon, this close, is a double tap: it ends the run. */
-  DOUBLE_TAP_MS: 450,
-  DOUBLE_TAP_PX: 40,
+  /** A mouse is exact, so it catches from much closer. At the finger's 18 the
+   *  cursor felt sticky on a laptop: it kept grabbing things it was only near. */
+  REACH_MOUSE_PX: 9,
+  /** The PRINT's own lines and ends pull from this much of the reach. A
+   *  scanned plan is full of lines; at the full reach the end jumped from one
+   *  to the next and the wall landed somewhere you did not put it. Walls you
+   *  drew keep the full reach, so your corners still join. */
+  PRINT_REACH: 0.5,
+  /** A second tap this soon, this close, is a double tap: it ends the run.
+   *  Tight, so two quick corners near each other are two corners. */
+  DOUBLE_TAP_MS: 350,
+  DOUBLE_TAP_PX: 28,
+  /** A press that moves less than this is still a tap. A finger rolls; a
+   *  tap must not turn into a drag (a stray wall, a moved corner) for it. */
+  TAP_SLOP_TOUCH_PX: 22,
+  TAP_SLOP_MOUSE_PX: 9,
   /** The loupe sits this far above the finger, so the finger never hides the point. */
   LOUPE_LIFT_PX: 96,
 } as const
+
+/** How far a press can move and still be a tap, for this kind of pointer. */
+/** The reach for the pointer in hand: a finger's, or a mouse's. */
+export const reachPx = (pointerType: string) =>
+  (pointerType === 'mouse' ? DRAW.REACH_MOUSE_PX : DRAW.REACH_PX)
+
+/** The last pointer used, so a snap knows whose reach to use without every
+ *  caller threading the event through. A finger until a mouse says otherwise. */
+let lastPointerType = 'touch'
+export const notePointer = (pointerType: string) => { if (pointerType) lastPointerType = pointerType }
+export const reachNow = () => reachPx(lastPointerType)
+
+export const tapSlopPx = (pointerType: string) =>
+  (pointerType === 'mouse' ? DRAW.TAP_SLOP_MOUSE_PX : DRAW.TAP_SLOP_TOUCH_PX)
 
 export type SnapKind =
   /** On the run's first point: the shape closes here. */
@@ -73,8 +99,11 @@ export interface DrawSnapOpts {
   runStart?: Pt | null
   /** Ends of walls already drawn. */
   ends?: readonly Pt[]
-  /** Walls already drawn (and print lines), to land on or run on to. */
+  /** Walls already drawn, to land on or run on to. */
   lines?: readonly Seg[]
+  /** The print's own wall ends and lines: targets too, at PRINT_REACH. */
+  printEnds?: readonly Pt[]
+  printLines?: readonly Seg[]
   /** The reach, in the caller's units. */
   tol: number
   /** Square by default; false keeps only a light magnet at square and 45. */
@@ -184,11 +213,22 @@ export function snapDrawPoint(p: Pt, o: DrawSnapOpts): DrawSnap {
   }
 
   // 2. Another wall's end — not the one being drawn from.
+  const pTol = tol * DRAW.PRINT_REACH
+  // Every target with its own reach; scored against that reach, so a print
+  // end only wins when it is as close for its size as your own corner.
+  const ends = [
+    ...(o.ends ?? []).map((e) => ({ e, r: tol })),
+    ...(o.printEnds ?? []).map((e) => ({ e, r: pTol })),
+  ]
+  const lines = [
+    ...(o.lines ?? []).map((l) => ({ l, r: tol })),
+    ...(o.printLines ?? []).map((l) => ({ l, r: pTol })),
+  ]
   let bestEnd: Pt | null = null
-  let bestD = tol
-  for (const e of o.ends ?? []) {
+  let bestD = 1
+  for (const { e, r } of ends) {
     if (from && dist(e, from) < 1e-6) continue
-    const d = dist(e, p)
+    const d = dist(e, p) / r
     if (d < bestD) { bestD = d; bestEnd = e }
   }
   if (bestEnd) {
@@ -199,10 +239,10 @@ export function snapDrawPoint(p: Pt, o: DrawSnapOpts): DrawSnap {
   // 3. A first point: along a wall, or the grid.
   if (!from) {
     let best: Pt | null = null
-    let bd = tol
-    for (const s of o.lines ?? []) {
+    let bd = 1
+    for (const { l: s, r } of lines) {
       const c = nearestOnSeg(p, s)
-      const d = dist(c, p)
+      const d = dist(c, p) / r
       if (d < bd) { bd = d; best = c }
     }
     if (best) return { point: best, kind: 'line', closes: false }
@@ -229,13 +269,16 @@ export function snapDrawPoint(p: Pt, o: DrawSnapOpts): DrawSnap {
   let t = (p.x - from.x) * u.x + (p.y - from.y) * u.y
   if (t <= 0) t = len
 
-  // Run on to a wall it nearly meets, along its own line.
+  // Run on to a wall it nearly meets, along its own line. Only a HELD wall, and
+  // only to walls you drew: running on to the print's lines, or bending a free
+  // angle to meet something, moved the end somewhere you did not put it.
   let hitT: number | null = null
-  let hitD = tol
-  for (const s of o.lines ?? []) {
+  let hitD = 1
+  const runOnTo = held ? (o.lines ?? []).map((l) => ({ l, r: tol })) : []
+  for (const { l: s, r } of runOnTo) {
     const h = rayHit(from, u, s)
     if (h == null) continue
-    const d = Math.abs(h - t)
+    const d = Math.abs(h - t) / r
     if (d < hitD) { hitD = d; hitT = h }
   }
   const at = (k: number): Pt => ({ x: from.x + u.x * k, y: from.y + u.y * k })
@@ -249,11 +292,13 @@ export function snapDrawPoint(p: Pt, o: DrawSnapOpts): DrawSnap {
   }
 
   if (held) {
-    // Stop level with a corner it lines up with (the run's start first among equals).
+    // Stop level with the run's first point, so the last wall of a room comes
+    // out square to the first. Only that point: lining up with every corner on
+    // the plan made the end jump from one to the next as the finger moved.
     let alignT: number | null = null
     let alignE: Pt | null = null
     let ad = tol
-    const cands = [...(o.runStart ? [o.runStart] : []), ...(o.ends ?? [])]
+    const cands = o.runStart ? [o.runStart] : []
     for (const e of cands) {
       const s = (e.x - from.x) * u.x + (e.y - from.y) * u.y
       if (s <= tol) continue

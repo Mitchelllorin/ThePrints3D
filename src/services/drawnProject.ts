@@ -90,6 +90,12 @@ export interface DrawnProjectSpec {
     /** The stud at this facet's start break belongs to the chord before it. */
     sharedStartStud?: boolean
   }>
+  /**
+   * NOTHING DRAWN YET: just the squared paper, `page` big, for the workspace's
+   * drawing tool to draw the walls on. Starting from nothing and tracing a
+   * print are the same tool; this is the paper for the first.
+   */
+  blank?: boolean
 }
 
 export interface DrawnProject {
@@ -284,6 +290,7 @@ export function createDrawnProject(spec: DrawnProjectSpec): DrawnProject {
   // Walls drawn one at a time are the building on their own. Everything below
   // this line assumes a closed footprint, which is the thing they do not have.
   if (spec.freeWalls?.length) return createFreeWallsProject(spec, spec.freeWalls)
+  if (spec.blank) return createFreeWallsProject(spec, [])
   const tMm = shellThicknessMm(spec.wallTypeKey)
   const px = (mm: number) => mm / DRAWN_MM_PER_PX
 
@@ -418,7 +425,13 @@ function createFreeWallsProject(
 ): DrawnProject {
   const px = (mm: number) => mm / DRAWN_MM_PER_PX
   const tPx = px(shellThicknessMm(spec.wallTypeKey))
-  const box = free.reduce(
+  // A blank sheet has no walls to measure: the page, inside its margin, is the box.
+  const pageBox = {
+    x1: MARGIN_MM, y1: MARGIN_MM,
+    x2: Math.max(MARGIN_MM + 1, (spec.page?.wMm ?? spec.widthMm + MARGIN_MM * 2) - MARGIN_MM),
+    y2: Math.max(MARGIN_MM + 1, (spec.page?.dMm ?? spec.depthMm + MARGIN_MM * 2) - MARGIN_MM),
+  }
+  const box = free.length === 0 ? pageBox : free.reduce(
     (a, w) => ({
       x1: Math.min(a.x1, w.x1, w.x2), y1: Math.min(a.y1, w.y1, w.y2),
       x2: Math.max(a.x2, w.x1, w.x2), y2: Math.max(a.y2, w.y1, w.y2),
@@ -456,7 +469,7 @@ function createFreeWallsProject(
   } as ParsedWall))
 
   const sizeMm = { w: box.x2 - box.x1, d: box.y2 - box.y1 }
-  const svg = sheetWallsSvg(spec, wPx, hPx, lines, tPx, sizeMm)
+  const svg = sheetWallsSvg(spec, wPx, hPx, lines, tPx, free.length ? sizeMm : null)
   let file: File
   try {
     file = new File([svg], 'drawn-project.svg', { type: 'image/svg+xml' })
@@ -506,7 +519,9 @@ function createFreeWallsProject(
     floorAreas: [],
     outlinePx,
     wizardInputs: {
-      set1BuildingBasics: `${free.length} wall${free.length === 1 ? '' : 's'} drawn one at a time, ${ftIn(sizeMm.w)} x ${ftIn(sizeMm.d)}, 8ft ceiling, 1 floor, floor not chosen`,
+      set1BuildingBasics: free.length
+        ? `${free.length} wall${free.length === 1 ? '' : 's'} drawn one at a time, ${ftIn(sizeMm.w)} x ${ftIn(sizeMm.d)}, 8ft ceiling, 1 floor, floor not chosen`
+        : 'Walls to be drawn on a blank sheet, 8ft ceiling, 1 floor, floor not chosen',
       set1Clarifications: 'Walls drawn to typed or printed sizes rather than closed from a footprint box.',
       set2StructuralDetails: `Exterior ${getWallType(spec.wallTypeKey)?.short ?? 'wood'} bearing walls, no closed footprint.`,
       set2Clarifications: 'Interior partitions to be added.',
@@ -522,12 +537,17 @@ function createFreeWallsProject(
 function sheetWallsSvg(
   spec: DrawnProjectSpec, wPx: number, hPx: number,
   lines: ReadonlyArray<{ x1: number; y1: number; x2: number; y2: number }>,
-  tPx: number, sizeMm: { w: number; d: number },
+  tPx: number, sizeMm: { w: number; d: number } | null,
 ): string {
   const grid = MM_PER_FT / DRAWN_MM_PER_PX
   const paths = lines
     .map((w) => `<line x1="${w.x1.toFixed(2)}" y1="${w.y1.toFixed(2)}" x2="${w.x2.toFixed(2)}" y2="${w.y2.toFixed(2)}" stroke="#0f172a" stroke-width="${tPx.toFixed(2)}" stroke-linecap="square"/>`)
     .join('')
+  // A BLANK SHEET IS CLEAR: the workspace's endless graph paper is the paper,
+  // and a grey slab with an edge laid on top of it is what it must not be.
+  if (!sizeMm && lines.length === 0) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${wPx}" height="${hPx}" viewBox="0 0 ${wPx} ${hPx}"></svg>`
+  }
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${wPx}" height="${hPx}" viewBox="0 0 ${wPx} ${hPx}">
     <defs>
       <pattern id="ft" width="${grid}" height="${grid}" patternUnits="userSpaceOnUse">
@@ -538,7 +558,7 @@ function sheetWallsSvg(
     <rect width="${wPx}" height="${hPx}" fill="url(#ft)"/>
     ${paths}
     <text x="14" y="${hPx - 14}" font-family="Inter, Arial, sans-serif" font-size="13" font-weight="600" fill="#334155">${spec.name ?? 'New project'}</text>
-    <text x="${wPx - 14}" y="${hPx - 14}" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="12" fill="#64748b">Drawn to size · ${ftIn(sizeMm.w)} × ${ftIn(sizeMm.d)}</text>
+    ${sizeMm ? `<text x="${wPx - 14}" y="${hPx - 14}" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="12" fill="#64748b">Drawn to size · ${ftIn(sizeMm.w)} × ${ftIn(sizeMm.d)}</text>` : ''}
   </svg>`
 }
 

@@ -16,8 +16,8 @@ import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import PrintWalkabout from './PrintWalkabout'
 import WallDimension from './WallDimension'
-import { TraceAids, Loupe, BendHandle } from './DrawAids'
-import { DRAW, arcWalls, bulgeForRadius, arcOf, curveBayMm, endsOf, isDoubleTap, movedCorner, pointAtCornerAngle, segsOf, slidWall, snapDrawPoint, type DrawSnap } from '../../services/drawSystem'
+import { TraceAids, Loupe, BendHandle, GraphPaper, WallLengths } from './DrawAids'
+import { DRAW, arcWalls, bulgeForRadius, arcOf, curveBayMm, endsOf, isDoubleTap, movedCorner, pointAtCornerAngle, segsOf, slidWall, snapDrawPoint, tapSlopPx, reachNow, notePointer, type DrawSnap } from '../../services/drawSystem'
 import { circleString } from '../../services/drawItPlan'
 import { formatMeasureMm } from '../../services/unitConverter'
 import { useAppStore } from '../../store/useAppStore'
@@ -26,8 +26,9 @@ import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '
 import { inferWallRole } from '../../services/wallFacing'
 import { solveStair, stairShapeFromSubtype } from '../../services/stairs'
 import { seatInGap } from '../../services/openingSeat'
-import { parseSizeMm } from '../../services/drawnProject'
+import { isDrawnSheet, parseSizeMm } from '../../services/drawnProject'
 import { usePrintDrop } from '../../services/printPlane'
+import { planViewCamera } from '../../services/builtScene'
 import { freeAnglePoint, squarePointToAxis, wallAngleOffSquareDeg } from '../../services/wallTraceReducer'
 import type { ParsedWall, TracedLine } from '../../types'
 import type { WallType } from '../../services/wallTypeClassifier'
@@ -332,6 +333,16 @@ interface DrawBridge {
 }
 
 export default function FloorplanOverlay() {
+  // Which pointer is in hand, so a mouse gets its own, tighter reach.
+  useEffect(() => {
+    const note = (e: PointerEvent) => notePointer(e.pointerType)
+    window.addEventListener('pointerdown', note, true)
+    window.addEventListener('pointermove', note, true)
+    return () => {
+      window.removeEventListener('pointerdown', note, true)
+      window.removeEventListener('pointermove', note, true)
+    }
+  }, [])
   const drawings = useAppStore((s) => s.drawings)
   const overlay = useAppStore((s) => s.floorplanOverlay)
   const setOverlayDrawing = useAppStore((s) => s.setFloorplanOverlayDrawing)
@@ -355,6 +366,8 @@ export default function FloorplanOverlay() {
   const placedObjects = useAppStore((s) => s.placedObjects)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const planView = useFloorplanLocalStore((s) => s.planView)
+  const graphPaper = useConfigStore((s) => s.graphPaper)
+  const paperMetric = useConfigStore((s) => s.lengthFormat === 'decimal' && (s.activeUnit === 'mm' || s.activeUnit === 'cm' || s.activeUnit === 'm'))
   const wizardInputs = useAppStore((s) => s.wizardInputs)
   const ceilingM = useSceneConfig(wizardInputs).wallHeightM
 
@@ -404,6 +417,25 @@ export default function FloorplanOverlay() {
   const selectLineExclusive = useFloorplanLocalStore((s) => s.selectLineExclusive)
   const closeAllPanels = useFloorplanLocalStore((s) => s.closeAllPanels)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
+  /**
+   * DRAWING WALLS IS DONE FLAT, however you got here: Draw it, the import's
+   * "I'll trace them", the scale step, the Build drawer, the step chip. Only
+   * some of those doors went flat, and the rest left you drawing on a print
+   * tilted off into the distance with a corner you could not reach. So the
+   * tool goes flat itself, once, as it starts. The 3D button still takes you
+   * out of it if you want to look round.
+   */
+  const { size: canvasSize } = useThree()
+  useEffect(() => {
+    if (!traceMode || activeTraceLayer !== 'framing') return
+    const fp = useFloorplanLocalStore.getState()
+    if (fp.planView) return
+    fp.setPlanView(true)
+    const app = useAppStore.getState()
+    app.setCameraPreset(planViewCamera(app.floorplanOverlay, canvasSize.width / Math.max(1, canvasSize.height)))
+  // Only as drawing starts, never again mid-run.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [traceMode, activeTraceLayer])
   /** Floor and roof outlines are for tracing them, not for the built house. */
   const showAreaOutlines = planView || (traceMode && (activeTraceLayer === 'roof' || activeTraceLayer === 'floors'))
   const activeWallType = useFloorplanLocalStore((s) => s.activeWallType)
@@ -668,6 +700,19 @@ export default function FloorplanOverlay() {
     return e.ray.intersectPlane(plane, p) ? p : null
   }
 
+  /** Where a screen point lands on the drawing, from the camera itself. */
+  const screenToPixel = (e: { clientX: number; clientY: number }): [number, number] | null => {
+    const { camera, gl } = getThree()
+    const r = gl.domElement.getBoundingClientRect()
+    if (r.width <= 0 || r.height <= 0) return null
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+    const rc = new THREE.Raycaster()
+    rc.setFromCamera(ndc, camera)
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(traceElevation + 0.03))
+    const q = new THREE.Vector3()
+    return rc.ray.intersectPlane(plane, q) ? toPixel(q) : null
+  }
+
   const traceWorldPoints = useMemo(
     () => traceStroke.map(planeLocalToTrace),
     [traceStroke, planeLocalToTrace],
@@ -789,7 +834,7 @@ export default function FloorplanOverlay() {
         const q = snapDrawPoint({ x: at.x + dpx, y: at.y + dpy }, {
           from: fixed, ends: endsOf(others).filter((e) => Math.hypot(e.x - at.x, e.y - at.y) > 1),
           lines: segsOf(others).filter((sg) => Math.hypot(sg.a.x - at.x, sg.a.y - at.y) > 1 && Math.hypot(sg.b.x - at.x, sg.b.y - at.y) > 1),
-          tol: DRAW.REACH_PX / scaleAt([at.x, at.y]).pxPerPrintPx,
+          tol: reachNow() / scaleAt([at.x, at.y]).pxPerPrintPx,
           square: useFloorplanLocalStore.getState().squareWalls,
         }).point
         changed = movedCorner(same, at, q, 1)
@@ -823,8 +868,8 @@ export default function FloorplanOverlay() {
   // Tap-vs-drag threshold. A touch finger wanders FAR more than a mouse on a
   // "tap", so a tight 9px slop made taps read as drags and points never dropped
   // — the core "touches don't work" bug. Give touch a much larger slop.
-  const TAP_MOVE_PX = 9
-  const TAP_MOVE_TOUCH_PX = 22
+  const TAP_MOVE_PX = DRAW.TAP_SLOP_MOUSE_PX
+  const TAP_MOVE_TOUCH_PX = DRAW.TAP_SLOP_TOUCH_PX
   const pointerDownScreen = useRef<{ x: number; y: number } | null>(null)
   // Last committed tap (screen space + time) — a quick second tap nearby is a
   // double-tap that ENDS the run, so the rubber-band cursor stops trailing you.
@@ -840,25 +885,51 @@ export default function FloorplanOverlay() {
    * its end. Two fingers are still pinch and nothing else.
    */
   const pressPixel = useRef<[number, number] | null>(null)
-  /** Long-press to finish a run: the timer, and whether it fired this press. */
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const longPressed = useRef(false)
   /** The anchor was dropped by this drag, so a pinch can take it back. */
   const dragAnchored = useRef(false)
   const fingers = useRef(new Set<number>())
   const pinched = useRef(false)
+  /**
+   * GRAB THE CORNER YOU JUST PUT DOWN. Pressing on the run's current corner
+   * and dragging picks it back up: the last wall comes off and is on the
+   * rubber band again, from its own start, until you let go. With only a first
+   * point down, the drag just moves that point. A tap on the corner still
+   * finishes the run. Without this, a press there began a NEW wall — so
+   * trying to fix the end you had just drawn shot a wall out of it.
+   */
+  const grab = useRef<null | { kind: 'leg' | 'first'; picked: boolean }>(null)
   useEffect(() => {
-    // Down in the capture phase so a second finger counts before the canvas
-    // hears it; up in the bubble phase so the canvas still sees the pinch.
-    const down = (e: PointerEvent) => { fingers.current.add(e.pointerId); if (fingers.current.size > 1) pinched.current = true }
-    const up = (e: PointerEvent) => { fingers.current.delete(e.pointerId); if (fingers.current.size === 0) pinched.current = false }
+    // EVERYTHING IN THE CAPTURE PHASE. The chips on the drawing (length, angle,
+    // Done) stop pointer events natively, so a finger lifted over one never
+    // bubbled up here: its id stayed in the set, every later touch counted as
+    // a second finger, and every tap was thrown away as a pinch — the drawing
+    // went dead after a few tries. Same with the press point: left set, the
+    // next plain mouse move read as a drag and dropped a corner from nowhere.
+    // A new primary pointer means every earlier one is gone, whatever we heard.
+    const down = (e: PointerEvent) => {
+      if (e.isPrimary) { fingers.current.clear(); pinched.current = false }
+      fingers.current.add(e.pointerId)
+      if (fingers.current.size > 1) pinched.current = true
+    }
+    const up = (e: PointerEvent) => {
+      fingers.current.delete(e.pointerId)
+      if (fingers.current.size > 0) return
+      // After the canvas has had this lift: nothing is pressed any more.
+      setTimeout(() => {
+        if (fingers.current.size > 0) return
+        pinched.current = false
+        pointerDownScreen.current = null
+        grab.current = null
+        useFloorplanLocalStore.getState().setTraceTouchDown(false)
+      }, 0)
+    }
     window.addEventListener('pointerdown', down, true)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
+    window.addEventListener('pointerup', up, true)
+    window.addEventListener('pointercancel', up, true)
     return () => {
       window.removeEventListener('pointerdown', down, true)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
+      window.removeEventListener('pointerup', up, true)
+      window.removeEventListener('pointercancel', up, true)
     }
   }, [])
   const dragDrawsWalls = () =>
@@ -870,28 +941,37 @@ export default function FloorplanOverlay() {
   const handleWorkspacePointerDown = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     pointerDownScreen.current = { x: event.nativeEvent.clientX, y: event.nativeEvent.clientY }
-    pressPixel.current = toPixel(rayToTracePlane(event) ?? event.point)
+    // From the screen position, not the event's ray: a press on a mark that
+    // is already drawn (the corner you just put down) came with a ray that
+    // missed the drawing entirely, so the press landed somewhere else.
+    pressPixel.current = screenToPixel(event.nativeEvent) ?? toPixel(rayToTracePlane(event) ?? event.point)
     dragAnchored.current = false
-    longPressed.current = false
-    if (longPressTimer.current) clearTimeout(longPressTimer.current)
+    grab.current = null
     const wallsLayer = traceMode && !tracePaused && traceStyle === 'line' && activeTraceLayer === 'framing'
+    // Picking up the point you just put down is a FINGER's move. A laptop
+    // touchpad reads a touch soon after a tap as press-and-drag, with the cursor
+    // still on the point just placed, so the last wall came off and shot out
+    // after the cursor. A mouse drags corners after drawing instead.
+    const fingerGrab = event.nativeEvent.pointerType !== 'mouse'
+    if (fingerGrab && wallsLayer && traceShape === 'wall' && traceStart && pressPixel.current) {
+      const p = pressPixel.current
+      const onScreen = Math.hypot(p[0] - traceStart[0], p[1] - traceStart[1]) * scaleAt(traceStart).pxPerPrintPx
+      if (onScreen <= reachNow() * 1.5) {
+        const leg = lastLeg.current
+        const legHere = !!leg && Math.hypot(leg.end[0] - traceStart[0], leg.end[1] - traceStart[1]) < 1e-6
+        grab.current = { kind: legHere ? 'leg' : 'first', picked: false }
+        if (!legHere && useFloorplanLocalStore.getState().tracePrevDir) grab.current = null
+      }
+    }
     if (wallsLayer) {
       // A FINGER GETS A LOUPE: the point is drawn above it while it is down.
       if (event.nativeEvent.pointerType === 'touch') {
         setTraceTouchDown(true)
         setHoverPixel(pressPixel.current)
       }
-      // LONG-PRESS FINISHES. Held still on a run in progress, the run ends
-      // where it is — no wall is added, and lifting the finger adds none.
-      if (traceStart) {
-        longPressTimer.current = setTimeout(() => {
-          longPressTimer.current = null
-          if (!pointerDownScreen.current || pinched.current) return
-          longPressed.current = true
-          endRun()
-          setTraceTouchDown(false)
-        }, DRAW.LONG_PRESS_MS)
-      }
+      // No long-press to finish: the loupe asks you to hold still and aim,
+      // and holding still used to end the run under you. Done, the last point
+      // or the first point finish it.
     }
     if (traceMode && traceStyle === 'freehand') {
       event.stopPropagation()
@@ -1019,6 +1099,16 @@ export default function FloorplanOverlay() {
   /** The same, as state, for drawing its bend ring. */
   const [legShown, setLegShown] = useState<Leg | null>(null)
   const setLeg = (v: Leg | null) => { lastLeg.current = v; setLegShown(v) }
+  // The Undo at the top takes walls off without going through the run, so a
+  // remembered last wall can be gone. Forget it then — bending or grabbing it
+  // would have taken a DIFFERENT wall off in its place.
+  useEffect(() => {
+    const leg = lastLeg.current
+    if (!leg) return
+    const there = userWalls.some((w) => (w.level ?? 0) === activeLevel && Math.hypot(w.x2 - leg.end[0], w.y2 - leg.end[1]) < 1e-6)
+    if (!there) setLeg(null)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userWalls, activeLevel])
 
   /**
    * Stamp the wall with what it is and put it in the drawing. Shared by a
@@ -1040,7 +1130,7 @@ export default function FloorplanOverlay() {
     const rh = drawing.rasterHeight ?? 900
     const mx = (wall.x1 + wall.x2) / 2, my = (wall.y1 + wall.y2) / 2
     const m = 24
-    if (!onPrint && (mx < -m || my < -m || mx > rw + m || my > rh + m)) {
+    if (!onPrint && !isDrawnSheet(drawing) && (mx < -m || my < -m || mx > rw + m || my > rh + m)) {
       setOffPrintWarn(true)
     } else {
       // Floors stack: if this upper-floor wall landed near — but not lined up
@@ -1109,13 +1199,16 @@ export default function FloorplanOverlay() {
     const { refWalls, belowWalls } = traceRefs()
     const st = useFloorplanLocalStore.getState()
     const from = st.traceStart
-    const tol = DRAW.REACH_PX / scaleAt(pixel).pxPerPrintPx
+    const tol = reachNow() / scaleAt(pixel).pxPerPrintPx
     return snapDrawPoint({ x: pixel[0], y: pixel[1] }, {
       from: from ? { x: from[0], y: from[1] } : null,
       prevDir: st.tracePrevDir ? { x: st.tracePrevDir[0], y: st.tracePrevDir[1] } : null,
       runStart: st.traceRunStart && from ? { x: st.traceRunStart[0], y: st.traceRunStart[1] } : null,
-      ends: endsOf(refWalls),
-      lines: segsOf([...refWalls, ...belowWalls]),
+      // Your own walls pull at full reach; the print's at a shorter one.
+      ends: endsOf(refWalls.filter((w) => w.source === 'user')),
+      lines: segsOf(refWalls.filter((w) => w.source === 'user')),
+      printEnds: endsOf(refWalls.filter((w) => w.source !== 'user')),
+      printLines: segsOf([...refWalls.filter((w) => w.source !== 'user'), ...belowWalls]),
       tol,
       square: st.squareWalls,
     })
@@ -1361,28 +1454,16 @@ export default function FloorplanOverlay() {
         return
       }
 
-      // Walls belong ON the plan. The tap-catcher is far bigger than the drawing
-      // (so floors/roofs can pull past the edge), which means a tap out toward a
-      // menu used to drop a wall in empty space — the #1 "I built a wall by
-      // accident while reaching for a menu" case. So: a wall tap that lands well
-      // OUTSIDE the drawing image just ENDS the run (rubber-band stops trailing)
-      // instead of committing. Margin is generous (25% of the image) so a trace
-      // that runs a little past the printed edge still lands normally.
-      {
-        const rw = drawing.rasterWidth ?? 1400
-        const rh = drawing.rasterHeight ?? 900
-        const mx = rw * 0.25, my = rh * 0.25
-        if (pixel[0] < -mx || pixel[1] < -my || pixel[0] > rw + mx || pixel[1] > rh + my) {
-          setTraceStart(null); setHoverPixel(null); lastTapRef.current = null
-          return
-        }
-      }
+      // NO EDGE. Walls go wherever you tap: past the print, past the blank
+      // sheet, a second building beside the first. The workspace is open
+      // ground; the sheet is only something to draw over. (Taps used to stop
+      // a little past the image, which fenced every job inside its paper.)
 
       // A CIRCLE: the first tap is the centre, the second sets the radius.
       if (traceShape === 'circle') {
         if (!traceStart) { setTraceStart(pixel); setHoverPixel(pixel); return }
         const r = Math.hypot(pixel[0] - traceStart[0], pixel[1] - traceStart[1])
-        if (r * scaleAt(pixel).pxPerPrintPx < DRAW.REACH_PX) { setTraceStart(null); return }
+        if (r * scaleAt(pixel).pxPerPrintPx < reachNow()) { setTraceStart(null); return }
         commitCircle(traceStart, r)
         return
       }
@@ -1399,7 +1480,7 @@ export default function FloorplanOverlay() {
         return
       }
       // A tap back on the anchor (the last point) finishes the run.
-      const tol = DRAW.REACH_PX / scaleAt(pixel).pxPerPrintPx
+      const tol = reachNow() / scaleAt(pixel).pxPerPrintPx
       if (Math.hypot(snap.point.x - traceStart[0], snap.point.y - traceStart[1]) < tol) { endRun(); return }
       const base = {
         x1: traceStart[0], y1: traceStart[1], x2: snap.point.x, y2: snap.point.y,
@@ -1427,10 +1508,33 @@ export default function FloorplanOverlay() {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     event.stopPropagation()
     const pixel = toPixel(rayToTracePlane(event) ?? event.point)
-    if (longPressTimer.current && pointerDownScreen.current) {
-      const d = pointerDownScreen.current
-      const lim = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
-      if (Math.hypot(event.nativeEvent.clientX - d.x, event.nativeEvent.clientY - d.y) > lim) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+    // A mouse with no button held is hovering, whatever press we think we saw.
+    if (event.nativeEvent.pointerType === 'mouse' && event.nativeEvent.buttons === 0 && pointerDownScreen.current) {
+      pointerDownScreen.current = null
+      grab.current = null
+    }
+    if (dragDrawsWalls() && pointerDownScreen.current && grab.current && !pinched.current) {
+      const down = pointerDownScreen.current
+      const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
+      const g = grab.current
+      if (!g.picked && moved > tapSlopPx(event.nativeEvent.pointerType)) {
+        g.picked = true
+        if (g.kind === 'leg' && lastLeg.current) {
+          // The last wall comes off; the band runs from its start again.
+          const leg = lastLeg.current
+          undoApp()
+          setLeg(null)
+          setTraceStart(leg.start, leg.prevDir)
+        }
+      }
+      if (g.picked && g.kind === 'first') {
+        // Snapped as a first point: no start of its own to measure from.
+        setTraceStart(null)
+        const q = snapTrace(pixel).point
+        setTraceStart([q.x, q.y])
+      }
+      setHoverPixel(pixel)
+      return
     }
     if (dragDrawsWalls() && pointerDownScreen.current) {
       // A pinch is not a wall: give back an anchor this gesture dropped, and
@@ -1443,21 +1547,10 @@ export default function FloorplanOverlay() {
       const down = pointerDownScreen.current
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
-      if (moved > limit && longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
       if (!traceStart && pressPixel.current && moved > limit) {
         commitTraceOrCalibrationPoint(event, pressPixel.current)
         dragAnchored.current = true
       }
-    }
-    // While tracing WALLS, freeze the rubber-band once the cursor leaves the
-    // drawing (headed for a menu): don't drag the preview line out across the
-    // screen after the finger. It stays put on the plan until you come back —
-    // matching the rule that an off-plan tap ends the run rather than building.
-    if (traceMode && activeTraceLayer === 'framing' && traceStart) {
-      const rw = drawing.rasterWidth ?? 1400
-      const rh = drawing.rasterHeight ?? 900
-      const mx = rw * 0.25, my = rh * 0.25
-      if (pixel[0] < -mx || pixel[1] < -my || pixel[0] > rw + mx || pixel[1] > rh + my) return
     }
     setHoverPixel(pixel)
     if (!traceMode || traceStyle !== 'freehand') return
@@ -1536,14 +1629,15 @@ export default function FloorplanOverlay() {
     // drifting cursor can no longer commit a point.
     const down = pointerDownScreen.current
     pointerDownScreen.current = null
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
     setTraceTouchDown(false)
-    // The long-press already finished the run: the lift adds nothing.
-    if (longPressed.current) { longPressed.current = false; event.stopPropagation(); return }
     // A pinch is never a tap. The second finger's press takes over the press
     // point, so the first finger up uses it up and the last one up arrived
     // with nothing to measure against — and read as a tap, dropping a corner.
-    if (pinched.current) return
+    if (pinched.current) { grab.current = null; return }
+    const g = grab.current
+    grab.current = null
+    // A moved first point is already where it was let go.
+    if (g?.picked && g.kind === 'first') { event.stopPropagation(); lastTapRef.current = null; setHoverPixel(null); return }
     if (down) {
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
@@ -1586,7 +1680,6 @@ export default function FloorplanOverlay() {
   // print); just reset, and let freehand commit whatever it had.
   const handleWorkspacePointerCancel = (event: ThreeEvent<PointerEvent>) => {
     pointerDownScreen.current = null
-    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
     setTraceTouchDown(false)
     if (drawing && traceMode && traceStyle === 'freehand') commitFreehandStroke(event)
   }
@@ -2056,6 +2149,21 @@ export default function FloorplanOverlay() {
             <meshBasicMaterial color="#a78bfa" transparent opacity={0.1} depthWrite={false} side={THREE.DoubleSide} />
           </mesh>
         </group>
+      )}
+      {/* Looking straight down, the workspace is endless graph paper. */}
+      {drawing && planView && graphPaper && <GraphPaper y={traceElevation} metric={paperMetric} />}
+      {/* Every wall's length while you draw, like the Draw it sheet. */}
+      {drawing?.scaleMmPerPx && planView && traceMode && activeTraceLayer === 'framing' && (
+        <WallLengths
+          walls={userWalls.filter((w) => (w.level ?? 0) === activeLevel)}
+          toWorld={planeLocalToTrace}
+          offsetPx={600 / drawing.scaleMmPerPx}
+          minPx={609.6 / drawing.scaleMmPerPx}
+          label={(lenPx) => {
+            const { activeUnit, lengthFormat } = useConfigStore.getState()
+            return formatMeasureMm(lenPx * drawing.scaleMmPerPx!, activeUnit, lengthFormat)
+          }}
+        />
       )}
       {/* Tap-catcher — deliberately OUTSIDE the `overlay.visible && texture`
           gate below. It used to live inside that group, which meant hiding the

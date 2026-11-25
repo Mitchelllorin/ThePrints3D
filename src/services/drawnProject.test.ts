@@ -314,3 +314,19 @@ describe('drawn walls meet where they were meant to', () => {
     expect(shellYs.some((y) => Math.abs(y - inner.y1) < 1e-6)).toBe(false)
   })
 })
+
+describe('Draw it from nothing — a blank sheet for the workspace drawing tool', () => {
+  const page = { originMm: { x: 0, y: 0 }, wMm: 40 * 304.8, dMm: 30 * 304.8 }
+  const p = createDrawnProject({ widthMm: page.wMm, depthMm: page.dMm, wallTypeKey: 'wood-2x6', floor: 'none', page, blank: true })
+  it('is the page, at the drawn scale, with no walls on it', () => {
+    expect(p.drawing.parsedWalls).toHaveLength(0)
+    expect(p.drawing.scaleMmPerPx).toBe(DRAWN_MM_PER_PX)
+    expect(p.drawing.scaleConfidence).toBe('parsed')
+    expect(p.drawing.rasterWidth).toBe(Math.round(page.wMm / DRAWN_MM_PER_PX))
+    expect(p.drawing.rasterHeight).toBe(Math.round(page.dMm / DRAWN_MM_PER_PX))
+  })
+  it('is known as a drawn sheet, so Find the rest is not offered on it', () => {
+    expect(isDrawnSheet(p.drawing)).toBe(true)
+    expect(p.floorAreas).toHaveLength(0)
+  })
+})
