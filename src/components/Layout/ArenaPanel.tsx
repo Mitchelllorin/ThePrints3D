@@ -23,7 +23,7 @@
  * strip at its minimum: it carries the run and the two ways back, and the part
  * gets the band the strip was occupying. One surface at the break, never two.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BENCH_LEVEL_COLOR, PHASE_COLOR, PHASE_LABEL, PRESETS, RAMP_MAX, RAMP_STEP,
   arenaRoster, benchLevelFor, breakFor, envelopeLine, envelopeOf, holdsAt, isRateable,
@@ -34,6 +34,31 @@ import { loadLog } from '../../lib/fuseRecord'
 import { useBenchStore } from '../../store/useBenchStore'
 import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import styles from './ArenaPanel.module.css'
+import {
+  RampStrip, battleTicks, breakOrder, defaultSet, randomPart, randomSet, shortLabel,
+  type RampState, type RampTick,
+} from './ramp-strip/RampStrip'
+
+const MODES = [
+  { id: 'solo', label: 'Solo' },
+  // Two to five members on the same job; the first to break ends the run.
+  { id: 'battle', label: 'Battle' },
+]
+const SPAN = RAMP_MAX - 1
+
+type Setup = Parameters<typeof verdictAt>[1]
+
+/** Where a member goes past L/360 (sag) and where it breaks, as ramp multiples. */
+function scanRamp(spec: ArenaSpecimen, setup: Setup): { sag: number | null; breaks: number | null } {
+  let sag: number | null = null
+  let breaks: number | null = null
+  for (let m = 1; m <= RAMP_MAX + 1e-9 && breaks == null; m += RAMP_STEP) {
+    const v = verdictAt(spec, setup, m)
+    if (sag == null && v.utilisation.deflection >= 1) sag = m
+    if (v.strengthFailed) breaks = m
+  }
+  return { sag, breaks }
+}
 
 /** What each basis means, on the card, in the trade's words. */
 const BASIS_LABEL: Record<ArenaSpecimen['basis'], string> = {
@@ -44,40 +69,6 @@ const BASIS_LABEL: Record<ArenaSpecimen['basis'], string> = {
 
 const pct = (u: number) => (Number.isFinite(u) ? `${(u * 100).toFixed(0)}%` : '—')
 const num = (n: number) => (Number.isFinite(n) ? Math.round(n).toLocaleString('en-CA') : '—')
-
-/**
- * One limit, as a single line in the strip: name, utilisation, and a 3 px bar
- * whose mark is the limit. The owner of the number lives in the sheet — on a
- * 360 px phone there is no room for it beside three bars, and the failure card
- * says it in full at the moment it matters.
- */
-function MiniGauge({ name, utilisation, service }: {
-  name: string
-  utilisation: number
-  service?: boolean
-}) {
-  const level = service ? serviceLevelFor(utilisation) : benchLevelFor(utilisation)
-  const fill = Math.min(1, Math.max(0, Number.isFinite(utilisation) ? utilisation : 1))
-  return (
-    <div className={styles.mini}>
-      <div className={styles.miniTop}>
-        <span className={styles.miniName}>{name}</span>
-        <span className={styles.miniPct} style={{ color: BENCH_LEVEL_COLOR[level] }}>{pct(utilisation)}</span>
-      </div>
-      <div
-        className={styles.miniTrack}
-        role="meter"
-        aria-valuenow={Math.round((Number.isFinite(utilisation) ? utilisation : 1) * 100)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={`${name}, ${pct(utilisation)} of the limit`}
-      >
-        <span className={styles.miniFill} style={{ width: `${fill * 100}%`, background: BENCH_LEVEL_COLOR[level] }} />
-        <span className={styles.miniLimit} aria-hidden />
-      </div>
-    </div>
-  )
-}
 
 /** One limit in the sheet: the same bar, with the reading, the limit and whose it is. */
 function StressRow({ name, utilisation, reading, limit, unit, owner, service }: {
@@ -131,12 +122,47 @@ export default function ArenaPanel() {
   const holding = useBenchStore((s) => s.holding)
   const holdStartedAt = useBenchStore((s) => s.holdStartedAt)
   const breakState = useBenchStore((s) => s.break)
+  const rate = useBenchStore((s) => s.rate)
+  const runFiled = useBenchStore((s) => s.runFiled)
 
   const [sheetOpen, setSheetOpen] = useState(false)
 
   const specimen = specimenId ? roster.find((s) => s.id === specimenId) ?? null : null
   const onBench = specimen && isRateable(specimen) ? specimen : null
   const verdict = onBench ? verdictAt(onBench, setup, multiple) : null
+
+  /** Battle: the line-up, two to five members on this one job. null is Solo. */
+  const [lineup, setLineupState] = useState<string[] | null>(null)
+  const battle = Array.isArray(lineup) && lineup.length > 1
+
+  /** Every member in play, with where on the track it breaks. */
+  const contenders = useMemo(() => {
+    if (!battle) return []
+    return lineup.map((id) => {
+      const spec = roster.find((r) => r.id === id)
+      const b = spec && isRateable(spec) ? scanRamp(spec, setup).breaks : null
+      return { id, label: spec?.label ?? id, breaksAt: b != null && b > 1 ? (b - 1) / SPAN : null }
+    })
+  }, [battle, lineup, roster, setup])
+
+  /** Solo: where this member goes past L/360 and where it breaks. Battle: each one's break. */
+  const ticks = useMemo<RampTick[]>(() => {
+    if (battle) return battleTicks(contenders)
+    if (!onBench) return []
+    const { sag, breaks } = scanRamp(onBench, setup)
+    const out: RampTick[] = []
+    if (sag != null && sag > 1) out.push({ at: (sag - 1) / SPAN, kind: 'limit', label: 'L/360' })
+    if (breaks != null && breaks > 1) out.push({ at: (breaks - 1) / SPAN, kind: 'break', label: 'breaks' })
+    return out
+  }, [battle, contenders, onBench, setup])
+
+  /** The card sits on top of the strip, so it needs the strip's height. */
+  const reportHeight = useCallback((px: number) => {
+    document.documentElement.style.setProperty('--rs-h', `${px}px`)
+  }, [])
+  useEffect(() => () => {
+    document.documentElement.style.removeProperty('--rs-h')
+  }, [])
 
   /** The ramp: ~11 ticks a second, the rate the family's bench runs at. */
   useEffect(() => {
@@ -218,12 +244,25 @@ export default function ArenaPanel() {
     s.setSpecimen(s.specimenId === id ? null : id)
   }
 
+  /** Battle: the member expected to go first is the one on the bench. */
+  const setLineup = (ids: string[] | null) => {
+    setLineupState(ids)
+    if (!ids || ids.length < 2) return
+    const order = breakOrder(ids.map((id) => {
+      const spec = roster.find((r) => r.id === id)
+      const b = spec && isRateable(spec) ? scanRamp(spec, setup).breaks : null
+      return { id, label: id, breaksAt: b }
+    }))
+    const go = order[0]?.id
+    const s = useBenchStore.getState()
+    if (go && go !== s.specimenId) {
+      if (s.break) s.dismiss()
+      s.setSpecimen(go)
+    }
+  }
+
   const presetActive = (p: BenchPreset) =>
     p.specimenId === specimenId && p.setup.spanFt === setup.spanFt
-
-  /* ── Broken: the card is the strip at its minimum. Nothing else. ────────── */
-
-  if (breakState) return null
 
   /* ── The parts sheet — transient, and it leaves when a run starts. ──────── */
 
@@ -242,6 +281,21 @@ export default function ArenaPanel() {
         </div>
 
         <div className={styles.sheetBody}>
+          <div className={styles.presets}>
+            {PRESETS.map((p) => (
+              <button
+                key={p.id}
+                data-testid="ramp-preset"
+                className={`${styles.preset} ${presetActive(p) ? styles.presetOn : ''}`}
+                onClick={() => applyPreset(p)}
+                title={p.note}
+                aria-pressed={presetActive(p)}
+              >
+                <span className={styles.presetName}>{p.label}</span>
+                <span className={styles.presetMeta}>breaks {p.breaks.at.toFixed(2)}× · holds {holdsAt(p).toFixed(2)}×</span>
+              </button>
+            ))}
+          </div>
           <label className={styles.field}>
             <span className={styles.fieldLabel}>
               Span <b>{setup.spanFt} ft</b>
@@ -372,81 +426,75 @@ export default function ArenaPanel() {
     )
   }
 
-  /* ── The strip ──────────────────────────────────────────────────────────── */
+  /* ── The strip: the family one (ramp-strip/, canonical in _tools/ramp-strip) ── */
+
+  const state: RampState = breakState
+    ? 'failed'
+    : running
+      ? 'running'
+      : holding
+        ? 'paused'
+        : runFiled && multiple >= RAMP_MAX
+          ? 'done'
+          : 'idle'
+  // Strength is what breaks; sag is the app's serviceability line and never does.
+  const level = breakState
+    ? 'failed'
+    : verdict
+      ? benchLevelFor(Math.max(verdict.utilisation.bending, verdict.utilisation.shear))
+      : 'safe'
+  const plf = (m: number) => num((setup.liveLoadPsf + setup.deadLoadPsf) * setup.spacingFt * m)
 
   return (
-    <div id="arena-strip" data-testid="ramp-strip" className={styles.strip}>
-      <div className={styles.head}>
-        <span className={styles.mark}>THE RAMP</span>
-        <span className={styles.rampValue}>
-          {multiple.toFixed(2)}× · {num((setup.liveLoadPsf + setup.deadLoadPsf) * setup.spacingFt * multiple)} plf
-        </span>
-      </div>
-
-      {verdict ? (
-        <div className={styles.gauges}>
-          <MiniGauge name="Bend" utilisation={verdict.utilisation.bending} />
-          <MiniGauge name="Shear" utilisation={verdict.utilisation.shear} />
-          <MiniGauge name="Sag" utilisation={verdict.utilisation.deflection} service />
-        </div>
-      ) : (
-        <p className={styles.empty}>Pick a part. Open Parts.</p>
-      )}
-
-      <div className={styles.presets}>
-        {PRESETS.map((p) => (
-          <button
-            key={p.id}
-            data-testid="ramp-preset"
-            className={`${styles.preset} ${presetActive(p) ? styles.presetOn : ''}`}
-            onClick={() => applyPreset(p)}
-            title={p.note}
-            aria-pressed={presetActive(p)}
-          >
-            <span className={styles.presetName}>{p.label}</span>
-            <span className={styles.presetMeta}>breaks {p.breaks.at.toFixed(2)}× · holds {holdsAt(p).toFixed(2)}×</span>
-          </button>
-        ))}
-      </div>
-
-      <input
-        className={styles.range}
-        type="range"
-        min={1}
-        max={RAMP_MAX}
-        step={RAMP_STEP}
-        value={multiple}
-        onChange={(e) => useBenchStore.getState().setMultiple(Number(e.target.value))}
-        aria-label="Load, multiple of the entered load"
-      />
-
-      <div className={styles.actions}>
-        <button
-          data-testid="ramp-push"
-          className={styles.push}
-          onClick={startRun}
-          disabled={!onBench}
-          aria-busy={running}
-        >
-          {running ? 'Pushing' : multiple > 1 ? 'More' : 'Push it'}
-        </button>
-        <button
-          className={`${styles.hold} ${holding ? styles.holdOn : ''}`}
-          onClick={holdRun}
-          disabled={!onBench}
-          aria-pressed={holding}
-        >
-          {holding ? `${held.toFixed(0)}s` : 'Hold'}
-        </button>
-        <button
-          className={styles.parts}
-          onClick={() => setSheetOpen(true)}
-          aria-expanded={false}
-        >
-          Parts
-        </button>
-        <button data-testid="ramp-reset" className={styles.reset} onClick={resetBench}>Reset</button>
-      </div>
-    </div>
+    <RampStrip
+      attrs={{ id: 'arena-strip', 'data-testid': 'ramp-strip' }}
+      modes={MODES}
+      mode={battle ? 'battle' : 'solo'}
+      onMode={(id) => setLineup(id === 'solo' ? null : lineup ?? defaultSet(parts, specimenId ?? undefined, 3))}
+      parts={parts}
+      part={specimenId ?? undefined}
+      onPart={(id) => useBenchStore.getState().setSpecimen(id)}
+      picked={battle ? lineup : undefined}
+      onPicked={battle ? setLineup : undefined}
+      onShuffle={() => {
+        if (battle) setLineup(randomSet(parts, lineup.length))
+        else {
+          const id = randomPart(parts, specimenId ?? undefined)
+          if (id) useBenchStore.getState().setSpecimen(id)
+        }
+      }}
+      rate={rate}
+      onRate={(r) => useBenchStore.getState().setRate(r)}
+      value={(multiple - 1) / SPAN}
+      onValue={(v) => useBenchStore.getState().setMultiple(1 + v * SPAN)}
+      step={RAMP_STEP / SPAN}
+      readout={`${multiple.toFixed(2)}× · ${plf(multiple)} plf`}
+      level={level}
+      ticks={ticks}
+      state={state}
+      onRun={() => {
+        if (breakState) useBenchStore.getState().dismiss()
+        // The span may have changed since the line-up was picked, and with it who goes first.
+        if (battle) setLineup(lineup)
+        startRun()
+      }}
+      onPause={holdRun}
+      onResume={() => {
+        clearSurfaces()
+        useBenchStore.getState().start()
+      }}
+      onReset={resetBench}
+      result={
+        breakState
+          ? battle
+            ? `${shortLabel(specimen?.label ?? 'Member')} first · ${multiple.toFixed(2)}×`
+            : `Broke at ${multiple.toFixed(2)}×`
+          : state === 'done'
+            ? `Held to ${RAMP_MAX.toFixed(2)}×`
+            : null
+      }
+      onMore={() => setSheetOpen(true)}
+      onHeight={reportHeight}
+    />
   )
 }

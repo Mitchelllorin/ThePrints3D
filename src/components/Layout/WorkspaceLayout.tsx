@@ -10,7 +10,6 @@ import type { BuildingType } from '../../onboarding/types'
 import { convertValue, convertLength, type ConverterKind, type ConverterUnit, type LengthFormat } from '../../services/unitConverter'
 import ModelViewer from '../Viewer3D/ModelViewer'
 import TakeoffContent from '../Viewer3D/TakeoffPanel'
-import DrawItSheet from './DrawItSheet'
 import InferencePrompt from '../Viewer3D/InferencePrompt'
 import TopIcons from './TopIcons'
 import EdgeDrawer from './EdgeDrawer'
@@ -326,6 +325,7 @@ function SettingsContent() {
         <Select label="Type" val={cfg.buildType} options={BUILD_TYPE_OPTIONS} onChange={(v) => setCfg({ buildType: v as BuildingType })} />
         <Toggle label="Auto framing" val={cfg.buildAutoEnableFraming} onChange={(v) => setCfg({ buildAutoEnableFraming: v })} />
         <Toggle label="Auto shell (slab → fascia)" val={cfg.buildAutoShell} onChange={(v) => setCfg({ buildAutoShell: v })} />
+        <Toggle label="Graph paper when drawing" val={cfg.graphPaper} onChange={(v) => setCfg({ graphPaper: v })} />
       </CollapsibleSection>
 
       <CollapsibleSection id="trades" title="Plumbing / Electrical" openId={openId} setOpenId={setOpenId}>
@@ -620,9 +620,6 @@ export default function WorkspaceLayout() {
   // existed and was already wired into DrawingUploader; the workspace chip just
   // never reached it.
   const [scanOpen, setScanOpen] = useState(false)
-  // DRAW IT — the typed-sizes way in. Opened from the start card, closes itself
-  // the moment a project exists.
-  const [drawItOpen, setDrawItOpen] = useState(false)
   // Save & load, from the top bar (TopIcons): the job list as its own sheet.
   const [jobsOpen, setJobsOpen] = useState(false)
   /** The tour and the sample plans, folded away until asked for. */
@@ -965,6 +962,47 @@ export default function WorkspaceLayout() {
     closePanels()
   }
 
+  /**
+   * DRAW IT — ONE DRAWING TOOL. Drawing from nothing and drawing over a plan
+   * are the same job, so they are the same tool: the workspace's own, looking
+   * straight down. With no plan open, the paper is a blank squared sheet at a
+   * known scale (40 x 30 ft, or 12 x 9 m); with a plan open, the plan is the
+   * paper. There used to be a separate Draw it sheet with its own editor, and
+   * every fix landed in one and not the other.
+   */
+  const drawIt = () => {
+    const app = useAppStore.getState()
+    const fp = useFloorplanLocalStore.getState()
+    const open = app.drawings.find((d) => d.id === app.selectedDrawingId) ?? app.drawings[0]
+    if (!open) {
+      const { activeUnit: u, lengthFormat } = useConfigStore.getState()
+      const metric = lengthFormat === 'decimal' && (u === 'mm' || u === 'cm' || u === 'm')
+      const FT = 304.8
+      const w = metric ? 12000 : 40 * FT, d = metric ? 9000 : 30 * FT
+      app.startDrawnProject({
+        widthMm: w, depthMm: d, wallTypeKey: 'wood-2x6', floor: 'none', name: 'New project',
+        page: { originMm: { x: 0, y: 0 }, wMm: w, dMm: d }, blank: true,
+      })
+    } else if (!(open.scaleMmPerPx && open.scaleConfidence === 'parsed')) {
+      // A plan with no scale yet: set it first, or every wall is the wrong
+      // length. The drawing tool opens the moment the scale is in.
+      fp.setActiveTraceLayer('framing')
+      fp.setTraceStyle('line')
+      fp.setTraceShape('wall')
+      fp.setPendingTraceAfterCalibration(true)
+      if (!useAppStore.getState().floorplanOverlay.calibrationMode) recalibrate()
+      return
+    }
+    for (const k of ['build', 'settings', 'place', 'ask'] as const) fp.setDrawerOpen(k, false)
+    fp.setActiveTraceLayer('framing')
+    fp.setTraceStyle('line')
+    fp.setTraceShape('wall')
+    fp.setPlanView(true)
+    const aspect = window.innerWidth / Math.max(1, window.innerHeight)
+    useAppStore.getState().setCameraPreset(planViewCamera(useAppStore.getState().floorplanOverlay, aspect))
+    fp.setTraceMode(true)
+  }
+
   // Free exports carry a corner mark; Pro exports the canvas untouched. The
   // export itself is never blocked — a share is how other trades find the app,
   // so the free tier keeps it and simply signs it. Same path as the rail's
@@ -1137,8 +1175,29 @@ export default function WorkspaceLayout() {
     const files = pendingImport
     if (!files) return
     setPendingImport(null)
-    addDrawings(files, { manualWalls })
+    const ids = addDrawings(files, { manualWalls })
+    // THE PLAN YOU JUST OPENED IS THE ONE ON SCREEN. A new drawing only took
+    // the workspace when nothing was showing, so after Draw it the blank sheet
+    // stayed up and the plan loaded out of sight. Put the drawing tool down
+    // too: it belonged to the sheet you were on, not this one.
+    if (ids[0]) {
+      useFloorplanLocalStore.getState().setTraceMode(false)
+      updateOverlay({ drawingId: ids[0] }, false)
+    }
+    // "I'll trace them" means: put me in the drawing tool on this plan.
+    if (manualWalls && ids[0]) setTraceOnReady(ids[0])
   }
+  /** A plan imported to trace: open the drawing tool on it once it has loaded. */
+  const [traceOnReady, setTraceOnReady] = useState<string | null>(null)
+  const traceSheetStatus = useAppStore((s) => (traceOnReady ? s.drawings.find((d) => d.id === traceOnReady)?.status ?? null : null))
+  useEffect(() => {
+    if (!traceOnReady) return
+    if (traceSheetStatus === 'error' || traceSheetStatus == null) { setTraceOnReady(null); return }
+    if (traceSheetStatus !== 'ready') return
+    setTraceOnReady(null)
+    drawIt()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [traceOnReady, traceSheetStatus])
 
   // ─── THE Escape owner ──────────────────────────────────────────────────────
   //
@@ -1268,8 +1327,6 @@ export default function WorkspaceLayout() {
       <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
         multiple style={{ display: 'none' }} onChange={handleFileChange} />
 
-      {drawItOpen && <DrawItSheet onClose={() => setDrawItOpen(false)} />}
-
       {scanOpen && (
         <CameraCapture
           onCapture={(file) => { setScanOpen(false); setPendingImport([file]) }}
@@ -1375,11 +1432,8 @@ export default function WorkspaceLayout() {
         <p className={styles.sectionTitle}>Tools</p>
         <button className={styles.specBtn} onClick={() => { setDrawerOpen('settings', false); startGuidedTour() }}>🎓 Guided tutorial</button>
         <button className={styles.specBtn} onClick={() => fileInputRef.current?.click()}>Open a plan</button>
-        {/* DRAW IT, WITH A PLAN ALREADY OPEN. The sheet only had a door on the
-            empty start card, so the one thing it can now do with a print — use
-            it as the paper and draw the walls on it — was behind a door that
-            closes the moment there is a print to draw on. */}
-        <button className={styles.specBtn} onClick={() => { setDrawerOpen('settings', false); setDrawItOpen(true) }}>✏ Draw it — walls on the print</button>
+        {/* DRAW IT, WITH A PLAN ALREADY OPEN: the same drawing tool, on the plan. */}
+        <button className={styles.specBtn} onClick={drawIt}>✏ Draw walls</button>
         <PresetPanel onLoad={handleLoadPreset} />
         <button className={styles.specBtn} onClick={recalibrate}>
           {calibrationMode ? 'Calibrating…' : 'Recalibrate'}
@@ -1413,9 +1467,9 @@ export default function WorkspaceLayout() {
               a building, open a plan they already have, or look at a finished
               one. Everything else is still here, one line down, for the person
               who goes looking. */}
-          <button className={styles.drawItChip} onClick={() => setDrawItOpen(true)}>
+          <button className={styles.drawItChip} onClick={drawIt}>
             ✏ Draw it
-            <span className={styles.drawItNote}>drag it to size</span>
+            <span className={styles.drawItNote}>tap the corners</span>
           </button>
           <div className={styles.uploadHintActions}>
             <button className={styles.uploadHintChip} onClick={() => fileInputRef.current?.click()}>Open a plan</button>

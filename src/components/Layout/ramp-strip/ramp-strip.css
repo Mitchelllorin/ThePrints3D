@@ -1,0 +1,271 @@
+/* RampStrip — the family Arena strip. Canonical copy: C:\Dev\_tools\ramp-strip.
+   Copied byte-for-byte into every app; edit here and run sync.mjs.
+   Slim, glass, on the bottom edge, never more than a third of a phone screen. */
+.rs {
+  --rs-safe: #3fbf6e;
+  --rs-stressed: #d9c23a;
+  --rs-warning: #e0a03a;
+  --rs-critical: #e5643f;
+  --rs-failed: #ff3b2f;
+  --rs-level: var(--rs-safe);
+  --rs-ink: #e8eef5;
+  --rs-dim: #8a9bb0;
+  --rs-line: rgba(66, 84, 104, 0.9);
+  --rs-btn: rgba(30, 40, 51, 0.85);
+  --rs-on: #3d9ae8;
+  --rs-go: #e5643f;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px calc(env(safe-area-inset-right, 0px) + 10px)
+    calc(env(safe-area-inset-bottom, 0px) + 8px) calc(env(safe-area-inset-left, 0px) + 10px);
+  max-height: 33vh;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: rgba(21, 28, 37, 0.82);
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  border-top: 1px solid var(--rs-line);
+  border-radius: 12px 12px 0 0;
+  color: var(--rs-ink);
+  font: 600 13px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  /* Apps lay the Arena over the scene with pointer-events: none so the scene
+     still turns; the strip must take taps back or nothing on it works. */
+  pointer-events: auto;
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .rs { background: rgba(21, 28, 37, 0.96); }
+}
+.rs *, .rs *::before, .rs *::after { box-sizing: border-box; }
+.rs--stressed { --rs-level: var(--rs-stressed); }
+.rs--warning { --rs-level: var(--rs-warning); }
+.rs--critical { --rs-level: var(--rs-critical); }
+.rs--failed { --rs-level: var(--rs-failed); }
+
+.rs button, .rs select { font: inherit; color: inherit; margin: 0; }
+.rs button:disabled { opacity: 0.4; }
+
+/* Row 1: modes · part · speed */
+.rs-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.rs-group { display: flex; gap: 3px; flex: 0 0 auto; }
+.rs-chip {
+  min-height: 32px;
+  padding: 0 9px;
+  border-radius: 8px;
+  border: 1px solid var(--rs-line);
+  background: var(--rs-btn);
+  color: #aebccd;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rs-chip.is-on { background: var(--rs-on); border-color: var(--rs-on); color: #04121f; }
+.rs-more { padding: 0 8px; font-size: 16px; line-height: 1; }
+.rs-spacer { flex: 1 1 auto; }
+.rs-part {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 22px 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--rs-line);
+  background: var(--rs-btn)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23aebccd' stroke-width='1.6'/%3E%3C/svg%3E")
+    no-repeat right 8px center;
+  appearance: none;
+  -webkit-appearance: none;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+}
+.rs-part option { background: #151c25; color: var(--rs-ink); }
+
+/* Row 2: the track. Fill coloured by level; limit and break ticks above it. */
+.rs-track { position: relative; height: 30px; display: flex; align-items: center; }
+.rs-track input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+.rs-track input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, var(--rs-level) calc(var(--rs-v) * 100%), rgba(120, 140, 160, 0.35) 0);
+}
+.rs-track input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: rgba(120, 140, 160, 0.35); }
+.rs-track input[type="range"]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--rs-level); }
+.rs-track input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: var(--rs-level);
+  border: 2px solid #0e141b;
+  box-shadow: 0 0 0 1px var(--rs-level);
+}
+.rs-track input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--rs-level);
+  border: 2px solid #0e141b;
+}
+/* A tick sits on the track where the thumb's centre would be at that value. */
+.rs-tick {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: calc(11px + var(--rs-at) * (100% - 22px));
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 0;
+}
+.rs-tick--limit { background: var(--rs-warning); }
+.rs-tick--break { background: var(--rs-failed); }
+.rs-tick i {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translate(-50%, 1px);
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--rs-dim);
+}
+/* Near either end the label leans inward rather than off the strip.
+   (After the rule above: same specificity, so order decides.) */
+.rs-tick--end i { left: auto; right: 0; transform: translate(0, 1px); }
+.rs-tick--start i { left: 0; transform: translate(0, 1px); }
+
+/* Row 3: − readout + · Run · reset */
+.rs-bottom { display: flex; align-items: stretch; gap: 6px; }
+.rs-step { display: flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; }
+.rs-nudge {
+  width: 42px;
+  min-height: 42px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  border: 1px solid var(--rs-line);
+  background: var(--rs-btn);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: none;
+}
+.rs-readout {
+  min-width: 72px;
+  max-width: 132px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--rs-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* After a run − and + are out of play, so they step aside and the result
+   ("Pistons first · 22%") gets their room. */
+.rs-state--failed .rs-nudge,
+.rs-state--done .rs-nudge { display: none; }
+.rs-state--failed .rs-step,
+.rs-state--done .rs-step { flex: 1 1 auto; }
+.rs-state--failed .rs-readout,
+.rs-state--done .rs-readout { flex: 1 1 auto; max-width: none; text-align: left; padding-left: 4px; }
+.rs-state--failed .rs-run,
+.rs-state--done .rs-run { flex: 0 0 auto; }
+.rs--warning .rs-readout,
+.rs--critical .rs-readout,
+.rs--failed .rs-readout { color: var(--rs-level); }
+.rs-run {
+  flex: 1 1 auto;
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--rs-go);
+  background: var(--rs-go);
+  color: #1a0a06;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.rs-state--running .rs-run { background: transparent; color: var(--rs-go); }
+.rs-state--paused .rs-run { background: var(--rs-warning); border-color: var(--rs-warning); }
+.rs-reset {
+  width: 42px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  border: 1px solid var(--rs-line);
+  background: var(--rs-btn);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+/* 🎲 and Battle's line-up. The list opens over the scene just above the strip
+   and is gone again on Done, Run, Escape or a tap anywhere else. */
+.rs-multi { flex: 1 1 auto; min-width: 0; display: flex; }
+.rs-shuffle { margin-left: auto; }
+.rs-multi > .rs-part { width: 100%; text-align: left; }
+.rs-pick {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 6px);
+  width: min(300px, calc(100% - 20px));
+  max-height: 40vh;
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(21, 28, 37, 0.95);
+  border: 1px solid var(--rs-line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+}
+.rs-pick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 0 4px 6px;
+  color: var(--rs-dim);
+  font-size: 11px;
+}
+.rs-pick-head .rs-chip { min-height: 28px; }
+.rs-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+}
+.rs-pick-item i { width: 14px; flex: 0 0 auto; font-style: normal; color: var(--rs-on); }
+.rs-pick-item.is-on { background: rgba(61, 154, 232, 0.16); }

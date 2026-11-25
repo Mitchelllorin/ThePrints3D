@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid } from '@react-three/drei'
+import { planViewCamera } from '../../services/builtScene'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { cameraControls } from './cameraControls'
 import CinemaBridge, { CinemaCaption } from '../../cinema/CinemaBridge'
@@ -360,6 +361,7 @@ function PrintAutoFrame() {
   const scale = useAppStore((s) => s.floorplanOverlay.scale)
   const position = useAppStore((s) => s.floorplanOverlay.position)
   const traceMode = useFloorplanLocalStore((s) => s.traceMode)
+  const planView = useFloorplanLocalStore((s) => s.planView)
   const setCameraPreset = useAppStore((s) => s.setCameraPreset)
   const lastKey = useRef<string | null>(null)
   const lastFramedForTrace = useRef(false)
@@ -403,13 +405,18 @@ function PrintAutoFrame() {
      * someone is dragging a window edge — only a real change in shape does.
      */
     const aspect = size.width / size.height
-    const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}:${aspect.toFixed(2)}`
+    const key = `${drawingId}:${Math.round(w)}x${Math.round(d)}:${aspect.toFixed(2)}:${planView ? 'flat' : '3d'}`
     lastFramedForTrace.current = traceMode
     if (lastKey.current === key) return
     lastKey.current = key
+    // DRAWING IS DONE LOOKING STRAIGHT DOWN. A new sheet (a blank one, or a
+    // plan just scaled) used to be framed at an angle here AFTER Draw it had
+    // put the camera flat, so you drew on a tilted diamond and could not reach
+    // its far corner. In plan view, frame it flat.
+    if (planView) { setCameraPreset(planViewCamera({ scale, position }, aspect)); return }
     const mobile = typeof window !== 'undefined' && window.innerWidth < 768
     setCameraPreset(framePrintPreset(w, d, position, aspect, 55, mobile))
-  }, [drawingId, scale, position, size.width, size.height, traceMode, setCameraPreset])
+  }, [drawingId, scale, position, size.width, size.height, traceMode, planView, setCameraPreset])
 
   return null
 }
@@ -1195,6 +1202,11 @@ export default function ModelViewer() {
           maxDistance={200}
           enablePan={panEnabled}
           screenSpacePanning
+          /* Looking straight down, the left button draws, so the paper slides
+             on the right OR the middle button (and two fingers on a phone). */
+          mouseButtons={planView
+            ? { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }
+            : { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
         />
         <OrbitEnabledGuard controlsRef={controlsRef} enabled={orbitEnabled} />
         <CameraPresetApplier controlsRef={controlsRef} />
