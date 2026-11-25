@@ -32,6 +32,9 @@ import { startFuseSync } from '../lib/fuseShare'
 startFuseSync()
 
 /** Round to the ramp's 0.05 grid so 0.1 accumulation cannot drift the reading. */
+/** Load added per tick (~11 a second) at each speed. Fast is three times Slow. */
+const RATE_STEP = { slow: 0.02, fast: 0.06 } as const
+
 function snap(m: number): number {
   return Math.round(m * 100) / 100
 }
@@ -50,6 +53,8 @@ interface BenchState {
   /** Hold parks the ramp and times how long the member has carried the load. */
   holding: boolean
   holdStartedAt: number | null
+  /** How fast Run climbs: Slow, or Fast at three times Slow (the family strip). */
+  rate: 'slow' | 'fast'
   /** The moment, once something has failed. Null while the bench is standing. */
   break: BenchBreak | null
   /** This run is already in the spine (it broke, or it held to the top). */
@@ -60,6 +65,7 @@ interface BenchState {
   setSetup: (patch: Partial<BenchSetup>) => void
   applyPreset: (specimenId: string, setup: BenchSetup) => void
   setMultiple: (m: number) => void
+  setRate: (rate: 'slow' | 'fast') => void
   /** One tick of the ramp. Stops itself at the ceiling. */
   push: () => void
   start: () => void
@@ -86,6 +92,7 @@ export const useBenchStore = create<BenchState>((set) => ({
   running: false,
   holding: false,
   holdStartedAt: null,
+  rate: 'slow',
   break: null,
   runFiled: false,
 
@@ -93,11 +100,12 @@ export const useBenchStore = create<BenchState>((set) => ({
   setSpecimen: (id) => set((s) => (endRun(s), { specimenId: id, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null, runFiled: false })),
   setSetup: (patch) => set((s) => (endRun(s), { setup: { ...s.setup, ...patch }, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null, runFiled: false })),
   applyPreset: (specimenId, setup) => set((s) => (endRun(s), { specimenId, setup, multiple: 1, running: false, holding: false, holdStartedAt: null, break: null, runFiled: false })),
+  setRate: (rate) => set({ rate }),
   setMultiple: (m) => set({ multiple: Math.min(RAMP_MAX, Math.max(1, snap(m))), holding: false, holdStartedAt: null }),
 
   push: () => set((s) => {
     if (s.break) return {}
-    const next = snap(s.multiple + 0.1)
+    const next = snap(s.multiple + RATE_STEP[s.rate])
     if (next >= RAMP_MAX) {
       // Carried the load to the top of the ramp: that is a result, filed now.
       endRun({ ...s, multiple: RAMP_MAX }, true)

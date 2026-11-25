@@ -10,7 +10,8 @@
   z-index: var(--z-sheet);
   left: calc(var(--rail-w, 44px) + 8px);
   right: calc(env(safe-area-inset-right, 0px) + 8px);
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  /* On top of the family Ramp strip, which stays up at the break (--rs-h is its measured height). */
+  bottom: calc(var(--rs-h, 0px) + 8px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -62,7 +63,17 @@
 .numbers dt { color: #b39d95; }
 .numbers dd { margin: 0; text-align: right; }
 
-.actions { display: flex; gap: 8px; }
+/* The two ways back never scroll out of reach: when the card is at its height
+   cap, the text scrolls under them. */
+.actions {
+  display: flex;
+  gap: 8px;
+  position: sticky;
+  bottom: -10px;
+  margin: 0 -12px -10px;
+  padding: 6px 12px 10px;
+  background: rgb(24, 15, 13);
+}
 
 .dismiss, .reset {
   min-height: 48px;
