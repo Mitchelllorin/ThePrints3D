@@ -49,6 +49,7 @@ import { suggestAllCornerTrims } from '../services/cornerInference'
 import { suggestLineSnap } from '../services/lineSnapInference'
 import { autoPlaceOutlets } from '../services/autoPlaceTrades'
 import { useUISettingsStore } from './useUISettingsStore'
+import { detectedOpeningsToFrame } from '../services/detectedOpenings'
 import { pitchToRatio, CEILING_TYPES } from '../data/traceLayers'
 
 /** A rectangle/segment in image pixels (opposite corners or endpoints). */
@@ -75,6 +76,20 @@ export type InferenceSuggestion =
  *  corner) and offers the whole cleanup at once. The single-wall line-snap still
  *  runs for the wall you just drew when there is nothing to trim.
  */
+/** Walls the user already said no to, keyed by where they sit. The sweep runs
+ *  again on every wall drawn, so without this a dismissed trim came straight
+ *  back on the next tap of a long run. A wall that is moved or redrawn has new
+ *  ends, so it gets a fresh key and can be offered again. */
+const dismissedWallKeys = new Set<string>()
+const wallKey = (r: InferRect): string => {
+  const a = `${Math.round(r.x1)},${Math.round(r.y1)}`, b = `${Math.round(r.x2)},${Math.round(r.y2)}`
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
+function forgetSuggestion(sug: InferenceSuggestion): void {
+  if (sug.kind === 'wall-corner-all') sug.trims.forEach((t) => dismissedWallKeys.add(wallKey(t.from)))
+  else if (sug.kind === 'wall-corner' || sug.kind === 'wall-line-snap') dismissedWallKeys.add(wallKey(sug.from))
+}
+
 function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): InferenceSuggestion | null {
   const userWalls = parsedWalls.filter((w) => w.source === 'user')
   if (userWalls.length < 2) return null
@@ -91,7 +106,9 @@ function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): Infe
   for (const walls of byLevel.values()) {
     if (walls.length < 2) continue
     for (const t of suggestAllCornerTrims(walls)) {
-      trims.push({ from: rectOf(walls[t.index]), rect: t.rect })
+      const from = rectOf(walls[t.index])
+      if (dismissedWallKeys.has(wallKey(from))) continue
+      trims.push({ from, rect: t.rect })
     }
   }
   if (trims.length > 0) {
@@ -107,7 +124,7 @@ function cornerSuggestionFor(parsedWalls: ParsedWall[], drawingId: string): Infe
 
   const last = userWalls[userWalls.length - 1]
   const others = userWalls.slice(0, -1)
-  const line = suggestLineSnap(last, others)
+  const line = dismissedWallKeys.has(wallKey(rectOf(last))) ? null : suggestLineSnap(last, others)
   if (line) return { kind: 'wall-line-snap', message: line.message, drawingId, from: rectOf(last), rect: line.rect }
   return null
 }
@@ -966,7 +983,8 @@ function computeFramingResult(
         type: o.type as 'door' | 'window',
       } satisfies ParsedOpening
     })
-  const allOpenings = [...allParsed.flatMap((d) => d.parsedOpenings), ...placedOpenings]
+  const tracedOnly = useUISettingsStore.getState().traceOwnWalls
+  const allOpenings = [...allParsed.flatMap((d) => detectedOpeningsToFrame(d, { tracedOnly })), ...placedOpenings]
   const cfg = useConfigStore.getState()
   const onboardingMeta = loadOnboardingWizardState().meta
   return buildFraming(allWalls, allOpenings, {
@@ -2797,21 +2815,13 @@ export const useAppStore = create<AppState>()(
         })
         st.floorsAreas = [...st.floorsAreas, ...missing]
 
+        const tracedOnly = useUISettingsStore.getState().traceOwnWalls
         for (const d of st.drawings) {
-          // ONLY IN A WALL. The plan reader finds "openings" all over a print —
-          // door swings, dimension gaps, text — and every one of them got a door
-          // or window hung on it, so a floor you traced yourself came out with
-          // doors and windows piled where no wall is. An opening is hung only
-          // where a wall of this plan runs through it.
-          const onAWall = (op: { x: number; y: number }) => d.parsedWalls.some((w) => {
-            const dx = w.x2 - w.x1, dy = w.y2 - w.y1
-            const l2 = dx * dx + dy * dy
-            const t = l2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((op.x - w.x1) * dx + (op.y - w.y1) * dy) / l2))
-            const reach = Math.max(6, (w.thickness ?? 8) * 1.5)
-            return Math.hypot(op.x - (w.x1 + t * dx), op.y - (w.y1 + t * dy)) <= reach
-          })
-          for (const op of d.parsedOpenings) {
-            if (!onAWall(op)) continue
+          // ONLY IN A WALL THE APP READ. The plan reader finds "openings" all
+          // over a print — door swings, dimension gaps, text. Hung on walls you
+          // drew yourself, Frame it came out with doors and windows you never
+          // put there. Walls you draw get the ones you place; see detectedOpenings.
+          for (const op of detectedOpeningsToFrame(d, { tracedOnly })) {
             const key = `${d.floorNumber ?? 0}:${Math.round(op.x)}:${Math.round(op.y)}`
             if (existing.has(key)) continue
             existing.add(key)
@@ -3191,7 +3201,11 @@ export const useAppStore = create<AppState>()(
       })
     },
 
-    dismissInferenceSuggestion: () => set((s) => { s.inferenceSuggestion = null }),
+    dismissInferenceSuggestion: () => {
+      const sug = get().inferenceSuggestion
+      if (sug) forgetSuggestion(sug)
+      set((s) => { s.inferenceSuggestion = null })
+    },
 
     removeFloorsArea: (id) => {
       pushHistory()

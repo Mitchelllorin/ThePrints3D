@@ -17,7 +17,7 @@
  * are placed in screen pixels each frame, so they hold their distance from the
  * point and the pointer at any zoom.
  */
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import Tap from './Tap'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
@@ -41,6 +41,51 @@ function useStopRef() {
     ref.current = el
     if (el) STOP_KINDS.forEach((k) => el.addEventListener(k, stopHere))
   }, [])
+}
+
+/**
+ * A chip anchored on the plan (a picked wall, room or balcony) that keeps itself
+ * in the free part of the screen: under its point if that fits, over it if the
+ * trace controls along the bottom are in the way, and slid sideways rather
+ * than run off an edge or onto the rail. Measured each frame, because the
+ * anchor moves with every pan and zoom. Returns the ref for the chip's div; it
+ * also stops the chip's events reaching the canvas (see useStopRef).
+ */
+function useChipClear(gap = 24) {
+  const stop = useStopRef()
+  const el = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    let raf = 0
+    let ox = 0, oy = 0
+    const tick = () => {
+      raf = requestAnimationFrame(tick)
+      const e = el.current
+      if (!e) return
+      const r = e.getBoundingClientRect()
+      if (r.width === 0) return
+      // Where the chip's centre is with no shift: the anchor (Html centres it).
+      const anchor = { x: r.left + r.width / 2 - ox, y: r.top + r.height / 2 - oy }
+      const h = r.height
+      const area = freeArea({ width: window.innerWidth, height: window.innerHeight })
+      const o = placeClear(anchor, [{ x: 0, y: gap + h / 2 }, { x: 0, y: -(gap + h / 2) }],
+        { w: r.width, h }, area, [{ ...anchor, r: 14 }], 6)
+      const nx = Math.round(o.x), ny = Math.round(o.y)
+      if (nx !== ox || ny !== oy) {
+        ox = nx; oy = ny
+        e.style.transform = `translate(${ox}px, ${oy}px)`
+      }
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [gap])
+  return useCallback((node: HTMLDivElement | null) => { el.current = node; stop(node) }, [stop])
+}
+
+/** A chip's row: wraps to a second line rather than run off a 360-wide phone. */
+const CHIP_ROW: CSSProperties = {
+  display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, alignItems: 'center',
+  whiteSpace: 'nowrap', width: 'max-content',
+  maxWidth: 'min(340px, calc(100vw - var(--rail-w, 44px) - 24px))',
 }
 
 const _v = new THREE.Vector3()
@@ -527,7 +572,7 @@ export function WallEditAids({
   const A = lift(toWorld(a)), B = lift(toWorld(b))
   const mid: PX = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
   const M = lift(toWorld(mid))
-  const stop = useStopRef()
+  const chip = useChipClear(40)
   const [typing, setTyping] = useState(false)
   const [draft, setDraft] = useState('')
   const [bad, setBad] = useState(false)
@@ -558,8 +603,7 @@ export function WallEditAids({
         </Html>
       ) : (
         <Html position={M} center zIndexRange={[10, 10]}>
-          <div ref={stop as (el: HTMLDivElement | null) => void} className={styles.ctx} role="group" aria-label="Picked wall"
-            style={{ transform: 'translate(0, 64px)', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <div ref={chip} className={styles.ctx} role="group" aria-label="Picked wall" style={CHIP_ROW}>
             {typing ? (
               <form className={styles.form} onSubmit={(e) => { e.preventDefault(); submit() }}>
                 <input className={`${styles.input} ${bad ? styles.bad : ''}`} autoFocus inputMode="decimal"
@@ -603,7 +647,7 @@ export function RoomAids({
   onBulkMode: (on: boolean) => void
   onReset: (() => void) | null
 }) {
-  const stop = useStopRef()
+  const chip = useChipClear()
   const [typing, setTyping] = useState(false)
   const [draft, setDraft] = useState('')
   const [bad, setBad] = useState(false)
@@ -642,8 +686,7 @@ export function RoomAids({
       ))}
       {picked && (
         <Html position={lift(toWorld(picked.at))} center zIndexRange={[10, 10]}>
-          <div ref={stop as (el: HTMLDivElement | null) => void} className={styles.ctx} role="group" aria-label="Picked room"
-            style={{ transform: 'translate(0, 40px)', display: 'flex', gap: 6, alignItems: 'center', whiteSpace: 'nowrap' }}>
+          <div ref={chip} className={styles.ctx} role="group" aria-label="Picked room" style={CHIP_ROW}>
             {bulkMode ? (
               <>
                 <span style={{ padding: '0 4px' }}>Tap the walls it runs along</span>
@@ -696,7 +739,7 @@ export function BalconyAids({
   onStack: () => void
   onDelete: () => void
 }) {
-  const stop = useStopRef()
+  const chip = useChipClear()
   const [typing, setTyping] = useState(false)
   const [draft, setDraft] = useState('')
   const [bad, setBad] = useState(false)
@@ -715,8 +758,7 @@ export function BalconyAids({
       {first && <Line points={ring(lift(toWorld(first)), 0.25, 20)} color="#a78bfa" lineWidth={4} />}
       {picked && (
         <Html position={lift(toWorld(picked))} center zIndexRange={[10, 10]}>
-          <div ref={stop as (el: HTMLDivElement | null) => void} className={styles.ctx} role="group" aria-label="Picked balcony"
-            style={{ transform: 'translate(0, 40px)', display: 'flex', gap: 6, alignItems: 'center', whiteSpace: 'nowrap' }}>
+          <div ref={chip} className={styles.ctx} role="group" aria-label="Picked balcony" style={CHIP_ROW}>
             {typing ? (
               <form className={styles.form} onSubmit={(e) => { e.preventDefault(); submit() }}>
                 <input className={`${styles.input} ${bad ? styles.bad : ''}`} autoFocus inputMode="decimal"
