@@ -17,7 +17,7 @@
  * are placed in screen pixels each frame, so they hold their distance from the
  * point and the pointer at any zoom.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import Tap from './Tap'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
@@ -41,6 +41,51 @@ function useStopRef() {
     ref.current = el
     if (el) STOP_KINDS.forEach((k) => el.addEventListener(k, stopHere))
   }, [])
+}
+
+/**
+ * A chip anchored on the plan (a picked wall, room or balcony) that keeps itself
+ * in the free part of the screen: under its point if that fits, over it if the
+ * trace controls along the bottom are in the way, and slid sideways rather
+ * than run off an edge or onto the rail. Measured each frame, because the
+ * anchor moves with every pan and zoom. Returns the ref for the chip's div; it
+ * also stops the chip's events reaching the canvas (see useStopRef).
+ */
+function useChipClear(gap = 24) {
+  const stop = useStopRef()
+  const el = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    let raf = 0
+    let ox = 0, oy = 0
+    const tick = () => {
+      raf = requestAnimationFrame(tick)
+      const e = el.current
+      if (!e) return
+      const r = e.getBoundingClientRect()
+      if (r.width === 0) return
+      // Where the chip's centre is with no shift: the anchor (Html centres it).
+      const anchor = { x: r.left + r.width / 2 - ox, y: r.top + r.height / 2 - oy }
+      const h = r.height
+      const area = freeArea({ width: window.innerWidth, height: window.innerHeight })
+      const o = placeClear(anchor, [{ x: 0, y: gap + h / 2 }, { x: 0, y: -(gap + h / 2) }],
+        { w: r.width, h }, area, [{ ...anchor, r: 14 }], 6)
+      const nx = Math.round(o.x), ny = Math.round(o.y)
+      if (nx !== ox || ny !== oy) {
+        ox = nx; oy = ny
+        e.style.transform = `translate(${ox}px, ${oy}px)`
+      }
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [gap])
+  return useCallback((node: HTMLDivElement | null) => { el.current = node; stop(node) }, [stop])
+}
+
+/** A chip's row: wraps to a second line rather than run off a 360-wide phone. */
+const CHIP_ROW: CSSProperties = {
+  display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 6, alignItems: 'center',
+  whiteSpace: 'nowrap', width: 'max-content',
+  maxWidth: 'min(340px, calc(100vw - var(--rail-w, 44px) - 24px))',
 }
 
 const _v = new THREE.Vector3()
@@ -190,7 +235,7 @@ export function TraceAids({
               {typing ? (
                 <form className={styles.form} onSubmit={(e) => { e.preventDefault(); submit() }}>
                   <input className={`${styles.input} ${bad ? styles.bad : ''}`} autoFocus inputMode="decimal"
-                    placeholder={`${snap.cornerDeg}°`} value={draft}
+                    placeholder={`${snap.cornerDeg}°`}
                     onChange={(e) => { setDraft(e.target.value); setBad(false) }}
                     onKeyDown={(e) => { if (e.key === 'Escape') { setTyping(null); setDraft('') } }}
                     onBlur={(e) => { if (!(e.currentTarget.parentElement?.contains(e.relatedTarget as Node | null))) { setTyping(null); setDraft('') } }}
@@ -298,10 +343,29 @@ export function Loupe({
     g.lineWidth = 1
     g.beginPath(); g.arc(SIZE / 2, SIZE / 2, SIZE / 2 - 0.5, 0, Math.PI * 2); g.stroke()
   }, [img, pixel, pxPerPrintPx, segments, snapped])
+  // ON SCREEN, ALWAYS. Above the finger by default; near the top edge there is
+  // no room there, so it sits beside the finger instead (the side with room),
+  // and it never hangs off the left or right edge either.
+  const [shift, setShift] = useState<[number, number]>([0, -DRAW.LOUPE_LIFT_PX])
+  useLayoutEffect(() => {
+    const host = canvasRef.current?.parentElement
+    if (!host) return
+    const r = host.getBoundingClientRect()
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2
+    const half = SIZE / 2, pad = 8, lift = DRAW.LOUPE_LIFT_PX
+    let dx = 0, dy = -lift
+    if (cy - lift - half < pad) {
+      dy = 0
+      dx = cx + lift + half <= window.innerWidth - pad ? lift : -lift
+    }
+    dx = Math.max(pad + half - cx, Math.min(window.innerWidth - pad - half - cx, dx))
+    dy = Math.max(pad + half - cy, Math.min(window.innerHeight - pad - half - cy, dy))
+    setShift((s0) => (s0[0] === dx && s0[1] === dy ? s0 : [dx, dy]))
+  }, [pixel, at])
   return (
     <Html position={at} center zIndexRange={[10, 10]} style={{ pointerEvents: 'none' }}>
       <canvas ref={canvasRef} data-loupe
-        style={{ width: SIZE, height: SIZE, transform: `translateY(${-DRAW.LOUPE_LIFT_PX}px)`, pointerEvents: 'none', display: 'block' }} />
+        style={{ width: SIZE, height: SIZE, transform: `translate(${shift[0]}px, ${shift[1]}px)`, pointerEvents: 'none', display: 'block' }} />
     </Html>
   )
 }
@@ -393,7 +457,7 @@ export function BendHandle({
                   if (onTypedRadius(draft)) { setTyping(false); setDraft(''); setBad(false) } else setBad(true)
                 }}>
                   <input className={`${styles.input} ${bad ? styles.bad : ''}`} autoFocus inputMode="decimal"
-                    placeholder={label} value={draft} aria-label="Arc radius"
+                    placeholder={label} aria-label="Arc radius"
                     onChange={(e) => { setDraft(e.target.value); setBad(false) }}
                     onKeyDown={(e) => { if (e.key === 'Escape') { setTyping(false); setDraft('') } }} />
                   <button type="submit" className={styles.go}>Set</button>
@@ -477,6 +541,245 @@ export function WallLengths({ walls, toWorld, label, offsetPx, minPx }: {
           </Html>
         )
       })}
+    </>
+  )
+}
+
+/**
+ * A WALL PICKED WITH ✎ EDIT. Lit up, a dot on each end (drag one: the wall
+ * swings onto an angle about its other end), a + on its middle (drag it, or
+ * anywhere along the wall: the wall is cut there and the new corner comes out
+ * with your finger, so part of it goes on an angle). Beside it, its corner
+ * angle — tap to type one — and Delete. While a dot is dragged the chip steps
+ * aside and the length and angle read at the finger instead.
+ */
+export function WallEditAids({
+  toWorld, worldPerScreenPx, a, b, angleDeg, onTypedAngle, onDelete, live,
+}: {
+  toWorld: (px: PX) => P3
+  worldPerScreenPx: number
+  a: PX
+  b: PX
+  /** The corner angle at the wall's held end (90 = square), or its angle off the plan's level. */
+  angleDeg: number
+  onTypedAngle: (text: string) => boolean
+  onDelete: () => void
+  /** While dragging: where the moving corner is and what it reads. */
+  live: { at: PX; text: string } | null
+}) {
+  const k = worldPerScreenPx
+  const lift = (p: P3, dy = 0.05): P3 => [p[0], p[1] + dy, p[2]]
+  const A = lift(toWorld(a)), B = lift(toWorld(b))
+  const mid: PX = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+  const M = lift(toWorld(mid))
+  const chip = useChipClear(40)
+  const [typing, setTyping] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [bad, setBad] = useState(false)
+  const plus = 7 * k
+  const dx = B[0] - A[0], dz = B[2] - A[2]
+  const L = Math.hypot(dx, dz) || 1
+  const ux = dx / L, uz = dz / L
+  const submit = () => {
+    if (onTypedAngle(draft)) { setTyping(false); setDraft(''); setBad(false) } else setBad(true)
+  }
+  return (
+    <>
+      <Line points={[A, B]} color="#facc15" lineWidth={6} />
+      {[A, B].map((p, i) => (
+        <Line key={i} points={ring(p, 9 * k, 20)} color="#facc15" lineWidth={4} />
+      ))}
+      {/* The + on the middle: cut here and angle part of the wall. */}
+      {!live && (
+        <>
+          <Line points={ring(M, 9 * k, 20)} color="#facc15" lineWidth={2} />
+          <Line points={[[M[0] - ux * plus, M[1], M[2] - uz * plus], [M[0] + ux * plus, M[1], M[2] + uz * plus]]} color="#facc15" lineWidth={3} />
+          <Line points={[[M[0] + uz * plus, M[1], M[2] - ux * plus], [M[0] - uz * plus, M[1], M[2] + ux * plus]]} color="#facc15" lineWidth={3} />
+        </>
+      )}
+      {live ? (
+        <Html position={lift(toWorld(live.at))} center zIndexRange={[10, 10]} style={{ pointerEvents: 'none' }}>
+          <div className={styles.length} style={{ transform: 'translate(0, -44px)', whiteSpace: 'nowrap' }}>{live.text}</div>
+        </Html>
+      ) : (
+        <Html position={M} center zIndexRange={[10, 10]}>
+          <div ref={chip} className={styles.ctx} role="group" aria-label="Picked wall" style={CHIP_ROW}>
+            {typing ? (
+              <form className={styles.form} onSubmit={(e) => { e.preventDefault(); submit() }}>
+                <input className={`${styles.input} ${bad ? styles.bad : ''}`} autoFocus inputMode="decimal"
+                  placeholder={`${angleDeg}°`}
+                  onChange={(e) => { setDraft(e.target.value); setBad(false) }}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { setTyping(false); setDraft('') } }}
+                  aria-label="Wall angle in degrees" />
+                <button type="submit" className={styles.go}>Set</button>
+              </form>
+            ) : (
+              <Tap className={styles.ctxBtn} onTap={() => setTyping(true)} aria-label={`Angle ${angleDeg} degrees. Tap to type one`}>
+                <span>∠ {angleDeg}°</span>
+              </Tap>
+            )}
+            <Tap className={styles.ctxBtn} onTap={onDelete} aria-label="Delete this wall"><span>Delete</span></Tap>
+          </div>
+        </Html>
+      )}
+    </>
+  )
+}
+
+/**
+ * ▭ ROOMS — the room picked, filled pale blue, with its chip: the ceiling
+ * height (tap, type), Bulkhead (then tap the walls it runs along), Reset.
+ * Every room already given a height or a bulkhead carries a small label.
+ */
+export function RoomAids({
+  toWorld, picked, labels, bulkLines, heightText, bulkMode, onTypedHeight, onBulkMode, onReset,
+}: {
+  toWorld: (px: PX) => P3
+  /** The picked room's floor, as print-px rectangles, and where its chip goes. */
+  picked: { rects: Array<[number, number, number, number]>; at: PX } | null
+  /** Rooms with their own settings, labelled where they were tapped. */
+  labels: Array<{ at: PX; text: string }>
+  /** Bulkheads, as the line along the wall face. */
+  bulkLines: Array<[PX, PX]>
+  heightText: string
+  bulkMode: boolean
+  onTypedHeight: (text: string) => boolean
+  onBulkMode: (on: boolean) => void
+  onReset: (() => void) | null
+}) {
+  const chip = useChipClear()
+  const [typing, setTyping] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [bad, setBad] = useState(false)
+  const lift = (p: P3, dy = 0.04): P3 => [p[0], p[1] + dy, p[2]]
+  const rects = picked?.rects
+  const fill = useMemo(() => {
+    if (!rects) return null
+    const pos: number[] = []
+    const at = (x: number, y: number) => { const p = toWorld([x, y]); return [p[0], p[1] + 0.02, p[2]] }
+    for (const [x1, y1, x2, y2] of rects) {
+      const a = at(x1, y1), b = at(x2, y1), c = at(x2, y2), d = at(x1, y2)
+      pos.push(...a, ...b, ...c, ...a, ...c, ...d)
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    return g
+  }, [rects, toWorld])
+  useEffect(() => () => fill?.dispose(), [fill])
+  const submit = () => {
+    if (onTypedHeight(draft)) { setTyping(false); setDraft(''); setBad(false) } else setBad(true)
+  }
+  return (
+    <>
+      {fill && (
+        <mesh geometry={fill} renderOrder={5}>
+          <meshBasicMaterial color="#38bdf8" transparent opacity={0.22} depthWrite={false} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      {bulkLines.map(([a, b], i) => (
+        <Line key={i} points={[lift(toWorld(a)), lift(toWorld(b))]} color="#f97316" lineWidth={7} />
+      ))}
+      {labels.map((l, i) => (
+        <Html key={i} position={lift(toWorld(l.at))} center zIndexRange={[9, 9]} style={{ pointerEvents: 'none' }}>
+          <div className={styles.length} style={{ whiteSpace: 'nowrap', opacity: 0.85 }}>{l.text}</div>
+        </Html>
+      ))}
+      {picked && (
+        <Html position={lift(toWorld(picked.at))} center zIndexRange={[10, 10]}>
+          <div ref={chip} className={styles.ctx} role="group" aria-label="Picked room" style={CHIP_ROW}>
+            {bulkMode ? (
+              <>
+                <span style={{ padding: '0 4px' }}>Tap the walls it runs along</span>
+                <Tap className={styles.ctxBtn} onTap={() => onBulkMode(false)} aria-label="Done adding bulkheads"><span>Done</span></Tap>
+              </>
+            ) : typing ? (
+              <form className={styles.form} onSubmit={(e) => { e.preventDefault(); submit() }}>
+                <input className={`${styles.input} ${bad ? styles.bad : ''}`} autoFocus inputMode="decimal"
+                  placeholder={heightText}
+                  onChange={(e) => { setDraft(e.target.value); setBad(false) }}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { setTyping(false); setDraft('') } }}
+                  aria-label="Ceiling height of this room" />
+                <button type="submit" className={styles.go}>Set</button>
+              </form>
+            ) : (
+              <>
+                <Tap className={styles.ctxBtn} onTap={() => setTyping(true)} aria-label={`Ceiling ${heightText}. Tap to type a height`}>
+                  <span>Ceiling ↕ {heightText}</span>
+                </Tap>
+                <Tap className={styles.ctxBtn} onTap={() => onBulkMode(true)} aria-label="Add a bulkhead along a wall"><span>+ Bulkhead</span></Tap>
+                {onReset && <Tap className={styles.ctxBtn} onTap={onReset} aria-label="Back to the building height, no bulkheads"><span>Reset</span></Tap>}
+              </>
+            )}
+          </div>
+        </Html>
+      )}
+    </>
+  )
+}
+
+/**
+ * ▱ BALCONY — every balcony on this floor outlined (a stacked one from below
+ * dashed), the first tap of a new one marked, and the picked one's chip:
+ * depth (tap, type), Concrete/Wood, Glass/Picket, Every floor above, Delete.
+ */
+export function BalconyAids({
+  toWorld, outlines, first, picked, depthText, kind, guard, stack, onTypedDepth, onKind, onGuard, onStack, onDelete,
+}: {
+  toWorld: (px: PX) => P3
+  outlines: Array<{ corners: [PX, PX, PX, PX]; picked: boolean; ghost: boolean }>
+  first: PX | null
+  picked: PX | null
+  depthText: string
+  kind: 'concrete' | 'wood'
+  guard: 'glass' | 'picket'
+  stack: boolean
+  onTypedDepth: (text: string) => boolean
+  onKind: () => void
+  onGuard: () => void
+  onStack: () => void
+  onDelete: () => void
+}) {
+  const chip = useChipClear()
+  const [typing, setTyping] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [bad, setBad] = useState(false)
+  const lift = (p: P3, dy = 0.05): P3 => [p[0], p[1] + dy, p[2]]
+  const submit = () => {
+    if (onTypedDepth(draft)) { setTyping(false); setDraft(''); setBad(false) } else setBad(true)
+  }
+  return (
+    <>
+      {outlines.map((o, i) => {
+        const pts = [...o.corners, o.corners[0]].map((c) => lift(toWorld(c)))
+        return o.ghost
+          ? <Line key={i} points={pts} color="#a78bfa" lineWidth={2} dashed dashSize={0.2} gapSize={0.12} />
+          : <Line key={i} points={pts} color={o.picked ? '#facc15' : '#a78bfa'} lineWidth={o.picked ? 5 : 3} />
+      })}
+      {first && <Line points={ring(lift(toWorld(first)), 0.25, 20)} color="#a78bfa" lineWidth={4} />}
+      {picked && (
+        <Html position={lift(toWorld(picked))} center zIndexRange={[10, 10]}>
+          <div ref={chip} className={styles.ctx} role="group" aria-label="Picked balcony" style={CHIP_ROW}>
+            {typing ? (
+              <form className={styles.form} onSubmit={(e) => { e.preventDefault(); submit() }}>
+                <input className={`${styles.input} ${bad ? styles.bad : ''}`} autoFocus inputMode="decimal"
+                  placeholder={depthText}
+                  onChange={(e) => { setDraft(e.target.value); setBad(false) }}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { setTyping(false); setDraft('') } }}
+                  aria-label="How far the balcony comes out" />
+                <button type="submit" className={styles.go}>Set</button>
+              </form>
+            ) : (
+              <>
+                <Tap className={styles.ctxBtn} onTap={() => setTyping(true)} aria-label={`Depth ${depthText}. Tap to type one`}><span>Out ↔ {depthText}</span></Tap>
+                <Tap className={styles.ctxBtn} onTap={onKind} aria-label="Concrete slab or wood deck"><span>{kind === 'concrete' ? 'Concrete' : 'Wood'}</span></Tap>
+                <Tap className={styles.ctxBtn} onTap={onGuard} aria-label="Glass or picket guard"><span>{guard === 'glass' ? 'Glass guard' : 'Picket guard'}</span></Tap>
+                <Tap className={styles.ctxBtn} onTap={onStack} aria-label="Same balcony on every floor above" aria-pressed={stack}><span>{stack ? '✓ Every floor above' : 'Every floor above'}</span></Tap>
+                <Tap className={styles.ctxBtn} onTap={onDelete} aria-label="Delete this balcony"><span>Delete</span></Tap>
+              </>
+            )}
+          </div>
+        </Html>
+      )}
     </>
   )
 }

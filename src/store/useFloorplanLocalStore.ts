@@ -8,6 +8,7 @@
  */
 
 import { create } from 'zustand'
+import type { WallType } from '../services/wallTypeClassifier'
 import type { ParsedWall } from '../types'
 import { PLUMBING_DEFAULTS, ELECTRICAL_DEFAULTS, HVAC_DEFAULTS, FLOORS_DEFAULTS, ROOF_DEFAULTS } from '../data/traceLayers'
 import type { TraceLayer } from '../data/traceLayers'
@@ -63,6 +64,17 @@ export type SelectionGranularity =
 export function defaultWallTypeForRole(role: string): string {
   return role === 'exterior-bearing' ? 'wood-2x8' : 'wood-2x4'
 }
+
+/** Picker framing key → engine WallType. Masonry (CMU) maps to a non-framed
+ *  type so the engine skips studs and it renders as a solid block instead. */
+export const FRAMING_TO_WALLTYPE: Record<string, WallType> = {
+  'wood-2x4': 'stud-2x4',
+  'wood-2x6': 'stud-2x6',
+  'wood-2x8': 'stud-2x8',
+  'steel-3-5-8': 'stud-2x4',
+  'steel-6': 'stud-2x6',
+  'cmu': 'masonry-thick',
+}
 /** A hovered/selected element in edit-everything mode. */
 export interface EditTarget { kind: EditKind; id: string }
 
@@ -98,6 +110,13 @@ interface FloorplanLocalState {
   /** Paused mid-run: the run/anchor is kept, but the camera unlocks so you can
    *  orbit to find the best route (and switch trades), then resume. */
   tracePaused: boolean
+  /** ✎ Edit on the drawing bar: taps pick walls already drawn (to angle, cut
+   *  or delete them) instead of drawing new ones. */
+  drawEditing: boolean
+  /** ▭ Rooms: tap a room to give it its own ceiling height or a bulkhead. */
+  drawRooms: boolean
+  /** ▱ Balcony: tap two points on an outside wall; tap one to change it. */
+  drawBalcony: boolean
   /** Set true right after a wall is traced OFF the print (outside the plan) so a
    *  gentle "did you mean to?" prompt can offer to undo it. */
   offPrintWarn: boolean
@@ -296,6 +315,9 @@ interface FloorplanLocalState {
   // ─── actions ─────────────────────────────────────────────────────
   setTraceMode: (v: boolean) => void
   setTracePaused: (v: boolean) => void
+  setDrawEditing: (v: boolean) => void
+  setDrawRooms: (v: boolean) => void
+  setDrawBalcony: (v: boolean) => void
   setOffPrintWarn: (v: boolean) => void
   setPlumbNudge: (v: PlumbNudge | null) => void
   setTraceStyle: (v: TraceStyle) => void
@@ -437,6 +459,9 @@ const WALL_SHEET = {
 export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => ({
   traceMode: false,
   tracePaused: false,
+  drawEditing: false,
+  drawRooms: false,
+  drawBalcony: false,
   offPrintWarn: false,
   plumbNudge: null,
   traceStyle: 'line',
@@ -526,8 +551,11 @@ export const useFloorplanLocalStore = create<FloorplanLocalState>((set, get) => 
   upgradeReason: null,
   coachBand: 0,
 
-  setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false } : { traceMode: false, tracePaused: false, traceStart: null, traceStroke: [], pendingWalls: null }),
+  setTraceMode: (v) => set(v ? { traceMode: true, tracePaused: false, drawEditing: false, drawRooms: false, drawBalcony: false } : { traceMode: false, tracePaused: false, drawEditing: false, drawRooms: false, drawBalcony: false, traceStart: null, traceStroke: [], pendingWalls: null }),
   setTracePaused: (v) => set({ tracePaused: v }),
+  setDrawEditing: (v) => set(v ? { drawEditing: true, drawRooms: false, drawBalcony: false, traceStart: null } : { drawEditing: false }),
+  setDrawRooms: (v) => set(v ? { drawRooms: true, drawEditing: false, drawBalcony: false, traceStart: null } : { drawRooms: false }),
+  setDrawBalcony: (v) => set(v ? { drawBalcony: true, drawEditing: false, drawRooms: false, traceStart: null } : { drawBalcony: false }),
   setOffPrintWarn: (v) => set({ offPrintWarn: v }),
   setPlumbNudge: (v) => set({ plumbNudge: v }),
   setTraceStyle: (v) => set({ traceStyle: v, traceStart: null, traceStroke: [], pendingWalls: null }),

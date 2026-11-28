@@ -18,6 +18,7 @@ import { roughOpening, tubAlcoveM } from './roughOpening'
 const ONE_STUD_M = 1.5 * 0.0254
 import type { WallFramingOpts, WallOpening } from './framingGeometry'
 import { modelWalls } from './modelWalls'
+import { detectedOpeningsToFrame } from './detectedOpenings'
 import { teesForWalls } from './wallTees'
 import { renderWallThicknessM, wallHeightM, wallFramingSpec } from './constructionCode'
 import { getCatalogItem, VERTICAL_CIRCULATION } from '../data/objectCatalog'
@@ -222,7 +223,7 @@ export function planWalls(input: WallPlanInput): PlannedWall[] {
   // width is measured from the gap's own endpoints through the transform, so it
   // stays right when the scale is unknown or the overlay has moved.
   for (const d of drawings) {
-    for (const op of d.parsedOpenings) {
+    for (const op of detectedOpeningsToFrame(d, { tracedOnly: input.tracedOnly })) {
       if (op.type !== 'door' && op.type !== 'window') continue
       const ang = op.angle ?? (op.orientation === 'vertical' ? Math.PI / 2 : 0)
       const hx = (Math.cos(ang) * op.widthPx) / 2

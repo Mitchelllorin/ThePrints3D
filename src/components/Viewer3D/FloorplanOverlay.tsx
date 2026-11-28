@@ -16,14 +16,17 @@ import { Line, Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import PrintWalkabout from './PrintWalkabout'
 import WallDimension from './WallDimension'
-import { TraceAids, Loupe, BendHandle, GraphPaper, WallLengths } from './DrawAids'
-import { DRAW, arcWalls, bulgeForRadius, arcOf, curveBayMm, endsOf, isDoubleTap, movedCorner, pointAtCornerAngle, segsOf, slidWall, snapDrawPoint, tapSlopPx, reachNow, notePointer, type DrawSnap } from '../../services/drawSystem'
+import { TraceAids, Loupe, BendHandle, GraphPaper, WallLengths, WallEditAids, RoomAids, BalconyAids } from './DrawAids'
+import { balconyShape, onBalcony, BALCONY_SPEC } from '../../services/balconies'
+import { isSteelJob } from '../../services/suspendedCeiling'
+import { roomAt, regionHas, bulkheadLayout, roomWalls } from '../../services/roomRegions'
+import { DRAW, arcWalls, bulgeForRadius, arcOf, curveBayMm, endsOf, isDoubleTap, movedCorner, pointAtCornerAngle, segsOf, pivotedCorner, wallNear, arrivingDir, cornerAngleDeg, tapSlopPx, slidWall, snapDrawPoint, reachNow, notePointer, type DrawSnap } from '../../services/drawSystem'
 import { circleString } from '../../services/drawItPlan'
 import { formatMeasureMm } from '../../services/unitConverter'
 import { useAppStore } from '../../store/useAppStore'
 import { useConfigStore } from '../../store/useConfigStore'
-import { useFloorplanLocalStore, defaultWallTypeForRole, type DragState } from '../../store/useFloorplanLocalStore'
-import { inferWallRole } from '../../services/wallFacing'
+import { useFloorplanLocalStore, defaultWallTypeForRole, FRAMING_TO_WALLTYPE, type DragState } from '../../store/useFloorplanLocalStore'
+import { inferWallRole, perimeterTest } from '../../services/wallFacing'
 import { solveStair, stairShapeFromSubtype } from '../../services/stairs'
 import { seatInGap } from '../../services/openingSeat'
 import { isDrawnSheet, parseSizeMm } from '../../services/drawnProject'
@@ -31,18 +34,7 @@ import { usePrintDrop } from '../../services/printPlane'
 import { planViewCamera } from '../../services/builtScene'
 import { freeAnglePoint, squarePointToAxis, wallAngleOffSquareDeg } from '../../services/wallTraceReducer'
 import type { ParsedWall, TracedLine } from '../../types'
-import type { WallType } from '../../services/wallTypeClassifier'
 
-// Picker framing key → engine WallType. Masonry (CMU) maps to a non-framed
-// type so the engine skips studs and it renders as a solid block instead.
-const FRAMING_TO_WALLTYPE: Record<string, WallType> = {
-  'wood-2x4': 'stud-2x4',
-  'wood-2x6': 'stud-2x6',
-  'wood-2x8': 'stud-2x8',
-  'steel-3-5-8': 'stud-2x4',
-  'steel-6': 'stud-2x6',
-  'cmu': 'masonry-thick',
-}
 import {
   extendWallToNearbyWall,
   reduceStrokeToWalls,
@@ -332,10 +324,35 @@ interface DrawBridge {
   raster: () => string | null
 }
 
+/** Mouse travel (screen px) after a touch before mouse hover moves the drawing again. */
+const MOUSE_WAKE_PX = 40
+
 export default function FloorplanOverlay() {
+  /**
+   * A TOUCHSCREEN LAPTOP HAS TWO POINTERS. After a finger, the mouse cursor is
+   * still parked wherever the touchpad left it, and a brush of the touchpad (or
+   * a palm) sends a mouse move from there: the wall being drawn shot off to that
+   * cursor, often off screen. So once a finger has been down, mouse HOVER is
+   * ignored until the mouse has really travelled; a mouse press always counts.
+   */
+  const mouseWake = useRef({ asleep: false, travel: 0, last: null as null | [number, number] })
   // Which pointer is in hand, so a mouse gets its own, tighter reach.
   useEffect(() => {
-    const note = (e: PointerEvent) => notePointer(e.pointerType)
+    const note = (e: PointerEvent) => {
+      const w = mouseWake.current
+      if (e.pointerType === 'mouse') {
+        if (e.buttons !== 0 || e.type === 'pointerdown') { w.asleep = false }
+        else if (w.asleep) {
+          if (w.last) w.travel += Math.hypot(e.clientX - w.last[0], e.clientY - w.last[1])
+          w.last = [e.clientX, e.clientY]
+          if (w.travel < MOUSE_WAKE_PX) return
+          w.asleep = false
+        }
+      } else if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+        w.asleep = true; w.travel = 0; w.last = null
+      }
+      notePointer(e.pointerType)
+    }
     window.addEventListener('pointerdown', note, true)
     window.addEventListener('pointermove', note, true)
     return () => {
@@ -349,6 +366,13 @@ export default function FloorplanOverlay() {
   const updateOverlay = useAppStore((s) => s.updateFloorplanOverlay)
   const checkpointHistory = useAppStore((s) => s.checkpointHistory)
   const moveUserWall = useAppStore((s) => s.moveUserWall)
+  const splitUserWall = useAppStore((s) => s.splitUserWall)
+  const deleteUserWallAt = useAppStore((s) => s.deleteUserWall)
+  const drawEditing = useFloorplanLocalStore((s) => s.drawEditing)
+  const drawRooms = useFloorplanLocalStore((s) => s.drawRooms)
+  const drawBalcony = useFloorplanLocalStore((s) => s.drawBalcony)
+  const balconies = useAppStore((s) => s.balconies)
+  const roomCeilings = useAppStore((s) => s.roomCeilings)
   const addUserTracedWall = useAppStore((s) => s.addUserTracedWall)
   const addTrace = useAppStore((s) => s.addTrace)
   const addPlacedObject = useAppStore((s) => s.addPlacedObject)
@@ -887,17 +911,16 @@ export default function FloorplanOverlay() {
   const pressPixel = useRef<[number, number] | null>(null)
   /** The anchor was dropped by this drag, so a pinch can take it back. */
   const dragAnchored = useRef(false)
+  /**
+   * THE PRESS IS ON A DOT: the run's current point, or (with no run going) the
+   * end of a wall already drawn. Only a drag that starts there draws a wall.
+   * Any drag used to: a finger that rolled or slid on its way to a tap put a
+   * wall down from the last point to wherever it lifted, and a few of those in a
+   * row were a zig-zag of walls nobody meant.
+   */
+  const pressOnDot = useRef(false)
   const fingers = useRef(new Set<number>())
   const pinched = useRef(false)
-  /**
-   * GRAB THE CORNER YOU JUST PUT DOWN. Pressing on the run's current corner
-   * and dragging picks it back up: the last wall comes off and is on the
-   * rubber band again, from its own start, until you let go. With only a first
-   * point down, the drag just moves that point. A tap on the corner still
-   * finishes the run. Without this, a press there began a NEW wall — so
-   * trying to fix the end you had just drawn shot a wall out of it.
-   */
-  const grab = useRef<null | { kind: 'leg' | 'first'; picked: boolean }>(null)
   useEffect(() => {
     // EVERYTHING IN THE CAPTURE PHASE. The chips on the drawing (length, angle,
     // Done) stop pointer events natively, so a finger lifted over one never
@@ -919,7 +942,6 @@ export default function FloorplanOverlay() {
         if (fingers.current.size > 0) return
         pinched.current = false
         pointerDownScreen.current = null
-        grab.current = null
         useFloorplanLocalStore.getState().setTraceTouchDown(false)
       }, 0)
     }
@@ -940,29 +962,36 @@ export default function FloorplanOverlay() {
   // Freehand is the exception: it draws WITH the drag, so it starts on press.
   const handleWorkspacePointerDown = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
+    if (traceMode && drawRooms) { roomsDown(event.nativeEvent); return }
+    if (traceMode && drawBalcony) { balDown(event.nativeEvent); return }
+    if (traceMode && drawEditing) {
+      event.stopPropagation()
+      if (!event.nativeEvent.isPrimary) { editUp(); return }
+      const px = screenToPixel(event.nativeEvent) ?? toPixel(rayToTracePlane(event) ?? event.point)
+      editDown(event.nativeEvent, px)
+      return
+    }
     pointerDownScreen.current = { x: event.nativeEvent.clientX, y: event.nativeEvent.clientY }
     // From the screen position, not the event's ray: a press on a mark that
     // is already drawn (the corner you just put down) came with a ray that
     // missed the drawing entirely, so the press landed somewhere else.
     pressPixel.current = screenToPixel(event.nativeEvent) ?? toPixel(rayToTracePlane(event) ?? event.point)
     dragAnchored.current = false
-    grab.current = null
-    const wallsLayer = traceMode && !tracePaused && traceStyle === 'line' && activeTraceLayer === 'framing'
-    // Picking up the point you just put down is a FINGER's move. A laptop
-    // touchpad reads a touch soon after a tap as press-and-drag, with the cursor
-    // still on the point just placed, so the last wall came off and shot out
-    // after the cursor. A mouse drags corners after drawing instead.
-    const fingerGrab = event.nativeEvent.pointerType !== 'mouse'
-    if (fingerGrab && wallsLayer && traceShape === 'wall' && traceStart && pressPixel.current) {
-      const p = pressPixel.current
-      const onScreen = Math.hypot(p[0] - traceStart[0], p[1] - traceStart[1]) * scaleAt(traceStart).pxPerPrintPx
-      if (onScreen <= reachNow() * 1.5) {
-        const leg = lastLeg.current
-        const legHere = !!leg && Math.hypot(leg.end[0] - traceStart[0], leg.end[1] - traceStart[1]) < 1e-6
-        grab.current = { kind: legHere ? 'leg' : 'first', picked: false }
-        if (!legHere && useFloorplanLocalStore.getState().tracePrevDir) grab.current = null
-      }
+    pressOnDot.current = false
+    if (pressPixel.current) {
+      const pp = pressPixel.current
+      const k = scaleAt(pp).pxPerPrintPx
+      const reach = reachNow() * 1.5
+      if (traceStart) pressOnDot.current = Math.hypot(pp[0] - traceStart[0], pp[1] - traceStart[1]) * k <= reach
+      else pressOnDot.current = endsOf(traceRefs().refWalls.filter((w) => w.source === 'user'))
+        .some((e) => Math.hypot(pp[0] - e.x, pp[1] - e.y) * k <= reach)
     }
+    const wallsLayer = traceMode && !tracePaused && traceStyle === 'line' && activeTraceLayer === 'framing'
+    // A DRAG FROM THE DOT DRAWS THE NEXT WALL. Pressing on the run's current
+    // corner used to pick it back up (the last wall came off, or a lone first
+    // point followed the finger), so on a touchscreen starting a wall from the
+    // dot dragged the dot away from the corner it had just joined. Undo takes a
+    // wall back; corners are dragged once the run is done.
     if (wallsLayer) {
       // A FINGER GETS A LOUPE: the point is drawn above it while it is down.
       if (event.nativeEvent.pointerType === 'touch') {
@@ -1083,7 +1112,9 @@ export default function FloorplanOverlay() {
       // (which read framingType) and a 2x8 to the materials estimate and the
       // construction engine (which read this). One wall, two sizes.
       wallType: FRAMING_TO_WALLTYPE[framingType] ?? base.wallType,
-      exteriorMaterial: isMasonry ? 'concrete' : base.exteriorMaterial,
+      exteriorMaterial: isMasonry ? 'concrete' : roleForWall === 'exterior-bearing' ? 'stucco' : 'drywall',
+      roleByHand: wallRoleChosen,
+      sizeByHand: wallTypeChosen,
       level: activeLevel,
     }
   }
@@ -1219,6 +1250,292 @@ export default function FloorplanOverlay() {
     setTraceStart(null); setTracePaused(false); setHoverPixel(null)
     lastTapRef.current = null
     setLeg(null)
+  }
+
+  // ─── ✎ EDIT: walls already drawn ───────────────────────────────────────
+  //
+  // With Edit on, a tap picks a wall you drew instead of starting one. Picked:
+  // drag an end dot and the wall swings about its other end (the walls joined
+  // there follow, nothing held square); press anywhere else along it and drag,
+  // and it is cut there and the new corner comes out with the finger, so part
+  // of it goes on an angle. Its angle can be typed, and it can be deleted.
+  const [editPick, setEditPick] = useState<number | null>(null)
+  const [editLive, setEditLive] = useState<{ at: [number, number]; text: string } | null>(null)
+  type EditPress = {
+    kind: 'end' | 'cut'
+    /** Screen point of the press, to tell a tap from a drag. */
+    sx: number; sy: number
+    /** The corner being moved (print px). */
+    at: [number, number]
+    /** The end that stays put. */
+    fixed: [number, number]
+    /** User walls when the drag began, for measuring from. */
+    start: ParsedWall[] | null
+  }
+  const editPress = useRef<EditPress | null>(null)
+  // Edit switched on or off: start with nothing picked. (A picked wall that is
+  // gone, by undo or delete, simply is not drawn: every use checks it exists.)
+  const [editSeen, setEditSeen] = useState(drawEditing)
+  if (editSeen !== drawEditing) { setEditSeen(drawEditing); setEditPick(null); setEditLive(null) }
+
+  /** User-wall indices on this storey. */
+  const editStorey = () => userWalls.map((w, i) => ((w.level ?? 0) === activeLevel ? i : -1)).filter((i) => i >= 0)
+
+  /** The corner angle at a wall's held end, against the wall arriving there;
+   *  with none, its angle off the plan's level (0 to 180). */
+  const editAngleAt = (walls: ParsedWall[], me: number, fixed: [number, number], moving: [number, number]) => {
+    const into = arrivingDir(walls, me, { x: fixed[0], y: fixed[1] }, 1)
+    if (into) return Math.round(cornerAngleDeg(into, { x: fixed[0], y: fixed[1] }, { x: moving[0], y: moving[1] }))
+    const d = (Math.atan2(-(moving[1] - fixed[1]), moving[0] - fixed[0]) * 180) / Math.PI
+    return Math.round(((d % 180) + 180) % 180)
+  }
+  /** Which end of a wall moves when its angle is typed: a free end if it has
+   *  one, else its far end. */
+  const editEnds = (i: number): { fixed: [number, number]; moving: [number, number] } => {
+    const w = userWalls[i]
+    const joined = (x: number, y: number) => userWalls.some((o, j) => j !== i && (Math.hypot(o.x1 - x, o.y1 - y) <= 1 || Math.hypot(o.x2 - x, o.y2 - y) <= 1))
+    const startFree = !joined(w.x1, w.y1), endFree = !joined(w.x2, w.y2)
+    return startFree && !endFree
+      ? { fixed: [w.x2, w.y2], moving: [w.x1, w.y1] }
+      : { fixed: [w.x1, w.y1], moving: [w.x2, w.y2] }
+  }
+
+  const editDown = (native: PointerEvent, pixel: [number, number]) => {
+    editPress.current = null
+    const k = scaleAt(pixel).pxPerPrintPx
+    const reach = (reachNow() * 1.6) / k
+    if (editPick != null && userWalls[editPick]) {
+      const w = userWalls[editPick]
+      const s0 = [w.x1, w.y1] as [number, number], e0 = [w.x2, w.y2] as [number, number]
+      const ds = Math.hypot(pixel[0] - s0[0], pixel[1] - s0[1]), de = Math.hypot(pixel[0] - e0[0], pixel[1] - e0[1])
+      if (Math.min(ds, de) <= reach) {
+        const [at, fixed] = ds <= de ? [s0, e0] : [e0, s0]
+        editPress.current = { kind: 'end', sx: native.clientX, sy: native.clientY, at, fixed, start: null }
+        return
+      }
+      const on = wallNear([w], { x: pixel[0], y: pixel[1] }, reach)
+      if (on) {
+        editPress.current = { kind: 'cut', sx: native.clientX, sy: native.clientY, at: [on.at.x, on.at.y], fixed: s0, start: null }
+        return
+      }
+    }
+    // Not on the picked wall: pick the one under the finger, or nothing.
+    const idx = editStorey()
+    const hit = wallNear(idx.map((i) => userWalls[i]), { x: pixel[0], y: pixel[1] }, reach)
+    setEditPick(hit ? idx[hit.i] : null)
+  }
+
+  const editMoveTo = (native: PointerEvent, pixel: [number, number]) => {
+    const pr = editPress.current
+    if (!pr || !drawing || editPick == null) return
+    if (!pr.start) {
+      if (Math.hypot(native.clientX - pr.sx, native.clientY - pr.sy) <= tapSlopPx(native.pointerType)) return
+      checkpointHistory()
+      if (pr.kind === 'cut') {
+        // Cut the wall where the finger pressed; the new corner is what moves.
+        const w = userWalls[editPick]
+        const minPiece = 6 / scaleAt(pr.at).pxPerPrintPx
+        if (Math.hypot(pr.at[0] - w.x1, pr.at[1] - w.y1) < minPiece || Math.hypot(pr.at[0] - w.x2, pr.at[1] - w.y2) < minPiece) {
+          editPress.current = null
+          return
+        }
+        splitUserWall(drawing.id, editPick, pr.at[0], pr.at[1])
+        pr.fixed = [w.x1, w.y1]
+      }
+      const now = useAppStore.getState().drawings.find((d) => d.id === drawing.id)
+      pr.start = (now?.parsedWalls ?? []).filter((w) => w.source === 'user').map((w) => ({ ...w }))
+      useFloorplanLocalStore.getState().setGestureLock(true)
+    }
+    const st = pr.start
+    const idx = st.map((w, i) => ((w.level ?? 0) === activeLevel ? i : -1)).filter((i) => i >= 0)
+    const same = idx.map((i) => st[i])
+    const at = { x: pr.at[0], y: pr.at[1] }
+    const others = same.filter((w) => !(Math.hypot(w.x1 - at.x, w.y1 - at.y) <= 1 || Math.hypot(w.x2 - at.x, w.y2 - at.y) <= 1))
+    const q = snapDrawPoint({ x: pixel[0], y: pixel[1] }, {
+      from: { x: pr.fixed[0], y: pr.fixed[1] },
+      ends: endsOf(others), lines: segsOf(others),
+      tol: reachNow() / scaleAt(pixel).pxPerPrintPx,
+      square: useFloorplanLocalStore.getState().squareWalls,
+    }).point
+    const changed = pivotedCorner(same, at, q, 1)
+    const cur = useAppStore.getState().drawings.find((d) => d.id === drawing.id)?.parsedWalls.filter((w) => w.source === 'user') ?? []
+    idx.forEach((ui, kk) => {
+      const w = changed.get(kk) ?? st[ui]
+      const c = cur[ui]
+      if (c && (c.x1 !== w.x1 || c.y1 !== w.y1 || c.x2 !== w.x2 || c.y2 !== w.y2)) {
+        moveUserWall(drawing.id, ui, { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 })
+      }
+    })
+    // Read it at the finger: length and angle of the piece being swung.
+    const mm = drawing.scaleMmPerPx
+    const len = Math.hypot(q.x - pr.fixed[0], q.y - pr.fixed[1])
+    const after = same.map((w, kk) => changed.get(kk) ?? w)
+    const near1 = (x: number, y: number, p: { x: number; y: number }) => Math.hypot(x - p.x, y - p.y) <= 1
+    const fx = { x: pr.fixed[0], y: pr.fixed[1] }
+    const me = after.findIndex((w) => (near1(w.x1, w.y1, q) && near1(w.x2, w.y2, fx)) || (near1(w.x2, w.y2, q) && near1(w.x1, w.y1, fx)))
+    const ang = editAngleAt(after, me, pr.fixed, [q.x, q.y])
+    { const { activeUnit, lengthFormat } = useConfigStore.getState(); setEditLive({ at: [q.x, q.y], text: `${mm ? formatMeasureMm(len * mm, activeUnit, lengthFormat) : ''} · ${ang}°` }) }
+  }
+
+  const editUp = () => {
+    const pr = editPress.current
+    editPress.current = null
+    setEditLive(null)
+    if (pr?.start) useFloorplanLocalStore.getState().setGestureLock(false)
+  }
+
+  /** A typed angle: the wall keeps its length and swings to it about its held end. */
+  const editTypedAngle = (text: string): boolean => {
+    if (!drawing || editPick == null || !userWalls[editPick]) return false
+    const deg = parseFloat(text.replace(/[^0-9.]/g, ''))
+    if (!(deg > 0 && deg < 360)) return false
+    const { fixed, moving } = editEnds(editPick)
+    const len = Math.hypot(moving[0] - fixed[0], moving[1] - fixed[1])
+    if (len < 1) return false
+    const into = arrivingDir(userWalls, editPick, { x: fixed[0], y: fixed[1] }, 1)
+    let q: { x: number; y: number }
+    if (into) {
+      q = pointAtCornerAngle(into, { x: fixed[0], y: fixed[1] }, deg > 180 ? 360 - deg : deg, len, { x: moving[0], y: moving[1] })
+    } else {
+      const r = (deg * Math.PI) / 180
+      // Off the plan's level, on the side the wall was already on.
+      const side = moving[1] <= fixed[1] ? -1 : 1
+      q = { x: fixed[0] + Math.cos(r) * len, y: fixed[1] + side * Math.abs(Math.sin(r)) * len }
+    }
+    checkpointHistory()
+    const idx = editStorey()
+    const changed = pivotedCorner(idx.map((i) => userWalls[i]), { x: moving[0], y: moving[1] }, q, 1)
+    for (const [kk, w] of changed) moveUserWall(drawing.id, idx[kk], { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 })
+    return true
+  }
+
+  const editDelete = () => {
+    if (!drawing || editPick == null) return
+    deleteUserWallAt(drawing.id, editPick)
+    setEditPick(null)
+  }
+
+  // ─── ▭ ROOMS ───────────────────────────────────────────────────────────
+  // Tap inside a room: it fills blue and gets a chip — its ceiling height
+  // (type it; lower than the walls is a dropped ceiling), + Bulkhead (then tap
+  // the walls it runs along; tap one again to take it off), Reset. The walls
+  // stay at the building height. Dragging still pans.
+  const [roomPick, setRoomPick] = useState<{ id: string | null; at: [number, number] } | null>(null)
+  const [roomBulk, setRoomBulk] = useState(false)
+  const roomPress = useRef<{ sx: number; sy: number } | null>(null)
+  const [roomsSeen, setRoomsSeen] = useState(drawRooms)
+  if (roomsSeen !== drawRooms) { setRoomsSeen(drawRooms); setRoomPick(null); setRoomBulk(false) }
+  const roomsHere = roomCeilings.filter((r) => (r.level ?? 0) === activeLevel)
+  const roomWallsHere = useMemo(
+    () => (drawing ? roomWalls(drawing.parsedWalls, activeLevel) : []),
+    [drawing, activeLevel],
+  )
+  const roomMm = drawing?.scaleMmPerPx ?? null
+  const roomRegions = useMemo(() => {
+    if (!drawRooms) return new Map<string, ReturnType<typeof roomAt>>()
+    return new Map(roomCeilings.filter((r) => (r.level ?? 0) === activeLevel).map((r) => [r.id, roomAt(roomWallsHere, r, roomMm)]))
+  }, [drawRooms, roomCeilings, activeLevel, roomWallsHere, roomMm])
+  const pickedRegion = useMemo(() => {
+    if (!roomPick) return null
+    if (roomPick.id && roomRegions.get(roomPick.id)) return roomRegions.get(roomPick.id) ?? null
+    return roomAt(roomWallsHere, { x: roomPick.at[0], y: roomPick.at[1] }, roomMm)
+  }, [roomPick, roomRegions, roomWallsHere, roomMm])
+
+  const roomTap = (pixel: [number, number]) => {
+    if (!drawing) return
+    const p = { x: pixel[0], y: pixel[1] }
+    if (roomBulk && roomPick && pickedRegion) {
+      const k = scaleAt(pixel).pxPerPrintPx
+      const near = wallNear(roomWallsHere, p, (reachNow() * 1.6) / k)
+      if (near) {
+        const w = roomWallsHere[near.i]
+        if (!bulkheadLayout(w, pickedRegion, w.thickness || 10)) return // not a wall of this room
+        const id = useAppStore.getState().toggleRoomBulkhead(activeLevel, { x: roomPick.at[0], y: roomPick.at[1] }, roomPick.id, w)
+        setRoomPick({ id, at: roomPick.at })
+        return
+      }
+    }
+    const region = roomAt(roomWallsHere, p, roomMm)
+    setRoomBulk(false)
+    if (!region) { setRoomPick(null); return }
+    const had = roomsHere.find((r) => regionHas(region, r))
+    setRoomPick(had ? { id: had.id, at: [had.x, had.y] } : { id: null, at: pixel })
+  }
+  // ─── ▱ BALCONY ─────────────────────────────────────────────────────────
+  // Tap an outside wall where the balcony starts, then where it ends: it comes
+  // out 6' on the outside. Tap one to pick it: depth, concrete or wood, glass
+  // or pickets, every floor above, delete.
+  const [balPick, setBalPick] = useState<string | null>(null)
+  const [balFirst, setBalFirst] = useState<{ w: ParsedWall; at: [number, number] } | null>(null)
+  const [balSeen, setBalSeen] = useState(drawBalcony)
+  if (balSeen !== drawBalcony) { setBalSeen(drawBalcony); setBalPick(null); setBalFirst(null) }
+  const balShapes = useMemo(() => {
+    if (!drawBalcony || !drawing) return []
+    const mm = drawing.scaleMmPerPx ?? null
+    return balconies
+      .filter((b) => b.level === activeLevel || (b.stack && b.level < activeLevel))
+      .map((b) => ({ b, ghost: b.level !== activeLevel, shape: balconyShape(b, drawing.parsedWalls.filter((w) => (w.level ?? 0) === b.level), mm) }))
+      .filter((x) => x.shape)
+  }, [drawBalcony, drawing, balconies, activeLevel])
+  const balTap = (pixel: [number, number]) => {
+    if (!drawing) return
+    const p = { x: pixel[0], y: pixel[1] }
+    const hit = balShapes.find((x) => !x.ghost && onBalcony(x.shape!, p))
+    if (hit) { setBalPick(hit.b.id); setBalFirst(null); return }
+    const project = (w: ParsedWall): [number, number] => {
+      const dx = w.x2 - w.x1, dy = w.y2 - w.y1
+      const L2 = dx * dx + dy * dy || 1
+      const t = Math.min(1, Math.max(0, ((p.x - w.x1) * dx + (p.y - w.y1) * dy) / L2))
+      return [w.x1 + dx * t, w.y1 + dy * t]
+    }
+    if (balFirst) {
+      const at = project(balFirst.w)
+      const mm = drawing.scaleMmPerPx ?? 0
+      if (Math.hypot(at[0] - balFirst.at[0], at[1] - balFirst.at[1]) * mm < 600) { setBalFirst(null); return }
+      const steel = useConfigStore.getState().framingMaterial === 'steel' || isSteelJob(drawing.parsedWalls)
+      const id = useAppStore.getState().addBalcony({
+        level: activeLevel, x1: balFirst.at[0], y1: balFirst.at[1], x2: at[0], y2: at[1],
+        depthM: BALCONY_SPEC.defaultDepthM, kind: steel ? 'concrete' : 'wood', guard: 'glass',
+      })
+      setBalFirst(null); setBalPick(id)
+      return
+    }
+    const outside = perimeterTest(roomWallsHere)
+    const outer = roomWallsHere.filter((w) => outside(w))
+    const k = scaleAt(pixel).pxPerPrintPx
+    const near = wallNear(outer, p, (reachNow() * 1.6) / k)
+    setBalPick(null)
+    setBalFirst(near ? { w: outer[near.i], at: project(outer[near.i]) } : null)
+  }
+  const balDown = (native: PointerEvent) => { roomPress.current = { sx: native.clientX, sy: native.clientY } }
+  const balUp = (native: PointerEvent, pixel: [number, number] | null) => {
+    const pr = roomPress.current
+    roomPress.current = null
+    if (!pr || !pixel || !native.isPrimary) return
+    if (Math.hypot(native.clientX - pr.sx, native.clientY - pr.sy) > tapSlopPx(native.pointerType)) return
+    balTap(pixel)
+  }
+
+  const roomsDown = (native: PointerEvent) => { roomPress.current = { sx: native.clientX, sy: native.clientY } }
+  const roomsUp = (native: PointerEvent, pixel: [number, number] | null) => {
+    const pr = roomPress.current
+    roomPress.current = null
+    if (!pr || !pixel || !native.isPrimary) return
+    if (Math.hypot(native.clientX - pr.sx, native.clientY - pr.sy) > tapSlopPx(native.pointerType)) return
+    roomTap(pixel)
+  }
+  const roomHeightText = (heightM: number | undefined) => {
+    const { activeUnit, lengthFormat } = useConfigStore.getState()
+    return formatMeasureMm((heightM ?? ceilingM) * 1000, activeUnit, lengthFormat)
+  }
+  const roomTypedHeight = (text: string): boolean => {
+    if (!roomPick) return false
+    const mm = parseSizeMm(text)
+    if (mm == null || mm < 1800 || mm > ceilingM * 1000 + 1) return false
+    const h = Math.abs(mm / 1000 - ceilingM) < 0.005 ? undefined : mm / 1000
+    const id = useAppStore.getState().setRoomHeight(activeLevel, { x: roomPick.at[0], y: roomPick.at[1] }, roomPick.id, h)
+    setRoomPick({ id, at: roomPick.at })
+    return true
   }
 
   /**
@@ -1479,8 +1796,9 @@ export default function FloorplanOverlay() {
         setHoverPixel(pixel)
         return
       }
-      // A tap back on the anchor (the last point) finishes the run.
-      const tol = reachNow() / scaleAt(pixel).pxPerPrintPx
+      // A tap right on the anchor (the last point) finishes the run. Right on
+      // it: at the full reach a short wall could not go in, the tap ended the run.
+      const tol = DRAW.ON_DOT_PX / scaleAt(pixel).pxPerPrintPx
       if (Math.hypot(snap.point.x - traceStart[0], snap.point.y - traceStart[1]) < tol) { endRun(); return }
       const base = {
         x1: traceStart[0], y1: traceStart[1], x2: snap.point.x, y2: snap.point.y,
@@ -1507,34 +1825,18 @@ export default function FloorplanOverlay() {
   const handleWorkspacePointerMove = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
     event.stopPropagation()
+    if (traceMode && (drawRooms || drawBalcony)) { if (pinched.current) roomPress.current = null; return }
+    if (traceMode && drawEditing) {
+      if (pinched.current) { editUp(); return }
+      if (editPress.current) editMoveTo(event.nativeEvent, toPixel(rayToTracePlane(event) ?? event.point))
+      return
+    }
+    // A parked mouse cursor waking up after a finger: not where you are drawing.
+    if (event.nativeEvent.pointerType === 'mouse' && event.nativeEvent.buttons === 0 && mouseWake.current.asleep) return
     const pixel = toPixel(rayToTracePlane(event) ?? event.point)
     // A mouse with no button held is hovering, whatever press we think we saw.
     if (event.nativeEvent.pointerType === 'mouse' && event.nativeEvent.buttons === 0 && pointerDownScreen.current) {
       pointerDownScreen.current = null
-      grab.current = null
-    }
-    if (dragDrawsWalls() && pointerDownScreen.current && grab.current && !pinched.current) {
-      const down = pointerDownScreen.current
-      const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
-      const g = grab.current
-      if (!g.picked && moved > tapSlopPx(event.nativeEvent.pointerType)) {
-        g.picked = true
-        if (g.kind === 'leg' && lastLeg.current) {
-          // The last wall comes off; the band runs from its start again.
-          const leg = lastLeg.current
-          undoApp()
-          setLeg(null)
-          setTraceStart(leg.start, leg.prevDir)
-        }
-      }
-      if (g.picked && g.kind === 'first') {
-        // Snapped as a first point: no start of its own to measure from.
-        setTraceStart(null)
-        const q = snapTrace(pixel).point
-        setTraceStart([q.x, q.y])
-      }
-      setHoverPixel(pixel)
-      return
     }
     if (dragDrawsWalls() && pointerDownScreen.current) {
       // A pinch is not a wall: give back an anchor this gesture dropped, and
@@ -1547,6 +1849,12 @@ export default function FloorplanOverlay() {
       const down = pointerDownScreen.current
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
+      if (moved > limit && !pressOnDot.current) {
+        // A slide that did not start on a dot draws nothing: no band, no loupe.
+        setHoverPixel(null)
+        setTraceTouchDown(false)
+        return
+      }
       if (!traceStart && pressPixel.current && moved > limit) {
         commitTraceOrCalibrationPoint(event, pressPixel.current)
         dragAnchored.current = true
@@ -1615,6 +1923,17 @@ export default function FloorplanOverlay() {
 
   const handleWorkspacePointerUp = (event: ThreeEvent<PointerEvent>) => {
     if (!drawing || (!traceMode && !overlay.calibrationMode)) return
+    if (traceMode && drawBalcony) {
+      event.stopPropagation()
+      balUp(event.nativeEvent, screenToPixel(event.nativeEvent) ?? toPixel(rayToTracePlane(event) ?? event.point))
+      return
+    }
+    if (traceMode && drawRooms) {
+      event.stopPropagation()
+      roomsUp(event.nativeEvent, screenToPixel(event.nativeEvent) ?? toPixel(rayToTracePlane(event) ?? event.point))
+      return
+    }
+    if (traceMode && drawEditing) { event.stopPropagation(); editUp(); return }
     // Freehand commits its stroke on release.
     if (traceMode && traceStyle === 'freehand') {
       event.stopPropagation()
@@ -1633,17 +1952,13 @@ export default function FloorplanOverlay() {
     // A pinch is never a tap. The second finger's press takes over the press
     // point, so the first finger up uses it up and the last one up arrived
     // with nothing to measure against — and read as a tap, dropping a corner.
-    if (pinched.current) { grab.current = null; return }
-    const g = grab.current
-    grab.current = null
-    // A moved first point is already where it was let go.
-    if (g?.picked && g.kind === 'first') { event.stopPropagation(); lastTapRef.current = null; setHoverPixel(null); return }
+    if (pinched.current) return
     if (down) {
       const moved = Math.hypot(event.nativeEvent.clientX - down.x, event.nativeEvent.clientY - down.y)
       const limit = event.nativeEvent.pointerType === 'touch' ? TAP_MOVE_TOUCH_PX : TAP_MOVE_PX
       if (moved > limit) {
         // A drag drawing a wall puts it down where the finger let go.
-        if (dragDrawsWalls() && traceStart) {
+        if (dragDrawsWalls() && traceStart && pressOnDot.current) {
           event.stopPropagation()
           lastTapRef.current = null
           dragAnchored.current = false
@@ -1674,11 +1989,18 @@ export default function FloorplanOverlay() {
     }
     if (tracePaused) setTracePaused(false)
     commitTraceOrCalibrationPoint(event)
+    // A FINGER HAS NO HOVER. Left in place, the band and its length readout sat
+    // on the dot after a tap, right where the next short wall goes, and the
+    // next tap landed on the readout instead of the plan. Gone until the next
+    // touch puts them back.
+    if (event.nativeEvent.pointerType !== 'mouse' && traceStyle === 'line') setHoverPixel(null)
   }
 
   // Pointer left/cancelled: never place a point (the finger didn't lift on the
   // print); just reset, and let freehand commit whatever it had.
   const handleWorkspacePointerCancel = (event: ThreeEvent<PointerEvent>) => {
+    if (drawEditing) editUp()
+    roomPress.current = null
     pointerDownScreen.current = null
     setTraceTouchDown(false)
     if (drawing && traceMode && traceStyle === 'freehand') commitFreehandStroke(event)
@@ -2618,6 +2940,91 @@ export default function FloorplanOverlay() {
               </mesh>
             ))}
           </group>
+        )
+      })()}
+
+      {/* ▱ BALCONY — outlines, the first tap, the picked one's chip. */}
+      {traceMode && drawBalcony && (() => {
+        const pickedB = balShapes.find((x) => x.b.id === balPick && !x.ghost)
+        const b = pickedB?.b
+        const sh = pickedB?.shape
+        const upd = (patch: Parameters<ReturnType<typeof useAppStore.getState>['updateBalcony']>[1]) => { if (b) useAppStore.getState().updateBalcony(b.id, patch) }
+        const { activeUnit, lengthFormat } = useConfigStore.getState()
+        return (
+          <BalconyAids
+            toWorld={planeLocalToTrace}
+            outlines={balShapes.map((x) => ({ corners: [x.shape!.a, x.shape!.b, x.shape!.c, x.shape!.d] as [[number, number], [number, number], [number, number], [number, number]], picked: x.b.id === balPick && !x.ghost, ghost: x.ghost }))}
+            first={balFirst?.at ?? null}
+            picked={sh ? [(sh.a[0] + sh.c[0]) / 2, (sh.a[1] + sh.c[1]) / 2] : null}
+            depthText={b ? formatMeasureMm(b.depthM * 1000, activeUnit, lengthFormat) : ''}
+            kind={b?.kind ?? 'wood'}
+            guard={b?.guard ?? 'glass'}
+            stack={!!b?.stack}
+            onTypedDepth={(text) => {
+              const mm = parseSizeMm(text)
+              if (!b || mm == null || mm < BALCONY_SPEC.minDepthM * 1000 || mm > BALCONY_SPEC.maxDepthM * 1000) return false
+              upd({ depthM: mm / 1000 }); return true
+            }}
+            onKind={() => upd({ kind: b?.kind === 'concrete' ? 'wood' : 'concrete' })}
+            onGuard={() => upd({ guard: b?.guard === 'glass' ? 'picket' : 'glass' })}
+            onStack={() => upd({ stack: !b?.stack })}
+            onDelete={() => { if (b) { useAppStore.getState().removeBalcony(b.id); setBalPick(null) } }}
+          />
+        )
+      })()}
+
+      {/* ▭ ROOMS — the room picked, its chip, and every room's own settings. */}
+      {traceMode && drawRooms && (() => {
+        const labels = roomsHere
+          .filter((r) => r.id !== roomPick?.id && roomRegions.get(r.id))
+          .map((r) => {
+            const n = r.bulkheads?.length ?? 0
+            const parts = [r.heightM != null ? `↕ ${roomHeightText(r.heightM)}` : '', n ? `${n} bulkhead${n > 1 ? 's' : ''}` : ''].filter(Boolean)
+            return { at: [r.x, r.y] as [number, number], text: parts.join(' · ') }
+          })
+          .filter((l) => l.text)
+        const bulkLines: Array<[[number, number], [number, number]]> = []
+        for (const r of roomsHere) {
+          const region = roomRegions.get(r.id)
+          if (!region) continue
+          for (const b of r.bulkheads ?? []) {
+            const w = roomWallsHere.find((o) => Math.min(
+              Math.hypot(o.x1 - b.x1, o.y1 - b.y1) + Math.hypot(o.x2 - b.x2, o.y2 - b.y2),
+              Math.hypot(o.x1 - b.x2, o.y1 - b.y2) + Math.hypot(o.x2 - b.x1, o.y2 - b.y1)) < 2)
+            const lay = bulkheadLayout(b, region, w?.thickness || 10)
+            if (lay) bulkLines.push([lay.a, lay.z])
+          }
+        }
+        const pickedRoom = roomPick?.id ? roomCeilings.find((r) => r.id === roomPick.id) : undefined
+        return (
+          <RoomAids
+            toWorld={planeLocalToTrace}
+            picked={roomPick && pickedRegion ? { rects: pickedRegion.rects, at: roomPick.at } : null}
+            labels={labels}
+            bulkLines={bulkLines}
+            heightText={roomHeightText(pickedRoom?.heightM)}
+            bulkMode={roomBulk}
+            onTypedHeight={roomTypedHeight}
+            onBulkMode={setRoomBulk}
+            onReset={pickedRoom ? () => { useAppStore.getState().clearRoom(pickedRoom.id); setRoomPick({ id: null, at: roomPick!.at }); setRoomBulk(false) } : null}
+          />
+        )
+      })()}
+
+      {/* ✎ EDIT — the wall picked to angle, cut or delete. */}
+      {traceMode && drawEditing && editPick != null && userWalls[editPick] && (() => {
+        const w = userWalls[editPick]
+        const { fixed, moving } = editEnds(editPick)
+        return (
+          <WallEditAids
+            toWorld={planeLocalToTrace}
+            worldPerScreenPx={scaleAt([(w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2]).worldPerScreenPx}
+            a={[w.x1, w.y1]} b={[w.x2, w.y2]}
+            angleDeg={editAngleAt(userWalls, editPick, fixed, moving)}
+            onTypedAngle={editTypedAngle}
+            onDelete={editDelete}
+            live={editLive}
+          />
         )
       })()}
 

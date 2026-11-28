@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { wallFootprintPx, deriveBuildAreas } from './autoBuildAreas'
+import { wallFootprintPx, deriveBuildAreas, footprintLoopPx } from './autoBuildAreas'
 import type { ParsedWall } from '../types'
 
 const wall = (x1: number, y1: number, x2: number, y2: number): ParsedWall => ({
@@ -75,5 +75,31 @@ describe('deriveBuildAreas', () => {
     const { floors, roofs } = deriveBuildAreas(box, { levels: 2, makeId: ids })
     const all = [...floors, ...roofs].map((a) => a.id)
     expect(new Set(all).size).toBe(all.length)
+  })
+})
+
+describe('the slab follows the walls', () => {
+  const W = (x1: number, y1: number, x2: number, y2: number, level = 0) =>
+    ({ x1, y1, x2, y2, thickness: 8, level, source: 'user', detectionConfidence: 1 }) as unknown as ParsedWall
+  // An L: the bottom-left corner is cut out. One inside wall across it.
+  const L = [
+    W(0, 0, 100, 0), W(100, 0, 100, 80), W(100, 80, 50, 80), W(50, 80, 50, 40), W(50, 40, 0, 40), W(0, 40, 0, 0),
+    W(0, 20, 100, 20),
+  ]
+  it('chains the outside walls into the outline, leaving the inside wall out', () => {
+    const loop = footprintLoopPx(L)!
+    expect(loop).toHaveLength(6)
+    expect(loop).toContainEqual([50, 40])
+  })
+  it('gives an L-shaped plan an L-shaped slab', () => {
+    const { floors } = deriveBuildAreas(L, { makeId: (r, l) => `${r}-${l}` })
+    const slab = floors.find((f) => f.id === 'slab-0')!
+    expect(slab.shape).toHaveLength(6)
+    expect(slab.shape).toContainEqual([0.5, 0.5])
+  })
+  it('leaves a plain box a plain box', () => {
+    const box = [W(0, 0, 100, 0), W(100, 0, 100, 80), W(100, 80, 0, 80), W(0, 80, 0, 0)]
+    const { floors } = deriveBuildAreas(box, { makeId: (r, l) => `${r}-${l}` })
+    expect(floors.find((f) => f.id === 'slab-0')!.shape).toBeUndefined()
   })
 })

@@ -12,6 +12,7 @@
  */
 import * as THREE from 'three'
 import { joistProfile } from '../data/traceLayers'
+import { supportsAt, LVL_PLY_M, type FloorSupportPlan } from './floorSupports'
 import { getManufacturerPart } from '../data/manufacturerParts'
 import { getMember } from '../data/members'
 import { buildPartModel } from './manufacturer/model'
@@ -1112,8 +1113,12 @@ export function buildFloorJoists(opts: {
   idPrefix?: string
   /** The floor's shape when it is not the box — see FloorPoly. */
   outline?: FloorPoly
+  /** The walls under it and the beams it needs — see floorSupports. */
+  supports?: FloorSupportPlan
+  /** From the joists' centre line down to the floor below: how tall a post is. */
+  postDropM?: number
 }): THREE.Group {
-  const { lenX, lenZ, element, ocM, opacity = 1, holes = [], idPrefix = 'joist', outline } = opts
+  const { lenX, lenZ, element, ocM, opacity = 1, holes = [], idPrefix = 'joist', outline, supports, postDropM = 2.4 } = opts
   let memberNo = 0
   const g = new THREE.Group()
   if (lenX < 0.1 || lenZ < 0.1) return g
@@ -1190,7 +1195,26 @@ export function buildFloorJoists(opts: {
       if (outline && !info) segEnds.push({ p, e: lo, s: -1 }, { p, e: hi, s: 1 })
     }
   }
+  // THE WALLS AND BEAMS UNDER IT. A joist breaks over an inside wall below
+  // (both pieces bear on its plate) and stops at each face of a flush beam,
+  // hung off it. Only when the plan was made for this same orientation.
+  const plan = supports && supports.spanAlongX === spanAlongX ? supports : undefined
+  const beamEnds: Array<{ p: number; e: number; s: number }> = []
+  const plainJoistSeg = addJoistSeg
+  const splitJoistSeg = (p: number, a: number, b: number, info?: string) => {
+    if (!plan) { plainJoistSeg(p, a, b, info); return }
+    let cursor = a
+    for (const sp of supportsAt(plan, p)) {
+      if (sp.s <= a + 0.05 || sp.s >= b - 0.05) continue
+      const gap = sp.kind === 'beam' ? sp.w / 2 : 0.003
+      plainJoistSeg(p, cursor, sp.s - gap, info)
+      if (sp.kind === 'beam' && !info) beamEnds.push({ p, e: sp.s - gap, s: 1 }, { p, e: sp.s + gap, s: -1 })
+      cursor = sp.s + gap
+    }
+    plainJoistSeg(p, cursor, b, info)
+  }
   for (const p of positions) {
+    const addJoistSeg = splitJoistSeg
     // Span-axis cuts from any hole whose run-range straddles this joist. The cut
     // runs to the HEADER's outer face, not the opening edge — the tail joist has
     // to stop where the header begins, or the two occupy the same wood.
@@ -1280,6 +1304,49 @@ export function buildFloorJoists(opts: {
     }
   }
 
+  // FLUSH LVL BEAMS, a ply at a time, as deep as the joists and flush with
+  // their tops, and the POSTS that carry them down to the floor below.
+  if (plan) {
+    const lvlMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#b9925a'), roughness: 0.6, transparent: opacity < 1, opacity })
+    const postMat = new THREE.MeshStandardMaterial({ color: new THREE.Color('#c9a56c'), roughness: 0.75, transparent: opacity < 1, opacity })
+    const ft = (m: number) => { const i = Math.round(m / 0.0254); return `${Math.floor(i / 12)}'-${i % 12}"` }
+    for (const bm of plan.beams) {
+      const runs = outline ? insideSpans(outline, !spanAlongX, bm.s) : [[bm.p0, bm.p1] as [number, number]]
+      const info = `Flush beam · ${bm.label} · ${ft(bm.spanM)} span${bm.posts.length ? ` · ${bm.posts.length} post${bm.posts.length > 1 ? 's' : ''}` : ''}`
+      for (const [c, d] of runs) {
+        const lo = Math.max(bm.p0, c), hi = Math.min(bm.p1, d)
+        if (hi - lo < 0.1) continue
+        for (let i = 0; i < bm.plies; i++) {
+          const s = bm.s - bm.widthM / 2 + LVL_PLY_M * (i + 0.5)
+          const m = new THREE.Mesh(
+            spanAlongX ? new THREE.BoxGeometry(LVL_PLY_M - 0.001, bm.depthM, hi - lo) : new THREE.BoxGeometry(hi - lo, bm.depthM, LVL_PLY_M - 0.001),
+            lvlMat,
+          )
+          m.position.set(spanAlongX ? s : (lo + hi) / 2, depth / 2 - bm.depthM / 2, spanAlongX ? (lo + hi) / 2 : s)
+          m.castShadow = true; m.receiveShadow = true
+          m.userData.layer = 'floors'
+          m.userData.info = info
+          m.userData.id = `${idPrefix}-beam-${memberNo++}`
+          m.userData.label = `Flush beam · ${bm.label}`
+          g.add(m)
+        }
+      }
+      const POST = 0.14
+      const postH = Math.max(0.3, postDropM - depth / 2)
+      for (const at of bm.posts) {
+        const pp = Math.min(bm.p1 - POST / 2, Math.max(bm.p0 + POST / 2, at))
+        const m = new THREE.Mesh(new THREE.BoxGeometry(POST, postH, POST), postMat)
+        m.position.set(spanAlongX ? bm.s : pp, -depth / 2 - postH / 2, spanAlongX ? pp : bm.s)
+        m.castShadow = true; m.receiveShadow = true
+        m.userData.layer = 'floors'
+        m.userData.info = 'Post under the beam · 6x6 or 3-ply 2x6, on a footing'
+        m.userData.id = `${idPrefix}-post-${memberNo++}`
+        m.userData.label = 'Beam post'
+        g.add(m)
+      }
+    }
+  }
+
   // Galvanised joist hangers — a shiny metal saddle at each joist-to-rim
   // connection (bottom seat + two side flanges hugging the joist end).
   const hangerMat = new THREE.MeshStandardMaterial({
@@ -1298,9 +1365,12 @@ export function buildFloorJoists(opts: {
     m.userData.info = 'Joist hanger (galv.)'
     g.add(m)
   }
-  const hangerAt = outline
-    ? segEnds
-    : positions.flatMap((p) => [-1, 1].map((s) => ({ p, e: s * half, s })))
+  // No hanger where a joist breaks over a wall or a beam's own pass: those
+  // ends bear, or get the beam's hangers below.
+  const atSupport = (h: { p: number; e: number }) => !!plan && supportsAt(plan, h.p).some((sp) => Math.abs(sp.s - h.e) < sp.w / 2 + 0.01)
+  const hangerAt = [...(outline
+    ? segEnds.filter((h) => !atSupport(h))
+    : positions.flatMap((p) => [-1, 1].map((s) => ({ p, e: s * half, s })))), ...beamEnds]
   for (const { p, e: end, s } of hangerAt) {
     {
       if (spanAlongX) {

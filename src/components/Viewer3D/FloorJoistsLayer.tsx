@@ -19,7 +19,7 @@ import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { useSceneConfig } from '../../store/useSceneConfig'
 import {
   buildFloorJoists, buildFloorDeck, FLOOR_SLAB_TYPES, SUBFLOOR_T, SLAB_T, FLOOR_ASSEMBLY_H,
-  type FloorHole,
+  type FloorHole, isSkidFloor,
 } from '../../services/framingGeometry'
 import { joistProfile, ocToM, CEILING_TYPES } from '../../data/traceLayers'
 import { VERTICAL_CIRCULATION, getCatalogItem } from '../../data/objectCatalog'
@@ -27,7 +27,9 @@ import { solveStair, stairOpeningM, stairShapeFromSubtype, stairHolePlacement } 
 import { rayToGround, worldDeltaToPixel } from './editMath'
 import { EditDragCatcher, AreaHighlight, XRAY_OPACITY } from './editHelpers'
 import type { FloorplanOverlayState } from '../../types'
-import type { TracedLine } from '../../types'
+import type { TracedLine, ParsedWall } from '../../types'
+import { planFloorSupports, type LocalWall } from '../../services/floorSupports'
+import { roomWalls } from '../../services/roomRegions'
 
 const DECK_LIFT = 1.6     // metres the sheets rise at full explode
 const JOIST_DROP = 0.7    // metres the joists sink at full explode
@@ -108,6 +110,8 @@ interface PartProps {
   pickTag?: PickTag
   /** 0..1 opacity override for ghost mode (1 = opaque). */
   ghostOpacity?: number
+  /** Every wall on the plan — the floor below's carry this floor. */
+  walls?: ParsedWall[]
 }
 
 /** Vertical explode for one floor part: the within-floor PEEL (deck up / joists
@@ -122,18 +126,32 @@ function useFloorExplode(ref: React.RefObject<THREE.Group | null>, baseY: number
 }
 
 /** The structure: joist field, or a concrete slab. */
-function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity, pickTag }: PartProps) {
+function JoistPart({ area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD, rotRad, storeyHeight, holes, offset = [0, 0], bodyHandlers, ghostOpacity, pickTag, walls }: PartProps) {
   const { lenX, lenZ, centre } = areaDims(area, pixelToWorld, imageWidth, imageHeight, overlayW, overlayD)
   const isSlab = FLOOR_SLAB_TYPES.has(area.elementType)
   const holeKey = JSON.stringify(holes ?? [])
   const outline = areaOutline(area, imageWidth, imageHeight, overlayW, overlayD)
   const outlineKey = JSON.stringify(outline ?? null)
+  // WHAT HOLDS IT UP: the walls on the floor below, in this area's metres —
+  // the joists break over them, and an LVL goes in where a span is too long.
+  const supports = useMemo(() => {
+    const lv = area.level ?? 0
+    if (isSlab || lv < 1 || !walls || isSkidFloor(area.elementType)) return undefined
+    const cx = (area.x1 + area.x2) / 2, cy = (area.y1 + area.y2) / 2
+    const mx = (x: number) => ((x - cx) / imageWidth) * overlayW
+    const mz = (y: number) => ((y - cy) / imageHeight) * overlayD
+    const below: LocalWall[] = roomWalls(walls, lv - 1).map((w) => ({
+      x1: mx(w.x1), z1: mz(w.y1), x2: mx(w.x2), z2: mz(w.y2), t: ((w.thickness || 10) / imageWidth) * overlayW,
+    }))
+    return planFloorSupports({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), joistDepthM: joistProfile(area.elementType).depth, wallsBelow: below })
+  }, [isSlab, walls, area.level, area.elementType, area.size, area.x1, area.x2, area.y1, area.y2, imageWidth, imageHeight, overlayW, overlayD, lenX, lenZ])
+  const postDropM = storeyHeight - SUBFLOOR_T - joistProfile(area.elementType).depth / 2
   const joists = useMemo(
     // Namespaced by the AREA id: two decks in one scene must not hand out the
     // same member id, or isolating a joist downstairs lights up its twin above.
-    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes, idPrefix: area.id, outline }),
+    () => buildFloorJoists({ lenX, lenZ, element: area.elementType, ocM: ocToM(area.size), holes, idPrefix: area.id, outline, supports, postDropM }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [lenX, lenZ, area.elementType, area.size, holeKey, area.id, outlineKey],
+    [lenX, lenZ, area.elementType, area.size, holeKey, area.id, outlineKey, supports, postDropM],
   )
   const ref = useRef<THREE.Group>(null)
   // Deck top sits at this storey's elevation; the structure hangs below it.
@@ -418,7 +436,7 @@ export default function FloorJoistsLayer() {
         {structural.map((area) => {
           const gop = areaOpacity(area)
           if (gop === 0) return null
-          return <JoistPart key={area.id} area={area} {...partProps} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} pickTag={pickTagFor(area)} />
+          return <JoistPart key={area.id} area={area} {...partProps} walls={drawing?.parsedWalls} holes={holesByArea[area.id]} offset={liveFor(area)} bodyHandlers={handlersFor(area)} ghostOpacity={gop} pickTag={pickTagFor(area)} />
         })}
       </group>
       <group name="floor-sheeting">

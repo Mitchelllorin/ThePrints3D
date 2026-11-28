@@ -6,18 +6,23 @@
  * See the ambient-inference-prompts memory / product vision.
  */
 import { useAppStore } from '../../store/useAppStore'
+import { useFloorplanLocalStore } from '../../store/useFloorplanLocalStore'
 import { cinema } from '../../cinema/cinemaRuntime'
 
 export default function InferencePrompt() {
   const suggestion = useAppStore((s) => s.inferenceSuggestion)
   const apply = useAppStore((s) => s.applyInferenceSuggestion)
   const dismiss = useAppStore((s) => s.dismissInferenceSuggestion)
+  // A run still being drawn: its corners aren't finished, so a trim offer now
+  // is about a wall you're in the middle of. It waits until the run ends.
+  const midRun = useFloorplanLocalStore((s) => s.traceMode && s.traceStart != null)
 
   // Not during a take. A suggestion raised while the plan was being set up is
   // still up when the shot arms, and a chrome shot then carries an offer to fix
   // something nobody is looking at. Same gate as the G.C. bubble.
   if (cinema.active) return null
   if (!suggestion) return null
+  if (midRun && suggestion.kind !== 'floor-flush') return null
   // Verb on the confirm button matches the suggestion kind.
   const verb = suggestion.kind === 'wall-corner' ? 'Trim'
     : suggestion.kind === 'wall-corner-all' ? (suggestion.trims.length > 1 ? 'Trim all' : 'Trim')

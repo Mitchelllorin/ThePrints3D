@@ -19,9 +19,10 @@
 
 import type { ParsedWall, TracedLine } from '../types'
 import { generateRoofPlanes, summarizeRoof } from './roofPlanes'
-import { pitchToRatio } from '../data/traceLayers'
+import { pitchToRatio, joistProfile, ocToM } from '../data/traceLayers'
 import { roughOpening } from './roughOpening'
 import { solveStair, stairShapeFromSubtype } from './stairs'
+import { planFloorSupports } from './floorSupports'
 
 const MM_PER_FT = 304.8
 const MM_PER_M = 1000
@@ -1013,6 +1014,45 @@ function stairsSection(objects: TakeoffObject[], wallHeightM: number): TakeoffSe
   return { title: 'Stairs', items }
 }
 
+/**
+ * FLOOR BEAMS — the flush LVLs a floor needs where its joists cannot span
+ * from wall to wall, the posts under them, and the hangers the joists hang
+ * off them by. Laid out the same way the 3D floor is (planFloorSupports), so
+ * the list and the model agree.
+ */
+function floorBeamsSection(floors: TracedLine[], walls: ParsedWall[], mm: number): TakeoffSection | null {
+  const lvl = new Map<string, number>()
+  let posts = 0, hangers = 0
+  for (const f of floors) {
+    const lv = f.level ?? 0
+    if (lv < 1 || !HANGER_FLOOR_TYPES.has(f.elementType)) continue
+    const cx = (f.x1 + f.x2) / 2, cy = (f.y1 + f.y2) / 2
+    const m = (v: number) => (v * mm) / MM_PER_M
+    const here = walls.filter((w) => (w.level ?? 0) === lv - 1)
+    const mine = here.filter((w) => w.source === 'user')
+    const below = (mine.length ? mine : here).map((w) => ({
+      x1: m(w.x1 - cx), z1: m(w.y1 - cy), x2: m(w.x2 - cx), z2: m(w.y2 - cy), t: m(w.thickness || 10),
+    }))
+    const ocM = ocToM(f.size)
+    const plan = planFloorSupports({
+      lenX: m(Math.abs(f.x2 - f.x1)), lenZ: m(Math.abs(f.y2 - f.y1)),
+      element: f.elementType, ocM, joistDepthM: joistProfile(f.elementType).depth, wallsBelow: below,
+    })
+    for (const b of plan.beams) {
+      const stock = b.label.replace(/, \d-ply$/, '')
+      const ft = ((b.p1 - b.p0) * FT_PER_M) * b.plies
+      lvl.set(stock, (lvl.get(stock) ?? 0) + ft)
+      posts += b.posts.length
+      hangers += 2 * Math.ceil((b.p1 - b.p0) / Math.max(0.2, ocM))
+    }
+  }
+  if (lvl.size === 0) return null
+  const items: TakeoffItem[] = [...lvl].map(([label, ft]) => ({ key: `__beam_${label}`, label: `${label} (ply ft)`, quantity: Math.ceil(ft), unit: 'ft' }))
+  if (posts > 0) items.push({ key: '__beam_posts', label: 'Posts under beams (6x6 or 3-ply 2x6)', quantity: posts, unit: 'ea' })
+  items.push({ key: '__beam_hangers', label: 'Joist hangers at the beams', quantity: hangers, unit: 'ea' })
+  return { title: 'Floor beams', items }
+}
+
 export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
   const { scaleMmPerPx: mm, wallHeightM } = input
   const sections: TakeoffSection[] = []
@@ -1082,6 +1122,9 @@ export function computeTakeoff(input: TakeoffInput): TakeoffSection[] {
 
   const floor = areaSection('Floors', input.floors, mm, (f) => SHEETED_FLOOR_TYPES.has(f.elementType))
   if (floor) sections.push(floor)
+
+  const beams = floorBeamsSection(input.floors, input.walls, mm)
+  if (beams) sections.push(beams)
 
   const roof = roofTakeoff(input.roof, mm, input.roofOverhangM ?? DEFAULT_ROOF_OVERHANG_M)
   if (roof.section) sections.push(roof.section)

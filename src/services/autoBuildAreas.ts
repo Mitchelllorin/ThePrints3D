@@ -14,6 +14,7 @@
  */
 import type { ParsedWall, TracedLine } from '../types'
 import { FLOORS_DEFAULTS, ROOF_DEFAULTS } from '../data/traceLayers'
+import { perimeterTest } from './wallFacing'
 
 /** Axis-aligned pixel-space rectangle, the same space `TracedLine` lives in. */
 export interface FootprintPx {
@@ -46,6 +47,44 @@ export function wallFootprintPx(walls: ParsedWall[]): FootprintPx | null {
   // builder rejects outright (it bails under 0.2 m a side).
   if (maxX - minX < 1 || maxY - minY < 1) return null
   return { x1: minX, y1: minY, x2: maxX, y2: maxY }
+}
+
+/**
+ * THE OUTLINE OF A STOREY: its outside walls chained end to end into a closed
+ * loop, as plan points. The largest loop wins (a courtyard's inner ring is not
+ * the footprint). Null when the outside walls do not close.
+ */
+export function footprintLoopPx(walls: ParsedWall[], tol = 4): Array<[number, number]> | null {
+  if (walls.length < 3) return null
+  const outside = perimeterTest(walls)
+  const segs = walls.filter((w) => outside(w)).map((w) => ({ a: [w.x1, w.y1] as [number, number], b: [w.x2, w.y2] as [number, number] }))
+  const near = (p: [number, number], q: [number, number]) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= tol
+  const used = new Set<number>()
+  let best: Array<[number, number]> | null = null
+  let bestArea = 0
+  for (let s0 = 0; s0 < segs.length; s0++) {
+    if (used.has(s0)) continue
+    used.add(s0)
+    const loop: Array<[number, number]> = [segs[s0].a]
+    let end = segs[s0].b
+    let closed = false
+    for (let guard = 0; guard < segs.length; guard++) {
+      if (near(end, loop[0])) { closed = true; break }
+      loop.push(end)
+      const k = segs.findIndex((sg, i) => !used.has(i) && (near(sg.a, end) || near(sg.b, end)))
+      if (k < 0) break
+      used.add(k)
+      end = near(segs[k].a, end) ? segs[k].b : segs[k].a
+    }
+    if (!closed || loop.length < 3) continue
+    let area = 0
+    for (let i = 0; i < loop.length; i++) {
+      const [x1, y1] = loop[i], [x2, y2] = loop[(i + 1) % loop.length]
+      area += x1 * y2 - x2 * y1
+    }
+    if (Math.abs(area) / 2 > bestArea) { bestArea = Math.abs(area) / 2; best = loop }
+  }
+  return best
 }
 
 export interface DerivedAreas {
@@ -99,8 +138,21 @@ export function deriveBuildAreas(walls: ParsedWall[], opts: DeriveOptions): Deri
     level,
   })
 
-  const floors: TracedLine[] = [rect('slab', 0, 'Concrete Slab', spacing)]
-  for (let lv = 1; lv < levels; lv++) floors.push(rect('deck', lv, deck, spacing))
+  // THE SLAB AND DECKS FOLLOW THE WALLS. A box round the walls put slab in
+  // the notch of an L and out past the walls. Where the outside walls close
+  // into a loop, the floor takes that shape (as fractions of its box).
+  const shaped = (a: TracedLine): TracedLine => {
+    const loop = footprintLoopPx(walls.filter((w) => (w.level ?? 0) === (a.level ?? 0)))
+    if (!loop) return a
+    const w = a.x2 - a.x1, h = a.y2 - a.y1
+    if (w < 1 || h < 1) return a
+    const shape = loop.map(([x, y]) => [(x - a.x1) / w, (y - a.y1) / h] as [number, number])
+    // A plain rectangle needs no shape.
+    if (shape.length === 4 && shape.every(([u, v]) => (u < 0.01 || u > 0.99) && (v < 0.01 || v > 0.99))) return a
+    return { ...a, shape }
+  }
+  const floors: TracedLine[] = [shaped(rect('slab', 0, 'Concrete Slab', spacing))]
+  for (let lv = 1; lv < levels; lv++) floors.push(shaped(rect('deck', lv, deck, spacing)))
   // The ceiling caps the top storey; the roof then sits above it.
   floors.push(rect('ceiling', topLevel, 'Ceiling joists', spacing))
 

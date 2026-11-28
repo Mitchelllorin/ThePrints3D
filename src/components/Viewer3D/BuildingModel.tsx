@@ -10,6 +10,7 @@ import type { PlacedComponent } from '../../services/decisions'
 import { logEvent } from '../../services/logger'
 import { useSceneConfig } from '../../store/useSceneConfig'
 import { modelWalls } from '../../services/modelWalls'
+import { detectedOpeningsToFrame } from '../../services/detectedOpenings'
 import { getCatalogItem } from '../../data/objectCatalog'
 import { WALL_THICKNESS_M, wallMaterialPreset } from '../../services/constructionCode'
 import { blockMaterial, FLOOR_ASSEMBLY_H } from '../../services/framingGeometry'
@@ -1010,7 +1011,7 @@ export default function BuildingModel({ layers }: Props) {
     const detectedSpecs: OpeningSpec[] = allParsed.flatMap((d) => {
       const t = transforms.get(d.id)
       if (!t) return []
-      return d.parsedOpenings.flatMap((op): OpeningSpec[] => {
+      return detectedOpeningsToFrame(d, { tracedOnly: traceOwnWalls }).flatMap((op): OpeningSpec[] => {
         if (op.type !== 'door' && op.type !== 'window') return []
         const item = getCatalogItem(op.type)
         const ang = op.angle ?? (op.orientation === 'vertical' ? Math.PI / 2 : 0)

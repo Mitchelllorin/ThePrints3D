@@ -71,6 +71,11 @@ export interface ParsedWall {
   framingType?: string
   /** Structural role chosen in the wall-type picker, e.g. 'exterior-bearing' */
   wallRole?: string
+  /** The role was picked by hand in the wall-type picker, not read off the
+   *  plan: Frame it leaves it alone when it re-reads inside from outside. */
+  roleByHand?: boolean
+  /** The stud size was picked by hand: it does not follow the role. */
+  sizeByHand?: boolean
   /**
    * A facet of a CURVED WALL rather than a straight run. The next facet carries
    * on round the arc instead of arriving at right angles, so it frames as a
@@ -267,6 +272,49 @@ export interface RoofRidge {
   /** Per-roof eave overhang (metres). Overrides the global Settings default so
    *  each roof can pull its own overhang. Undefined → use the global setting. */
   overhangM?: number
+}
+
+/** A bulkhead along one wall of a room: the wall's line in print px, the box
+ *  hung on the room's side of it. */
+export interface RoomBulkhead {
+  x1: number; y1: number; x2: number; y2: number
+  /** Drop below the room's ceiling and depth off the wall, metres. Absent =
+   *  Settings → Bulkhead drop / depth. */
+  dropM?: number
+  depthM?: number
+}
+
+/**
+ * One room's ceiling, set by hand. The walls all frame to the building height
+ * (the storey has to stack); a room's own height is its FINISHED ceiling — a
+ * drop ceiling framed below the joists — and its bulkheads. The room is not
+ * stored: it is whatever the walls enclose around `x, y`, so it follows the
+ * walls when they are moved.
+ */
+export interface RoomCeiling {
+  id: string
+  level: number
+  /** A point inside the room, print px. */
+  x: number
+  y: number
+  /** Finished ceiling above this floor, metres. Absent = the building height. */
+  heightM?: number
+  bulkheads?: RoomBulkhead[]
+}
+
+/** A balcony off an outside wall (▱ Balcony). See services/balconies.ts. */
+export interface Balcony {
+  id: string
+  level: number
+  /** The stretch of the wall it comes off, on the wall's centre line, print px. */
+  x1: number; y1: number; x2: number; y2: number
+  /** How far out it comes, metres. */
+  depthM: number
+  /** A concrete slab (tower) or a framed deck (wood). */
+  kind: 'concrete' | 'wood'
+  guard: 'glass' | 'picket'
+  /** The same balcony on every floor above, to the top of the building. */
+  stack?: boolean
 }
 
 /** A room (enclosed region) detected by flood-filling the rasterized image. */

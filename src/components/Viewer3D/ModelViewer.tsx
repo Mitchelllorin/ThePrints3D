@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree, events as r3fEvents } from '@react-three/fiber'
 import { OrbitControls, Grid } from '@react-three/drei'
 import { planViewCamera } from '../../services/builtScene'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
@@ -36,6 +36,8 @@ import FloatingNameplates from './FloatingNameplates'
 import NameplateTracker from './NameplateTracker'
 import FloorJoistsLayer from './FloorJoistsLayer'
 import CeilingLayer from './CeilingLayer'
+import RoomCeilingLayer from './RoomCeilingLayer'
+import BalconyLayer from './BalconyLayer'
 import RoofLayer from './RoofLayer'
 import HoverNameplate from './HoverNameplate'
 import ExplodeDriver from './ExplodeDriver'
@@ -605,6 +607,27 @@ function AnnotationForm({ form, onSubmit, onCancel }: AnnotationFormProps) {
   )
 }
 
+/**
+ * WHERE A TAP IS, FROM THE CANVAS. R3F reads a pointer's offsetX/offsetY, which
+ * are measured from whatever element was under it. The lengths, angles and Done
+ * drawn over the model are HTML inside the canvas's container, so a tap that
+ * landed on one read as a point a few pixels from the canvas's top-left corner:
+ * the wall being drawn shot off to the corner of the screen. Measure from the
+ * canvas itself, every time.
+ */
+const canvasEvents: typeof r3fEvents = (store) => {
+  const base = r3fEvents(store)
+  return {
+    ...base,
+    compute(event, state) {
+      const r = state.gl.domElement.getBoundingClientRect()
+      if (r.width <= 0 || r.height <= 0) return base.compute?.(event, state)
+      state.pointer.set(((event.clientX - r.left) / r.width) * 2 - 1, -((event.clientY - r.top) / r.height) * 2 + 1)
+      state.raycaster.setFromCamera(state.pointer, state.camera)
+    },
+  }
+}
+
 export default function ModelViewer() {
   const gridSettings = useUISettingsStore(useShallow((s) => ({
     visible: s.gridVisible,
@@ -1034,6 +1057,7 @@ export default function ModelViewer() {
           shorthand asks for the soft type, so name the replacement explicitly.
           Same filtering, one less warning on every load. */}
       <Canvas
+        events={canvasEvents}
         shadows="percentage"
         dpr={[1, 2]}
         /* DEPTH PRECISION — the "flashy glitches", and the reason they change as
@@ -1167,6 +1191,8 @@ export default function ModelViewer() {
           <LiveWallsLayer />
           <FloorJoistsLayer />
           <CeilingLayer />
+          <RoomCeilingLayer />
+          <BalconyLayer />
           <RoofLayer />
           <HoverNameplate />
           <NameplateTracker />

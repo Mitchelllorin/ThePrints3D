@@ -158,7 +158,6 @@ export default function WallDimension({
                 autoFocus
                 inputMode="decimal"
                 placeholder={label}
-                value={draft}
                 onChange={(e) => { setDraft(e.target.value); setBad(false) }}
                 onKeyDown={(e) => { if (e.key === 'Escape') { setTyping(null); setDraft('') } }}
                 // Tapping away puts the number down; tapping Set does not count as away.
