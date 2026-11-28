@@ -316,7 +316,7 @@ function SettingsContent() {
         {/* Ceiling height, not "floor height": it is the height walls frame to,
             and it now actually drives the model (see useSceneConfig). Range is
             7ft to 13ft — a residential 8ft default sits near the bottom. */}
-        <Slider label="Ceiling height" val={cfg.ceilingHeightM ?? 2.44} min={2.1} max={4} step={0.05} unit="m" onChange={(v) => setCfg({ ceilingHeightM: v })} />
+        <Slider label="Ceiling height" val={cfg.ceilingHeightM ?? 2.44} min={1.8} max={6.1} step={0.05} unit="m" onChange={(v) => setCfg({ ceilingHeightM: v })} />
         {/* BULKHEAD HEIGHT AND DEPTH. The soffit the model drew was a fixed box;
             these are the two numbers that decide whether it clears a duct, a
             beam, or the head of the door beside it. */}

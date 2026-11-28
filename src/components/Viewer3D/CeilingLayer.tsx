@@ -11,6 +11,8 @@ import { useExplodeChildren } from './explodeRuntime'
 import { useAppStore } from '../../store/useAppStore'
 import { useNameplateSource } from './nameplateRegistry'
 import { useSceneConfig } from '../../store/useSceneConfig'
+import { useConfigStore } from '../../store/useConfigStore'
+import { isSteelJob } from '../../services/suspendedCeiling'
 import { buildCeiling, FLOOR_ASSEMBLY_H, CEILING_JOIST_DEPTH } from '../../services/framingGeometry'
 import { CEILING_TYPES, ocToM } from '../../data/traceLayers'
 import type { TracedLine } from '../../types'
@@ -66,6 +68,7 @@ export default function CeilingLayer() {
   const floorsAreas = useAppStore((s) => s.floorsAreas)
   const visibleLayers = useAppStore((s) => s.visibleLayers)
   const wizardInputs = useAppStore((s) => s.wizardInputs)
+  const framingMaterial = useConfigStore((s) => s.framingMaterial)
 
   const groupRef = useRef<THREE.Group>(null)
   useExplodeChildren(groupRef, 'framing')
@@ -87,7 +90,10 @@ export default function CeilingLayer() {
     return new THREE.Vector3(overlay.position[0] + v.x, 0, overlay.position[1] + v.z)
   }, [imageWidth, imageHeight, overlayW, overlayD, rotRad, overlay.position])
 
-  const ceilings = floorsAreas.filter((a) => CEILING_TYPES.has(a.elementType))
+  // A STEEL JOB HANGS ITS CEILINGS (RoomCeilingLayer: wire, carrying channel,
+  // hat track). Wood joists laid by Frame it would be a second ceiling.
+  const steel = framingMaterial === 'steel' || isSteelJob(drawing?.parsedWalls ?? [])
+  const ceilings = floorsAreas.filter((a) => CEILING_TYPES.has(a.elementType) && !(steel && a.id.startsWith('auto-')))
   if (!visibleLayers.has('floors') || ceilings.length === 0) return null
 
   return (

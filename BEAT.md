@@ -31,34 +31,63 @@ weren't looking.
 
 ## 2 · Draw it — the main road
 
-5. **Draw it** → type a width and a depth. Check both units parse: `24`,
-   `24 6`, `24'6"`, `7.3 m`.
-6. Shell wall type and floor choice (slab / joists / later).
-   - **Outline → ∠ Any angle**: every corner is a square handle — drag the
-     back-right one in and the right wall goes diagonal, reading `· 72°` on
-     it. Pull a **+** off a wall for a bay point. Tap a corner → **✕ Corner**
-     takes it out (never lands on the corner). Tap a wall's number, type 44 —
-     that wall is 44′. Drag a corner across the house — it goes back.
-     **Frame it**: one wall per side, the diagonal framed, the slab (or joists
-     and subfloor) cut to the shape, no rectangle of slab poking past it.
-     **⊾ Square** puts the boxes back.
-   - **Inside walls** on the sheet: pick **∠ Any angle**, drag a diagonal —
-     a stretchy arrow on it, reading length and angle; it lands at that angle.
-     **⊾ Square** keeps a nearly-square drag square.
-7. The blank gridded sheet lands. Grid visible, scale known.
-8. **Stand them up** — the four outside walls frame themselves.
-9. **Draw the inside walls** — the chip drops you into plan view, drawing walls.
-   - The stretchy dimension arrow follows the finger, ft-in live in the chip on
-     the line.
-   - Tap the chip, type an exact length, commit. The wall goes down at that
-     length, the run carries on from its end.
-   - Tap the chip and cancel — no stray wall underneath.
-   - **Drag** a wall with one finger: the arrow stretches, let go and the wall
-     is down; the next drag carries on from its end. A two-finger pinch zooms
-     and drops nothing.
-   - Flip **⊾ Square** to **∠ Any angle** on the trace bar. Drag a 30° wall —
-     the chip reads `· 30°`, it goes down at 30°, and stays 30° when the next
-     wall is drawn off its end. Flip back: a wobbly drag comes out square.
+5. **Draw it** (chip note reads *tap the corners*) → straight into plan view,
+   drawing walls, on a blank squared sheet: 40 × 30 ft, or 12 × 9 m in metric.
+   No sizes asked, no second editor. Grid visible, scale known.
+6. The trace bar: **← Back** (on the blank sheet it just stops drawing; nothing
+   drawn is lost), the wall-type chip, **⊾ Square / ∠ Any angle**, **▦ Grid**
+   (same switch as Settings → *Graph paper when drawing*), **◯ Circle**.
+   **↕ 8′ 0″** is the wall height: tap, type `9 1` — it reads 9′ 1″ and the
+   walls frame at that height. Frame it: inside walls 2x4 with drywall,
+   outside 2x8; an L-shaped floor gets an L-shaped slab; no door or window
+   appears that is not in a wall.
+7. Draw the outside: tap the corners. Each tap puts a wall down; tap the first
+   point (its ring turns green) to close. Tap the last point again, or double
+   tap, to end a run. Units parse on the length: `24`, `24 6`, `24'6"`, `7.3 m`.
+   - The stretchy arrow follows the finger, ft-in live on the line, clear of
+     the end being dragged. Tap it, type an exact length — the wall goes down
+     at that length and the run carries on. Tap it and cancel — no stray wall.
+   - Tap the corner angle and type one — the wall leaves at that angle.
+   - **Drag** draws one wall finger-down to finger-up; a drag from the last
+     point carries the run on. A two-finger pinch zooms and drops nothing.
+   - Touch: the loupe sits above the finger, crosshair green when caught.
+     Mouse: no loupe, catches at 9 px, and a touchpad never drags the last wall
+     out after the cursor.
+   - **∠ Any angle**: a 30° wall reads `· 30°`, lands at 30°, stays 30° when
+     the next wall comes off its end. Back to **⊾ Square**: a wobbly drag comes
+     out square.
+   - Run-on reaches only walls you drew, never a printed line.
+   - Edit after: drag a corner (a rectangle resizes, level stays level), drag
+     a wall (it slides square, its neighbours stretch), drag a wall's bend ring
+     (arc, radius readout, type a radius). **◯ Circle**: centre, then radius.
+8. Draw the inside walls the same way, ending on the outside walls.
+   - **✎ Edit** on the bar: tap a wall — dots on its ends, + in the middle,
+     ∠ and Delete under it. Drag an end dot: it swings onto an angle, the
+     joined wall follows, length · angle at the finger. Drag along the wall:
+     it cuts there and a new corner comes out (a bay). Tap ∠, type 120 —
+     all three digits land, the wall keeps its length. Delete it. **✏ Draw**
+     goes back to drawing; a tap on a wall starts a wall again.
+   - **▭ Rooms** on the bar: tap inside a room — it fills blue, chip under it.
+     **Ceiling ↕ 8′ 0″**: type `7 6` — label reads ↕ 7′ 6″, the walls stay
+     8′, and after Frame it the room has a dropped ceiling board at 7′ 6″.
+     **+ Bulkhead**, tap a wall of the room — orange along its face, only
+     the stretch in this room; tap it again to take it off; a wall not
+     round the room does nothing. **Done**. After Frame it: a framed,
+     boarded bulkhead (Settings drop/depth). **Reset** clears the room.
+     Tap outside the walls: nothing picked. Undo takes each change back.
+   - **Steel job** (Settings framing = steel, or steel studs drawn): after
+     Frame it every closed room has a hung ceiling — hanger wire 4′×4′ up to
+     the floor above, carrying channel at 4′, hat track at 16″, wall angle,
+     board. Tap a channel: its name. No wood ceiling joists on top of it. A
+     wood job's dropped room hangs the same way.
+   - **▱ Balcony**: tap an outside wall where it starts (ring), then where it
+     ends — a 6′ balcony comes out on the outside. Tap it: Out ↔ type `8`;
+     Concrete/Wood (steel jobs start concrete); Glass/Picket guard at 42″;
+     **Every floor above** — dashed outline on the floors above, and one
+     built on each. Delete. Tap an inside wall: nothing.
+9. **🔨 Frame it** (shows once there is a wall) — drawing stops, plan view goes,
+   the walls stand up and frame. Settings → Tools → **✏ Draw walls** gets you
+   back into the same tool.
 10. **Add doors & windows** — place a door, a window, and a garage-width door.
 11. **See the cut list** — every stick, per wall. Scroll it. Export it.
 

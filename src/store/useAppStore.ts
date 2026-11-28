@@ -1,11 +1,12 @@
 import { create } from 'zustand'
+import { perimeterTest } from '../services/wallFacing'
 import { current, enableMapSet } from 'immer'
 import { immer } from 'zustand/middleware/immer'
 import { wallCoversLevel } from '../services/constructionCode'
 
 // Trade-layer visibility uses a Set in the immer store.
 enableMapSet()
-import type {
+import type { RoomCeiling, Balcony,
   AppView,
   Annotation,
   BuildResult,
@@ -160,7 +161,7 @@ import { planRegisters, planSource, planRuns, TRADE_LINES, type Trade, type Plan
 import { createPresetDrawing, type PresetDifficulty } from '../services/presetDrawings'
 import { readCachedPro } from '../services/billing'
 import { useConfigStore } from './useConfigStore'
-import { useFloorplanLocalStore } from './useFloorplanLocalStore'
+import { useFloorplanLocalStore, defaultWallTypeForRole, FRAMING_TO_WALLTYPE } from './useFloorplanLocalStore'
 import {
   DEFAULT_WIZARD_STATE,
   completeWizardGroup as completeWizardGroupState,
@@ -368,6 +369,8 @@ export interface WorkspaceHistorySnapshot {
   hvacLines: TracedLine[]
   floorsAreas: TracedLine[]
   roofAreas: TracedLine[]
+  roomCeilings?: RoomCeiling[]
+  balconies?: Balcony[]
   circuits: Circuit[]
   annotations: Annotation[]
   measurements: Measurement[]
@@ -424,6 +427,10 @@ interface AppState {
   /** Traced roof areas (rectangles) that build a gable roof. Reuses TracedLine:
    *  (x1,y1)-(x2,y2) are opposite corners; elementType=roof type, size=pitch. */
   roofAreas: TracedLine[]
+  /** Rooms given their own ceiling height or bulkheads (✎ Rooms). */
+  roomCeilings: RoomCeiling[]
+  /** Balconies (▱ Balcony). */
+  balconies: Balcony[]
   /** Pending ambient-inference suggestion (flush-edge, corner trim, …). A gentle
    *  one-tap prompt (InferencePrompt) reads this; null = none. */
   inferenceSuggestion: InferenceSuggestion | null
@@ -487,6 +494,15 @@ interface AppState {
   addUserTracedWalls: (id: string, walls: ParsedWall[]) => void
   /** Delete a single user-traced wall by its index within the drawing's user walls. */
   deleteUserWall: (id: string, userIndex: number) => void
+  /** Set or clear a room's own ceiling height (undefined = building height). */
+  setRoomHeight: (level: number, at: { x: number; y: number }, roomId: string | null, heightM: number | undefined) => string
+  /** Add a bulkhead along a wall of the room, or take it off if it is there. */
+  toggleRoomBulkhead: (level: number, at: { x: number; y: number }, roomId: string | null, wall: { x1: number; y1: number; x2: number; y2: number }) => string
+  /** The room back to the building height, no bulkheads. */
+  clearRoom: (roomId: string) => void
+  addBalcony: (b: Omit<Balcony, 'id'>) => string
+  updateBalcony: (id: string, patch: Partial<Omit<Balcony, 'id'>>) => void
+  removeBalcony: (id: string) => void
   /** Drop DETECTED walls, by their index in `parsedWalls`. Walls the user traced
    *  are ignored even if an index points at one — the panel never offers them,
    *  and this is the guard that makes that true whatever the caller does. */
@@ -517,6 +533,8 @@ interface AppState {
   updateUserWall: (id: string, userIndex: number, patch: Partial<ParsedWall>) => void
   /** Live-move a user wall's endpoints WITHOUT pushing history (drag use). */
   moveUserWall: (id: string, userIndex: number, coords: Partial<Pick<ParsedWall, 'x1' | 'y1' | 'x2' | 'y2'>>) => void
+  /** Cut a drawn wall in two at (x, y): one undo step. The second piece is appended last. */
+  splitUserWall: (id: string, userIndex: number, x: number, y: number) => void
   /** TRIM: remove the PIECE of a wall containing (px, py). Real trim semantics —
    *  point at the bit you want gone. The wall is cut at its junctions (where
    *  other same-level user walls cross it or land on it) and the piece under the
@@ -789,6 +807,8 @@ function captureSnapshot(state: AppState): WorkspaceHistorySnapshot {
     hvacLines: state.hvacLines,
     floorsAreas: state.floorsAreas,
     roofAreas: state.roofAreas,
+    roomCeilings: state.roomCeilings,
+    balconies: state.balconies,
     circuits: state.circuits,
     annotations: state.annotations,
     measurements: state.measurements,
@@ -834,6 +854,8 @@ function applySnapshot(state: AppState, snapshot: WorkspaceHistorySnapshot) {
   state.hvacLines = deepCopy(snapshot.hvacLines ?? [])
   state.floorsAreas = deepCopy(snapshot.floorsAreas ?? [])
   state.roofAreas = deepCopy(snapshot.roofAreas ?? [])
+  state.roomCeilings = deepCopy(snapshot.roomCeilings ?? [])
+  state.balconies = deepCopy(snapshot.balconies ?? [])
   state.circuits = deepCopy(snapshot.circuits ?? [])
   state.annotations = deepCopy(snapshot.annotations)
   state.measurements = deepCopy(snapshot.measurements)
@@ -1040,6 +1062,8 @@ export const useAppStore = create<AppState>()(
     floorsAreas: [],
     inferenceSuggestion: null,
     roofAreas: [],
+    roomCeilings: [],
+    balconies: [],
     circuits: [],
     visibleLayers: new Set<TraceLayer>(TRACE_LAYER_ORDER),
     wizardInputs: null,
@@ -1162,6 +1186,8 @@ export const useAppStore = create<AppState>()(
         s.placedObjects = []
         s.floorsAreas = []
         s.roofAreas = []
+        s.roomCeilings = []
+        s.balconies = []
         s.plumbingLines = []
         s.electricalLines = []
         s.hvacLines = []
@@ -1279,7 +1305,14 @@ export const useAppStore = create<AppState>()(
         const exteriorMaterial = activeWallRole === 'exterior-bearing' ? 'stucco' : 'drywall'
         const combined = [
           ...d.parsedWalls.filter((w) => w.source === 'user'),
-          { ...wall, source: 'user' as const, detectionConfidence: 1, framingType: activeWallType, wallRole: activeWallRole, interiorMaterial: 'drywall', exteriorMaterial },
+          // WHAT THE DRAWING SAID, NOT THE PICKER'S DEFAULT. The drawing tool
+          // reads each wall's role off where it was drawn (inside or outside)
+          // and sizes it from that; this stamped the picker's untouched default
+          // over the top, so every wall drawn came out an exterior 2x8 with
+          // stucco on it — partitions and all.
+          { ...wall, source: 'user' as const, detectionConfidence: 1,
+            framingType: wall.framingType ?? activeWallType, wallRole: wall.wallRole ?? activeWallRole,
+            interiorMaterial: wall.interiorMaterial ?? 'drywall', exteriorMaterial: wall.exteriorMaterial ?? exteriorMaterial },
         ]
         const userWalls = cornerInferEnabled ? inferCorners(combined, cornerTolerancePx) : combined
         d.parsedWalls = mergeAutoAndUserWalls(autoWalls, userWalls)
@@ -1387,6 +1420,56 @@ export const useAppStore = create<AppState>()(
 
     // Remove a single user-traced wall (identified by its index among the
     // drawing's user walls, matching the order the overlay/UI iterate them).
+    setRoomHeight: (level, at, roomId, heightM) => {
+      pushHistory()
+      let id = roomId ?? ''
+      set((s) => {
+        let r = roomId ? s.roomCeilings.find((c) => c.id === roomId) : undefined
+        if (!r) {
+          id = `room-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+          r = { id, level, x: at.x, y: at.y }
+          s.roomCeilings.push(r)
+        }
+        r.heightM = heightM
+      })
+      return id
+    },
+    toggleRoomBulkhead: (level, at, roomId, wall) => {
+      pushHistory()
+      let id = roomId ?? ''
+      set((s) => {
+        let r = roomId ? s.roomCeilings.find((c) => c.id === roomId) : undefined
+        if (!r) {
+          id = `room-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+          r = { id, level, x: at.x, y: at.y }
+          s.roomCeilings.push(r)
+        }
+        const same = (b: { x1: number; y1: number; x2: number; y2: number }) =>
+          (Math.hypot(b.x1 - wall.x1, b.y1 - wall.y1) < 1 && Math.hypot(b.x2 - wall.x2, b.y2 - wall.y2) < 1)
+          || (Math.hypot(b.x1 - wall.x2, b.y1 - wall.y2) < 1 && Math.hypot(b.x2 - wall.x1, b.y2 - wall.y1) < 1)
+        const list = r.bulkheads ?? []
+        r.bulkheads = list.some(same) ? list.filter((b) => !same(b)) : [...list, { x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 }]
+      })
+      return id
+    },
+    addBalcony: (b) => {
+      pushHistory()
+      const id = `balcony-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+      set((s) => { s.balconies.push({ ...b, id }) })
+      return id
+    },
+    updateBalcony: (id, patch) => {
+      pushHistory()
+      set((s) => { const b = s.balconies.find((x) => x.id === id); if (b) Object.assign(b, patch) })
+    },
+    removeBalcony: (id) => {
+      pushHistory()
+      set((s) => { s.balconies = s.balconies.filter((x) => x.id !== id) })
+    },
+    clearRoom: (roomId) => {
+      pushHistory()
+      set((s) => { s.roomCeilings = s.roomCeilings.filter((c) => c.id !== roomId) })
+    },
     deleteUserWall: (id, userIndex) => {
       pushHistory()
       set((s) => {
@@ -1517,6 +1600,20 @@ export const useAppStore = create<AppState>()(
     // Live coordinate move for a user wall WITHOUT pushing history — used during
     // a drag (one checkpoint is taken at drag start instead). Only touches the
     // endpoints so a fast drag stays cheap and the live walls follow instantly.
+    splitUserWall: (id, userIndex, x, y) => {
+      pushHistory()
+      set((s) => {
+        const d = s.drawings.find((dr) => dr.id === id)
+        if (!d) return
+        const autoWalls = d.parsedWalls.filter((w) => (w.source ?? 'auto') !== 'user')
+        const userWalls = d.parsedWalls.filter((w) => w.source === 'user')
+        const w = userWalls[userIndex]
+        if (!w) return
+        const second = { ...w, x1: x, y1: y }
+        w.x2 = x; w.y2 = y
+        d.parsedWalls = mergeAutoAndUserWalls(autoWalls, [...userWalls, second])
+      })
+    },
     moveUserWall: (id, userIndex, coords) => {
       set((s) => {
         const d = s.drawings.find((dr) => dr.id === id)
@@ -2701,7 +2798,20 @@ export const useAppStore = create<AppState>()(
         st.floorsAreas = [...st.floorsAreas, ...missing]
 
         for (const d of st.drawings) {
+          // ONLY IN A WALL. The plan reader finds "openings" all over a print —
+          // door swings, dimension gaps, text — and every one of them got a door
+          // or window hung on it, so a floor you traced yourself came out with
+          // doors and windows piled where no wall is. An opening is hung only
+          // where a wall of this plan runs through it.
+          const onAWall = (op: { x: number; y: number }) => d.parsedWalls.some((w) => {
+            const dx = w.x2 - w.x1, dy = w.y2 - w.y1
+            const l2 = dx * dx + dy * dy
+            const t = l2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((op.x - w.x1) * dx + (op.y - w.y1) * dy) / l2))
+            const reach = Math.max(6, (w.thickness ?? 8) * 1.5)
+            return Math.hypot(op.x - (w.x1 + t * dx), op.y - (w.y1 + t * dy)) <= reach
+          })
           for (const op of d.parsedOpenings) {
+            if (!onAWall(op)) continue
             const key = `${d.floorNumber ?? 0}:${Math.round(op.x)}:${Math.round(op.y)}`
             if (existing.has(key)) continue
             existing.add(key)
@@ -2778,6 +2888,32 @@ export const useAppStore = create<AppState>()(
 
     standWalls: () => {
       asOneUndo(() => {
+        // INSIDE OR OUTSIDE, FROM THE WHOLE FLOOR. A wall's role is read when it
+        // is drawn, but a wall drawn before the outline closed cannot know yet,
+        // so read them again now the floor is done. Roles and sizes picked by
+        // hand stay as picked.
+        set((s) => {
+          for (const d of s.drawings) {
+            const mine = d.parsedWalls.filter((w) => w.source === 'user')
+            if (mine.length === 0) continue
+            const levels = new Set(mine.map((w) => w.level ?? 0))
+            for (const lv of levels) {
+              const here = mine.filter((w) => (w.level ?? 0) === lv)
+              const outside = perimeterTest(here)
+              for (const w of here) {
+                if (w.roleByHand || w.framingType === 'cmu') continue
+                const role = outside(w) ? 'exterior-bearing' : 'interior-bearing'
+                if (role === w.wallRole) continue
+                w.wallRole = role
+                w.exteriorMaterial = role === 'exterior-bearing' ? 'stucco' : 'drywall'
+                if (!w.sizeByHand) {
+                  w.framingType = defaultWallTypeForRole(role)
+                  w.wallType = FRAMING_TO_WALLTYPE[w.framingType] ?? w.wallType
+                }
+              }
+            }
+          }
+        })
         const app = get()
         app.finishShell({ roof: false })
         app.buildForMe()

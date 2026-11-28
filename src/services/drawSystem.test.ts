@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   arcOf, arcPoints, arcWalls, bulgeForRadius, bulgeThrough, clearOf, cornerAngleDeg, curveBayMm,
   DRAW, isDoubleTap, pointAtCornerAngle, snapDrawPoint, endsOf, segsOf,
+  pivotedCorner, wallNear, splitWall, arrivingDir,
 } from './drawSystem'
 
 const deg = (a: { x: number; y: number }, b: { x: number; y: number }) => (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
@@ -233,5 +234,52 @@ describe('the print pulls from a shorter reach than your own walls', () => {
   it('a print end very close still catches it', () => {
     const q = snapDrawPoint({ x: 100, y: 4 }, { tol: 20, printEnds: [{ x: 100, y: 0 }] })
     expect(q.kind).toBe('end')
+  })
+})
+
+describe('angling walls already drawn', () => {
+  const room = [
+    { x1: 0, y1: 0, x2: 100, y2: 0 },
+    { x1: 100, y1: 0, x2: 100, y2: 80 },
+    { x1: 100, y1: 80, x2: 0, y2: 80 },
+    { x1: 0, y1: 80, x2: 0, y2: 0 },
+  ]
+  it('swings a corner: both walls on it go to an angle, the rest stay put', () => {
+    const m = pivotedCorner(room, { x: 100, y: 0 }, { x: 80, y: 0 }, 1)
+    expect(m.size).toBe(2)
+    expect(m.get(0)).toMatchObject({ x1: 0, y1: 0, x2: 80, y2: 0 })
+    expect(m.get(1)).toMatchObject({ x1: 80, y1: 0, x2: 100, y2: 80 })
+  })
+  it('finds the wall under a point, and only within reach', () => {
+    expect(wallNear(room, { x: 50, y: 3 }, 5)?.i).toBe(0)
+    expect(wallNear(room, { x: 50, y: 40 }, 5)).toBeNull()
+  })
+  it('cuts a wall in two at a point, and refuses a sliver', () => {
+    const [a, b] = splitWall(room[0], { x: 70, y: 4 }, 5)!
+    expect(a).toMatchObject({ x1: 0, y1: 0, x2: 70, y2: 0 })
+    expect(b).toMatchObject({ x1: 70, y1: 0, x2: 100, y2: 0 })
+    expect(splitWall(room[0], { x: 98, y: 0 }, 5)).toBeNull()
+  })
+  it('reads the way into a corner along the other wall', () => {
+    expect(arrivingDir(room, 1, { x: 100, y: 0 }, 1)).toEqual({ x: 1, y: 0 })
+    expect(arrivingDir([room[1]], 0, { x: 100, y: 0 }, 1)).toBeNull()
+  })
+})
+
+describe('short walls go square', () => {
+  const from = { x: 100, y: 100 }
+  it('a short wall a few px off square holds square', () => {
+    // 20 px long, 4 px off: 11° out — past the angle tolerance, inside reach.
+    const s = snapDrawPoint({ x: 120, y: 104 }, { from, tol: 10 })
+    expect(s.heldDeg).toBe(0)
+    expect(s.point.y).toBeCloseTo(100)
+  })
+  it('a long wall 11° off is still an angled wall', () => {
+    const s = snapDrawPoint({ x: 300, y: 139 }, { from, tol: 10 })
+    expect(s.heldDeg).toBeUndefined()
+  })
+  it('Any angle leaves a short wall where it is put', () => {
+    const s = snapDrawPoint({ x: 120, y: 104 }, { from, tol: 10, square: false })
+    expect(s.point.y).toBeCloseTo(104, 0)
   })
 })

@@ -11,6 +11,7 @@ import PanelBoard from './PanelBoard'
 import { useConfigStore } from '../../store/useConfigStore'
 import { useFloorplanLocalStore, defaultWallTypeForRole } from '../../store/useFloorplanLocalStore'
 import { convertLength, formatLengthFromMm, formatMeasureMm } from '../../services/unitConverter'
+import { parseSizeMm } from '../../services/drawnProject'
 import { roughOpening, tubAlcoveM } from '../../services/roughOpening'
 import { getCatalogItem, trayItems, electricalTrayItems, SUBTYPES } from '../../data/objectCatalog'
 import { stockSizes } from '../../data/objectSizes'
@@ -177,6 +178,13 @@ export default function FloorplanPanel() {
   const setActiveWallRole = useFloorplanLocalStore((s) => s.setActiveWallRole)
   const squareWalls    = useFloorplanLocalStore((s) => s.squareWalls)
   const graphPaper     = useConfigStore((s) => s.graphPaper)
+  const drawEditing    = useFloorplanLocalStore((s) => s.drawEditing)
+  const drawRooms      = useFloorplanLocalStore((s) => s.drawRooms)
+  const drawBalcony    = useFloorplanLocalStore((s) => s.drawBalcony)
+  const wallHeightM    = useConfigStore((s) => s.ceilingHeightM) ?? 2.44
+  const [heightTyping, setHeightTyping] = useState(false)
+  const [heightDraft, setHeightDraft] = useState('')
+  const [heightBad, setHeightBad] = useState(false)
   const setSquareWalls = useFloorplanLocalStore((s) => s.setSquareWalls)
   const activeTraceLayer = useFloorplanLocalStore((s) => s.activeTraceLayer)
   const setActiveTraceLayer = useFloorplanLocalStore((s) => s.setActiveTraceLayer)
@@ -969,6 +977,84 @@ export default function FloorplanPanel() {
               aria-pressed={traceShape === 'circle'}
             >
               ◯ Circle
+            </button>
+          )}
+          {/* WALL HEIGHT, up front. Every wall, deck, sheet of drywall and the
+              roof read this one number (store/useSceneConfig), so the floors
+              line up; it was only a metric slider deep in Settings, and nothing
+              asked. Tap to type it: 9, 9 1, 9'1", 2.7 m. */}
+          {framingActive && (
+            heightTyping ? (
+              <form className={styles.traceBarBtn} style={{ display: 'flex', gap: 4, alignItems: 'center' }}
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  const mm = parseSizeMm(heightDraft)
+                  if (mm == null || mm < 1800 || mm > 6100) { setHeightBad(true); return }
+                  useConfigStore.getState().set({ ceilingHeightM: mm / 1000 })
+                  setHeightTyping(false); setHeightDraft(''); setHeightBad(false)
+                }}>
+                <span>↕</span>
+                <input autoFocus inputMode="decimal" aria-label="Wall height"
+                  placeholder={formatMeasureMm(wallHeightM * 1000, activeUnit, lengthFormat)}
+                  value={heightDraft}
+                  onChange={(e) => { setHeightDraft(e.target.value); setHeightBad(false) }}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { setHeightTyping(false); setHeightDraft('') } }}
+                  style={{ width: 70, background: 'transparent', color: 'inherit', border: `1px solid ${heightBad ? '#ef4444' : 'currentColor'}`, borderRadius: 6, padding: '2px 6px', font: 'inherit' }} />
+                <button type="submit" style={{ background: 'none', border: 0, color: 'inherit', font: 'inherit', cursor: 'pointer' }}>Set</button>
+              </form>
+            ) : (
+              <button className={styles.traceBarBtn} onClick={() => setHeightTyping(true)}
+                title="Wall height for the whole floor — tap to type it">
+                ↕ {formatMeasureMm(wallHeightM * 1000, activeUnit, lengthFormat)}
+              </button>
+            )
+          )}
+          {/* ✎ EDIT — go back to a wall already drawn: tap it, then drag an end
+              to put it on an angle, drag its + to angle part of it, or delete
+              it. Tap Edit again to carry on drawing. */}
+          {framingActive && wallCount > 0 && (
+            <button
+              className={`${styles.traceBarBtn} ${drawEditing ? styles.traceBarBuild : ''}`}
+              onClick={() => {
+                const st = useFloorplanLocalStore.getState()
+                st.setTraceStart(null)
+                st.setDrawEditing(!drawEditing)
+              }}
+              title={drawEditing ? 'Back to drawing walls' : 'Pick a wall you drew to angle it, angle part of it, or delete it'}
+              aria-pressed={drawEditing}
+            >
+              {drawEditing ? '✏ Draw' : '✎ Edit'}
+            </button>
+          )}
+          {/* ▭ ROOMS — tap a room to give it its own ceiling height (a dropped
+              ceiling) or a bulkhead along a wall. Walls stay at ↕. */}
+          {framingActive && wallCount > 0 && (
+            <button
+              className={`${styles.traceBarBtn} ${drawRooms ? styles.traceBarBuild : ''}`}
+              onClick={() => {
+                const st = useFloorplanLocalStore.getState()
+                st.setTraceStart(null)
+                st.setDrawRooms(!drawRooms)
+              }}
+              title={drawRooms ? 'Back to drawing walls' : 'Tap a room to set its ceiling height or add a bulkhead'}
+              aria-pressed={drawRooms}
+            >
+              {drawRooms ? '✏ Draw' : '▭ Rooms'}
+            </button>
+          )}
+          {/* ▱ BALCONY — tap an outside wall where it starts and where it ends. */}
+          {framingActive && wallCount > 0 && (
+            <button
+              className={`${styles.traceBarBtn} ${drawBalcony ? styles.traceBarBuild : ''}`}
+              onClick={() => {
+                const st = useFloorplanLocalStore.getState()
+                st.setTraceStart(null)
+                st.setDrawBalcony(!drawBalcony)
+              }}
+              title={drawBalcony ? 'Back to drawing walls' : 'Tap an outside wall where a balcony starts, then where it ends'}
+              aria-pressed={drawBalcony}
+            >
+              {drawBalcony ? '✏ Draw' : '▱ Balcony'}
             </button>
           )}
           {/* FRAME IT — the button the old Draw it sheet ended on. Drawing is

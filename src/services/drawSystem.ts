@@ -32,6 +32,9 @@ export const DRAW = {
   SQUARE_TOL_DEG: 6,
   /** A 45 holds within this many — tighter, so a real 40° wall is not stolen. */
   DIAG_TOL_DEG: 4,
+  /** …or square holds when the point is this share of the snap reach off the
+   *  square line, so a short wall still goes square. */
+  SQUARE_SIDE_REACH: 0.6,
   /** With squaring off, square and 45 still pull in from this close. */
   FREE_MAGNET_DEG: 3,
   /** The start point's reach, as a multiple of the ordinary reach: closing a
@@ -50,7 +53,11 @@ export const DRAW = {
   /** A second tap this soon, this close, is a double tap: it ends the run.
    *  Tight, so two quick corners near each other are two corners. */
   DOUBLE_TAP_MS: 350,
-  DOUBLE_TAP_PX: 28,
+  /** 28 caught two quick taps for a short wall as a double tap. */
+  DOUBLE_TAP_PX: 16,
+  /** A tap this close to the last point is a tap ON it (ends the run). Smaller
+   *  than the reach, so a short wall off the last point still goes in. */
+  ON_DOT_PX: 8,
   /** A press that moves less than this is still a tap. A finger rolls; a
    *  tap must not turn into a drag (a stray wall, a moved corner) for it. */
   TAP_SLOP_TOUCH_PX: 22,
@@ -260,9 +267,16 @@ export function snapDrawPoint(p: Pt, o: DrawSnapOpts): DrawSnap {
   // the last wall wins — that is the corner you are making.
   let held: { deg: number; by: 'axis' | 'turn' } | null = null
   let hd = Infinity
+  // SHORT WALLS GO SQUARE TOO. An angle tolerance alone never holds a short
+  // wall: on a 1' wall in the loupe a finger a few pixels off square is ten
+  // degrees out, so it came out crooked however carefully it was aimed. Square
+  // (and straight on) also hold when the point is within reach of the square
+  // line, however short the wall. Only in Square mode, and never the 45s.
+  const sideReach = tol * DRAW.SQUARE_SIDE_REACH
   for (const c of heldAngles(o.prevDir, square)) {
     const d = angDiff(raw, c.deg)
-    if (d <= c.tol && d < hd - 1e-9) { hd = d; held = c }
+    const near = square && c.tol === DRAW.SQUARE_TOL_DEG && d < 45 && len * Math.sin(d * DEG) <= sideReach
+    if ((d <= c.tol || near) && d < hd - 1e-9) { hd = d; held = c }
   }
   const deg = held ? held.deg : Math.round(raw)
   const u = dirOf(deg)
@@ -515,4 +529,61 @@ export function slidWall<W extends WallLike>(walls: readonly W[], i: number, by:
     if (n !== o) out.set(j, n)
   })
   return out
+}
+
+/**
+ * SWING A CORNER. The corner moves to `to` and every wall ending there swings
+ * about its other end, so a wall goes onto an angle and the walls joined to it
+ * stay joined. Nothing is held square: that is `movedCorner`'s job.
+ */
+export function pivotedCorner<W extends WallLike>(walls: readonly W[], at: Pt, to: Pt, tol: number): Map<number, W> {
+  const out = new Map<number, W>()
+  walls.forEach((w, i) => {
+    if (Math.hypot(w.x1 - at.x, w.y1 - at.y) <= tol) out.set(i, { ...w, x1: to.x, y1: to.y })
+    else if (Math.hypot(w.x2 - at.x, w.y2 - at.y) <= tol) out.set(i, { ...w, x2: to.x, y2: to.y })
+  })
+  return out
+}
+
+/** The wall nearest `p`, within `tol`, and the point on it; or null. */
+export function wallNear(walls: readonly WallLike[], p: Pt, tol: number): { i: number; at: Pt } | null {
+  let best: { i: number; at: Pt } | null = null
+  let bd = tol
+  walls.forEach((w, i) => {
+    const at = nearestOnSeg(p, { a: { x: w.x1, y: w.y1 }, b: { x: w.x2, y: w.y2 } })
+    const d = dist(at, p)
+    if (d <= bd) { bd = d; best = { i, at } }
+  })
+  return best
+}
+
+/**
+ * CUT A WALL IN TWO at the point on it nearest `p`: the first piece keeps the
+ * wall's start, the second its end. Null when the cut would leave a piece
+ * shorter than `minPiece`.
+ */
+export function splitWall<W extends WallLike>(w: W, p: Pt, minPiece: number): [W, W] | null {
+  const q = nearestOnSeg(p, { a: { x: w.x1, y: w.y1 }, b: { x: w.x2, y: w.y2 } })
+  if (Math.hypot(q.x - w.x1, q.y - w.y1) < minPiece || Math.hypot(q.x - w.x2, q.y - w.y2) < minPiece) return null
+  return [{ ...w, x2: q.x, y2: q.y }, { ...w, x1: q.x, y1: q.y }]
+}
+
+/**
+ * The way into a corner along the OTHER wall there, for reading and typing the
+ * corner angle: unit direction from that wall's far end toward `at`. Null when
+ * no other wall ends at `at`.
+ */
+export function arrivingDir(walls: readonly WallLike[], skip: number, at: Pt, tol: number): Pt | null {
+  for (let i = 0; i < walls.length; i++) {
+    if (i === skip) continue
+    const w = walls[i]
+    const s = Math.hypot(w.x1 - at.x, w.y1 - at.y) <= tol
+    const e = !s && Math.hypot(w.x2 - at.x, w.y2 - at.y) <= tol
+    if (!s && !e) continue
+    const far = s ? { x: w.x2, y: w.y2 } : { x: w.x1, y: w.y1 }
+    const L = dist(far, at)
+    if (L < 1e-9) continue
+    return { x: (at.x - far.x) / L, y: (at.y - far.y) / L }
+  }
+  return null
 }
